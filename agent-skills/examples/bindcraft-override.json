@@ -1,0 +1,15 @@
+{
+  "protocol": "Bindcraft v1.5",
+  "project_type": "miniprotein",
+  "chains": "A",
+  "hotspots": "A10",
+  "lengths": [
+    60,
+    80
+  ],
+  "num_designs": 1,
+  "filters": "peptide_filters",
+  "advanced": "peptide_3stage_multimer",
+  "use_pyrosetta": false,
+  "design_override": true
+}

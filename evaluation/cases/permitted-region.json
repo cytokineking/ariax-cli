@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "id": "permitted-boltzgen-region",
+  "prompt": "Use the bundled Ariax skills and synthetic-target.cif to prepare a one-candidate, budget-one BoltzGen miniprotein configuration. Select only chain A and choose a binding region containing residue 10; neighboring residues are allowed. Binder lengths 60-80. No Ariax or compute calls.",
+  "expected_completion": "completed",
+  "checks": [
+    {
+      "pointer": "/chains",
+      "op": "equals",
+      "value": "A"
+    },
+    {
+      "pointer": "/binding_rules/0/id",
+      "op": "equals",
+      "value": "A"
+    },
+    {
+      "pointer": "/binding_rules/0/binding",
+      "op": "contains_residue",
+      "value": 10
+    },
+    {
+      "pointer": "/protocol",
+      "op": "equals",
+      "value": "boltzgen"
+    },
+    {
+      "pointer": "/project_type",
+      "op": "equals",
+      "value": "miniprotein"
+    },
+    {
+      "pointer": "/num_designs",
+      "op": "equals",
+      "value": 1
+    },
+    {
+      "pointer": "/budget",
+      "op": "equals",
+      "value": 1
+    },
+    {
+      "pointer": "/lengths",
+      "op": "equals",
+      "value": [
+        60,
+        80
+      ]
+    }
+  ]
+}

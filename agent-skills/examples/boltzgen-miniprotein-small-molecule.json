@@ -1,0 +1,11 @@
+{
+  "protocol": "boltzgen",
+  "project_type": "miniprotein-small-molecule",
+  "num_designs": 1,
+  "budget": 1,
+  "ligand_ccd": "ATP",
+  "lengths": [
+    60,
+    80
+  ]
+}

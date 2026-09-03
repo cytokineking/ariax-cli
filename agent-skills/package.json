@@ -1,0 +1,13 @@
+{
+  "name": "@ariax/agent-skills",
+  "version": "0.1.0",
+  "description": "Shared and protocol-specific Ariax workflows for coding agents",
+  "license": "MIT",
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "core/",
+    "examples/",
+    "skills/"
+  ]
+}

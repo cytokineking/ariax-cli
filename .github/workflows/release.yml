@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify release version
+        run: test "${GITHUB_REF_NAME}" = "v$(node -p 'require("./package.json").version')"
+      - run: npm test
+      - run: npm run test:package
+      - name: Build release artifact
+        run: |
+          npm run pack:npm
+          sha256sum ariax-cli-*.tgz > SHA256SUMS
+      - name: Attach package and checksum
+        run: gh release upload "$GITHUB_REF_NAME" ariax-cli-*.tgz SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}

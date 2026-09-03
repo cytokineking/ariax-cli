@@ -1,0 +1,50 @@
+{
+  "name": "ariax-cli",
+  "version": "0.1.0",
+  "description": "Thin Node CLI for Ariax REST with local structure preparation and direct object-storage uploads.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "optionalDependencies": {
+    "@napi-rs/keyring": "2.0.0"
+  },
+  "bin": {
+    "ariax": "./bin/ariax.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "build-info.json",
+    "agent-skills/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "install.sh",
+    ".github/assets/ariax-cli-terminal.png"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:package": "node scripts/test-package.js",
+    "pack:github": "node scripts/pack-release.js github",
+    "pack:npm": "node scripts/pack-release.js npm",
+    "prepack": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cytokineking/ariax-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cytokineking/ariax-cli/issues"
+  },
+  "homepage": "https://www.ariax.bio/docs",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "ariax",
+    "cli"
+  ]
+}
