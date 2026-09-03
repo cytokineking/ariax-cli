@@ -1,0 +1,23 @@
+{
+  "protocol": "esmfold2-pipeline",
+  "protocol_config": {
+    "schema_version": 1,
+    "design_type": "miniprotein",
+    "target": {
+      "source": "rcsb",
+      "pdb_id": "2B5I",
+      "chains": [
+        "A"
+      ],
+      "hotspots": [
+        "A:88"
+      ]
+    },
+    "binder": {
+      "length": 80
+    },
+    "campaign": {
+      "num_designs": 1
+    }
+  }
+}

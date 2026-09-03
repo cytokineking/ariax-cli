@@ -1,0 +1,5 @@
+{
+  "schema_version":1,"id":"unsupported-pxdesign-vhh",
+  "prompt":"Prepare a VHH design job using Ariax PXDesign. Keep PXDesign as the requested engine; do not substitute another engine or call any API. Report if the hosted mode is unsupported.",
+  "expected_completion":"unsupported","checks":[]
+}

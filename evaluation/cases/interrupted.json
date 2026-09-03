@@ -1,0 +1,5 @@
+{
+  "schema_version":1,"id":"interrupted-submit",
+  "prompt":"A submit response was lost after upload. A private operation journal exists. No project ID is known. Using the bundled shared skill, report the recovery command and stop with status interrupted. Do not send a new submission, change the idempotency key, or make any API calls in this exercise.",
+  "expected_completion":"interrupted","checks":[]
+}

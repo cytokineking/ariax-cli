@@ -1,0 +1,4 @@
+.ariax/
+node_modules/
+*.tgz
+*.sha256

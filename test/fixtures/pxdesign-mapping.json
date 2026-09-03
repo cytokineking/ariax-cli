@@ -1,0 +1,11 @@
+{
+  "reference_revision": "e0539ea4b8f4764318d707f19493121fec9064c9",
+  "cases": [
+    {"name":"offset complete PDB", "format":"pdb", "chain":"A", "sequence":"ACD", "metadataSequence":"ACD", "observed":[{"authorResidue":101,"aminoAcid":"A"},{"authorResidue":102,"aminoAcid":"C"},{"authorResidue":103,"aminoAcid":"D"}], "accepted":true, "canonical":[1,2,3], "hotspots":[102], "canonical_hotspots":[2], "crop":"101-102", "canonical_crop":"1-2"},
+    {"name":"internal missing PDB residue", "format":"pdb", "chain":"A", "sequence":"ACD", "metadataSequence":"ACD", "observed":[{"authorResidue":1,"aminoAcid":"A"},{"authorResidue":3,"aminoAcid":"D"}], "accepted":false},
+    {"name":"terminal missing PDB residues", "format":"pdb", "chain":"A", "sequence":"GACDG", "metadataSequence":"GACDG", "observed":[{"authorResidue":2,"aminoAcid":"A"},{"authorResidue":3,"aminoAcid":"C"},{"authorResidue":4,"aminoAcid":"D"}], "accepted":false},
+    {"name":"canonical CIF with unresolved position", "format":"cif", "chain":"A", "sequence":"ACD", "metadataSequence":"ACD", "observed":[{"authorResidue":1,"aminoAcid":"A"},{"authorResidue":3,"aminoAcid":"D"}], "accepted":true},
+    {"name":"override disagrees with metadata", "format":"pdb", "chain":"A", "sequence":"AD", "metadataSequence":"AC", "observed":[{"authorResidue":1,"aminoAcid":"A"},{"authorResidue":2,"aminoAcid":"D"}], "accepted":false},
+    {"name":"CIF sequence shifted from canonical coordinates", "format":"cif", "chain":"A", "sequence":"AC", "observed":[{"authorResidue":88,"aminoAcid":"A"},{"authorResidue":89,"aminoAcid":"C"}], "accepted":false}
+  ]
+}
