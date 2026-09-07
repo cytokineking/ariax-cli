@@ -159,6 +159,26 @@ function loopsFor(parsed, category) {
   return parsed.loops.filter((loop) => loop.headers.some((header) => header.startsWith(`_${category}.`)));
 }
 
+function scalarCategoryValues(lines, header) {
+  const values = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const tokens = tokenizeCifLine(lines[index].trim());
+    if (tokens[0] !== header) continue;
+    if (tokens[1]) {
+      values.push(cifValue(tokens[1]));
+      continue;
+    }
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const nextTokens = tokenizeCifLine(lines[next].trim());
+      if (!nextTokens.length) continue;
+      if (nextTokens[0].startsWith('_') || nextTokens[0] === 'loop_') break;
+      values.push(cifValue(nextTokens[0]));
+      break;
+    }
+  }
+  return values.filter(Boolean);
+}
+
 function canonicalAuthorChainMap(parsed) {
   const authorChains = [];
   const seen = new Set();
@@ -942,12 +962,51 @@ function valueForEntityPolySeq(header, target, index) {
   return '?';
 }
 
+function repairPxStructConnValueOrder(text) {
+  const newline = text.includes('\r\n') ? '\r\n' : '\n';
+  const parsed = parseCifLoops(text);
+  const missing = loopsFor(parsed, 'struct_conn').filter(
+    (loop) => !loop.headers.includes('_struct_conn.pdbx_value_order'),
+  );
+  if (!missing.length) return { text, repaired: false };
+
+  const lines = [...parsed.lines];
+  for (const loop of [...missing].sort((left, right) => right.start - left.start)) {
+    const dataLineIndexes = [];
+    for (let index = loop.dataStart; index < loop.dataEnd; index += 1) {
+      const trimmed = lines[index].trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      dataLineIndexes.push(index);
+    }
+    if (loop.incompleteTokenCount || dataLineIndexes.some(
+      (index) => tokenizeCifLine(lines[index].trim()).length !== loop.headers.length,
+    )) {
+      throw invalid(
+        'PXDesign mmCIF _struct_conn rows are wrapped or incomplete; '
+        + 'the missing pdbx_value_order column cannot be repaired safely.',
+      );
+    }
+    lines.splice(loop.dataStart, 0, '_struct_conn.pdbx_value_order');
+    for (const originalIndex of dataLineIndexes) {
+      const shiftedIndex = originalIndex + 1;
+      lines[shiftedIndex] = `${lines[shiftedIndex]} ?`;
+    }
+  }
+  return { text: lines.join(newline), repaired: true };
+}
+
 function repairPxCif(text, parsedStructure, chains, sequences) {
   const { parsed, labelToAuth, labelToEntity, authorToEntity } = parsedStructure.cif;
   const entityPoly = loopsFor(parsed, 'entity_poly')[0];
   const entityPolySeq = loopsFor(parsed, 'entity_poly_seq')[0];
-  const presentPoly = new Set(entityPoly?.rows.map((row) => field(entityPoly, row, '_entity_poly.entity_id')));
-  const presentSeq = new Set(entityPolySeq?.rows.map((row) => field(entityPolySeq, row, '_entity_poly_seq.entity_id')));
+  const presentPoly = new Set([
+    ...(entityPoly?.rows.map((row) => field(entityPoly, row, '_entity_poly.entity_id')) || []),
+    ...scalarCategoryValues(parsed.lines, '_entity_poly.entity_id'),
+  ]);
+  const presentSeq = new Set([
+    ...(entityPolySeq?.rows.map((row) => field(entityPolySeq, row, '_entity_poly_seq.entity_id')) || []),
+    ...scalarCategoryValues(parsed.lines, '_entity_poly_seq.entity_id'),
+  ]);
   const targets = [];
   for (const chain of chains) {
     if (!sequences[chain]) continue;
@@ -1138,6 +1197,18 @@ export async function prepareStructureInput({ spec, text, targetFilename, prompt
       if (repaired.repairedChains.length) {
         transforms.push({ kind: 'cif_polymer_metadata_fill', description: `Filled missing polymer metadata for selected chain(s): ${repaired.repairedChains.join(', ')}.` });
         messages.push(`PXDesign mmCIF polymer metadata repaired for chain(s): ${repaired.repairedChains.join(', ')}.`);
+      }
+      const structConnRepair = repairPxStructConnValueOrder(uploadText);
+      uploadText = structConnRepair.text;
+      if (structConnRepair.repaired) {
+        transforms.push({
+          kind: 'cif_struct_conn_value_order_fill',
+          description: 'Added the missing _struct_conn.pdbx_value_order column using unspecified bond-order values.',
+        });
+        messages.push(
+          'PXDesign mmCIF added the missing _struct_conn.pdbx_value_order column '
+          + 'using unspecified bond-order values in the upload copy.',
+        );
       }
     }
   } else if (protocol === 'esmfold2-pipeline') {

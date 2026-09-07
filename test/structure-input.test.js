@@ -53,6 +53,81 @@ function pxSpec(extra = {}) {
 }
 
 describe('structure parsing and protocol preparation', () => {
+  it('surgically repairs a missing PXDesign struct_conn bond-order column', async () => {
+    const text = `data_target
+#
+_entity_poly.entity_id 1
+_entity_poly.type polypeptide(L)
+#
+loop_
+_entity_poly_seq.entity_id
+_entity_poly_seq.num
+_entity_poly_seq.mon_id
+1 1 ASN
+#
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+C 1
+D 2
+#
+loop_
+_atom_site.group_PDB
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.auth_asym_id
+_atom_site.auth_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.pdbx_PDB_model_num
+ATOM N ND2 ASN C 1 1 C 1 0.0 0.0 0.0 1
+HETATM C C1 NAG D 2 . D 1 1.0 0.0 0.0 1
+#
+loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr2_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.pdbx_dist_value
+covale1 covale ND2 C C1 D 1.375
+#
+`;
+    const prepared = await prepareStructureInput({
+      spec: pxSpec({ hotspots_by_chain: { C: [1] } }),
+      text,
+      targetFilename: 'input.cif',
+    });
+
+    assert.match(prepared.text, /_struct_conn\.pdbx_value_order/);
+    assert.match(prepared.text, /covale1 covale ND2 C C1 D 1\.375 \?/);
+    assert.equal(
+      prepared.text.replace('_struct_conn.pdbx_value_order\n', '').replace(' 1.375 ?\n', ' 1.375\n'),
+      text,
+    );
+    assert.equal(
+      prepared.transforms.filter((item) => item.kind === 'cif_struct_conn_value_order_fill').length,
+      1,
+    );
+
+    const second = await prepareStructureInput({
+      spec: pxSpec({ hotspots_by_chain: { C: [1] } }),
+      text: prepared.text,
+      targetFilename: 'input.cif',
+    });
+    assert.equal(second.text, prepared.text);
+    assert.equal(
+      second.transforms.some((item) => item.kind === 'cif_struct_conn_value_order_fill'),
+      false,
+    );
+  });
+
   it('extracts a missing PXDesign sequence from contiguous coordinates', async () => {
     const text = pdbChain('C', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     const parsed = parseStructureInput(text, 'input.pdb');

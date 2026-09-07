@@ -109,6 +109,106 @@ describe('submit input upload', () => {
     assert.equal(posts[1].options.body.input_upload_intent_id, '11111111-1111-4111-8111-111111111111');
   });
 
+  it('explains a failed upload reservation and never creates or journals a project', async () => {
+    const rootDir = fs.mkdtempSync(path.join(directory, 'failed-upload-'));
+    const specFile = write('failed-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const inputFile = write('failed-upload.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
+    const expiresAt = '2026-09-07T21:30:00Z';
+    const posts = [];
+    const ctx = {
+      client: {
+        get: async () => ({ data: { actor: { user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, billing: { account_type: 'user', account_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } }),
+        post: async (route) => {
+          posts.push(route);
+          assert.equal(route, '/api/v1/uploads/init');
+          return { data: {
+            upload_intent_id: '99999999-9999-4999-8999-999999999999',
+            upload_url: 'https://storage.example/upload',
+            upload_headers: {},
+            expires_at: expiresAt,
+          } };
+        },
+      },
+      fetchImpl: async () => new Response(null, { status: 503 }),
+      flags: { file: specFile, input: inputFile, name: 'failed-upload' },
+      json: false,
+      config: { rootDir },
+      timeoutMs: 30_000,
+    };
+
+    await assert.rejects(() => submit(ctx), (error) => {
+      assert.equal(error.exitCode, 10);
+      assert.match(error.message, /Direct input upload failed \(HTTP 503\)/);
+      assert.match(error.message, /Project creation was not requested/);
+      assert.match(error.message, new RegExp(`reservation may remain active until ${expiresAt}`));
+      assert.match(error.message, /wait until then, then rerun the same command/);
+      return true;
+    });
+    assert.deepEqual(posts, ['/api/v1/uploads/init']);
+    assert.equal(fs.existsSync(path.join(rootDir, '.ariax', 'operations')), false);
+
+    const networkRootDir = fs.mkdtempSync(path.join(directory, 'rejected-upload-'));
+    const networkCause = new Error('socket closed');
+    posts.length = 0;
+    await assert.rejects(
+      () => submit({
+        ...ctx,
+        config: { rootDir: networkRootDir },
+        flags: { ...ctx.flags, name: 'rejected-upload' },
+        fetchImpl: async () => { throw networkCause; },
+      }),
+      (error) => {
+        assert.equal(error.exitCode, 9);
+        assert.equal(error.retryable, true);
+        assert.equal(error.cause, networkCause);
+        assert.match(error.message, /Direct input upload failed before receiving a response/);
+        assert.match(error.message, new RegExp(`reservation may remain active until ${expiresAt}`));
+        return true;
+      },
+    );
+    assert.deepEqual(posts, ['/api/v1/uploads/init']);
+    assert.equal(fs.existsSync(path.join(networkRootDir, '.ariax', 'operations')), false);
+  });
+
+  it('bounds a stalled upload with the configured timeout and gives fallback reservation guidance', async () => {
+    const rootDir = fs.mkdtempSync(path.join(directory, 'timed-out-upload-'));
+    const specFile = write('timed-out-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const inputFile = write('timed-out-upload.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
+    let uploadSignal;
+    const ctx = {
+      client: {
+        get: async () => ({ data: { actor: { user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, billing: { account_type: 'user', account_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } }),
+        post: async (route) => {
+          assert.equal(route, '/api/v1/uploads/init');
+          return { data: {
+            upload_intent_id: 'aaaaaaaa-9999-4999-8999-999999999999',
+            upload_url: 'https://storage.example/upload',
+            upload_headers: {},
+          } };
+        },
+      },
+      fetchImpl: async (_url, { signal }) => new Promise((_resolve, reject) => {
+        uploadSignal = signal;
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      }),
+      flags: { file: specFile, input: inputFile, name: 'timed-out-upload' },
+      json: false,
+      config: { rootDir },
+      timeoutMs: 5,
+    };
+
+    await assert.rejects(() => submit(ctx), (error) => {
+      assert.equal(error.exitCode, 9);
+      assert.equal(error.retryable, true);
+      assert.match(error.message, /Direct input upload timed out after 5ms/);
+      assert.match(error.message, /reservation may remain active for up to 15 minutes/);
+      assert.match(error.message, /wait for it to expire, then rerun the same command/);
+      return true;
+    });
+    assert.equal(uploadSignal.aborted, true);
+    assert.equal(fs.existsSync(path.join(rootDir, '.ariax', 'operations')), false);
+  });
+
   it('reuses an uploaded intent for an exact project retry without another PUT', async () => {
     const specFile = write('retry-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein' }));
     let submitted;

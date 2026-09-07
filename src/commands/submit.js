@@ -13,7 +13,7 @@ import { readAndValidateInput } from '../input.js';
 import { prepareStructureInput } from '../structure-input.js';
 import { createSequencePrompt } from '../sequence-prompt.js';
 import { isUUID } from '../uuid.js';
-import { validateTransferUrl } from '../http.js';
+import { DEFAULT_TIMEOUT_MS, validateTransferUrl } from '../http.js';
 import { accountIdentity, createOperation, sourceIdentity, sendOperation, waitForOperation } from '../operations.js';
 
 /** @param {{ client: any, flags: Record<string, any>, json: boolean, config: { rootDir: string } }} ctx */
@@ -102,12 +102,23 @@ export async function run(ctx) {
         error.exitCode = EXIT.SERVER;
         throw error;
       }
-      await putInput(
-        ctx.fetchImpl,
-        upload.upload_url,
-        upload.upload_headers,
-        preparedBytes,
-      );
+      try {
+        await putInput(
+          ctx.fetchImpl,
+          upload.upload_url,
+          upload.upload_headers,
+          preparedBytes,
+          ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        );
+      } catch (error) {
+        const expiresAt = typeof upload.expires_at === 'string' && Number.isFinite(Date.parse(upload.expires_at))
+          ? upload.expires_at
+          : null;
+        error.message += expiresAt
+          ? ` Project creation was not requested. The project-name reservation may remain active until ${expiresAt}; wait until then, then rerun the same command.`
+          : ' Project creation was not requested. The project-name reservation may remain active for up to 15 minutes; wait for it to expire, then rerun the same command.';
+        throw error;
+      }
       body.input_upload_intent_id = upload.upload_intent_id;
     }
   }
@@ -153,22 +164,29 @@ export async function run(ctx) {
   return waitAndReport(ctx, String(projectId), operation);
 }
 
-async function putInput(fetchImpl, url, headers, body) {
+async function putInput(fetchImpl, url, headers, body, timeoutMs) {
   const destination = validateTransferUrl(url, 'Upload');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response;
   try {
     response = await fetchImpl(destination, {
       method: 'PUT',
       headers: headers && typeof headers === 'object' ? headers : {},
       body,
+      signal: controller.signal,
       redirect: 'error',
     });
   } catch (cause) {
-    const error = new Error('Direct input upload failed before receiving a response.');
+    const error = new Error(controller.signal.aborted
+      ? `Direct input upload timed out after ${timeoutMs}ms.`
+      : 'Direct input upload failed before receiving a response.');
     error.exitCode = EXIT.NETWORK;
     error.retryable = true;
     error.cause = cause;
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
   if (!response.ok) {
     const error = new Error(`Direct input upload failed (HTTP ${response.status}).`);
