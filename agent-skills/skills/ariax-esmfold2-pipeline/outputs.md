@@ -27,3 +27,16 @@ and the primary value is not a directional minimum. Inspect retained validation
 artifacts for details; do not relabel fields or transplant thresholds from a
 different ipSAE protocol. Missing confidence/pose evidence should be explained
 through diagnostics, not silently treated as a pass.
+
+
+## Execution failures and worker logs
+
+The campaign log summarizes each worker's status and exit code. Use
+`ariax logs JOB_ID --list` to discover retained design-worker logs, then read a
+returned reference with `--log-ref` to obtain the traceback. A successful input
+validation followed by zero designs can indicate a runtime/configuration bug;
+it does not establish that candidate designs failed scientific filters.
+
+Inspect the available target preprocessing, pipeline configs and campaign
+ledger when relevant. Failed projects cannot be restarted; report the exception
+and project/job IDs to support. `recover` reconciles an uncertain request only.

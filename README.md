@@ -244,7 +244,7 @@ capabilities and input rules.
 | Launch | `ariax submit -f job.json --name NAME [--input target.pdb] [--wait]` |
 | Recover an attempt | `ariax operations [OPERATION_ID]`, `ariax recover OPERATION_ID [--wait]` |
 | Find and monitor | `ariax projects`, `ariax status <PROJECT_ID>`, `ariax jobs --project <PROJECT_ID>` |
-| Inspect output | `ariax logs <JOB_ID>`, `ariax results <PROJECT_ID> --download ./results` |
+| Inspect output | `ariax logs <JOB_ID> --list`, `ariax logs <JOB_ID> --log-ref PATH`, `ariax results <PROJECT_ID> --download ./results` |
 | Control a project | `ariax pause <PROJECT_ID>`, `ariax restart <PROJECT_ID>`, `ariax abort <PROJECT_ID>` |
 | Inspect run evidence | `ariax runs PROJECT_ID [--job JOB_ID] --json` |
 | Read candidate tables | `ariax candidates PROJECT_ID [--view final\|all\|diagnostics] [--all] --json` |
@@ -305,6 +305,32 @@ GPU preference files replace the saved allocation policy, for example:
 to `false`; when it is `true`, omitted or empty `turbo_multiples` selects
 `[2,4,8]`. Preferences apply to the next provisioning attempt. Saving them
 does not change active GPU instances or restart the project.
+
+Only paused projects can be restarted. Failed projects cannot be restarted;
+inspect retained worker logs and contact support. `ariax recover` reconciles an
+uncertain create/restart request, rather than restarting failed compute.
+
+To diagnose a job failure:
+
+```bash
+ariax status PROJECT_ID
+ariax logs JOB_ID --list
+ariax logs JOB_ID --log-ref logs/design_workers/WORKER.log --tail 200
+```
+
+The default log is a campaign/run summary. Worker logs contain detailed
+tracebacks; a worker exit code alone does not establish the cause. `--list`
+follows all discovery pages and returns usable project-relative references,
+labels, sizes, and modification times. Default JSON reads identify the selected
+`log_ref`. Logs are read through a sanitized, bounded endpoint rather than raw
+download URLs. A missing retained log does not imply it will appear later.
+
+`ariax results` discovers synced scientific intermediates and useful project
+metadata beyond the website's curated listing. ESMFold2 includes target
+preprocessing, pipeline configs, campaign/sync SQLite ledgers, checkpoints and
+restore manifests. Credentials, orchestration code, opaque content-addressed
+copies, and bundles containing unsanitized logs are excluded; scientific files
+inside intermediate trees remain individually downloadable.
 
 Structure files are parsed locally and uploaded directly to private object
 storage with a short-lived URL—their bytes do not pass through Ariax

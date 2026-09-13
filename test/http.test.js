@@ -305,3 +305,11 @@ describe('structured validation details', () => {
     assert.equal(error.details.issues[0].rule, 'field_invalid');
   });
 });
+
+
+it('preserves bounded project lifecycle details without arbitrary backend data', () => {
+  const error = new ApiError({ status: 400, message: 'Only paused projects can be restarted', details: {
+    current_status: 'failed', allowed_statuses: ['paused'], backend_traceback: 'private', token: 'secret',
+  } });
+  assert.deepEqual(error.details, { current_status: 'failed', allowed_statuses: ['paused'] });
+});

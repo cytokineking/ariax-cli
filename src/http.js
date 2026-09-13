@@ -74,6 +74,11 @@ function sanitizeErrorDetails(details) {
   for (const key of ['current_balance_usd', 'required_balance_usd', 'deficit_usd']) {
     if (typeof details[key] === 'number' && Number.isFinite(details[key])) result[key] = details[key];
   }
+  const statuses = ['created', 'queued', 'running', 'in_progress', 'paused', 'completed', 'aborted', 'failed'];
+  if (statuses.includes(details.current_status)) result.current_status = details.current_status;
+  if (Array.isArray(details.allowed_statuses) && details.allowed_statuses.every((value) => statuses.includes(value))) {
+    result.allowed_statuses = [...new Set(details.allowed_statuses)];
+  }
   return Object.keys(result).length ? result : undefined;
 }
 

@@ -1,9 +1,9 @@
 /**
- * `ariax logs <job-id> [--tail N] [--log-ref PATH]`
+ * `ariax logs <job-id> [--list] [--tail N] [--log-ref PATH]`
  * Reads a job-owned log artifact from project object storage. This surface does
  * not expose Ariax application or platform logs.
  */
-import { printData, printJson, printProgress } from '../output.js';
+import { printData, printJson, printProgress, printTable } from '../output.js';
 import { usageError } from '../args.js';
 import { isUUID } from '../uuid.js';
 
@@ -13,6 +13,12 @@ export async function run(ctx) {
   if (!operand) throw usageError('logs: missing <job-id> (UUID).');
   if (!isUUID(String(operand))) {
     throw usageError(`logs: invalid job id "${operand}": expected a UUID (see: ariax jobs).`);
+  }
+  if (ctx.flags.list === true) {
+    if (ctx.flags.tail !== undefined || ctx.flags['log-ref'] !== undefined) {
+      throw usageError('logs: --list cannot be combined with --tail or --log-ref.');
+    }
+    return listLogs(ctx, String(operand));
   }
   let tail = 200;
   if (ctx.flags.tail !== undefined) {
@@ -59,4 +65,32 @@ function extractLines(data) {
     }
     return String(e);
   });
+}
+
+async function listLogs(ctx, jobId) {
+  const logs = [];
+  const seen = new Set();
+  let cursor;
+  let requestId;
+  do {
+    const res = await ctx.client.get(`/api/v1/jobs/${encodeURIComponent(jobId)}/logs/list`, {
+      query: { limit: 100, cursor }, signal: ctx.signal,
+    });
+    requestId = res.requestId;
+    if (!Array.isArray(res.data) || res.data.some((item) => !item || typeof item.log_ref !== 'string' || !item.log_ref)) {
+      throw new Error('Log listing returned an invalid page.');
+    }
+    logs.push(...res.data);
+    cursor = res.meta?.next_cursor;
+    if (cursor !== undefined && cursor !== null && (typeof cursor !== 'string' || !cursor || seen.has(cursor))) {
+      throw new Error('Log listing returned an invalid or repeated continuation cursor.');
+    }
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  if (ctx.json) printJson({ data: { job_id: jobId, logs }, meta: { next_cursor: null }, request_id: requestId });
+  else if (logs.length) printTable(['log_ref', 'label', 'size', 'last_modified'], logs.map((item) => [
+    item.log_ref, item.label ?? '-', item.size ?? '-', item.last_modified ?? '-',
+  ]));
+  else printData('No logs are currently retained for this job.');
+  return { logs };
 }

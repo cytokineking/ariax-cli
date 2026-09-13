@@ -164,7 +164,9 @@ observed/recovered.
 Legacy `status --resume --wait` and `submit --resume` remain polling-only.
 
 Restart preserves saved scientific settings and the saved GPU policy; send an
-empty body. A restart is recovery, not scientific extension. Use pause, restart,
+empty body. Only paused projects can be restarted. Failed projects require
+diagnosis and support; `recover` reconciles an uncertain request and does not
+restart failed compute. Scientific changes require a new project. Use pause, restart,
 or abort when included in the user's authorization. Terminal project states
 are `completed`, `failed`, `paused`, and `aborted`; a local timeout is not one.
 
@@ -188,7 +190,9 @@ but fetching them again may return changed source data.
 
 ```sh
 ariax jobs --project PROJECT_ID --json
+ariax logs JOB_ID --list
 ariax logs JOB_ID --tail 200
+ariax logs JOB_ID --log-ref logs/design_workers/WORKER.log --tail 200
 ariax runs PROJECT_ID --json
 ariax runs PROJECT_ID --job JOB_ID --json
 ariax candidates PROJECT_ID --view final --json
@@ -228,6 +232,21 @@ See [recorded settings](core/recorded-settings.md).
 For recorded runtime or cost, inspect every job allocation and sum its recorded
 values across attempts. The latest `started_at` can describe only the newest
 attempt, so check every allocation state before drawing a project-wide conclusion.
+
+On failure, inspect status, list retained logs, read the campaign summary, and
+then read the failed worker's detailed log using its returned `log_ref`. Campaign
+summaries report worker outcomes; worker tracebacks explain failures. Validation
+passing is not proof that runtime execution will succeed. Separate execution
+failures before designs from completed designs rejected by scientific filters.
+Report the exception and evidence; do not infer scientific failure from zero
+completed designs. Missing retained logs do not promise future availability.
+
+Agent artifact discovery includes synced scientific outputs, intermediates and
+project metadata such as ESMFold2 configs, campaign/sync SQLite ledgers and
+checkpoint/restore manifests. File extensions alone do not imply sensitivity.
+Read logs through their sanitized endpoint; opaque storage copies and raw bundles
+containing unsanitized logs remain unavailable. Scientific intermediate files
+can be downloaded individually through `ariax results`.
 
 Logs are retained project/campaign compute artifacts; restarts can reuse the
 same object. They are not isolated job transcripts or platform logs. A truncated

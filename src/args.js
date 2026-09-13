@@ -40,6 +40,7 @@ const BOOLEAN_FLAGS = new Set([
   'resume',
   'overwrite',
   'full',
+  'list',
   'raw',
   'all',
   'eligible',
