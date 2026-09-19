@@ -8,6 +8,20 @@ scores, target-aligned pose comparisons, and biological objective checks.
 - `--view all`: `esmfold2/metrics_all.csv`, design candidates, joined to ranking diagnostics when available.
 - `--view diagnostics`: `ranked_results/ranking_diagnostics.csv`, including excluded rows and the producer's eligibility/reasons.
 
+## Interpreting stage and final counts
+
+Use `esmfold2_progress.counts` for stage counts: `completed` is completed
+generation, `selected` is selection for validation, and `validated` is completed
+validation. The legacy project-level `accepted_designs` field also reports
+completed validations for ESMFold2; it is not a count of final ranking-eligible
+designs. Eight completed validations and three final ranking-eligible designs
+can therefore both be correct.
+
+Once final results are available for a completed project, use the final
+candidates response's `meta.total` as the full final-table count. Do not use the
+length of the current paginated `data` page as the total. Missing or incomplete
+final results do not establish that zero designs passed final ranking.
+
 Native identity is `design_name` in the compact final table and `candidate_id` elsewhere. The adapter preserves eligibility, exclusion reasons, hotspot/ipSAE/RMSD pass flags, and named confidence/distance metrics. Consensus score is this pipeline's ranking metric, not a score that can be compared to other engines. Eligibility is not yet known for design rows lacking diagnostics.
 
 Final ranking rows are **not** the copied top-k subset. `esmfold2` and `validator` roles identify reported original model structures when currently present. `top_ranked_esmfold2` and `top_ranked_validator` roles occur only when diagnostics explicitly report the copied path and the object is verified. A candidate can rank successfully without a top-ranked copy. No private diagnostic fields or internal model/config hashes are projected into candidate rows.
