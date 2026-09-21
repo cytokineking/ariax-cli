@@ -186,6 +186,15 @@ function nativeSelections(value, chains, { scaffold, label }) {
 }
 
 function validateSelections(value, chains, view, { scaffold = false, label }) {
+  if (!scaffold && value) value = String(value).split(',').map((token) => {
+    if (!/^[A-Za-z]+$/.test(token)) return token;
+    const numbers = view[token]?.authorResidues;
+    if (!chains.includes(token) || !numbers?.length) throw invalid(`${label}: whole-chain selection ${token} must name an existing selected chain.`);
+    if (numbers.some((number) => !Number.isInteger(number) || number < 0)) throw invalid(`${label}: whole-chain selection requires nonnegative native residue numbering.`);
+    const first = numbers.reduce((min, number) => Math.min(min, number), Infinity);
+    const last = numbers.reduce((max, number) => Math.max(max, number), -Infinity);
+    return first === last ? `${token}${first}` : `${token}${first}-${last}`;
+  }).join(',');
   for (const selection of nativeSelections(value, chains, { scaffold, label })) {
     const { token, chain, first, last } = selection;
     if (!chains.includes(chain) || !view[chain]) {

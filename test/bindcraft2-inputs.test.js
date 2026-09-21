@@ -322,3 +322,21 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     assert.deepEqual(listOperations(root), []);
   });
 });
+
+it('accepts whole-chain hotspots without rewriting the saved job and rejects missing chains', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-whole-chain-'));
+  try {
+    const directory = inputDirectory(root);
+    fs.writeFileSync(path.join(directory, 'input.pdb'), pdbResidues('A', [5, 8, 20]));
+    const job = spec();
+    job.protocol_config.targets[0].hotspots = 'A';
+    const bundle = prepareBindcraft2Bundle({ spec: job, inputDir: directory });
+    assert.equal(bundle.spec.protocol_config.targets[0].hotspots, 'A');
+    job.protocol_config.targets[0].hotspots = 'Z';
+    assert.throws(() => prepareBindcraft2Bundle({ spec: job, inputDir: directory }), /existing selected chain/);
+    job.protocol_config.targets[0].hotspots = 'A';
+    job.protocol_config.targets = [job.protocol_config.targets[0]];
+    job.protocol_config.targets[0].coldspots = 'A';
+    assert.equal(prepareBindcraft2Bundle({ spec: job, inputDir: directory }).spec.protocol_config.targets[0].coldspots, 'A');
+  } finally { fs.rmSync(root, {recursive:true, force:true}); }
+});
