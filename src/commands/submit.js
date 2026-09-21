@@ -15,6 +15,9 @@ import { createSequencePrompt } from '../sequence-prompt.js';
 import { isUUID } from '../uuid.js';
 import { DEFAULT_TIMEOUT_MS, validateTransferUrl } from '../http.js';
 import { accountIdentity, createOperation, sourceIdentity, sendOperation, waitForOperation } from '../operations.js';
+import { isBindcraft2, prepareBindcraft2Bundle, requiredBindcraft2Inputs } from '../bindcraft2-inputs.js';
+import { bindCraft2ProgressSummary } from '../bindcraft2-progress.js';
+import { campaignStatusLines, compactCampaign, compactSubmission, usesCompactCampaignPresentation } from '../campaign-presentation.js';
 
 /** @param {{ client: any, flags: Record<string, any>, json: boolean, config: { rootDir: string } }} ctx */
 export async function run(ctx) {
@@ -42,6 +45,7 @@ export async function run(ctx) {
   const spec = readJsonFile(String(file));
   const sources = [sourceIdentity(String(file))];
   let preparedBytes;
+  let preparedInputs;
   let account;
   let body = { ...spec, name: projectName };
 
@@ -52,7 +56,80 @@ export async function run(ctx) {
     }
     body.input_upload_intent_id = String(recoveryIntentId);
   }
-  if (flags.input !== undefined) {
+  if (flags.input !== undefined && flags['input-dir'] !== undefined) {
+    throw usageError('submit: choose only one input source: --input or --input-dir.');
+  }
+  if (isBindcraft2(spec)) {
+    if (flags.input === undefined && flags['input-dir'] === undefined) {
+      throw usageError('submit: BindCraft2 requires --input FILE or --input-dir DIR.');
+    }
+    if (spec.input_upload_intent_id !== undefined) {
+      throw usageError('submit: remove input_upload_intent_id from job.json; use --input-upload-intent-id only for an existing authorization.');
+    }
+    const bundle = prepareBindcraft2Bundle({
+      spec,
+      inputFile: flags.input,
+      inputDir: flags['input-dir'],
+    });
+    sources.push(...bundle.sources);
+    preparedInputs = bundle.files.map(({ filename, bytes }) => ({ filename, bytes }));
+
+    const validation = await ctx.client.post('/api/v1/validate', { body: bundle.spec });
+    const normalized = validation.data?.normalized_job_spec;
+    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) {
+      const error = new Error('BindCraft2 validation returned no normalized job spec.');
+      error.exitCode = EXIT.SERVER;
+      throw error;
+    }
+    const normalizedFiles = requiredBindcraft2Inputs(normalized);
+    if (JSON.stringify(normalizedFiles) !== JSON.stringify(bundle.required)) {
+      const error = new Error('BindCraft2 validation changed the required input file set; no upload was attempted.');
+      error.exitCode = EXIT.SERVER;
+      throw error;
+    }
+    body = { ...normalized, name: projectName };
+    const projectType = typeof normalized.project_type === 'string' && normalized.project_type
+      ? normalized.project_type : bundle.projectType;
+
+    if (recoveryIntentId !== undefined) {
+      body.input_upload_intent_id = String(recoveryIntentId);
+    } else {
+      account = await accountIdentity(ctx);
+      const init = await ctx.client.post('/api/v1/uploads/init', {
+        body: {
+          project_name: projectName,
+          project_type: projectType,
+          target_filename: bundle.primaryFilename,
+          input_files: bundle.required,
+        },
+      });
+      const upload = init.data ?? {};
+      const descriptors = validateBundleUploads(upload.uploads, bundle.required);
+      if (typeof upload.upload_intent_id !== 'string' || !upload.upload_intent_id) {
+        const error = new Error('Upload authorization returned no intent id.');
+        error.exitCode = EXIT.SERVER;
+        throw error;
+      }
+      try {
+        const byName = new Map(bundle.files.map((entry) => [entry.filename, entry.bytes]));
+        for (const descriptor of descriptors) {
+          await putInput(
+            ctx.fetchImpl,
+            descriptor.upload_url,
+            descriptor.upload_headers,
+            byName.get(descriptor.filename),
+            ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          );
+        }
+      } catch (error) {
+        appendUploadReservationHint(error, upload);
+        throw error;
+      }
+      body.input_upload_intent_id = upload.upload_intent_id;
+    }
+  } else if (flags['input-dir'] !== undefined) {
+    throw usageError('submit: --input-dir is supported only for BindCraft2 jobs.');
+  } else if (flags.input !== undefined) {
     if (spec.input_upload_intent_id !== undefined) {
       throw usageError('submit: remove input_upload_intent_id from job.json when using --input.');
     }
@@ -111,12 +188,7 @@ export async function run(ctx) {
           ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         );
       } catch (error) {
-        const expiresAt = typeof upload.expires_at === 'string' && Number.isFinite(Date.parse(upload.expires_at))
-          ? upload.expires_at
-          : null;
-        error.message += expiresAt
-          ? ` Project creation was not requested. The project-name reservation may remain active until ${expiresAt}; wait until then, then rerun the same command.`
-          : ' Project creation was not requested. The project-name reservation may remain active for up to 15 minutes; wait for it to expire, then rerun the same command.';
+        appendUploadReservationHint(error, upload);
         throw error;
       }
       body.input_upload_intent_id = upload.upload_intent_id;
@@ -126,15 +198,19 @@ export async function run(ctx) {
   account ??= await accountIdentity(ctx);
   const operation = createOperation(ctx, {
     action: 'project:create', request: { method: 'POST', path: '/api/v1/projects', body },
-    account, sources, preparedBytes,
+    account, sources, preparedBytes, preparedInputs,
   });
   const res = await sendOperation(ctx, operation);
+  const compactDefault = isBindcraft2(body) && flags.details !== true;
   if (operation.state === 'in_progress') {
     if (flags.wait === true) {
       await waitForOperation(ctx, operation);
       return waitAndReport(ctx, operation.project_id, operation);
     }
-    if (ctx.json) printJson({ data: { ...res.data, local_operation_id: operation.id }, meta: res.meta });
+    if (ctx.json) {
+      if (compactDefault) printJson({ data: compactSubmission({ ...res.data, status: 'submission_in_progress' }, body, operation.id) });
+      else printJson({ data: { ...res.data, local_operation_id: operation.id }, meta: res.meta });
+    }
     else printData(`Operation in progress. Check with: ariax operations ${operation.id}`);
     return { operationId: operation.id, projectId: operation.project_id };
   }
@@ -149,12 +225,25 @@ export async function run(ctx) {
 
   if (ctx.json) {
     if (flags.wait !== true) {
-      printJson({ data: res.data, meta: { ...res.meta, local_operation_id: operation.id }, request_id: res.requestId });
+      if (compactDefault) {
+        printJson({ data: compactSubmission(project, body, operation.id) });
+      } else {
+        printJson({ data: res.data, meta: { ...res.meta, local_operation_id: operation.id }, request_id: res.requestId });
+      }
     }
   } else {
-    printData(`project_id: ${projectId}`);
-    if (jobId) printData(`job_id: ${jobId}`);
-    if (project.status) printData(`status: ${project.status}`);
+    if (!compactDefault) {
+      printData(`project_id: ${projectId}`);
+      if (jobId) printData(`job_id: ${jobId}`);
+      if (project.status) printData(`status: ${project.status}`);
+    } else {
+      const submission = compactSubmission(project, body, operation.id);
+      printData(`${projectName} — submitted`);
+      printData(`Project: ${projectId}${jobId ? ` · Job: ${jobId}` : ''}`);
+      printData(`Protocol: ${submission.accepted_settings.protocol ?? 'unknown'} · Binder: ${submission.accepted_settings.binder_format ?? 'unknown'}`);
+      printData(`Requested: ${submission.accepted_settings.requested_designs ?? 'unknown'} accepted design(s) · Attempt limit: ${submission.accepted_settings.attempt_limit ?? 'unknown'}`);
+      printData(`Next: ${submission.next.command}`);
+    }
   }
 
   if (flags.wait !== true) {
@@ -162,6 +251,33 @@ export async function run(ctx) {
     return { projectId, operationId: operation.id };
   }
   return waitAndReport(ctx, String(projectId), operation);
+}
+
+function validateBundleUploads(value, required) {
+  if (!Array.isArray(value) || value.length !== required.length) {
+    const error = new Error('Upload authorization did not describe the exact BindCraft2 input bundle.');
+    error.exitCode = EXIT.SERVER;
+    throw error;
+  }
+  const names = value.map((entry) => entry?.filename);
+  if (new Set(names).size !== names.length || JSON.stringify([...names].sort()) !== JSON.stringify(required)
+      || value.some((entry) => typeof entry.upload_url !== 'string' || !entry.upload_url
+        || entry.upload_method !== 'PUT' || !entry.upload_headers || typeof entry.upload_headers !== 'object'
+        || Array.isArray(entry.upload_headers))) {
+    const error = new Error('Upload authorization returned invalid or mismatched BindCraft2 upload descriptors.');
+    error.exitCode = EXIT.SERVER;
+    throw error;
+  }
+  return value;
+}
+
+function appendUploadReservationHint(error, upload) {
+  const expiresAt = typeof upload.expires_at === 'string' && Number.isFinite(Date.parse(upload.expires_at))
+    ? upload.expires_at
+    : null;
+  error.message += expiresAt
+    ? ` Project creation was not requested. The project-name reservation may remain active until ${expiresAt}; wait until then, then rerun the same command.`
+    : ' Project creation was not requested. The project-name reservation may remain active for up to 15 minutes; wait for it to expire, then rerun the same command.';
 }
 
 async function putInput(fetchImpl, url, headers, body, timeoutMs) {
@@ -210,12 +326,17 @@ export async function waitAndReport(ctx, projectId, operation) {
   process.once('SIGINT', onSigint);
   try {
     printProgress('Waiting for a terminal state (completed/failed/paused/aborted)…');
+    let lastProgress = null;
     const out = await waitForProject(ctx.client, projectId, {
       pollIntervalMs: pollMs,
       timeoutMs,
       shouldStop: () => stopped,
-      onTick: ({ status, elapsedMs }) => {
-        printProgress(`… status=${status ?? 'unknown'} elapsed=${Math.round(elapsedMs / 1000)}s`);
+      onTick: ({ project, status, elapsedMs }) => {
+        const fingerprint = waitProgressFingerprint(project, status);
+        if (fingerprint !== lastProgress) {
+          lastProgress = fingerprint;
+          printProgress(waitProgressLine(project, status, elapsedMs));
+        }
       },
     });
     if (stopped || out.stopped) {
@@ -239,16 +360,36 @@ export async function waitAndReport(ctx, projectId, operation) {
       err.exitCode = EXIT.SERVER;
       throw err;
     }
+    const compactDefault = usesCompactCampaignPresentation(out.project) && ctx.flags.details !== true;
+    const compact = compactDefault ? compactCampaign(out.project, projectId) : null;
     if (ctx.json) {
-      printJson({ data: out.project, meta: { waited: true, status: out.status } });
+      if (compactDefault) printJson({ data: compact, meta: { waited: true } });
+      else printJson({ data: out.project, meta: { waited: true, status: out.status } });
     } else {
-      printData(`status: ${out.status}`);
-      printData(`project_id: ${out.project?.id ?? projectId}`);
+      if (!compactDefault) {
+        printData(`status: ${out.status}`);
+        printData(`project_id: ${out.project?.id ?? projectId}`);
+      } else {
+        for (const line of campaignStatusLines(compact)) printData(line);
+      }
     }
     return { projectId, status: out.status };
   } finally {
     process.removeListener('SIGINT', onSigint);
   }
+}
+
+export function waitProgressLine(project, status, elapsedMs) {
+  const value = project?.project ?? project;
+  const summary = bindCraft2ProgressSummary(value);
+  return summary
+    ? `… ${summary} elapsed=${Math.round(elapsedMs / 1000)}s`
+    : `… status=${status ?? 'unknown'} elapsed=${Math.round(elapsedMs / 1000)}s`;
+}
+
+export function waitProgressFingerprint(project, status) {
+  const value = project?.project ?? project;
+  return bindCraft2ProgressSummary(value) ?? `status=${status ?? 'unknown'}`;
 }
 
 function readJsonFile(file) {

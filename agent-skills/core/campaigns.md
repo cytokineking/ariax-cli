@@ -28,6 +28,7 @@ Use only inputs and controls supported by the live Ariax schema.
 | BoltzGen | Pilot of **25–50 designs**, inspect outputs, then typically **10,000–20,000** for a full campaign. `num_designs` is generated volume; `budget` is the final selected-set size. |
 | ESMFold2-pipeline | Pilot of **25–50 designs**, then **1,000** initially. Review quality, diversity, and useful candidate yield before recommending another campaign. Counts are total across frameworks. |
 | BindCraft / FreeBindCraft | Choose an **accepted-design** target. Periodically review trajectories and acceptance; **zero accepted after 25–40 trajectories** is a reason to discuss stopping and revising settings, filters, hotspots, or target trim. |
+| BindCraft2 | Start with **2 accepted designs** and, when a bounded pilot is wanted, **20 maximum trajectories**. Review attempted/accepted/refolded/ranked counts and per-attempt adaptation before scaling. |
 
 Pilots check that the actual pipeline produces interpretable candidates at the
 intended site. Inspect final evaluation outputs as well as generation; successful
@@ -40,6 +41,9 @@ high acceptance can finish quickly while low or zero acceptance can continue
 indefinitely. The 25–40-trajectory review point is not an automatic abort or
 proof of a software failure. Follow the user's agreed lifecycle policy when
 stopping or reconfiguring; scientific changes require a new project, not restart.
+BindCraft2's `max_trajectories` is an attempt cap rather than a spend cap. A
+pilot can finish with `attempt_limit_reached` and zero accepted designs; do not
+relaunch it implicitly.
 
 ## Choose compute for the whole workflow
 
@@ -73,7 +77,7 @@ changes instead of silently relaxing filters to obtain a desired count.
 
 Report generated/attempted, evaluated, native filter-passing, objective-respecting,
 and distinct shortlisted counts **where supported by evidence**. Label the unit:
-BindCraft trajectories and accepted sequence variants are different populations.
+BindCraft and BindCraft2 trajectories and accepted sequence variants are different populations.
 Use the [shared count-source guidance](../SKILL.md#results-and-errors) and complete
 [candidate retrieval](candidates.md); state unavailable counts rather than
 inventing them. Retain result paths and the settings used for the comparison.

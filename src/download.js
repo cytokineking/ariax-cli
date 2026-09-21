@@ -15,7 +15,10 @@ import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { validateTransferUrl } from './http.js';
 
-const SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+// Native BindCraft2 summary tables use names such as !_Trajectories.csv.
+// Permit one leading exclamation mark without broadening separators, dotfiles,
+// leading dashes, whitespace, or the rest of the conservative segment charset.
+const SEGMENT_RE = /^(?:[A-Za-z0-9][A-Za-z0-9._+-]*|![A-Za-z0-9_][A-Za-z0-9._+-]*)$/;
 
 export class UnsafePathError extends Error {
   constructor(message) {
@@ -29,6 +32,14 @@ export class ChecksumMismatchError extends Error {
   constructor(message) {
     super(message);
     this.name = 'ChecksumMismatchError';
+    this.exitCode = 10;
+  }
+}
+
+export class SizeMismatchError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SizeMismatchError';
     this.exitCode = 10;
   }
 }
@@ -130,11 +141,11 @@ export function declaredSha256(artifact) {
  * Stream a fetch Response body to a temp file, verify, then rename.
  * @param {Response} res fetch Response with a readable body
  * @param {string} dest absolute destination path
- * @param {{ expectedSha256?: string|null, overwrite?: boolean, signal?: AbortSignal, onBytes?: (bytes:number)=>void }} [opts]
+ * @param {{ expectedSha256?: string|null, expectedBytes?: number|null, overwrite?: boolean, signal?: AbortSignal, onBytes?: (bytes:number)=>void }} [opts]
  * @returns {Promise<{ path: string, bytes: number, sha256: string }>}
  */
 export async function streamToFile(res, dest, opts = {}) {
-  const { expectedSha256 = null, overwrite = false } = opts;
+  const { expectedSha256 = null, expectedBytes = null, overwrite = false } = opts;
   if (!res || !res.body) throw new Error('Download response has no body.');
   if (!overwrite && fs.existsSync(dest)) throw new OverwriteRefusedError(dest);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -156,6 +167,12 @@ export async function streamToFile(res, dest, opts = {}) {
     throw err;
   }
   const digest = hash.digest('hex');
+  if (Number.isInteger(expectedBytes) && expectedBytes >= 0 && bytes !== expectedBytes) {
+    try { fs.rmSync(tmp, { force: true }); } catch {}
+    throw new SizeMismatchError(
+      `Size mismatch for ${path.basename(dest)}: expected ${expectedBytes} bytes, got ${bytes}.`,
+    );
+  }
   if (expectedSha256 && digest !== expectedSha256.toLowerCase()) {
     try { fs.rmSync(tmp, { force: true }); } catch {}
     throw new ChecksumMismatchError(
@@ -185,7 +202,7 @@ export async function streamToFile(res, dest, opts = {}) {
  * @param {string} url presigned URL
  * @param {string} dest absolute destination path
  * timeoutMs bounds connection and read inactivity, not the total transfer time.
- * @param {{ expectedSha256?: string|null, overwrite?: boolean, timeoutMs?: number, signal?: AbortSignal }} [opts]
+ * @param {{ expectedSha256?: string|null, expectedBytes?: number|null, overwrite?: boolean, timeoutMs?: number, signal?: AbortSignal }} [opts]
  */
 export async function downloadUrl(fetchImpl, url, dest, opts = {}) {
   const source = validateTransferUrl(url, 'Download');

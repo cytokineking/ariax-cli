@@ -47,6 +47,7 @@ source-table scores from later rerun structures; report missing provenance.
 | **Interchain PAE / iPAE** | Predicted uncertainty in relative positioning across chains; lower generally means greater confidence. | Raw PAE is in angstroms; producer-scaled PAE is not. Check the interface/residue scope and never apply angstrom thresholds to scaled fields. |
 | **Target-aligned binder RMSD / self-consistency DockQ** | Agreement of designed and subsequently predicted binding poses; lower RMSD or higher DockQ means closer agreement. | Identify the alignment, atom selection, chain mapping, and reference. Agreement with a designed structure is computational self-consistency, not agreement with an experimental binder complex. |
 | **Native pass flags / composite rank scores** | Whether a producer's stated criteria passed, or relative ordering within its workflow. | Selected/ranked does not necessarily mean passed. Composite scores and pool-dependent scores are not comparable across engines or unrelated scoring batches. |
+| **BC2 i_pDAE / i_pAE** | BC2 interface ranking/confidence evidence; higher i_pDAE and lower normalized i_pAE are preferred within the recorded workflow. | Both are normalized 0–1 fields. i_pAE is not an ångström PAE matrix, and neither metric is affinity. Keep per-target vector order and detarget signs. |
 
 For VHH/scFv, inspect CDR confidence and CDR-mediated target contacts separately
 from the conserved framework; a high framework average can hide uncertain
@@ -54,6 +55,8 @@ designed loops. Include plausible sequence/structure liabilities in shortlist
 review, such as exposed hydrophobic patches, long homopolymer runs, clashes,
 and disulfide compatibility. Judge these in the requested modality: antibody
 framework similarity and expected cysteines are not miniprotein novelty failures.
+For BC2 scFv, review both ordered variable-domain chains and design any linker
+as a separate construct decision; the engine does not supply it.
 
 ## Compare candidates fairly
 

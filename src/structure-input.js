@@ -627,13 +627,15 @@ export function parseStructureInput(text, targetFilename, esmOnly = false) {
 export function protocolId(protocol) {
   const value = String(protocol || '').trim().toLowerCase();
   if (value === 'bindcraft-v1.5' || value.startsWith('bindcraft v1')) return 'bindcraft';
-  if (value === 'boltzgen' || value === 'pxdesign' || value === 'esmfold2-pipeline') return value;
+  if (value === 'bindcraft2' || value === 'boltzgen' || value === 'pxdesign' || value === 'esmfold2-pipeline') return value;
   return null;
 }
 
 export function selectedChains(spec, protocol) {
   const raw = protocol === 'esmfold2-pipeline'
     ? spec.protocol_config?.target?.chains
+    : protocol === 'bindcraft2'
+      ? spec.protocol_config?.targets?.[0]?.chains
     : spec.chains;
   const values = Array.isArray(raw) ? raw : String(raw || '').split(',');
   return values.map((chain) => String(chain).trim()).filter(Boolean);

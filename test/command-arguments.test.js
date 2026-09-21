@@ -76,11 +76,12 @@ it('validates all command surfaces before credential access or network', async (
 
 it('preserves supported authenticated options and existing aliases at dispatch', async () => {
   const cases = [
-    ['submit', '--file=job.json', '--name=test', '--input=input.pdb', '--input-upload-intent-id=id', '--wait', '--resume', '--poll-interval=2', '--wait-timeout=4'],
-    ['submit', '--f=job.json'], ['validate', '-f', 'job.json', '--input=input.pdb'], ['validate', '--f=job.json'],
-    ['status', '--resume', '--wait', '--poll-interval=2', '--wait-timeout=4'],
-    ['restart', project, '--wait', '--poll-interval=2', '--wait-timeout=4'],
-    ['recover', 'operation-id', '--wait', '--poll-interval=2', '--wait-timeout=4'],
+    ['submit', '--file=job.json', '--name=test', '--input=input.pdb', '--input-upload-intent-id=id', '--wait', '--resume', '--poll-interval=2', '--wait-timeout=4', '--details'],
+    ['submit', '--f=job.json'], ['submit', '--f=job.json', '--input-dir=inputs'],
+    ['validate', '-f', 'job.json', '--input=input.pdb', '--details'], ['validate', '--f=job.json', '--input-dir=inputs'], ['validate', '--f=job.json'],
+    ['status', '--resume', '--wait', '--poll-interval=2', '--wait-timeout=4', '--details'],
+    ['restart', project, '--wait', '--poll-interval=2', '--wait-timeout=4', '--details'],
+    ['recover', 'operation-id', '--wait', '--poll-interval=2', '--wait-timeout=4', '--details'],
     ['projects', '--status=running', '--protocol=boltzgen', '--name=x', '--limit=5', '--cursor=x', '--all'],
     ['projects', 'export', project, '-o', 'job.json'],
     ['jobs', '--project=x', '--status=running', '--limit=5', '--cursor=x', '--all'],
@@ -88,8 +89,8 @@ it('preserves supported authenticated options and existing aliases at dispatch',
     ['logs', project, '--list'],
     ['gpu-preferences', project, '-f', 'preferences.json'],
     ['runs', project, '--job=id', '--limit=5', '--cursor=x', '--all'],
-    ['candidates', project, '--view=final', '--limit=5', '--cursor=x', '--all', '--eligible', '--output=x', '--overwrite'],
-    ['results', project, '--path=x', '--download=x', '--overwrite', '--limit=5'],
+    ['candidates', project, '--view=final', '--limit=5', '--cursor=x', '--all', '--eligible', '--output=x', '--overwrite', '--details'],
+    ['results', project, '--path=x', '--download=x', '--overwrite', '--limit=5', '--details'],
   ];
   for (const argv of cases) {
     let reads = 0;

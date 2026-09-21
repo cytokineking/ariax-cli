@@ -4,14 +4,15 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { usageError } from '../args.js';
 import { EXIT } from '../exit-codes.js';
-import { printJson, printProgress, printTable } from '../output.js';
+import { printData, printJson, printProgress, printTable } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
+import { compactCandidateResult, usesCompactCandidatePresentation } from '../campaign-presentation.js';
 
 function serverError(message) { const error = new Error(message); error.exitCode = EXIT.SERVER; return error; }
 
 export async function run(ctx) {
   if (ctx.positionals.length !== 1) throw usageError('candidates: expected one project UUID or exact unique name.');
-  const allowed = new Set(['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite']);
+  const allowed = new Set(['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details']);
   for (const flag of Object.keys(ctx.flags)) if (!allowed.has(flag)) throw usageError(`candidates: unknown flag --${flag}`);
   const view = ctx.flags.view ?? 'final';
   if (!['final', 'all', 'diagnostics'].includes(view)) throw usageError('candidates: --view must be final, all, or diagnostics.');
@@ -53,25 +54,95 @@ export async function run(ctx) {
       if (next) seenCursors.add(next);
       cursor = next;
     } while (ctx.flags.all && cursor);
-    const result = { data, meta: { ...meta, returned: data.length, fetched: seenIds.size, ...(ctx.flags.eligible ? { eligibility_filter: { mode: 'explicit_true_only', excluded_false: excludedFalse, excluded_unknown: excludedUnknown, reasons: [...exclusionReasons] } } : {}) }, ...(requestId ? { request_id: requestId } : {}) };
+    const eligibilityFilter = ctx.flags.eligible
+      ? { mode: 'explicit_true_only', excluded_false: excludedFalse, excluded_unknown: excludedUnknown, reasons: [...exclusionReasons] }
+      : null;
+    const result = { data, meta: { ...meta, returned: data.length, fetched: seenIds.size, ...(eligibilityFilter ? { eligibility_filter: eligibilityFilter } : {}) }, ...(requestId ? { request_id: requestId } : {}) };
+    const compact = ctx.flags.details !== true && usesCompactCandidatePresentation(data, result.meta);
+    const presented = compact ? compactCandidateResult(data, result.meta, eligibilityFilter) : result;
     if (destination) {
-      writeAtomic(destination, JSON.stringify(result, null, 2) + '\n', ctx.flags.overwrite);
+      writeAtomic(destination, JSON.stringify(presented, null, 2) + '\n', ctx.flags.overwrite);
       printProgress(`Saved ${data.length} candidates to ${destination}`);
     }
-    if (ctx.json) printJson(result);
+    if (ctx.json) printJson(presented);
     else {
-      printTable(['native_id', 'rank', 'selected', 'pass_filters', 'ranking_eligible', 'structures'], data.map((c) => [
-        c.native_id, c.rank ?? '-', c.selection?.selected ?? 'unknown',
-        nativeFilterPass(c),
-        c.ranking_eligible ?? 'unknown', c.structures?.length ?? 0,
-      ]));
-      printProgress(`Candidate state: ${meta.state ?? 'unknown'}; ${data.length} returned (${seenIds.size} fetched).`);
+      if (!compact) {
+        if (data.some((candidate) => candidate?.engine === 'bindcraft2')) emitBindCraft2Table(data);
+        else emitStandardTable(data);
+      } else emitCompactTable(presented.data);
+      if (compact) for (const candidate of presented.data) {
+        for (const reason of candidate.ranking.reasons) printData(`Note [${candidate.native_id ?? candidate.id ?? 'candidate'}]: ${reason}`);
+      }
+      printProgress(`Candidate state: ${presented.meta?.state ?? meta.state ?? 'unknown'}; ${data.length} returned (${seenIds.size} fetched).`);
+      if (compact && presented.meta?.explanation) printProgress(presented.meta.explanation);
+      if (compact) for (const note of presented.meta?.notes || []) printData(`Note: ${note}`);
       if (ctx.flags.eligible) printProgress(`Explicit eligibility filter excluded ${excludedFalse} false and ${excludedUnknown} unknown rows. ${[...exclusionReasons].join(' ')}`);
-      for (const warning of meta.warnings || []) printProgress(String(warning));
+      if (!compact) for (const warning of meta.warnings || []) printProgress(String(warning));
       if (meta.next_cursor) printProgress('More rows are available; use --all or --cursor with the JSON next_cursor.');
     }
-    return result;
+    return presented;
   } finally { process.removeListener('SIGINT', interrupt); }
+}
+
+function emitCompactTable(data) {
+  if (!data.length) {
+    printData('No candidate rows in this view.');
+    return;
+  }
+  const priority = new Map([
+    ['i_pTM', 0], ['pLDDT', 1], ['i_pDAE', 2], ['i_pAE', 3], ['pTM', 4],
+    ['Binder_RMSD', 5], ['Target_RMSD', 6], ['Hotspot_Contact_Fraction', 7],
+    ['Off_Epitope_Contact_Fraction', 8], ['Interface_Residues', 9],
+  ]);
+  const headers = ['candidate', 'rank', 'selected', 'outcome', 'native_pass', 'eligible', 'optimization', 'key_scores', 'target_scores', 'recorded_rejection', 'sequences', 'structures'];
+  const rows = data.map((candidate) => {
+    const scores = candidate.metrics
+      .map((metric, index) => ({ metric, index }))
+      .filter(({ metric }) => metric.value !== null)
+      .sort((left, right) => (priority.get(left.metric.name) ?? 1000) - (priority.get(right.metric.name) ?? 1000) || left.index - right.index)
+      .slice(0, 4)
+      .map(({ metric }) => `${metric.name}=${metric.value}`)
+      .join(', ');
+    const targetScores = candidate.target_scores.targets
+      .map((target) => `${target.name ?? 'unnamed'}(weight=${target.weight ?? 'unknown'},i_pDAE=${target.i_pDAE ?? 'unknown'})`);
+    if (candidate.target_scores.aligned_positive_target_mean_i_pDAE !== null) {
+      targetScores.unshift(`aligned_positive_mean=${candidate.target_scores.aligned_positive_target_mean_i_pDAE}`);
+    }
+    const rejection = candidate.rejection.terminated_stage
+      ? `terminated:${candidate.rejection.terminated_stage}`
+      : (candidate.rejection.failed_filters.length ? candidate.rejection.failed_filters.join(',') : '-');
+    return [
+      candidate.native_id ?? candidate.id ?? '-', candidate.rank, candidate.selected, candidate.native_outcome, candidate.native_filter_pass, candidate.ranking.eligible,
+      candidate.optimization.state === 'unknown' ? null : candidate.optimization.state,
+      scores || null, targetScores.join(', ') || null, rejection === '-' ? null : rejection, candidate.binder_sequences.length, candidate.structures.length,
+    ];
+  });
+  // Human tables need not repeat whole columns of unknown values. State the
+  // unavailable fields once, preserving mixed known/unknown and false/zero.
+  // JSON remains the stable, complete scientific record.
+  const visible = headers.map((_, index) => index).filter((index) => rows.some((row) => row[index] !== null));
+  const absent = headers.filter((_, index) => !visible.includes(index));
+  printTable(visible.map((index) => headers[index]), rows.map((row) => visible.map((index) => row[index] ?? 'unknown')));
+  if (absent.length) printData(`Not reported in these rows: ${absent.join(', ')}.`);
+}
+
+function emitStandardTable(data) {
+  printTable(['native_id', 'rank', 'selected', 'pass_filters', 'ranking_eligible', 'structures'], data.map((c) => [
+    c.native_id, c.rank ?? '-', c.selection?.selected ?? 'unknown',
+    nativeFilterPass(c),
+    c.ranking_eligible ?? 'unknown', c.structures?.length ?? 0,
+  ]));
+}
+
+function emitBindCraft2Table(data) {
+  printTable(['native_id', 'rank', 'selected', 'outcome', 'binder_chains', 'ranking_eligible', 'structures'], data.map((candidate) => {
+    const sequences = Array.isArray(candidate?.bindcraft2?.binder_sequences)
+      ? candidate.bindcraft2.binder_sequences.filter((sequence) => typeof sequence === 'string' && sequence.length)
+      : [];
+    const selected = candidate.selection?.selected ?? 'unknown';
+    const outcome = candidate.bindcraft2?.outcome ?? candidate.outcome ?? 'unknown';
+    return [candidate.native_id, candidate.rank ?? '-', selected, outcome, sequences.length || '-', candidate.ranking_eligible ?? 'unknown', candidate.structures?.length ?? 0];
+  }));
 }
 
 function nativeFilterPass(candidate) {

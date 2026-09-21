@@ -10,6 +10,7 @@ const MAX_READ_BYTES = 64 * 1024;
 const PROTOCOLS = Object.freeze({
   'bindcraft-v1.5': 'ariax-bindcraft',
   bindcraft: 'ariax-bindcraft',
+  bindcraft2: 'ariax-bindcraft2',
   boltzgen: 'ariax-boltzgen',
   pxdesign: 'ariax-pxdesign',
   'esmfold2-pipeline': 'ariax-esmfold2-pipeline',
@@ -27,6 +28,7 @@ const CORE_REFERENCES = Object.freeze({
 function protocolPaths() {
   return {
     'bindcraft-v1.5': join(ROOT, 'skills', 'ariax-bindcraft', 'SKILL.md'),
+    bindcraft2: join(ROOT, 'skills', 'ariax-bindcraft2', 'SKILL.md'),
     boltzgen: join(ROOT, 'skills', 'ariax-boltzgen', 'SKILL.md'),
     pxdesign: join(ROOT, 'skills', 'ariax-pxdesign', 'SKILL.md'),
     'esmfold2-pipeline': join(ROOT, 'skills', 'ariax-esmfold2-pipeline', 'SKILL.md'),

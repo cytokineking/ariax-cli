@@ -53,6 +53,8 @@ BoltzGen's diffusion workflow has less stringent GPU requirements than the
 inversion workflows, but increase GPU capability and VRAM as target size grows.
 Include binder size and downstream refolding in that decision. Use current
 hourly prices and the live schema to choose a range of eligible GPU classes.
+Treat canonical `RTX6000PRO` as a primary/core eligible option when advertised,
+not as an additional fallback; it is distinct from `RTX6000ADA` and `A6000`.
 Trim targets when helpful while preserving the intended site's fold and physical context.
 
 ## Build a job specification

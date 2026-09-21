@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "bindcraft2-exact-bundle",
+  "prompt": "Prepare, without API or compute calls, a BindCraft2 miniprotein pilot for structured input.pdb chain A and secondary homolog.fasta chain A. Keep both as positive targets, request exactly 2 accepted designs and at most 20 trajectories, and use the humanize property. Preserve the exact filenames and use an input directory.",
+  "expected_completion": "completed",
+  "checks": [
+    {"pointer": "/protocol", "op": "equals", "value": "bindcraft2"},
+    {"pointer": "/protocol_config/modality", "op": "equals", "value": ["binder"]},
+    {"pointer": "/protocol_config/properties", "op": "equals", "value": ["humanize"]},
+    {"pointer": "/protocol_config/targets/0/input_file", "op": "equals", "value": "input.pdb"},
+    {"pointer": "/protocol_config/targets/1/input_file", "op": "equals", "value": "homolog.fasta"},
+    {"pointer": "/protocol_config/campaign/num_designs", "op": "equals", "value": 2},
+    {"pointer": "/protocol_config/campaign/max_trajectories", "op": "equals", "value": 20}
+  ]
+}

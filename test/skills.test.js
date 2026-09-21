@@ -62,6 +62,14 @@ describe('bundled skills read-through', () => {
     assert.equal(protocol.stderr, '');
   });
 
+  it('packages the dedicated BindCraft2 guide and output reference', async () => {
+    const out = await captureOutput(() => main(['skills', 'bindcraft2', '--json'], {}));
+    const data = JSON.parse(out.stdout).data;
+    assert.equal(data.protocol, 'bindcraft2');
+    assert.match(data.skill, /ariax-bindcraft2\/SKILL\.md$/);
+    assert.match(data.references.outputs, /ariax-bindcraft2\/outputs\.md$/);
+  });
+
   it('reads named core and protocol output references', async () => {
     const core = await captureOutput(() => main([
       'skills', '--reference', 'candidates', '--read', '--json',
@@ -86,6 +94,27 @@ describe('bundled skills read-through', () => {
       outputData.content,
       readFileSync(new URL('../agent-skills/skills/ariax-pxdesign/outputs.md', import.meta.url), 'utf8'),
     );
+  });
+
+  it('documents the compact BindCraft2 candidate contract without losing target or completion semantics', () => {
+    const candidates = readFileSync(new URL('../agent-skills/core/candidates.md', import.meta.url), 'utf8');
+    const outputs = readFileSync(new URL('../agent-skills/skills/ariax-bindcraft2/outputs.md', import.meta.url), 'utf8');
+    assert.match(candidates, /target_scores\.aligned_positive_target_mean_i_pDAE/);
+    assert.match(candidates, /recorded `completed` state is not a rejection/);
+    assert.match(candidates, /Other-engine `candidates` and status \| Released engine-specific payload remains the default/);
+    assert.match(outputs, /Compact `target_scores\.targets` keeps target names, signed weights, and i_pDAE values/);
+    assert.match(outputs, /`optimization\.state: "completed"` records successful native optimization and is not rejection evidence/);
+  });
+
+  it('treats canonical RTX6000PRO as primary on supported engines and excluded on PXDesign', () => {
+    for (const name of ['ariax-bindcraft', 'ariax-bindcraft2', 'ariax-boltzgen', 'ariax-esmfold2-pipeline']) {
+      const guide = readFileSync(new URL(`../agent-skills/skills/${name}/SKILL.md`, import.meta.url), 'utf8');
+      assert.match(guide, /`RTX6000PRO`/i, name);
+      assert.match(guide, /primary\/core/i, name);
+    }
+    const pxdesign = readFileSync(new URL('../agent-skills/skills/ariax-pxdesign/SKILL.md', import.meta.url), 'utf8');
+    assert.match(pxdesign, /excludes[^.]*`RTX6000PRO`/i);
+    assert.doesNotMatch(pxdesign, /`RTX6000PRO`[^.]*primary\/core/i);
   });
 
   it('rejects arbitrary paths and incomplete reference requests', async () => {

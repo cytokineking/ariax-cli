@@ -8,8 +8,10 @@ malformed records are reported as unavailable and never block operations.
 
 The version-1 record uses `kind: "ariax_run_settings"` and
 `capture_scope: "accepted_job_configuration"`. It contains public `settings`,
-`compute_preferences`, known `input` metadata (source, filename, PDB ID, and
-SHA256 when known), and optional `ariax_build`. It does not probe remote inputs,
+`compute_preferences`, known `input` metadata, and optional `ariax_build`.
+Legacy records contain source, filename, PDB ID, and SHA256. BindCraft2 records
+can instead contain a `files` map with each bundle filename, byte count, and
+SHA256. It does not probe remote inputs,
 loaded models, or execution environments. Preserve local preparation manifests
 and input bytes separately. Run-list `provenance_status` is `recorded` or
 `unavailable`; recording is optional and a missing history table does not hide jobs.
