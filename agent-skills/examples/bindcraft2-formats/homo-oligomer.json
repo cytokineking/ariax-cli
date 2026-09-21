@@ -31,7 +31,11 @@
       "max_trajectories": 20
     },
     "advanced": {
-      "oligomer_tie": "symmetric"
+      "oligomer_tie": "symmetric",
+      "save_design_trajectory": true,
+      "save_failed_trajectories": true,
+      "save_failed_refolds": true,
+      "save_binder_monomers": true
     }
   },
   "allowed_gpus": [

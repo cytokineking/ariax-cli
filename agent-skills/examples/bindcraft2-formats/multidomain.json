@@ -30,7 +30,11 @@
       "max_trajectories": 20
     },
     "advanced": {
-      "n_domains": 2
+      "n_domains": 2,
+      "save_design_trajectory": true,
+      "save_failed_trajectories": true,
+      "save_failed_refolds": true,
+      "save_binder_monomers": true
     }
   },
   "allowed_gpus": [

@@ -26,7 +26,12 @@
       "num_designs": 2,
       "max_trajectories": 20
     },
-    "advanced": {}
+    "advanced": {
+      "save_design_trajectory": true,
+      "save_failed_trajectories": true,
+      "save_failed_refolds": true,
+      "save_binder_monomers": true
+    }
   },
   "allowed_gpus": [
     "H100",

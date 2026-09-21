@@ -47,7 +47,11 @@
         10,
         40
       ],
-      "idr_crop_count": 2
+      "idr_crop_count": 2,
+      "save_design_trajectory": true,
+      "save_failed_trajectories": true,
+      "save_failed_refolds": true,
+      "save_binder_monomers": true
     }
   },
   "allowed_gpus": [

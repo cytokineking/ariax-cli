@@ -88,3 +88,11 @@ Project lifecycle and campaign phase answer different questions. Always read att
 Native stage termination precedes final filtering. When no candidates were scored, an empty final-filter list means those filters were not evaluated. Do not infer pass/fail from rounded metrics or treat missing eligibility as false. BindCraft2 can publish more refold rows than trajectories because multiple sequence candidates can be evaluated from one trajectory.
 
 Read [BindCraft2 outputs](outputs.md) for candidate fields, missing tables, native score units, and recovery. Follow each download failure's `action`; rerunning a transiently interrupted download resumes saved files.
+
+### Saved structures
+
+Use the live server schema and validation with the existing job JSON `protocol_config.advanced`. New campaigns default `save_design_trajectory`, `save_failed_trajectories`, `save_failed_refolds`, and `save_binder_monomers` to true; explicit false values are preserved. Packaged BindCraft2 examples show these choices. No additional flags or settings DSL are needed. Retain these values when exporting or reusing a job.
+
+`save_design_trajectory` saves the terminal prediction per predicted state, including rejected/early-terminated trajectories when predictions exist. Accepted/ranked structures are always saved. `save_binder_monomers` controls refolded monomers; terminal trajectory output may also write monomers. Intermediate frames, animations, and relaxation remain separate and are not enabled by these choices.
+
+A missing saved structure is distinct from scientific rejection or acceptance. No finite prediction can mean no structure; an early exit can have a structure but no scored metrics. Never invent scores or claim to recover historical unsaved structures. The website defaults to trajectories with structures while keeping full CSV downloads and attempt counts. The candidates API supports `view=diagnostics&structures_only=true` for BindCraft2; it filters before pagination, reports `total` and `overall_total`, and invalidates cursors when publication/filter changes. Omitted/false keeps all rows. Older publications use bounded discovery and may require retrieving the CSV and artifacts directly.

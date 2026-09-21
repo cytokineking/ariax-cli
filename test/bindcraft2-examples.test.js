@@ -48,6 +48,7 @@ describe('BindCraft2 packaged examples', () => {
     ]));
     for (const job of jobs) {
       assert.equal(job.protocol, 'bindcraft2');
+      for (const key of ['save_design_trajectory', 'save_failed_trajectories', 'save_failed_refolds', 'save_binder_monomers']) assert.equal(job.protocol_config.advanced[key], true);
       assert.equal(job.protocol_config.targets[0].input_file, 'input.pdb');
       assert.equal(job.protocol_config.campaign.num_designs, 2);
       assert.equal(job.protocol_config.campaign.max_trajectories, 20);
