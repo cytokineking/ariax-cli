@@ -58,7 +58,7 @@ export async function waitForProject(client, projectId, opts = {}) {
     if (status !== undefined && isTerminalState(status)) {
       return { project, status, timedOut: false, stopped: false };
     }
-    if (opts.onTick) opts.onTick({ status, elapsedMs });
+    if (opts.onTick) opts.onTick({ project, status, elapsedMs });
     if (timeoutMs > 0 && elapsedMs >= timeoutMs) {
       return { project, status, timedOut: true, stopped: false };
     }

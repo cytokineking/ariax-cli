@@ -31,7 +31,9 @@ async function run(args, runtime = {}, env = {}) {
   try {
     const code = await main(args, env, {fetchImpl:noNetwork, interactive:false,
       credentialStore:{read:async () => { throw new Error('Credentials must not be accessed'); }}, ...runtime});
-    return {code, data:stdout ? JSON.parse(stdout).data : undefined, error:stdout ? JSON.parse(stdout).error : undefined, stdout, stderr};
+    let parsed;
+    try { parsed = stdout ? JSON.parse(stdout) : undefined; } catch { parsed = undefined; }
+    return {code, data:parsed?.data, error:parsed?.error, stdout, stderr};
   } finally { process.stdout.write = originalOut; process.stderr.write = originalErr; }
 }
 
@@ -168,6 +170,127 @@ ATOM 2 C CA GLY X 1 2 GLY AAA 177 ? 11 10 10
     const full = await run(['inputs','inspect','--input',large,'--full','--json']);
     assert.equal(full.data.chains[0].residues.length, 300);
     assert.equal(full.data.chains[0].sequence.length, 300);
+  });
+
+  it('makes BindCraft2 --full inspection expose exact per-file sequences and residue maps', async () => {
+    const directory = path.join(root, 'bc2-inspect');
+    fs.mkdirSync(directory);
+    fs.copyFileSync(pdb, path.join(directory, 'input.pdb'));
+    const bc2Job = write('bc2-inspect.json', JSON.stringify({
+      protocol: 'bindcraft2',
+      protocol_config: {
+        schema_version: 1,
+        modality: ['binder'],
+        properties: [],
+        targets: [{ name: 'target', input_file: 'input.pdb', chains: ['A'], objective: 'target', weight: 1 }],
+        binder: { lengths: [60, 80] },
+        campaign: { num_designs: 1 },
+      },
+    }));
+    const args = ['inputs', 'inspect', '--input-dir', directory, '-f', bc2Job];
+    const compact = await run([...args, '--json']);
+    const compactTarget = compact.data.files[0];
+    assert.equal(compact.code, 0, compact.stdout);
+    assert.equal(compactTarget.chains[0].sequence, undefined);
+    assert.equal(compactTarget.chains[0].sequence_length, 3);
+    assert.equal(compactTarget.chains[0].residues, undefined);
+    assert.equal(compact.data.kind, undefined);
+    assert.equal(compact.data.prepared_by, undefined);
+
+    const full = await run([...args, '--full', '--json']);
+    const fullTarget = full.data.files[0];
+    assert.equal(full.code, 0, full.stdout);
+    assert.equal(fullTarget.chains[0].sequence, 'ACD');
+    assert.equal(fullTarget.chains[0].residues.length, 3);
+    assert.deepEqual(fullTarget.chains[0].residues.map(row => row.author_residue), [101, 102, 103]);
+
+    const details = await run([...args, '--details', '--json']);
+    assert.equal(details.code, 0, details.stdout);
+    assert.equal(details.data.kind, 'ariax_bindcraft2_input_bundle');
+    assert.match(details.data.files['input.pdb'].sha256, /^[a-f0-9]{64}$/);
+    assert.equal(details.data.file_inspections[0].chains[0].sequence, undefined);
+
+    const fullDetails = await run([...args, '--full', '--details', '--json']);
+    assert.equal(fullDetails.code, 0, fullDetails.stdout);
+    assert.equal(fullDetails.data.inspection_scope.full, true);
+    assert.equal(fullDetails.data.file_inspections[0].chains[0].sequence, 'ACD');
+
+    const human = await run([...args, '--no-json']);
+    assert.equal(human.code, 0, human.stdout);
+    assert.match(human.stdout, /^BindCraft2 input — ready · miniprotein/m);
+    assert.match(human.stdout, /^input\.pdb — target · pdb/m);
+    assert.match(human.stdout, /Target target \[A\] \(target\) · hotspots=none · coldspots=none/);
+    assert.match(human.stdout, /Chain A · 3 aa · verified · 0 unresolved region\(s\)/);
+    assert.doesNotMatch(human.stdout, /sha256|prepared_by|source_revision|schema_version|residues/);
+  });
+
+  it('keeps multi-target and detarget FASTA evidence visible without manifest bookkeeping', async () => {
+    const directory = path.join(root, 'bc2-multi-inspect');
+    fs.mkdirSync(directory);
+    fs.copyFileSync(pdb, path.join(directory, 'input.pdb'));
+    fs.writeFileSync(path.join(directory, 'avoid.fasta'), '>B\nACDE\n');
+    const bc2Job = write('bc2-multi-inspect.json', JSON.stringify({
+      protocol: 'bindcraft2',
+      protocol_config: {
+        schema_version: 1,
+        modality: ['binder'],
+        properties: [],
+        targets: [
+          { name: 'target', input_file: 'input.pdb', chains: ['A'], hotspots: 'A101', objective: 'target', weight: 1 },
+          { name: 'avoid', input_file: 'avoid.fasta', chains: ['B'], objective: 'detarget', weight: -1 },
+        ],
+        binder: { lengths: [60, 80] },
+        campaign: { num_designs: 1 },
+      },
+    }));
+    const args = ['inputs', 'inspect', '--input-dir', directory, '-f', bc2Job];
+    const compact = await run([...args, '--json']);
+    assert.equal(compact.code, 0, compact.stdout);
+    const structured = compact.data.files.find((file) => file.filename === 'input.pdb');
+    const fasta = compact.data.files.find((file) => file.filename === 'avoid.fasta');
+    assert.deepEqual(structured.targets[0].hotspots, { value: 'A101', residue_register: 'author', validated: true });
+    assert.deepEqual(fasta.targets[0], {
+      name: 'avoid', objective: 'detarget', weight: -1, chains: ['B'],
+      hotspots: { value: null, residue_register: null, validation: 'not_applicable_for_fasta' },
+      coldspots: { value: null, residue_register: null, validation: 'not_applicable_for_fasta' },
+      selected_record: 'B',
+    });
+    assert.deepEqual(fasta.records, [{ name: 'B', sequence_length: 4 }]);
+    assert.equal(JSON.stringify(compact.data).includes('sha256'), false);
+
+    const human = await run([...args, '--no-json']);
+    assert.match(human.stdout, /Target target \[A\] \(target\) · hotspots=A101 \(valid, author\)/);
+    assert.match(human.stdout, /avoid\.fasta — target · fasta/);
+    assert.match(human.stdout, /Target avoid \[B\] \(detarget\) · record B/);
+    assert.match(human.stdout, /FASTA B · 4 aa/);
+  });
+
+  it('makes bounded BindCraft2 chain previews explicit and keeps selected chains visible', async () => {
+    const directory = path.join(root, 'bc2-many-chain-inspect');
+    fs.mkdirSync(directory);
+    const chainIds = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
+    fs.writeFileSync(path.join(directory, 'input.pdb'), chainIds.map((chain, index) => (
+      `ATOM  ${String(index + 1).padStart(5)}  N   ALA ${chain}   1      10.000  10.000  10.000  1.00 20.00           N\n`
+    )).join(''));
+    const bc2Job = write('bc2-many-chain-inspect.json', JSON.stringify({
+      protocol: 'bindcraft2',
+      protocol_config: {
+        schema_version: 1, modality: ['binder'], properties: [],
+        targets: [{ name: 'target', input_file: 'input.pdb', chains: ['z'], hotspots: 'z1', objective: 'target', weight: 1 }],
+        binder: { lengths: [60, 80] }, campaign: { num_designs: 1 },
+      },
+    }));
+    const args = ['inputs', 'inspect', '--input-dir', directory, '-f', bc2Job];
+    const compact = await run([...args, '--json']);
+    const file = compact.data.files[0];
+    assert.equal(file.chain_count, 52);
+    assert.equal(file.chains_truncated, true);
+    assert.deepEqual(file.selected_chains, ['z']);
+    assert.equal(file.chains[0].chain, 'z');
+
+    const human = await run([...args, '--no-json']);
+    assert.match(human.stdout, /Chain z · 1 aa/);
+    assert.match(human.stdout, /Chain preview: 50 of 52; 1 selected \(selected chains shown first\)/);
   });
 
   it('does not invent positions for an ambiguous full-sequence register', async () => {

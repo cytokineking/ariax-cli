@@ -1,0 +1,41 @@
+{
+  "protocol": "bindcraft2",
+  "protocol_config": {
+    "schema_version": 1,
+    "modality": [
+      "homo_oligomer"
+    ],
+    "properties": [],
+    "targets": [
+      {
+        "name": "target",
+        "input_file": "input.pdb",
+        "chains": [
+          "A"
+        ],
+        "hotspots": "A54,A56",
+        "coldspots": "",
+        "objective": "target",
+        "weight": 1
+      }
+    ],
+    "binder": {
+      "lengths": [
+        60,
+        90
+      ],
+      "copies": 2
+    },
+    "campaign": {
+      "num_designs": 2,
+      "max_trajectories": 20
+    },
+    "advanced": {
+      "oligomer_tie": "symmetric"
+    }
+  },
+  "allowed_gpus": [
+    "H100",
+    "RTX6000PRO"
+  ]
+}

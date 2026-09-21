@@ -1,9 +1,11 @@
 /** `ariax status <project-id> [--wait] [--resume]` — project detail + optional wait. */
-import { printJson, printKv, printProgress } from '../output.js';
+import { printData, printJson, printKv, printProgress } from '../output.js';
 import { usageError } from '../args.js';
 import { resolveProjectId } from '../resolve.js';
 import { loadResume, saveResume } from '../resume.js';
 import { waitAndReport } from './submit.js';
+import { bindCraft2ProgressFields } from '../bindcraft2-progress.js';
+import { campaignStatusLines, compactCampaign, usesCompactCampaignPresentation } from '../campaign-presentation.js';
 
 /** @param {{ client: any, flags: Record<string, any>, positionals: string[], json: boolean, config: { rootDir: string } }} ctx */
 export async function run(ctx) {
@@ -25,14 +27,22 @@ export async function run(ctx) {
   }
   const res = await ctx.client.get(`/api/v1/projects/${projectId}`);
   const project = res.data?.project ?? res.data ?? {};
-  if (ctx.json) {
+  const compactDefault = usesCompactCampaignPresentation(project) && ctx.flags.details !== true;
+  if (!compactDefault && ctx.json) {
     printJson({ data: res.data, meta: res.meta, request_id: res.requestId });
     return;
+  }
+  if (compactDefault) {
+    const compact = compactCampaign(project, projectId);
+    if (ctx.json) printJson({ data: compact });
+    else for (const line of campaignStatusLines(compact)) printData(line);
+    return compact;
   }
   printKv({
     id: project.id ?? projectId,
     name: project.name ?? '-',
     protocol: project.protocol ?? project.protocol_id ?? '-',
     status: project.status ?? project.state ?? '-',
+    ...bindCraft2ProgressFields(project),
   });
 }

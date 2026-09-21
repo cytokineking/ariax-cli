@@ -61,21 +61,21 @@ const COMMAND_OPTIONS = {
   pricing: [[], 0],
   schema: [['raw', 'kind', 'output', 'o'], 1],
   skills: [['read', 'reference'], 1],
-  validate: [['file', 'f', 'input'], 0],
-  submit: [['file', 'f', 'name', 'input', 'input-upload-intent-id', 'wait', 'resume', 'poll-interval', 'wait-timeout'], 0],
+  validate: [['file', 'f', 'input', 'input-dir', 'details'], 0],
+  submit: [['file', 'f', 'name', 'input', 'input-dir', 'input-upload-intent-id', 'wait', 'resume', 'poll-interval', 'wait-timeout', 'details'], 0],
   projects: [['status', 'protocol', 'name', 'limit', 'cursor', 'all'], 0],
   jobs: [['project', 'status', 'limit', 'cursor', 'all'], 0],
-  status: [['wait', 'resume', 'poll-interval', 'wait-timeout'], 1],
+  status: [['wait', 'resume', 'poll-interval', 'wait-timeout', 'details'], 1],
   logs: [['tail', 'log-ref', 'list'], 1],
   pause: [[], 1],
-  restart: [['wait', 'poll-interval', 'wait-timeout'], 1],
+  restart: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   abort: [[], 1],
   operations: [[], 1],
-  recover: [['wait', 'poll-interval', 'wait-timeout'], 1],
+  recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   'gpu-preferences': [['file'], 1],
   runs: [['job', 'limit', 'cursor', 'all'], 1],
-  candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite'], 1],
-  results: [['path', 'download', 'overwrite', 'limit'], 1],
+  candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
+  results: [['path', 'download', 'overwrite', 'limit', 'details'], 1],
   upgrade: [['check', 'yes'], 0],
   login: [['with-token', 'insecure-storage'], 0],
   logout: [[], 0],
@@ -95,7 +95,7 @@ function validateCommandArguments({ command, positionals, flags }) {
     if (!['inspect', 'prepare'].includes(action)) {
       throw usageError('inputs: expected inspect or prepare.');
     }
-    options = [action === 'inspect' ? ['input', 'pdb', 'file', 'full'] : ['input', 'pdb', 'file', 'output'], 1];
+    options = [action === 'inspect' ? ['input', 'input-dir', 'pdb', 'file', 'full', 'details'] : ['input', 'input-dir', 'pdb', 'file', 'output'], 1];
     label = `inputs ${action}`;
   }
   if (!options) return; // Unknown commands are reported by the dispatcher.
@@ -134,6 +134,7 @@ function reportError(err, jsonMode) {
         code: apiCode || 'error',
         message,
         retryable: err?.retryable === true,
+        ...(typeof err?.action === 'string' && err.action ? { action: err.action } : {}),
         ...(err?.details === undefined ? {} : { details: err.details }),
       },
       ...(requestId ? { request_id: requestId } : {}),
@@ -141,6 +142,7 @@ function reportError(err, jsonMode) {
   } else {
     printProgress(`error: ${message}`);
     if (apiCode && apiCode !== 'ARIAX_USAGE') printProgress(`code: ${apiCode}`);
+    if (typeof err?.action === 'string' && err.action) printProgress(`action: ${err.action}`);
     for (const issue of err?.details?.issues || []) {
       printProgress(`${issue.field.join('.') || 'job'} [${issue.rule}]: ${issue.message}`);
     }
@@ -155,22 +157,22 @@ const HELP_TOPICS = {
   pricing: 'ariax pricing',
   schema: 'ariax schema <protocol> [--raw] [--kind job|submission] [-o, --output FILE]',
   skills: 'ariax skills [protocol] [--read] [--reference NAME]',
-  inputs: 'ariax inputs inspect|prepare (--input FILE | --pdb ID) [-f job.json] [--output DIR] [--full]',
-  validate: 'ariax validate -f job.json [--input FILE]',
-  submit: 'ariax submit -f job.json --name <name> [--input FILE] [--wait]',
+  inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
+  validate: 'ariax validate -f job.json [--input FILE | --input-dir DIR] [--details]',
+  submit: 'ariax submit -f job.json --name <name> [--input FILE | --input-dir DIR] [--wait] [--details]',
   operations: 'ariax operations [operation-id]',
   recover: 'ariax recover <operation-id> [--wait]',
   projects: 'ariax projects [--status s] [--protocol p] [--name n] [--limit N] [--cursor C] [--all] | ariax projects export <project-id> [-o, --output job.json]',
   jobs: 'ariax jobs [--project <id>] [--status s] [--limit N] [--cursor C] [--all]',
-  status: 'ariax status <project-id> [--wait] [--resume]',
+  status: 'ariax status <project-id> [--wait] [--resume] [--details]',
   logs: 'ariax logs <job-id> [--list | [--tail N] [--log-ref PATH]]',
   pause: 'ariax pause <project-id>',
   restart: 'ariax restart <project-id> [--wait]',
   'gpu-preferences': 'ariax gpu-preferences <project-id> -f preferences.json',
   abort: 'ariax abort <project-id>',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
-  candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite]',
-  results: 'ariax results <project-id> [--path <artifact-prefix>] [--download <dir>] [--overwrite] [--limit N]',
+  candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
+  results: 'ariax results <project-id> [--path <artifact-prefix>] [--download <dir>] [--overwrite] [--limit N] [--details]',
   upgrade: 'ariax upgrade [--check] [--yes]',
   login: 'ariax login [--with-token] [--insecure-storage]',
   logout: 'ariax logout',

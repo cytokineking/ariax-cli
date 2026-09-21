@@ -8,6 +8,7 @@ and result-retrieval behavior lives in [`SKILL.md`](SKILL.md), with
 Protocol-specific scientific guidance is independently discoverable:
 
 - [`ariax-bindcraft`](skills/ariax-bindcraft/SKILL.md)
+- [`ariax-bindcraft2`](skills/ariax-bindcraft2/SKILL.md)
 - [`ariax-boltzgen`](skills/ariax-boltzgen/SKILL.md)
 - [`ariax-pxdesign`](skills/ariax-pxdesign/SKILL.md)
 - [`ariax-esmfold2-pipeline`](skills/ariax-esmfold2-pipeline/SKILL.md)

@@ -79,16 +79,41 @@ export async function accountIdentity(ctx) {
     api_origin: new URL(ctx.config.baseUrl ?? 'https://www.ariax.bio').origin };
 }
 
-export function createOperation(ctx, { action, request, account, sources = [], preparedBytes }) {
+export function createOperation(ctx, { action, request, account, sources = [], preparedBytes, preparedInputs }) {
   rejectCredentials(request.body);
   const id = randomUUID();
   const file = operationPath(ctx.config.rootDir, id);
   const now = new Date().toISOString();
+  if (preparedBytes !== undefined && preparedInputs !== undefined) {
+    throw usageError('Operation input evidence must use one snapshot format.');
+  }
+  let version = 1;
+  let bundleEvidence;
+  if (preparedInputs !== undefined) {
+    if (!Array.isArray(preparedInputs) || !preparedInputs.length || preparedInputs.length > 9
+        || new Set(preparedInputs.map((entry) => entry?.filename)).size !== preparedInputs.length
+        || preparedInputs.some((entry) => !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(?:pdb|cif|fasta)$/.test(entry?.filename)
+          || !Buffer.isBuffer(entry?.bytes) || !entry.bytes.length)) {
+      throw usageError('Prepared input bundle evidence is malformed.');
+    }
+    version = 2;
+    bundleEvidence = preparedInputs.map((entry, index) => ({
+      filename: entry.filename,
+      snapshot: `${id}.input.${index}`,
+      sha256: sha256(entry.bytes),
+      bytes: entry.bytes.length,
+    }));
+    for (let index = 0; index < preparedInputs.length; index += 1) {
+      atomicWrite(path.join(path.dirname(file), bundleEvidence[index].snapshot), preparedInputs[index].bytes, true);
+    }
+  }
   const record = {
-    version: 1, id, idempotency_key: id, action, ...account,
+    version, id, idempotency_key: id, action, ...account,
     created_at: now, updated_at: now, replay_not_after: new Date(Date.now() + RETENTION_MS).toISOString(),
     request, request_sha256: sha256(JSON.stringify(request)), sources,
-    prepared_input: preparedBytes === undefined ? null : { filename: `${id}.input`, sha256: sha256(preparedBytes) },
+    ...(version === 1
+      ? { prepared_input: preparedBytes === undefined ? null : { filename: `${id}.input`, sha256: sha256(preparedBytes) } }
+      : { prepared_inputs: bundleEvidence }),
     upload_intent_id: request.body.input_upload_intent_id ?? null,
     state: 'pending', operation_id: null, project_id: null, job_id: null,
   };
@@ -102,7 +127,15 @@ export function loadOperation(rootDir, id) {
   let record;
   try { record = JSON.parse(readRegular(file)); }
   catch (error) { throw usageError(`Cannot read operation ${id}: ${error.message}. The record was left unchanged.`); }
-  if (record.version !== 1 || record.id !== id || record.idempotency_key !== id
+  const legacyEvidence = record.version === 1 && (record.prepared_input === null
+    || (record.prepared_input?.filename === `${id}.input` && /^[a-f0-9]{64}$/.test(record.prepared_input.sha256)));
+  const bundleEvidence = record.version === 2 && Array.isArray(record.prepared_inputs)
+    && record.prepared_inputs.length >= 1 && record.prepared_inputs.length <= 9
+    && new Set(record.prepared_inputs.map((entry) => entry?.filename)).size === record.prepared_inputs.length
+    && record.prepared_inputs.every((entry, index) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(?:pdb|cif|fasta)$/.test(entry?.filename)
+      && entry.snapshot === `${id}.input.${index}` && /^[a-f0-9]{64}$/.test(entry.sha256)
+      && Number.isSafeInteger(entry.bytes) && entry.bytes > 0);
+  if ((!legacyEvidence && !bundleEvidence) || record.id !== id || record.idempotency_key !== id
       || !['project:create', 'project:restart'].includes(record.action)
       || !isUUID(record.actor_user_id)
       || !['user', 'team'].includes(record.billing_account_type) || !isUUID(record.billing_account_id)
@@ -161,6 +194,12 @@ export function verifyReplayInputs(ctx, operation) {
     if (prepared.filename !== `${operation.id}.input`
         || sha256(readRegular(path.join(directory(ctx.config.rootDir), prepared.filename))) !== prepared.sha256) {
       throw usageError('Prepared input changed or is corrupt. No mutation was sent.');
+    }
+  }
+  for (const prepared of operation.prepared_inputs ?? []) {
+    const bytes = readRegular(path.join(directory(ctx.config.rootDir), prepared.snapshot));
+    if (bytes.length !== prepared.bytes || sha256(bytes) !== prepared.sha256) {
+      throw usageError('Prepared input bundle changed or is corrupt. No mutation was sent.');
     }
   }
 }

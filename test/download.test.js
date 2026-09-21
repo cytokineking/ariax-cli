@@ -43,6 +43,12 @@ describe('safeDestPath: accepts safe relative paths', () => {
     const dest = safeDestPath(base, 'a/b-c_d+e.f');
     assert.equal(dest, path.resolve(base, 'a', 'b-c_d+e.f'));
   });
+  it('accepts native BindCraft2 summary basenames with one leading exclamation mark', () => {
+    const base = makeTmp();
+    const artifact = 'output/1_Trajectories/!_Trajectories.csv';
+    assert.equal(safeDestPath(base, artifact), path.resolve(base, ...artifact.split('/')));
+    assert.equal(prepareDestPath(base, artifact), path.resolve(fs.realpathSync(base), ...artifact.split('/')));
+  });
 });
 
 describe('safeDestPath: rejects unsafe paths', () => {
@@ -70,6 +76,8 @@ describe('safeDestPath: rejects unsafe paths', () => {
     assert.throws(() => safeDestPath(makeTmp(), 'a b.txt'), UnsafePathError);
     assert.throws(() => safeDestPath(makeTmp(), '-lead.txt'), UnsafePathError);
     assert.throws(() => safeDestPath(makeTmp(), '.hidden'), UnsafePathError);
+    assert.throws(() => safeDestPath(makeTmp(), '!'), UnsafePathError);
+    assert.throws(() => safeDestPath(makeTmp(), '!!name.txt'), UnsafePathError);
   });
   it('UnsafePathError maps to exit 5', () => {
     try {

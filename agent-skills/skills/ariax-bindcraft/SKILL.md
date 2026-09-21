@@ -48,8 +48,9 @@ For both BindCraft and FreeBindCraft, Ariax's practical GPU guidance is:
   supported for this protocol. Account for binder length as well.
 - Above that range, allow more VRAM. For **300–700-residue targets**, an
   **H100, H200, B200, or B300 is strongly recommended**.
-- **RTX 6000 Pro** has similar BindCraft performance to an H100; check current
-  hourly prices, distinguish it from RTX 6000 Ada, and use the live schema's ID.
+- Canonical **`RTX6000PRO`** is a primary/core BindCraft option with similar
+  performance to an H100. Check current hourly prices and distinguish it from
+  `RTX6000ADA` and `A6000`.
 - Targets **over about 700 residues** may crash and generally become
   uneconomical. Prefer trimming to the relevant domain/site to reduce memory,
   runtime, and cost while preserving its fold and necessary structural context.

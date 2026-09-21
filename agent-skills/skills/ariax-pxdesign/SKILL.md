@@ -48,7 +48,7 @@ inversion workflows, but increase GPU capability and VRAM as target size grows.
 Include binder size and the AF2/Protenix evaluation stages in memory planning.
 Use current hourly prices to choose a range of compatible GPUs. Trim targets
 when helpful while preserving their fold, epitope, and relevant physical context.
-PXDesign currently excludes Blackwell GPUs and RTX 6000 Pro; choose a compatible
+PXDesign currently excludes Blackwell GPUs and canonical `RTX6000PRO`; choose a compatible
 class from the live schema rather than assuming the newest GPU is supported.
 
 ## Discover the current contract
@@ -164,7 +164,7 @@ PXDesign supports Ariax Turbo through the job-file `turbo_mode` and
 `turbo_multiples` fields. Fetch their allowed values from the live schema
 (currently 2x, 4x, and 8x). These values allow Ariax to select a parallel GPU
 allocation; they do not guarantee a particular multiple. PXDesign rejects
-Blackwell GPUs and RTX 6000 Pro. Select `allowed_gpus` when needed for the agreed
+Blackwell GPUs and canonical `RTX6000PRO`. Select `allowed_gpus` when needed for the agreed
 capacity/cost policy, and validate the selection before submission.
 
 ## Monitor and retrieve results

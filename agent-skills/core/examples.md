@@ -11,6 +11,8 @@ counts, and compute policy for the authorized experiment, then validate.
 | `bindcraft-v1.5.json` | Miniprotein, FreeBindCraft scoring | Synthetic PDB |
 | `bindcraft-peptide.json` | Linear alpha-helical peptide | Synthetic PDB |
 | `bindcraft-override.json` | Explicit known cross-family presets | Synthetic PDB |
+| `bindcraft2-pilot.json` | Two-design / 20-trajectory miniprotein pilot | User-supplied `input.pdb` |
+| `bindcraft2-formats/*.json` | Ten BC2 native formats, secondary FASTA, and custom scaffold recipes | User-supplied exact bundle files |
 | `boltzgen.json` | Miniprotein | Synthetic canonical mmCIF |
 | `boltzgen-peptide.json`, `boltzgen-cyclic-peptide.json` | Linear / cyclic peptide | Synthetic canonical mmCIF |
 | `boltzgen-helicon.json`, `boltzgen-vhh.json` | Installed staple / scaffold recipe | Synthetic canonical mmCIF |
@@ -22,8 +24,8 @@ counts, and compute policy for the authorized experiment, then validate.
 | `esmfold2-rcsb.json` | Real 2B5I chain A, author residue 88 | RCSB source; JSON validation alone does not inspect the entry |
 
 `examples/cases.json` binds each job to its intended input. The CLI test suite
-prepares every structure-backed example; the platform qualification script
-validates both original and prepared jobs against runtime and raw schemas.
+prepares every structure-backed example; the platform validation script checks
+both original and prepared jobs against runtime and raw schemas.
 Use `ariax inputs inspect`/`prepare` to resolve the RCSB entry locally before
 validating its prepared upload. A target example is not an assertion of binding
 site accessibility or expected activity.

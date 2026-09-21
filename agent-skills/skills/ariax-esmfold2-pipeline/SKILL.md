@@ -70,7 +70,9 @@ compute policy.
 
 ESMFold2-pipeline requires **at least 80 GB of VRAM per GPU**; the minimum usable
 class is an **A100 80 GB**, not an A100 40 GB. Use the live schema for compatible
-larger classes. Very large complexes may still crash: count the effective
+larger classes. Canonical `RTX6000PRO` is a primary/core supported option when
+advertised and satisfies this workflow's capacity class; do not confuse it with
+`RTX6000ADA` or `A6000`. Very large complexes may still crash: count the effective
 target across all selected chains **plus the binder**. This is especially
 important for scFvs, which are roughly **300 amino acids**; keep **scFv targets
 under 400 amino acids** as Ariax's practical operating recommendation.

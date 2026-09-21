@@ -24,6 +24,7 @@ downloads results from your terminal, scripts, or an AI coding agent.
 | Workflow | What you can design |
 | --- | --- |
 | [BindCraft](https://www.ariax.bio/docs/bindcraft-project-setup) | De novo miniproteins and linear alpha-helical peptides ([agent guide](agent-skills/skills/ariax-bindcraft/SKILL.md)) |
+| [BindCraft2](https://www.ariax.bio/docs/bindcraft2-project-setup) | Proteins, peptides, VHHs, scFvs, Fabs, ARPs, oligomers, and multidomain binders ([agent guide](agent-skills/skills/ariax-bindcraft2/SKILL.md)) |
 | [BoltzGen](https://www.ariax.bio/docs/boltzgen-project-setup) | Miniproteins, VHHs, linear and cyclic peptides, helicons, and miniproteins targeting small molecules ([agent guide](agent-skills/skills/ariax-boltzgen/SKILL.md)) |
 | [PXDesign](https://www.ariax.bio/docs/pxdesign-project-setup) | Diffusion-designed miniprotein binders ([agent guide](agent-skills/skills/ariax-pxdesign/SKILL.md)) |
 | [ESMFold2-pipeline](https://www.ariax.bio/docs/esmfold2-pipeline-project-setup) | Miniproteins, VHHs, and scFvs ([agent guide](agent-skills/skills/ariax-esmfold2-pipeline/SKILL.md)) |
@@ -147,10 +148,16 @@ ariax status <PROJECT_ID> --wait
 ariax results <PROJECT_ID> --download ./ariax-results
 ```
 
-The browser URL is `https://www.ariax.bio/projects/<engine>/<id>`, where the
-engine segment is `bindcraft`, `boltzgen`, `pxdesign`, or `esmfold2-pipeline`.
+BindCraft2 jobs can name several target and scaffold files. Put those exact
+basenames in one directory and use `--input-dir` with `inputs inspect`,
+`inputs prepare`, `validate`, and `submit`. It is mutually exclusive with
+`--input`. The prepared directory contains the normalized job, every required
+file, and a manifest of byte counts and SHA-256 hashes.
 
-Starter files for all four workflows are in
+The browser URL is `https://www.ariax.bio/projects/<engine>/<id>`, where the
+engine segment is `bindcraft`, `bindcraft2`, `boltzgen`, `pxdesign`, or `esmfold2-pipeline`.
+
+Starter files for all five workflows are in
 [`agent-skills/examples/`](agent-skills/examples). Always use `ariax schema`
 and the matching agent guide for current fields, target preparation, and
 residue numbering.
@@ -165,6 +172,7 @@ the explicit job selects BindCraft):
 ariax inputs inspect --input ./target.pdb --json
 ariax inputs inspect --pdb 1ABC --json
 ariax inputs inspect --input ./target.cif -f job.json --full --json
+ariax inputs inspect --input-dir ./bc2-inputs -f bc2-job.json --details --json
 ariax inputs prepare --input ./target.cif -f job.json --output ./prepared --json
 ```
 
@@ -172,11 +180,16 @@ Inspection reports chain IDs, sequence provenance, author/label residue mappings
 unresolved sequence regions, and warnings. With `-f`, `preparation.ready` reports
 whether the explicit job can be prepared and lists proposed supported repairs.
 Inspection itself does not validate the full server schema. Default console output
-omits sequence text and limits mapping rows. In compact JSON, each chain's
-`residue_count` is the authoritative total and `residues_truncated` says whether
-`residues` is only a preview; use `--full` for every mapping row. For example, a
-PD-1 chain with 106 mapped residues can have 85 preview rows. Both sources have a
-10 MB limit. RCSB downloads have a 30-second total timeout;
+omits sequence text and limits mapping rows. BindCraft2 compact inspection reports
+only relevant filenames and roles, targets, selected chains or FASTA records,
+authoritative chain counts and visible preview truncation, lengths, selector
+validation, scaffold edits, and warnings. Use `--full` for
+complete sequences and residue maps, and `--details` for manifest hashes, build
+identity, and the prior diagnostic field layout; the flags can be combined. Other
+protocols keep their released bounded inspection shape, where each chain's
+`residue_count` is authoritative and `residues_truncated` marks a preview. For
+example, a PD-1 chain with 106 mapped residues can have 85 preview rows. Both
+sources have a 10 MB limit. RCSB downloads have a 30-second total timeout;
 `--timeout` can lower it. Download redirects are rejected.
 
 Preparation requires explicit protocol and chain selections in `job.json`; it
@@ -294,6 +307,11 @@ Turbo hourly pricing is `(single-GPU hourly price + $1) × GPU count`.
 Choose a range of compatible GPUs within the user's hourly price preferences to
 maximize availability. The live schema defines compatible GPU identifiers and
 memory requirements still apply. Do not estimate campaign duration or total cost.
+For new BindCraft, BindCraft2, BoltzGen, and ESMFold2-pipeline selections, treat
+the exact `RTX6000PRO` identifier as a primary supported option when advertised
+by the live schema. It is distinct from `RTX6000ADA` and `A6000`; PXDesign does
+not support it. Keep an existing project's saved or user-specified selection
+unchanged unless the user asks to replace that policy.
 
 GPU preference files replace the saved allocation policy, for example:
 
@@ -395,10 +413,11 @@ conclusion.
 Use `ariax candidates PROJECT --json` for typed engine-specific metrics, filter
 outcomes, selection and verified structure paths. `--all --output shortlist.json`
 exports all pages atomically. Data is current project output; source changes
-invalidate cursors. Human tables report native `pass_filters` as `true`, `false`,
-or `unknown`. Unknown eligibility is distinct from false, and `--eligible`
-is generally unsuitable for PXDesign/BoltzGen. See [candidate semantics and
-bounds](agent-skills/core/candidates.md).
+invalidate cursors. BindCraft2 defaults to compact scientific rows and tables
+that show outcome and binder-chain count; add `--details` for its prior API-shaped
+record. Other engines retain their released candidate payloads and human tables.
+Unknown eligibility is distinct from false, and `--eligible` is generally
+unsuitable for PXDesign/BoltzGen. See [candidate semantics and bounds](agent-skills/core/candidates.md).
 
 Use `project.design_count_source` before interpreting project counts.
 `project_counters` makes BindCraft and ESMFold2 `tested_designs` and
@@ -415,7 +434,7 @@ inputs, review the settings, then use normal `ariax submit` for a new authorized
 billable project. PXDesign regenerates its MSA. RCSB identifiers are retained,
 but fetching them again may return changed source data.
 
-The [16 bundled modality/input examples](agent-skills/core/examples.md) are
+The [bundled modality/input examples](agent-skills/core/examples.md) are
 small syntax/preparation cases. The repository's [agent evidence recorder](https://github.com/cytokineking/ariax-cli/tree/main/evaluation)
 records exact inputs, CLI identity, commands, validation responses, and completion
 separately. It is an offline evidence tool, not a claim of completed compute.

@@ -50,6 +50,7 @@ const BOOLEAN_FLAGS = new Set([
   'insecure-storage',
   'allow-custom-origin',
   'read',
+  'details',
 ]);
 
 /**

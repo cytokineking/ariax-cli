@@ -35,7 +35,10 @@ try {
     assert.match(execute(process.execPath, [script, 'help']), /ariax skills/);
     const skills = JSON.parse(execute(process.execPath, [script, 'skills', '--json']));
     assert.ok(JSON.stringify(skills).includes('ariax-boltzgen'));
+    assert.ok(JSON.stringify(skills).includes('ariax-bindcraft2'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-boltzgen/SKILL.md'));
+    await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/SKILL.md'));
+    await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/outputs.md'));
     if (channel === 'github') githubBuild = installed.build;
     else {
       assert.equal(isUpdateAvailable(githubBuild.version, installed.build.version, githubBuild.channel), true);

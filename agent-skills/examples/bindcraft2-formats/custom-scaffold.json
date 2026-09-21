@@ -1,0 +1,36 @@
+{
+  "protocol": "bindcraft2",
+  "protocol_config": {
+    "schema_version": 1,
+    "modality": [
+      "VHH"
+    ],
+    "properties": [],
+    "targets": [
+      {
+        "name": "target",
+        "input_file": "input.pdb",
+        "chains": [
+          "A"
+        ],
+        "hotspots": "A54,A56",
+        "coldspots": "",
+        "objective": "target",
+        "weight": 1
+      }
+    ],
+    "binder": {
+      "scaffold_file": "custom-vhh.cif",
+      "mutate_positions": "A26-35,A50-65,A95-110"
+    },
+    "campaign": {
+      "num_designs": 2,
+      "max_trajectories": 20
+    },
+    "advanced": {}
+  },
+  "allowed_gpus": [
+    "H100",
+    "RTX6000PRO"
+  ]
+}

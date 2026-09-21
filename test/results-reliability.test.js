@@ -55,7 +55,7 @@ describe('artifact pagination reliability', () => {
           next_cursor: null, output_roots: ['esmfold2', 'validation', 'ranked_results', 'archives'],
           archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest`,
         } };
-      } }, flags: {}, positionals: [projectId], json: true,
+      } }, flags: { details: true }, positionals: [projectId], json: true,
     });
     } finally { process.stdout.write = originalWrite; }
     const output = JSON.parse(lines.join(''));
@@ -77,6 +77,53 @@ describe('artifact pagination reliability', () => {
 });
 
 describe('download recovery', () => {
+  it('loads the BindCraft2 archive manifest and verifies archive bytes and checksum', async () => {
+    const dir = directory();
+    const content = 'verified archive';
+    const archivePath = 'output/archives/bindcraft2-results.tar.gz';
+    const requests = [];
+    const client = {
+      get: async (url) => {
+        requests.push(url);
+        if (url.endsWith('/archive-manifest')) return { data: { schema_version: 1, stage: 'verified', archives: [{ path: archivePath, stage: 'verified', bytes: Buffer.byteLength(content), sha256: digest(content) }] } };
+        return { data: [{ path: archivePath, size: Buffer.byteLength(content) }], meta: { next_cursor: null, archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest` } };
+      },
+      post: async (_url, { body }) => ({ data: body.paths.map((key) => ({ path: key, url: `https://storage.example/${key}` })) }),
+    };
+    const output = await run(context(client, dir, async () => new Response(content)));
+    assert.equal(requests.length, 2);
+    assert.equal(output.archiveVerification, 'verified_manifest_loaded');
+    assert.equal(output.downloads[0].checksum_verified, true);
+    assert.equal(output.downloads[0].verification_source, 'archive_manifest');
+  });
+
+  it('rejects an archive that does not match the verified manifest before publishing it', async () => {
+    const dir = directory();
+    const expected = 'expected archive';
+    const archivePath = 'output/archives/bindcraft2-results.tar.gz';
+    const client = {
+      get: async (url) => url.endsWith('/archive-manifest')
+        ? { data: { schema_version: 1, stage: 'verified', archives: [{ path: archivePath, stage: 'verified', bytes: Buffer.byteLength(expected), sha256: digest(expected) }] } }
+        : { data: [{ path: archivePath }], meta: { next_cursor: null, archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest` } },
+      post: async () => ({ data: [{ path: archivePath, url: 'https://storage.example/archive' }] }),
+    };
+    await assert.rejects(run(context(client, dir, async () => new Response('wrong'))), /failed to download/);
+    assert.equal(fs.existsSync(path.join(dir, archivePath)), false);
+  });
+
+  it('marks downloads without a digest manifest as unverified', async () => {
+    const dir = directory();
+    const client = {
+      get: async (url) => url.endsWith('/archive-manifest')
+        ? { data: { schema_version: 1, stage: 'complete', archives: [{ name: 'results.tar.gz', stage: 'verified' }] } }
+        : { data: [{ path: 'archives/results.tar.gz' }], meta: { next_cursor: null, archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest` } },
+      post: async () => ({ data: [{ path: 'archives/results.tar.gz', url: 'https://storage.example/archive' }] }),
+    };
+    const output = await run(context(client, dir, async () => new Response('archive')));
+    assert.equal(output.archiveVerification, 'manifest_has_no_digests');
+    assert.equal(output.downloads[0].checksum_verified, false);
+  });
+
   it('signs bounded batches just before transfer and downloads before fetching the next page', async (t) => {
     let page = 0;
     let fetched = 0;
