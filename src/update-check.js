@@ -1,10 +1,19 @@
-/** Quiet, dependency-free checks for newer stable ariax-cli releases on npm. */
+/** Quiet, dependency-free checks for the installed distribution channel. */
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const NPM_LATEST_URL = 'https://registry.npmjs.org/ariax-cli/latest';
+export const GITHUB_LATEST_URL = 'https://api.github.com/repos/cytokineking/ariax-cli/commits/main';
+
+export function isRevision(value) {
+  return typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
+}
+
+export function updateChannel(channel) {
+  return channel === 'github' ? 'github' : 'npm';
+}
 
 /** Return parsed SemVer parts, or null for an invalid version. */
 export function parseVersion(value) {
@@ -52,9 +61,8 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-export function isUpdateAvailable(currentVersion, latestVersion, currentChannel = 'npm') {
-  const comparison = compareVersions(currentVersion, latestVersion);
-  return comparison === -1 || (comparison === 0 && currentChannel !== 'npm');
+export function isUpdateAvailable(currentVersion, latestVersion) {
+  return compareVersions(currentVersion, latestVersion) === -1;
 }
 
 /** Use the operating system's normal per-user cache location. */
@@ -71,9 +79,10 @@ export function updateCachePath({ env = process.env, platform = process.platform
 export async function readUpdateCache(file) {
   try {
     const parsed = JSON.parse(await fs.readFile(file, 'utf8'));
-    if (!parsed || parsed.version !== 1) return null;
+    if (!parsed || parsed.version !== 2 || !['github', 'npm'].includes(parsed.channel)) return null;
     if (typeof parsed.checked_at !== 'string') return null;
     if ((parsed.latest_version !== null && !parseVersion(parsed.latest_version))
+      || (parsed.latest_revision !== null && !isRevision(parsed.latest_revision))
       || !Number.isFinite(Date.parse(parsed.checked_at))) return null;
     return parsed;
   } catch {
@@ -117,6 +126,34 @@ export async function fetchLatestVersion({ fetchImpl = globalThis.fetch, timeout
   }
 }
 
+/** Resolve main to an immutable commit; never send Ariax credentials to GitHub. */
+export async function fetchLatestRevision({ fetchImpl = globalThis.fetch, timeoutMs = 5_000 } = {}) {
+  const response = await fetchImpl(GITHUB_LATEST_URL, {
+    headers: { accept: 'application/vnd.github+json', 'user-agent': 'ariax-cli' },
+    redirect: 'error',
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
+  const body = await response.json();
+  if (!isRevision(body?.sha)) throw new Error('GitHub returned an invalid source revision');
+  return body.sha;
+}
+
+export async function fetchLatestRelease({ channel, ...options }) {
+  return channel === 'github'
+    ? { channel, latest_version: null, latest_revision: await fetchLatestRevision(options) }
+    : { channel: 'npm', latest_version: await fetchLatestVersion(options), latest_revision: null };
+}
+
+export function releaseUpdateAvailable({ currentVersion, currentChannel, currentRevision, release }) {
+  if (release.channel === 'github') {
+    return isRevision(release.latest_revision)
+      && (currentChannel !== 'github' || currentRevision !== release.latest_revision);
+  }
+  return Boolean(release.latest_version)
+    && (currentChannel !== 'npm' || isUpdateAvailable(currentVersion, release.latest_version));
+}
+
 export function shouldRunAutomaticUpdateCheck({ command, jsonMode, env = process.env, interactive } = {}) {
   if (!interactive || jsonMode) return false;
   if (!command || ['help', 'upgrade', 'login', 'logout', 'inputs'].includes(command)) return false;
@@ -128,11 +165,12 @@ export function shouldRunAutomaticUpdateCheck({ command, jsonMode, env = process
 
 /**
  * Return a notice at most once per interval. Automatic failures are intentionally
- * swallowed so npm availability can never affect an Ariax command.
+ * swallowed so release-server availability can never affect an Ariax command.
  */
 export async function automaticUpdateNotice({
   currentVersion,
   currentChannel = 'npm',
+  currentRevision = null,
   fetchImpl = globalThis.fetch,
   cacheFile = updateCachePath(),
   now = Date.now(),
@@ -141,31 +179,42 @@ export async function automaticUpdateNotice({
 } = {}) {
   try {
     const nowIso = new Date(now).toISOString();
-    const cached = await readUpdateCache(cacheFile);
+    const channel = updateChannel(currentChannel);
+    const stored = await readUpdateCache(cacheFile);
+    const cached = stored?.channel === channel ? stored : null;
     const checkedAt = cached ? Date.parse(cached.checked_at) : Number.NaN;
     const fresh = cached && now - checkedAt >= 0 && now - checkedAt < intervalMs;
-    let latestVersion = cached?.latest_version;
     let next = cached;
 
     if (!fresh) {
-      latestVersion = await fetchLatestVersion({ fetchImpl, timeoutMs });
+      let release;
+      try {
+        release = await fetchLatestRelease({ channel, fetchImpl, timeoutMs });
+      } catch {
+        // Back off after offline, timeout, rate-limit, or malformed responses too.
+        await writeUpdateCache(cacheFile, {
+          version: 2, channel, checked_at: nowIso, latest_version: null, latest_revision: null,
+        });
+        return null;
+      }
       next = {
-        version: 1,
+        version: 2,
         checked_at: nowIso,
-        latest_version: latestVersion,
-        ...(cached?.latest_version === latestVersion && cached?.notified_at
-          ? { notified_at: cached.notified_at, notified_version: cached.notified_version }
+        ...release,
+        ...(cached?.latest_version === release.latest_version && cached?.latest_revision === release.latest_revision && cached?.notified_at
+          ? { notified_at: cached.notified_at, notified_build: cached.notified_build }
           : {}),
       };
     }
 
-    if (!isUpdateAvailable(currentVersion, latestVersion, currentChannel)) {
+    if (!releaseUpdateAvailable({ currentVersion, currentChannel, currentRevision, release: next })) {
       if (!fresh) await writeUpdateCache(cacheFile, next);
       return null;
     }
 
     const notifiedAt = next?.notified_at ? Date.parse(next.notified_at) : Number.NaN;
-    const alreadyNotified = next?.notified_version === latestVersion
+    const build = `${currentChannel}:${currentVersion}:${currentRevision}`;
+    const alreadyNotified = next?.notified_build === build
       && now - notifiedAt >= 0
       && now - notifiedAt < intervalMs;
     if (alreadyNotified) {
@@ -176,14 +225,19 @@ export async function automaticUpdateNotice({
     await writeUpdateCache(cacheFile, {
       ...next,
       notified_at: nowIso,
-      notified_version: latestVersion,
+      notified_build: build,
     });
-    return { currentVersion, latestVersion };
+    return channel === 'github'
+      ? { channel, currentVersion, currentRevision, latestRevision: next.latest_revision }
+      : { currentVersion, latestVersion: next.latest_version };
   } catch {
     return null;
   }
 }
 
-export function formatUpdateNotice({ currentVersion, latestVersion }) {
+export function formatUpdateNotice({ channel, currentVersion, latestVersion, currentRevision, latestRevision }) {
+  if (channel === 'github') {
+    return `Ariax CLI GitHub main is at ${latestRevision.slice(0, 12)}; you have ${currentRevision?.slice(0, 12) || 'an unknown revision'}. Run: ariax upgrade`;
+  }
   return `Ariax CLI ${latestVersion} is available; you have ${currentVersion}. Run: ariax upgrade`;
 }

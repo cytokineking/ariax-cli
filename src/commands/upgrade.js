@@ -1,20 +1,20 @@
-/** `ariax upgrade [--check] [--yes]` — check npm or install the latest stable CLI. */
+/** Check or update the current channel, or explicitly switch distributions. */
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 
 import { usageError } from '../args.js';
 import { EXIT } from '../exit-codes.js';
 import { printData, printJson, printProgress } from '../output.js';
-import { fetchLatestVersion, isUpdateAvailable, parseVersion } from '../update-check.js';
-import { verifyInstallation } from '../installation.js';
+import { fetchLatestRelease, releaseUpdateAvailable, parseVersion, updateChannel } from '../update-check.js';
+import { installGitHub, verifyInstallation } from '../installation.js';
 
 const RELEASES_URL = 'https://github.com/cytokineking/ariax-cli/releases';
-const BOOTSTRAP_INSTRUCTION = 'No stable npm release has been published. To install a newer development build, rerun the GitHub installer documented at https://github.com/cytokineking/ariax-cli#install (optionally pin ARIAX_REVISION to a full commit SHA).';
+const BOOTSTRAP_INSTRUCTION = 'No stable npm release has been published. To select the GitHub development channel, run: ariax upgrade --channel github';
 
 /** @param {{ flags: Record<string, any>, positionals: string[], json: boolean }} ctx */
 export async function run(ctx) {
   if (ctx.positionals.length > 0) throw usageError('upgrade: unexpected positional arguments.');
-  const unknownFlags = Object.keys(ctx.flags).filter((name) => name !== 'check' && name !== 'yes');
+  const unknownFlags = Object.keys(ctx.flags).filter((name) => !['check', 'yes', 'channel'].includes(name));
   if (unknownFlags.length > 0) throw usageError(`upgrade: unknown flag --${unknownFlags[0]}.`);
   if (ctx.flags.check === true && ctx.flags.yes === true) {
     throw usageError('upgrade: --check and --yes cannot be used together.');
@@ -22,28 +22,33 @@ export async function run(ctx) {
 
   const currentVersion = ctx.currentVersion;
   const currentBuild = ctx.currentBuild ?? { channel: 'npm', source_revision: null };
-  let latestVersion;
+  const channel = ctx.flags.channel ?? updateChannel(currentBuild.channel);
+  if (!['github', 'npm'].includes(channel)) throw usageError('upgrade: --channel must be github or npm.');
+  let release;
   try {
-    latestVersion = await fetchLatestVersion({ fetchImpl: ctx.fetchImpl, timeoutMs: 5_000 });
+    release = await fetchLatestRelease({ channel, fetchImpl: ctx.fetchImpl, timeoutMs: 5_000 });
   } catch (cause) {
-    const error = new Error('Could not check npm for the latest Ariax CLI version.');
+    const error = new Error(`Could not check ${channel === 'github' ? 'GitHub' : 'npm'} for the latest Ariax CLI build.`);
     error.code = 'update_check_failed';
     error.exitCode = EXIT.NETWORK;
     error.cause = cause;
     throw error;
   }
 
-  const updateAvailable = isUpdateAvailable(currentVersion, latestVersion, currentBuild.channel);
+  const latestVersion = release.latest_version;
+  const updateAvailable = releaseUpdateAvailable({ currentVersion, currentChannel: currentBuild.channel, currentRevision: currentBuild.source_revision, release });
   const status = {
     current_version: currentVersion,
     current_channel: currentBuild.channel,
     current_revision: currentBuild.source_revision,
     latest_version: latestVersion,
+    latest_channel: channel,
+    latest_revision: release.latest_revision,
     update_available: updateAvailable,
-    ...(latestVersion === null ? { status: 'unpublished', instruction: BOOTSTRAP_INSTRUCTION } : {}),
+    ...(channel === 'npm' && latestVersion === null ? { status: 'unpublished', instruction: BOOTSTRAP_INSTRUCTION } : {}),
   };
 
-  if (latestVersion === null) {
+  if (channel === 'npm' && latestVersion === null) {
     if (ctx.json) printJson({ data: status });
     else printData(BOOTSTRAP_INSTRUCTION);
     return;
@@ -63,7 +68,9 @@ export async function run(ctx) {
 
   if (!ctx.json) {
     printStatus(status);
-    printData(`Release notes: ${RELEASES_URL}/tag/v${latestVersion}`);
+    printData(channel === 'github'
+      ? `Source: https://github.com/cytokineking/ariax-cli/commit/${release.latest_revision}`
+      : `Release notes: ${RELEASES_URL}/tag/v${latestVersion}`);
   }
 
   if (ctx.flags.yes !== true) {
@@ -77,20 +84,29 @@ export async function run(ctx) {
     }
   }
 
-  printProgress(`Installing ariax-cli@${latestVersion} with npm…`);
-  await (ctx.installLatest ?? installLatest)({ version: latestVersion, quiet: ctx.json });
-  const installed = await (ctx.verifyInstallation ?? verifyInstallation)({ version: latestVersion, channel: 'npm' });
+  let expected;
+  if (channel === 'github') {
+    printProgress(`Installing Ariax CLI GitHub build ${release.latest_revision} with npm…`);
+    expected = await (ctx.installGitHub ?? installGitHub)({ revision: release.latest_revision, quiet: ctx.json, fetchImpl: ctx.fetchImpl });
+  } else {
+    printProgress(`Installing ariax-cli@${latestVersion} with npm…`);
+    await (ctx.installLatest ?? installLatest)({ version: latestVersion, quiet: ctx.json });
+    expected = { version: latestVersion, channel: 'npm' };
+  }
+  const installed = await (ctx.verifyInstallation ?? verifyInstallation)(expected);
   if (ctx.json) {
     printJson({ data: { ...status, updated: true, installed } });
   } else {
-    printData(`Updated Ariax CLI: ${currentVersion} → ${latestVersion}`);
+    printData(`Updated Ariax CLI: ${currentVersion} (${currentBuild.channel}) → ${expected.version} (${channel}${expected.source_revision ? ` ${expected.source_revision}` : ''})`);
     printData(`Verified executable: ${installed.executable}`);
   }
 }
 
 function printStatus(status) {
-  printData(`Current version: ${status.current_version}`);
-  printData(`Latest version:  ${status.latest_version}`);
+  printData(`Current version: ${status.current_version} (${status.current_channel}${status.current_revision ? ` ${status.current_revision}` : ''})`);
+  printData(status.latest_channel === 'github'
+    ? `Latest GitHub main: ${status.latest_revision}`
+    : `Latest npm version: ${status.latest_version}`);
   printData(`Update available: ${status.update_available ? 'yes' : 'no'}`);
 }
 

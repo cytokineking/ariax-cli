@@ -56,7 +56,7 @@ async function runInstaller(t, scenario, overrides = {}) {
     };
     syncBuiltinESMExports();
   `);
-  const env = { ...process.env, ARIAX_VERSION: '', ARIAX_REVISION: '', ...overrides,
+  const env = { ...process.env, ARIAX_VERSION: '', ARIAX_REVISION: '', ARIAX_CHANNEL: '', ...overrides,
     INSTALLER_TEST_ROOT: root, INSTALLER_TEST_SCENARIO: scenario,
     NODE_OPTIONS: `--import=${preload}`,
   };
@@ -68,8 +68,24 @@ async function runInstaller(t, scenario, overrides = {}) {
 }
 
 describe('public installer', { skip: process.platform === 'win32' }, () => {
+  it('rejects unknown channels and channel/pin conflicts before network access', async (t) => {
+    for (const overrides of [{ ARIAX_CHANNEL: 'other' }, { ARIAX_CHANNEL: 'npm', ARIAX_REVISION: 'a'.repeat(40) }, { ARIAX_CHANNEL: 'github', ARIAX_VERSION: '0.1.0' }]) {
+      const { result, calls } = await runInstaller(t, 'stable', overrides);
+      assert.notEqual(result.code, 0);
+      assert.match(result.stderr, /ARIAX_CHANNEL/);
+      assert.equal(calls.length, 0);
+    }
+  });
+
+  it('does not switch to GitHub when the npm channel is unpublished', async (t) => {
+    const { result, calls } = await runInstaller(t, 'missing', { ARIAX_CHANNEL: 'npm' });
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /no other version will be installed/);
+    assert.equal(calls.some((call) => call.command || call.url?.includes('github.com')), false);
+  });
+
   it('installs the exact stable version selected by the registry and verifies it', async (t) => {
-    const { result, calls } = await runInstaller(t, 'stable');
+    const { result, calls } = await runInstaller(t, 'stable', { ARIAX_CHANNEL: 'npm' });
     assert.equal(result.code, 0, result.stderr);
     assert.deepEqual(calls.find((call) => call.args?.[0] === 'install').args,
       ['install', '--global', 'ariax-cli@0.1.0', '--registry=https://registry.npmjs.org']);
@@ -77,16 +93,17 @@ describe('public installer', { skip: process.platform === 'win32' }, () => {
     assert.match(result.stdout, /Verified/);
   });
 
-  it('resolves missing npm to a pinned GitHub commit and installs a package, not a directory', async (t) => {
-    const { result, calls } = await runInstaller(t, 'missing');
+  it('defaults to GitHub even when npm is published and installs a package, not a directory', async (t) => {
+    const { result, calls } = await runInstaller(t, 'stable');
     assert.equal(result.code, 0, result.stderr);
     assert.ok(calls.some((call) => call.url === `https://github.com/cytokineking/ariax-cli/archive/${'a'.repeat(40)}.tar.gz`));
     assert.ok(calls.find((call) => call.args?.[0] === 'install').args[2].endsWith('.tgz'));
     assert.match(result.stdout, /"channel":"github"/);
+    assert.equal(calls.some((call) => call.url?.includes('registry.npmjs.org')), false);
   });
 
   it('does not fall back or install anything on registry outage', async (t) => {
-    const { result, calls } = await runInstaller(t, 'outage');
+    const { result, calls } = await runInstaller(t, 'outage', { ARIAX_CHANNEL: 'npm' });
     assert.notEqual(result.code, 0);
     assert.match(result.stderr, /HTTP 503; no fallback/);
     assert.equal(calls.some((call) => call.command || call.url?.includes('github.com')), false);

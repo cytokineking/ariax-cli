@@ -6,10 +6,12 @@ import path from 'node:path';
 
 import {
   NPM_LATEST_URL,
+  GITHUB_LATEST_URL,
   UPDATE_CHECK_INTERVAL_MS,
   automaticUpdateNotice,
   compareVersions,
   fetchLatestVersion,
+  fetchLatestRevision,
   formatUpdateNotice,
   isUpdateAvailable,
   parseVersion,
@@ -44,10 +46,8 @@ describe('update version comparison', () => {
     assert.equal(compareVersions('bad', '1.0.0'), null);
     assert.equal(isUpdateAvailable('1.0.0', '1.1.0'), true);
     assert.equal(isUpdateAvailable('2.0.0', '1.1.0'), false);
-    assert.equal(isUpdateAvailable('0.1.0', '0.1.0', 'github'), true);
-    assert.equal(isUpdateAvailable('0.1.0', '0.1.0', 'unknown'), true);
-    assert.equal(isUpdateAvailable('0.1.0', '0.1.0', 'npm'), false);
-    assert.equal(isUpdateAvailable('0.2.0', '0.1.0', 'github'), false);
+    assert.equal(isUpdateAvailable('0.1.0', '0.1.0'), false);
+    assert.equal(isUpdateAvailable('0.2.0', '0.1.0'), false);
   });
 });
 
@@ -89,16 +89,75 @@ describe('npm latest lookup', () => {
   });
 });
 
+describe('GitHub latest lookup', () => {
+  it('resolves main without credentials and validates the complete SHA', async () => {
+    const sha = 'b'.repeat(40);
+    assert.equal(await fetchLatestRevision({ fetchImpl: async (url, options) => {
+      assert.equal(url, GITHUB_LATEST_URL);
+      assert.equal(options.redirect, 'error');
+      assert.equal(options.headers.authorization, undefined);
+      assert.ok(options.signal instanceof AbortSignal);
+      return new Response(JSON.stringify({ sha }));
+    } }), sha);
+    for (const response of [new Response('', { status: 403 }), new Response(JSON.stringify({ sha: 'short' }))]) {
+      await assert.rejects(fetchLatestRevision({ fetchImpl: async () => response }), /GitHub returned/);
+    }
+  });
+});
+
 describe('automatic update notices', () => {
+  it('checks GitHub commits even when the package version has not changed', async (t) => {
+    const cacheFile = await temporaryCache(t);
+    const options = { currentVersion: '0.1.0', currentChannel: 'github', currentRevision: 'a'.repeat(40), cacheFile, now: 1_000 };
+    let calls = 0;
+    const fetchImpl = async (url) => {
+      calls += 1;
+      assert.equal(url, GITHUB_LATEST_URL);
+      return new Response(JSON.stringify({ sha: 'b'.repeat(40) }));
+    };
+    const notice = await automaticUpdateNotice({ ...options, fetchImpl });
+    assert.equal(notice.latestRevision, 'b'.repeat(40));
+    assert.match(formatUpdateNotice(notice), /GitHub main is at b{12}; you have a{12}.*ariax upgrade/);
+    assert.equal(await automaticUpdateNotice({ ...options, fetchImpl, now: 2_000 }), null);
+    assert.equal(await automaticUpdateNotice({ ...options, fetchImpl, currentRevision: 'b'.repeat(40), now: 3_000 }), null);
+    assert.equal(calls, 1);
+    assert.ok(await automaticUpdateNotice({ ...options, fetchImpl, now: UPDATE_CHECK_INTERVAL_MS + 1_001 }));
+    assert.equal(calls, 2);
+  });
+
+  it('does not reuse a cached release from a different channel', async (t) => {
+    const cacheFile = await temporaryCache(t);
+    let calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(url);
+      return new Response(JSON.stringify(url === GITHUB_LATEST_URL ? { sha: 'a'.repeat(40) } : { version: '0.1.0' }));
+    };
+    const options = { currentVersion: '0.1.0', currentRevision: 'a'.repeat(40), cacheFile, fetchImpl, now: 1_000 };
+    assert.equal(await automaticUpdateNotice({ ...options, currentChannel: 'github' }), null);
+    assert.equal(await automaticUpdateNotice({ ...options, currentChannel: 'npm', now: 2_000 }), null);
+    assert.deepEqual(calls, [GITHUB_LATEST_URL, NPM_LATEST_URL]);
+  });
+
+  it('ignores old npm-only caches when checking a GitHub build', async (t) => {
+    const cacheFile = await temporaryCache(t);
+    await fs.writeFile(cacheFile, JSON.stringify({ version: 1, checked_at: new Date(1_000).toISOString(), latest_version: '1.0.0' }));
+    assert.equal(await readUpdateCache(cacheFile), null);
+    const notice = await automaticUpdateNotice({
+      currentVersion: '0.1.0', currentChannel: 'github', currentRevision: 'a'.repeat(40), cacheFile, now: 2_000,
+      fetchImpl: async () => new Response(JSON.stringify({ sha: 'b'.repeat(40) })),
+    });
+    assert.equal(notice.latestRevision, 'b'.repeat(40));
+  });
+
   it('caches an unpublished registry response without warning or repeated lookups', async (t) => {
     const cacheFile = await temporaryCache(t);
     assert.equal(await automaticUpdateNotice({
-      currentVersion: '0.1.0', currentChannel: 'github', cacheFile, now: 1_000,
+      currentVersion: '0.1.0', currentChannel: 'npm', cacheFile, now: 1_000,
       fetchImpl: async () => new Response('', { status: 404 }),
     }), null);
     assert.equal((await readUpdateCache(cacheFile)).latest_version, null);
     assert.equal(await automaticUpdateNotice({
-      currentVersion: '0.1.0', currentChannel: 'github', cacheFile, now: 2_000,
+      currentVersion: '0.1.0', currentChannel: 'npm', cacheFile, now: 2_000,
       fetchImpl: async () => { throw new Error('unexpected lookup'); },
     }), null);
   });
@@ -147,7 +206,13 @@ describe('automatic update notices', () => {
       fetchImpl: async () => { throw new Error('offline'); },
       now: 1_000,
     }), null);
-    await assert.rejects(fs.access(offlineCache));
+    assert.equal((await readUpdateCache(offlineCache)).checked_at, new Date(1_000).toISOString());
+    let retried = false;
+    await automaticUpdateNotice({
+      currentVersion: '1.0.0', cacheFile: offlineCache, now: 2_000,
+      fetchImpl: async () => { retried = true; throw new Error('offline'); },
+    });
+    assert.equal(retried, false);
   });
 
   it('runs only for ordinary interactive human commands', () => {

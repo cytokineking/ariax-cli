@@ -76,7 +76,7 @@ const COMMAND_OPTIONS = {
   runs: [['job', 'limit', 'cursor', 'all'], 1],
   candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
   results: [['path', 'download', 'overwrite', 'limit', 'details'], 1],
-  upgrade: [['check', 'yes'], 0],
+  upgrade: [['check', 'yes', 'channel'], 0],
   login: [['with-token', 'insecure-storage'], 0],
   logout: [[], 0],
   help: [[], 1],
@@ -173,7 +173,7 @@ const HELP_TOPICS = {
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
   results: 'ariax results <project-id> [--path <artifact-prefix>] [--download <dir>] [--overwrite] [--limit N] [--details]',
-  upgrade: 'ariax upgrade [--check] [--yes]',
+  upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',
   logout: 'ariax logout',
 };
@@ -332,7 +332,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     env,
     interactive,
   })
-    ? automaticUpdateNotice({ currentVersion, currentChannel: currentBuild.channel, fetchImpl })
+    ? automaticUpdateNotice({ currentVersion, currentChannel: currentBuild.channel, currentRevision: currentBuild.source_revision, fetchImpl })
     : Promise.resolve(null);
 
   const client = createClient({

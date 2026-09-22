@@ -11,7 +11,7 @@ if [ "$node_major" -lt 20 ]; then
   exit 1
 fi
 
-# A self-contained bootstrap: registry failures never select a different channel.
+# Both channels use the same npm-managed global package and executable.
 node --input-type=module <<'JS'
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -24,7 +24,10 @@ const repository = 'cytokineking/ariax-cli';
 const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const requestedVersion = process.env.ARIAX_VERSION;
 const requestedRevision = process.env.ARIAX_REVISION;
+const channel = process.env.ARIAX_CHANNEL || (requestedVersion ? 'npm' : 'github');
+if (!['github', 'npm'].includes(channel)) throw new Error('ARIAX_CHANNEL must be github or npm.');
 if (requestedVersion && requestedRevision) throw new Error('Choose ARIAX_VERSION or ARIAX_REVISION, not both.');
+if ((requestedVersion && channel !== 'npm') || (requestedRevision && channel !== 'github')) throw new Error('Requested version or revision conflicts with ARIAX_CHANNEL.');
 if (requestedVersion && !stableVersion.test(requestedVersion)) throw new Error('ARIAX_VERSION must be an exact stable version, such as 0.1.0.');
 if (requestedRevision && !/^[a-f0-9]{40}$/.test(requestedRevision)) throw new Error('ARIAX_REVISION must be a full lowercase 40-character Git commit SHA.');
 
@@ -36,10 +39,10 @@ function npm(args, options = {}) {
 }
 
 let version;
-if (!requestedRevision) {
+if (channel === 'npm') {
   const response = await get(`${registry}/ariax-cli/${requestedVersion || 'latest'}`);
   if (response.status === 404) {
-    if (requestedVersion) throw new Error(`ariax-cli@${requestedVersion} is not published on npm; no other version will be installed.`);
+    throw new Error(`ariax-cli@${requestedVersion || 'latest'} is not published on npm; no other version will be installed.`);
   } else {
     if (!response.ok) throw new Error(`npm registry returned HTTP ${response.status}; no fallback installation was attempted.`);
     const release = await response.json();
@@ -65,7 +68,7 @@ try {
       revision = (await response.json()).sha;
     }
     if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error('GitHub returned an invalid source revision.');
-    console.error(`Installing GitHub development build ${revision} (npm is ${requestedRevision ? 'not selected' : 'not yet published'})…`);
+    console.error(`Installing GitHub development build ${revision}…`);
     temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-install-'));
     const response = await get(`https://github.com/${repository}/archive/${revision}.tar.gz`);
     if (!response.ok) throw new Error(`GitHub archive returned HTTP ${response.status}.`);

@@ -33,9 +33,61 @@ function context(overrides = {}) {
 }
 
 describe('upgrade command', () => {
-  it('returns a successful bootstrap status when npm is unpublished, without installing', async () => {
+  it('checks GitHub main by default for a script build without contacting npm', async () => {
     const out = await captureOutput(() => upgrade(context({
       flags: { check: true }, json: true,
+      currentVersion: '0.1.0', currentBuild: { channel: 'github', source_revision: 'a'.repeat(40) },
+      fetchImpl: async (url) => {
+        assert.equal(url, 'https://api.github.com/repos/cytokineking/ariax-cli/commits/main');
+        return new Response(JSON.stringify({ sha: 'b'.repeat(40) }));
+      },
+      installGitHub: async () => { throw new Error('must not install'); },
+    })));
+    const result = JSON.parse(out.stdout).data;
+    assert.equal(result.latest_channel, 'github');
+    assert.equal(result.latest_revision, 'b'.repeat(40));
+    assert.equal(result.update_available, true);
+  });
+
+  it('recognizes an identical GitHub commit as current', async () => {
+    const out = await captureOutput(() => upgrade(context({
+      json: true, currentBuild: { channel: 'github', source_revision: 'a'.repeat(40) },
+      fetchImpl: async () => new Response(JSON.stringify({ sha: 'a'.repeat(40) })),
+      installGitHub: async () => { throw new Error('must not install'); },
+    })));
+    assert.equal(JSON.parse(out.stdout).data.updated, false);
+    assert.equal(JSON.parse(out.stdout).data.update_available, false);
+  });
+
+  it('installs and verifies the checked commit for GitHub updates and npm-to-GitHub switches', async () => {
+    for (const channel of ['github', 'npm']) {
+      const revision = 'b'.repeat(40);
+      const expected = { version: '1.0.0', channel: 'github', source_revision: revision };
+      const calls = [];
+      const out = await captureOutput(() => upgrade(context({
+        flags: { yes: true, channel: 'github' }, json: true,
+        currentBuild: { channel, source_revision: channel === 'npm' ? revision : 'a'.repeat(40) },
+        fetchImpl: async () => new Response(JSON.stringify({ sha: revision })),
+        installGitHub: async (options) => { calls.push(options.revision); assert.equal(options.quiet, true); return expected; },
+        verifyInstallation: async (options) => { calls.push(options); return { executable: '/test/bin/ariax', build: expected }; },
+      })));
+      assert.deepEqual(calls, [revision, expected]);
+      assert.equal(JSON.parse(out.stdout).data.updated, true);
+    }
+  });
+
+  it('allows explicitly switching a development-ahead version to the stable npm channel', async () => {
+    let installed;
+    await captureOutput(() => upgrade(context({
+      flags: { yes: true, channel: 'npm' }, currentVersion: '2.0.0', currentBuild: { channel: 'github' },
+      installLatest: async (options) => { installed = options.version; },
+    })));
+    assert.equal(installed, '1.1.0');
+  });
+
+  it('returns a successful bootstrap status when npm is unpublished, without installing', async () => {
+    const out = await captureOutput(() => upgrade(context({
+      flags: { check: true, channel: 'npm' }, json: true,
       currentVersion: '0.1.0', currentBuild: { channel: 'github', source_revision: 'a'.repeat(40) },
       fetchImpl: async () => new Response('', { status: 404 }),
       installLatest: async () => { throw new Error('must not install'); },
@@ -44,13 +96,13 @@ describe('upgrade command', () => {
     assert.equal(result.status, 'unpublished');
     assert.equal(result.latest_version, null);
     assert.equal(result.update_available, false);
-    assert.match(result.instruction, /ARIAX_REVISION/);
+    assert.match(result.instruction, /--channel github/);
   });
 
   it('migrates a same-version GitHub build to npm and verifies before reporting success', async () => {
     const calls = [];
     const out = await captureOutput(() => upgrade(context({
-      flags: { yes: true }, json: true,
+      flags: { yes: true, channel: 'npm' }, json: true,
       currentVersion: '0.1.0', currentBuild: { channel: 'github', source_revision: 'a'.repeat(40) },
       fetchImpl: async () => new Response(JSON.stringify({ version: '0.1.0' })),
       installLatest: async (options) => calls.push(['install', options]),
@@ -85,6 +137,8 @@ describe('upgrade command', () => {
         current_channel: 'npm',
         current_revision: null,
         latest_version: '1.1.0',
+        latest_channel: 'npm',
+        latest_revision: null,
         update_available: true,
       },
     });
@@ -129,6 +183,8 @@ describe('upgrade command', () => {
         current_channel: 'npm',
         current_revision: null,
         latest_version: '1.1.0',
+        latest_channel: 'npm',
+        latest_revision: null,
         update_available: true,
         updated: true,
         installed: { executable: '/test/bin/ariax', build: { version: '1.1.0', channel: 'npm' } },
@@ -140,6 +196,7 @@ describe('upgrade command', () => {
   it('rejects conflicting, unknown, and positional input', async () => {
     await assert.rejects(upgrade(context({ flags: { check: true, yes: true } })), /cannot be used together/);
     await assert.rejects(upgrade(context({ flags: { unexpected: true } })), /unknown flag/);
+    await assert.rejects(upgrade(context({ flags: { channel: 'other' } })), /--channel must/);
     await assert.rejects(upgrade(context({ positionals: ['extra'] })), /unexpected positional/);
   });
 

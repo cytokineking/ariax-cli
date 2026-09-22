@@ -221,13 +221,28 @@ describe('CLI contract', () => {
       return new Response(JSON.stringify({ version: '0.2.0' }));
     };
     try {
-      const out = await captureOutput(() => main(['upgrade', '--check', '--json'], {}));
+      const out = await captureOutput(() => main(['upgrade', '--check', '--channel', 'npm', '--json'], {}));
       assert.equal(out.value, 0);
       assert.equal(JSON.parse(out.stdout).data.update_available, true);
       assert.equal(authorization, undefined);
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('checks the GitHub channel through the command parser and reports the installed revision', async () => {
+    const out = await captureOutput(() => main(['upgrade', '--check', '--channel', 'github', '--json'], {}, {
+      fetchImpl: async (url, options) => {
+        assert.equal(url, 'https://api.github.com/repos/cytokineking/ariax-cli/commits/main');
+        assert.equal(options.headers.authorization, undefined);
+        return new Response(JSON.stringify({ sha: 'b'.repeat(40) }));
+      },
+    }));
+    assert.equal(out.value, 0);
+    const result = JSON.parse(out.stdout).data;
+    assert.equal(result.latest_channel, 'github');
+    assert.equal(result.latest_revision, 'b'.repeat(40));
+    assert.match(result.current_revision, /^[a-f0-9]{40}$/);
   });
 
   it('refuses to send a key to a custom API origin without explicit opt-in', async () => {

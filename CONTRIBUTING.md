@@ -9,7 +9,7 @@ npm test
 After committing the candidate, run `npm run test:package`. It builds both
 development and stable packages, installs them offline without optional native
 dependencies in a temporary prefix, and checks version identity, bundled skills,
-same-version channel migration, and executable shadowing. It never changes the
+same-version channel migration in both directions, and executable shadowing. It never changes the
 user's global installation.
 
 Use `npm run pack:github -- /path/to/output` for a development artifact or

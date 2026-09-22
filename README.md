@@ -34,7 +34,7 @@ downloads results from your terminal, scripts, or an AI coding agent.
 Ariax requires [Node.js 20 or newer](https://nodejs.org/).
 
 ```sh
-# GitHub-hosted Ariax installer (works before the first npm publication)
+# Latest commit on GitHub main (development channel)
 curl -fsSL https://raw.githubusercontent.com/cytokineking/ariax-cli/main/install.sh | sh
 ```
 
@@ -46,42 +46,64 @@ ariax --version --json
 ariax help
 ```
 
-The [public installer](install.sh) checks Node.js and selects an exact stable npm
-version. Until the first npm release exists, it resolves GitHub `main` to an
-immutable commit, packages that snapshot, and records its full revision and
-`github` channel. Registry outages stop installation; they do not silently select
-a different channel. `--version --json` reports the version, channel, revision,
-and whether a source checkout has uncommitted changes.
+The [public installer](install.sh) checks Node.js, resolves GitHub `main` to an
+immutable commit, and installs that snapshot as an npm-managed global package.
+It records the full revision and `github` channel, and keeps selecting GitHub
+after npm releases become available. `--version --json` reports the version,
+channel, revision, and whether a source checkout has uncommitted changes.
 
 To reproduce a development installation, download `install.sh` from the desired
 commit and run it with `ARIAX_REVISION` set to that full 40-character commit SHA.
-`ARIAX_VERSION` instead pins an exact **published** npm version; it never falls
-back to GitHub. These two options cannot be combined. Direct
-`npm install --global ariax-cli` becomes available after the first npm publication;
-use the installer during stabilization.
+`ARIAX_VERSION` instead selects an exact **published** npm version, or set
+`ARIAX_CHANNEL=npm` to select npm's stable `latest` release. Neither falls back to
+GitHub if npm is unavailable. Version and revision pins cannot be combined or
+used with a conflicting channel. Pins select the initial build; subsequent
+explicit upgrades follow that build's channel.
 
-The CLI checks for a newer stable release at most once per day during
-interactive use. It never auto-updates or interrupts a command:
+After the first npm publication, install the stable channel directly with:
 
 ```sh
-ariax upgrade --check       # Check only
-ariax upgrade               # Check, confirm, and update
-ariax upgrade --yes         # Update without a prompt
+npm install --global ariax-cli@latest
 ```
 
-Before npm publication, these commands report a successful `unpublished` status
-and instructions to rerun the installer for a newer development build. They do
-not update GitHub builds automatically. Once npm is available, an explicit
-upgrade can migrate a GitHub build to the same npm version (for example,
-`0.1.0` to stable `0.1.0`). Upgrade installs the exact selected version and verifies
-the installed executable before reporting success. For older GitHub installations
+During interactive use, the CLI checks at most once per day: GitHub builds
+compare their full commit SHA with `main`, and npm builds compare their version
+with npm's stable `latest` release. GitHub changes are detected even when the
+package version is unchanged. Checks run alongside the command, have a short
+timeout, and silently back off after failures. They only display a notice;
+installing an update requires an explicit command:
+
+```sh
+ariax upgrade --check       # Check the current channel now, bypassing the cache
+ariax upgrade               # Check, confirm, and update within the current channel
+ariax upgrade --yes         # Update without a prompt
+ariax upgrade --channel npm       # Switch to the stable npm release
+ariax upgrade --channel github    # Switch to the latest GitHub main commit
+```
+
+Both channels share the package name `ariax-cli`, executable `ariax`, and the
+same npm global prefix (`npm prefix --global`). Switching replaces that package
+in place, including when both builds have the same version, and retains saved
+credentials and project files. An explicit switch to npm can select a lower
+version than a development build. Ordinary upgrades stay on the current channel.
+Re-running the script switches back to GitHub; a direct global npm install
+switches to npm. Keep the same Node.js installation and npm prefix for either
+route, since different Node version managers or prefixes can create separate
+installations.
+
+Upgrade installs the exact checked commit or npm version and verifies the build
+identity and executable on PATH before reporting success. Before npm publication,
+an explicit npm check reports `unpublished` and leaves the installed build alone;
+GitHub checks and upgrades work independently. For older GitHub installations
 that predate build identities, rerun the installer once to obtain this behavior.
 
 Installation reports the executable it verified. If `ariax --version` in your
 shell differs, check `type -a ariax` for a shell alias or another installation.
 The installer does not change shell startup files or aliases.
 
-Set `NO_UPDATE_NOTIFIER=1` to disable automatic checks.
+Automatic checks are skipped for JSON output, CI, and noninteractive commands.
+Set `NO_UPDATE_NOTIFIER=1` to disable them. There is no background service; the
+daily check occurs the next time you run an eligible interactive command.
 
 ## Connect your account
 
