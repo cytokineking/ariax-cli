@@ -31,79 +31,60 @@ downloads results from your terminal, scripts, or an AI coding agent.
 
 ## Install
 
-Ariax requires [Node.js 20 or newer](https://nodejs.org/).
-
-```sh
-# Latest commit on GitHub main (development channel)
-curl -fsSL https://raw.githubusercontent.com/cytokineking/ariax-cli/main/install.sh | sh
-```
-
-Verify it:
-
-```sh
-ariax --version
-ariax --version --json
-ariax help
-```
-
-The [public installer](install.sh) checks Node.js, resolves GitHub `main` to an
-immutable commit, and installs that snapshot as an npm-managed global package.
-It records the full revision and `github` channel, and keeps selecting GitHub
-after npm releases become available. `--version --json` reports the version,
-channel, revision, and whether a source checkout has uncommitted changes.
-
-To reproduce a development installation, download `install.sh` from the desired
-commit and run it with `ARIAX_REVISION` set to that full 40-character commit SHA.
-`ARIAX_VERSION` instead selects an exact **published** npm version, or set
-`ARIAX_CHANNEL=npm` to select npm's stable `latest` release. Neither falls back to
-GitHub if npm is unavailable. Version and revision pins cannot be combined or
-used with a conflicting channel. Pins select the initial build; subsequent
-explicit upgrades follow that build's channel.
-
-After the first npm publication, install the stable channel directly with:
+Install [Node.js 20 or newer](https://nodejs.org/), then install the latest
+stable release from [npm](https://www.npmjs.com/package/ariax-cli):
 
 ```sh
 npm install --global ariax-cli@latest
 ```
 
-During interactive use, the CLI checks at most once per day: GitHub builds
-compare their full commit SHA with `main`, and npm builds compare their version
-with npm's stable `latest` release. GitHub changes are detected even when the
-package version is unchanged. Checks run alongside the command, have a short
-timeout, and silently back off after failures. They only display a notice;
-installing an update requires an explicit command:
+For the latest development commit from GitHub, use the install script instead:
 
 ```sh
-ariax upgrade --check       # Check the current channel now, bypassing the cache
-ariax upgrade               # Check, confirm, and update within the current channel
-ariax upgrade --yes         # Update without a prompt
-ariax upgrade --channel npm       # Switch to the stable npm release
+curl -fsSL https://raw.githubusercontent.com/cytokineking/ariax-cli/main/install.sh | sh
+```
+
+Both methods require Node.js and npm. Check your installed version, channel,
+and commit with:
+
+```sh
+ariax --version
+ariax help
+```
+
+## Updates
+
+During interactive use, the CLI checks for updates at most once per day. npm
+installs check the latest npm release; script installs check GitHub `main` for a
+new commit, even when the version number stays the same. It shows a notice when
+an update is available. Updates are installed only when you request them:
+
+```sh
+ariax upgrade --check    # Check now
+ariax upgrade            # Update your current channel, with confirmation
+ariax upgrade --yes      # Update without a prompt
+```
+
+Automatic checks are skipped in CI, noninteractive commands, and JSON output.
+Set `NO_UPDATE_NOTIFIER=1` to disable them.
+
+### Switch between npm and the script install
+
+```sh
+ariax upgrade --channel npm       # Switch to the latest stable npm release
 ariax upgrade --channel github    # Switch to the latest GitHub main commit
 ```
 
-Both channels share the package name `ariax-cli`, executable `ariax`, and the
-same npm global prefix (`npm prefix --global`). Switching replaces that package
-in place, including when both builds have the same version, and retains saved
-credentials and project files. An explicit switch to npm can select a lower
-version than a development build. Ordinary upgrades stay on the current channel.
-Re-running the script switches back to GitHub; a direct global npm install
-switches to npm. Keep the same Node.js installation and npm prefix for either
-route, since different Node version managers or prefixes can create separate
-installations.
+You can also rerun either installation command above to switch. Both methods
+use the same npm-managed package and `ariax` command, so switching replaces the
+existing installation and preserves your login and project files. It works even
+when both builds have the same version; switching to npm may select an older
+build than GitHub. Future upgrades follow the channel you selected.
 
-Upgrade installs the exact checked commit or npm version and verifies the build
-identity and executable on PATH before reporting success. Before npm publication,
-an explicit npm check reports `unpublished` and leaves the installed build alone;
-GitHub checks and upgrades work independently. For older GitHub installations
-that predate build identities, rerun the installer once to obtain this behavior.
-
-Installation reports the executable it verified. If `ariax --version` in your
-shell differs, check `type -a ariax` for a shell alias or another installation.
-The installer does not change shell startup files or aliases.
-
-Automatic checks are skipped for JSON output, CI, and noninteractive commands.
-Set `NO_UPDATE_NOTIFIER=1` to disable them. There is no background service; the
-daily check occurs the next time you run an eligible interactive command.
+Use the same Node.js installation and npm global prefix for both methods. If you
+have multiple installations, compare `type -a ariax` with `npm prefix --global`.
+For an existing installation under `/opt/homebrew`, for example, target it with
+`npm_config_prefix=/opt/homebrew ariax upgrade` (add `--channel npm` to switch).
 
 ## Connect your account
 
@@ -250,8 +231,7 @@ then give the agent this:
 
 ```text
 Use the Ariax CLI for my protein-design project. Verify `ariax --version`, run
-`ariax upgrade --check --json`, and tell me if an update is available (an
-`unpublished` status means continue with this development build); do not
+`ariax upgrade --check --json`, and tell me if an update is available; do not
 upgrade without my approval. Run `ariax skills --read --json`, then
 `ariax skills <protocol> --read --json` and
 `ariax skills <protocol> --reference outputs --read --json` for the selected
