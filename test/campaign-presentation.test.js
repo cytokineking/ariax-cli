@@ -193,7 +193,7 @@ describe('compact campaign presentation', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-generic-presentation-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const job = path.join(root, 'job.json');
-    const spec = { protocol: 'boltzgen', chains: 'A', num_designs: 2 };
+    const spec = { protocol: 'boltzgen', project_type: 'miniprotein-small-molecule', ligand_smiles: 'CCO', num_designs: 2 };
     fs.writeFileSync(job, JSON.stringify(spec));
     const validated = await capture(['validate', '-f', job, '--json'], async (url) => {
       assert.match(String(url), /\/api\/v1\/validate$/);

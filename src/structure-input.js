@@ -525,7 +525,9 @@ function parseCif(text, esmOnly = false) {
       const residue = { author, register, insertion, aminoAcid };
       addResidue(authorResidues, authChain || labelChain, residue);
       addResidue(pxResidues, authChain || labelChain, { ...residue, register: author });
-      addResidue(labelResidues, labelChain || authChain, residue);
+      if (labelChain && Number.isSafeInteger(labelNumber) && labelNumber > 0) {
+        addResidue(labelResidues, labelChain, residue);
+      }
       if (labelChain && authChain) labelToAuth[labelChain] = authChain;
       const entity = field(loop, row, '_atom_site.label_entity_id');
       if (entity) {

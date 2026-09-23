@@ -92,7 +92,9 @@ by its protocol guide; use `--input-dir` for its exact bundle.
 
 With `--input`, the CLI checks selected chains, coordinates, sequence metadata,
 and protocol-specific selectors locally, then validates JSON through the API.
-Without structure bytes, API validation establishes only configuration validity.
+Structure-backed BoltzGen requires `--input` for both `validate` and `submit`.
+For other protocols that allow validation without structure bytes, API validation
+establishes only configuration validity.
 Neither validation mode proves that a remote job completed or that a binder
 works experimentally. Resolve `error.details.issues` using each field path,
 rule, and constraint; do not weaken an explicit requirement to silence an error.

@@ -4,7 +4,7 @@ import { printData, printJson, printKv, printProgress } from '../output.js';
 import { EXIT } from '../exit-codes.js';
 import { readAndValidateInput } from '../input.js';
 import { createSequencePrompt } from '../sequence-prompt.js';
-import { prepareStructureInput } from '../structure-input.js';
+import { prepareStructureInput, protocolId } from '../structure-input.js';
 import { isBindcraft2, prepareBindcraft2Bundle } from '../bindcraft2-inputs.js';
 import { compactScientificSettings } from '../campaign-presentation.js';
 
@@ -19,6 +19,13 @@ export async function run(ctx) {
   let body = readJsonFile(String(file));
   if (ctx.flags.input !== undefined && ctx.flags['input-dir'] !== undefined) {
     const err = new Error('Choose only one input source: --input or --input-dir.');
+    err.exitCode = EXIT.USAGE;
+    throw err;
+  }
+  if (protocolId(body.protocol) === 'boltzgen'
+      && (body.project_type ?? body.protocol_config?.design_type) !== 'miniprotein-small-molecule'
+      && ctx.flags.input === undefined) {
+    const err = new Error('BoltzGen validation requires --input FILE to check target chains and residues.');
     err.exitCode = EXIT.USAGE;
     throw err;
   }

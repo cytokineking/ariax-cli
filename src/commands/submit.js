@@ -10,7 +10,7 @@ import { EXIT } from '../exit-codes.js';
 import { loadResume, clearResume, resumeHint } from '../resume.js';
 import { waitForProject } from '../poll.js';
 import { readAndValidateInput } from '../input.js';
-import { prepareStructureInput } from '../structure-input.js';
+import { prepareStructureInput, protocolId } from '../structure-input.js';
 import { createSequencePrompt } from '../sequence-prompt.js';
 import { isUUID } from '../uuid.js';
 import { DEFAULT_TIMEOUT_MS, validateTransferUrl } from '../http.js';
@@ -58,6 +58,11 @@ export async function run(ctx) {
   }
   if (flags.input !== undefined && flags['input-dir'] !== undefined) {
     throw usageError('submit: choose only one input source: --input or --input-dir.');
+  }
+  if (protocolId(spec.protocol) === 'boltzgen'
+      && (spec.project_type ?? spec.protocol_config?.design_type) !== 'miniprotein-small-molecule'
+      && flags.input === undefined) {
+    throw usageError('submit: BoltzGen requires --input FILE to validate target chains and residues.');
   }
   if (isBindcraft2(spec)) {
     if (flags.input === undefined && flags['input-dir'] === undefined) {

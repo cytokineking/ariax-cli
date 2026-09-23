@@ -121,7 +121,8 @@ author residue numbers:
 
 - For mmCIF, BoltzGen expects `label_asym_id` chain IDs and absolute
   `label_seq_id` residue positions. The CLI preserves those absolute positions
-  when validating binding rules.
+  when validating binding rules. Select protein chains, not solvent chains;
+  an `auth_asym_id` that names a protein may also be a solvent `label_asym_id`.
 - For PDB, the first observed author residue maps to canonical position 1. The
   CLI reports the shift when author numbering does not begin at 1.
 - Missing residues still occupy canonical sequence positions. A gapped PDB
@@ -135,6 +136,9 @@ every reported chain, numbering, gap, mask, water, or ligand-residue error.
 ## Validate, launch, and wait
 
 Protein-target campaign:
+
+`--input` is required for both `validate` and `submit` so the CLI can check
+selected chains and masks against the structure before upload.
 
 ```sh
 ariax validate -f job.json --input ./target.cif --json

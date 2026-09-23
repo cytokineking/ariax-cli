@@ -267,6 +267,9 @@ capabilities and input rules.
 | Change GPU preferences | `ariax gpu-preferences <PROJECT_ID> -f preferences.json` |
 | Check or install updates | `ariax upgrade --check`, `ariax upgrade` |
 
+For structure-backed BoltzGen jobs, `--input` is required on both `validate`
+and `submit`. The `miniprotein-small-molecule` mode has no structure input.
+
 Run `ariax help <COMMAND>` for complete usage. Add `--json` for scripts, and
 keep human help output out of the JSON file. The [safe shell example](agent-skills/core/examples.md#safe-scripted-output)
 preserves the CLI exit code and stderr before parsing. Submit,
