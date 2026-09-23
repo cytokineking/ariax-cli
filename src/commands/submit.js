@@ -14,7 +14,7 @@ import { prepareStructureInput, protocolId } from '../structure-input.js';
 import { createSequencePrompt } from '../sequence-prompt.js';
 import { isUUID } from '../uuid.js';
 import { DEFAULT_TIMEOUT_MS, validateTransferUrl } from '../http.js';
-import { accountIdentity, createOperation, sourceIdentity, sendOperation, waitForOperation } from '../operations.js';
+import { accountIdentity, createOperation, sourceIdentity, sendOperation, verifyOperationStorage, waitForOperation } from '../operations.js';
 import { isBindcraft2, prepareBindcraft2Bundle, requiredBindcraft2Inputs } from '../bindcraft2-inputs.js';
 import { bindCraft2ProgressSummary } from '../bindcraft2-progress.js';
 import { campaignStatusLines, compactCampaign, compactSubmission, usesCompactCampaignPresentation } from '../campaign-presentation.js';
@@ -47,6 +47,7 @@ export async function run(ctx) {
   let preparedBytes;
   let preparedInputs;
   let account;
+  let uploadedIntent;
   let body = { ...spec, name: projectName };
 
   const recoveryIntentId = flags['input-upload-intent-id'];
@@ -99,6 +100,7 @@ export async function run(ctx) {
     if (recoveryIntentId !== undefined) {
       body.input_upload_intent_id = String(recoveryIntentId);
     } else {
+      requireOperationStorage(ctx.config.rootDir);
       account = await accountIdentity(ctx);
       const init = await ctx.client.post('/api/v1/uploads/init', {
         body: {
@@ -130,6 +132,8 @@ export async function run(ctx) {
         appendUploadReservationHint(error, upload);
         throw error;
       }
+      uploadedIntent = { id: upload.upload_intent_id, expiresAt: upload.expires_at,
+        sourceArg: flags['input-dir'] !== undefined ? '--input-dir INPUT_DIR' : '--input INPUT_FILE' };
       body.input_upload_intent_id = upload.upload_intent_id;
     }
   } else if (flags['input-dir'] !== undefined) {
@@ -165,6 +169,7 @@ export async function run(ctx) {
       if (typeof projectType !== 'string' || !projectType) {
         throw usageError('submit: job.json must identify project_type (or protocol_config.design_type) when --input is used.');
       }
+      requireOperationStorage(ctx.config.rootDir);
       account = await accountIdentity(ctx);
       const init = await ctx.client.post('/api/v1/uploads/init', {
         body: {
@@ -196,15 +201,22 @@ export async function run(ctx) {
         appendUploadReservationHint(error, upload);
         throw error;
       }
+      uploadedIntent = { id: upload.upload_intent_id, expiresAt: upload.expires_at, sourceArg: '--input INPUT_FILE' };
       body.input_upload_intent_id = upload.upload_intent_id;
     }
   }
 
   account ??= await accountIdentity(ctx);
-  const operation = createOperation(ctx, {
-    action: 'project:create', request: { method: 'POST', path: '/api/v1/projects', body },
-    account, sources, preparedBytes, preparedInputs,
-  });
+  let operation;
+  try {
+    operation = createOperation(ctx, {
+      action: 'project:create', request: { method: 'POST', path: '/api/v1/projects', body },
+      account, sources, preparedBytes, preparedInputs,
+    });
+  } catch (error) {
+    if (uploadedIntent) appendUnjournaledUploadHint(error, uploadedIntent, projectName);
+    throw error;
+  }
   const res = await sendOperation(ctx, operation);
   const compactDefault = isBindcraft2(body) && flags.details !== true;
   if (operation.state === 'in_progress') {
@@ -283,6 +295,21 @@ function appendUploadReservationHint(error, upload) {
   error.message += expiresAt
     ? ` Project creation was not requested. The project-name reservation may remain active until ${expiresAt}; wait until then, then rerun the same command.`
     : ' Project creation was not requested. The project-name reservation may remain active for up to 15 minutes; wait for it to expire, then rerun the same command.';
+}
+
+function requireOperationStorage(rootDir) {
+  try {
+    verifyOperationStorage(rootDir);
+  } catch (error) {
+    error.message += ' No upload was reserved. Retry with --root-dir WRITABLE_DIRECTORY.';
+    throw error;
+  }
+}
+
+function appendUnjournaledUploadHint(error, intent, projectName) {
+  const expiry = typeof intent.expiresAt === 'string' && Number.isFinite(Date.parse(intent.expiresAt))
+    ? ` before ${intent.expiresAt}` : ' before the upload intent expires (normally 15 minutes)';
+  error.message += ` Project creation was not requested. Uploaded input intent ${intent.id} can be reused${expiry}. No operation ID was returned, so ariax recover cannot use this attempt. Keep the original job and input bytes, account, and API origin. Retry with a writable root directory: ariax submit -f JOB_JSON ${intent.sourceArg} --name ${projectName} --input-upload-intent-id ${intent.id} --root-dir WRITABLE_DIRECTORY.`;
 }
 
 async function putInput(fetchImpl, url, headers, body, timeoutMs) {

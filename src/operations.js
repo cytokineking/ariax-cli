@@ -45,6 +45,16 @@ function atomicWrite(file, bytes, exclusive = false) {
   } finally { fs.rmSync(temp, { force: true }); }
 }
 
+export function verifyOperationStorage(rootDir) {
+  const dir = directory(rootDir);
+  const probe = path.join(dir, `.${randomUUID()}.probe`);
+  try {
+    atomicWrite(probe, 'ready', true);
+  } finally {
+    fs.rmSync(probe, { force: true });
+  }
+}
+
 function readRegular(file) {
   const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   try {

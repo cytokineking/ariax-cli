@@ -317,7 +317,7 @@ ATOM 2 C CA GLY X 1 2 GLY AAA 177 ? 11 10 10
     const result = await run(['inputs','prepare','--input',pdb,'-f',job,'--output',path.join(root,'for-submit'),'--json']);
     const preparedJob = JSON.parse(fs.readFileSync(result.data.job));
     let uploaded, payload;
-    const submitted = await run(['submit','-f',result.data.job,'--input',result.data.input,'--name','prepared-copy','--json'], {
+    const submitted = await run(['submit','-f',result.data.job,'--input',result.data.input,'--name','prepared-copy','--root-dir',root,'--json'], {
       fetchImpl: async (url, options) => {
         if (String(url).endsWith('/me')) return Response.json({data:{
           actor:{user_id:'33333333-3333-4333-8333-333333333333'},

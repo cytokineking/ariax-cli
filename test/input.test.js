@@ -109,6 +109,71 @@ describe('submit input upload', () => {
     assert.equal(posts[1].options.body.input_upload_intent_id, '11111111-1111-4111-8111-111111111111');
   });
 
+  it('rejects unusable operation storage before reserving or uploading input', async () => {
+    const rootDir = fs.mkdtempSync(path.join(directory, 'unusable-journal-'));
+    fs.symlinkSync(directory, path.join(rootDir, '.ariax'), 'dir');
+    const specFile = write('unusable-journal-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const inputFile = write('unusable-journal.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
+    let requests = 0;
+    await assert.rejects(() => submit({
+      client: {
+        get: async () => { requests += 1; throw new Error('unexpected account lookup'); },
+        post: async () => { requests += 1; throw new Error('unexpected API request'); },
+      },
+      fetchImpl: async () => { requests += 1; throw new Error('unexpected upload'); },
+      flags: { file: specFile, input: inputFile, name: 'unusable-journal' },
+      json: false,
+      config: { rootDir },
+    }), (error) => {
+      assert.match(error.message, /Operation storage must use real directories/);
+      assert.match(error.message, /No upload was reserved/);
+      assert.match(error.message, /--root-dir WRITABLE_DIRECTORY/);
+      return true;
+    });
+    assert.equal(requests, 0);
+  });
+
+  it('reports a reusable upload intent if journaling fails after a successful PUT', async () => {
+    const rootDir = fs.mkdtempSync(path.join(directory, 'journal-after-upload-'));
+    const specFile = write('journal-after-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const inputFile = write('journal-after-upload.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
+    const intentId = '11111111-1111-4111-8111-111111111111';
+    const expiresAt = '2030-01-01T00:00:00Z';
+    const posts = [];
+    let uploads = 0;
+    await assert.rejects(() => submit({
+      client: {
+        get: async () => ({ data: { actor: { user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, billing: { account_type: 'user', account_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } }),
+        post: async (route) => {
+          posts.push(route);
+          assert.equal(route, '/api/v1/uploads/init');
+          return { data: { upload_intent_id: intentId, upload_url: 'https://storage.example/upload', upload_headers: {}, expires_at: expiresAt } };
+        },
+      },
+      fetchImpl: async () => {
+        uploads += 1;
+        const journalDir = path.join(rootDir, '.ariax', 'operations');
+        fs.rmdirSync(journalDir);
+        fs.symlinkSync(directory, journalDir, 'dir');
+        return new Response(null, { status: 200 });
+      },
+      flags: { file: specFile, input: inputFile, name: 'journal-after-upload' },
+      json: false,
+      config: { rootDir },
+    }), (error) => {
+      assert.match(error.message, /Operation storage must use real directories/);
+      assert.match(error.message, new RegExp(intentId));
+      assert.match(error.message, new RegExp(expiresAt));
+      assert.match(error.message, /Project creation was not requested/);
+      assert.match(error.message, /ariax recover cannot use this attempt/);
+      assert.match(error.message, /--input-upload-intent-id/);
+      assert.match(error.message, /--root-dir WRITABLE_DIRECTORY/);
+      return true;
+    });
+    assert.deepEqual(posts, ['/api/v1/uploads/init']);
+    assert.equal(uploads, 1);
+  });
+
   it('explains a failed upload reservation and never creates or journals a project', async () => {
     const rootDir = fs.mkdtempSync(path.join(directory, 'failed-upload-'));
     const specFile = write('failed-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
@@ -145,7 +210,7 @@ describe('submit input upload', () => {
       return true;
     });
     assert.deepEqual(posts, ['/api/v1/uploads/init']);
-    assert.equal(fs.existsSync(path.join(rootDir, '.ariax', 'operations')), false);
+    assert.deepEqual(fs.readdirSync(path.join(rootDir, '.ariax', 'operations')), []);
 
     const networkRootDir = fs.mkdtempSync(path.join(directory, 'rejected-upload-'));
     const networkCause = new Error('socket closed');
@@ -167,7 +232,7 @@ describe('submit input upload', () => {
       },
     );
     assert.deepEqual(posts, ['/api/v1/uploads/init']);
-    assert.equal(fs.existsSync(path.join(networkRootDir, '.ariax', 'operations')), false);
+    assert.deepEqual(fs.readdirSync(path.join(networkRootDir, '.ariax', 'operations')), []);
   });
 
   it('bounds a stalled upload with the configured timeout and gives fallback reservation guidance', async () => {
@@ -206,7 +271,7 @@ describe('submit input upload', () => {
       return true;
     });
     assert.equal(uploadSignal.aborted, true);
-    assert.equal(fs.existsSync(path.join(rootDir, '.ariax', 'operations')), false);
+    assert.deepEqual(fs.readdirSync(path.join(rootDir, '.ariax', 'operations')), []);
   });
 
   it('reuses an uploaded intent for an exact project retry without another PUT', async () => {

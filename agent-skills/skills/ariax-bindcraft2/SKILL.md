@@ -46,6 +46,11 @@ The nine optional properties are `bigbang`, `disulfide_staple`, `forced_targetin
 
 Use only fields accepted by the live schema. Preserve omitted fields, explicit zeroes, and `false`: they are different requests. `sequence_candidates` controls ProteinMPNN proposals; `kept_sequences` controls retained proposals. Detarget rotation thresholds and `max_detarget_iptm_final` serve different stages. Filters have exact native names, directions, units, and optional state scope. Shell commands, model paths, arbitrary native settings, provider knobs, upstream sweeps, and custom reranking are outside the hosted contract.
 
+Omit `advanced.desperation_trajectories` to keep the native 750-trajectory
+threshold, including for VHH. An explicit `0` starts the first recovery rung
+on the first trajectory when `desperation` is enabled. This adjusts search
+behavior; `campaign.max_trajectories` still limits total attempts.
+
 ## Plan a bounded pilot
 
 A useful starting suggestion is two accepted designs with `max_trajectories: 20`, leaving native scientific defaults unchanged. This is a review point, not a guarantee or spend cap. Accepted designs and attempted trajectories are separate counts; an exhausted pilot can complete with zero accepted designs.

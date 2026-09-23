@@ -156,6 +156,14 @@ ariax recover OPERATION_ID --wait
 ariax status PROJECT_ID --wait
 ```
 
+If a direct input upload succeeds but local operation journaling fails, the CLI
+reports the upload intent ID and confirms project creation was not sent. Keep
+the original job and input bytes, account, API origin, and project name; select
+a writable `--root-dir` and retry with `--input-upload-intent-id ID` before
+the intent expires. No operation ID is returned, so `ariax recover` does not
+apply. If the intent expires, resolve the reservation before considering a new
+upload within the existing campaign authorization.
+
 The CLI journals each mutation without credentials or signed URLs. Recovery
 reconciles and, when safe, replays only the retained request and idempotency key;
 it never creates a replacement campaign. Follow `in_progress` with `--wait`.

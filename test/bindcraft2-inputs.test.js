@@ -53,6 +53,7 @@ describe('BindCraft2 deterministic input bundles', () => {
     assert.equal(bundle.projectType, 'arp');
     assert.equal(bundle.spec.protocol_config.modality[0], 'ARP');
     assert.deepEqual(bundle.required, ['avoid.fasta', 'input.pdb', 'scaffold.pdb']);
+    assert.equal(Object.hasOwn(bundle.spec.protocol_config.advanced, 'desperation_trajectories'), false);
     assert.deepEqual(Object.keys(bundle.manifest.files), bundle.required);
     const output = path.join(root, 'prepared');
     writeBindcraft2Bundle(output, bundle);
@@ -242,10 +243,13 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-submit-'));
     const directory = inputDirectory(root);
     const job = path.join(root, 'job.json');
-    fs.writeFileSync(job, JSON.stringify(spec()));
+    const requested = spec();
+    requested.protocol_config.advanced.desperation = true;
+    requested.protocol_config.advanced.desperation_trajectories = 0;
+    fs.writeFileSync(job, JSON.stringify(requested));
     const posts = [];
     const puts = [];
-    const normalized = { ...spec(), project_type: 'miniprotein' };
+    const normalized = { ...requested, project_type: 'miniprotein' };
     const client = {
       get: async (url) => {
         assert.equal(url, '/api/v1/me');
@@ -278,6 +282,8 @@ describe('BindCraft2 signed upload and durable recovery', () => {
       config: { rootDir: root, baseUrl: 'https://www.ariax.bio' },
     };
     await submit(ctx);
+    assert.equal(posts.find((entry) => entry.url === '/api/v1/validate').options.body.protocol_config.advanced.desperation_trajectories, 0);
+    assert.equal(posts.find((entry) => entry.url === '/api/v1/projects').options.body.protocol_config.advanced.desperation_trajectories, 0);
     const init = posts.find((entry) => entry.url === '/api/v1/uploads/init').options.body;
     assert.deepEqual(init, { project_name: 'bc2-test', project_type: 'miniprotein', target_filename: 'input.pdb', input_files: ['avoid.fasta', 'input.pdb'] });
     assert.equal(puts.length, 2);
@@ -285,12 +291,94 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     assert.equal(puts.find((entry) => entry.url.endsWith('/input')).body.toString(), PDB_A);
     const operation = listOperations(root)[0];
     assert.equal(operation.version, 2);
+    assert.equal(operation.request.body.protocol_config.advanced.desperation_trajectories, 0);
     assert.deepEqual(operation.prepared_inputs.map((entry) => entry.filename), ['avoid.fasta', 'input.pdb']);
     fs.rmSync(job);
     fs.rmSync(directory, { recursive: true });
     assert.doesNotThrow(() => verifyReplayInputs(ctx, operation));
     fs.appendFileSync(path.join(root, '.ariax', 'operations', operation.prepared_inputs[0].snapshot), 'changed');
     assert.throws(() => verifyReplayInputs(ctx, operation), /bundle changed or is corrupt/);
+  });
+
+  it('checks local operation storage before reserving a BindCraft2 upload', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-preflight-'));
+    const directory = inputDirectory(root);
+    const job = path.join(root, 'job.json');
+    fs.writeFileSync(job, JSON.stringify(spec()));
+    fs.symlinkSync(directory, path.join(root, '.ariax'), 'dir');
+    const posts = [];
+    await assert.rejects(() => submit({
+      client: {
+        get: async () => assert.fail('account lookup must not run'),
+        post: async (url) => {
+          posts.push(url);
+          assert.equal(url, '/api/v1/validate');
+          return { data: { normalized_job_spec: { ...spec(), project_type: 'miniprotein' } } };
+        },
+      },
+      fetchImpl: async () => assert.fail('upload must not run'),
+      flags: { file: job, name: 'bc2-preflight', 'input-dir': directory },
+      config: { rootDir: root, baseUrl: 'https://www.ariax.bio' },
+      json: true,
+    }), (error) => {
+      assert.match(error.message, /Operation storage must use real directories/);
+      assert.match(error.message, /No upload was reserved/);
+      assert.match(error.message, /--root-dir WRITABLE_DIRECTORY/);
+      return true;
+    });
+    assert.deepEqual(posts, ['/api/v1/validate']);
+  });
+
+  it('reports a reusable bundle intent when journaling fails after both PUTs', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-journal-failure-'));
+    const directory = inputDirectory(root);
+    const job = path.join(root, 'job.json');
+    fs.writeFileSync(job, JSON.stringify(spec()));
+    const intentId = '33333333-3333-4333-8333-333333333333';
+    const expiresAt = '2030-01-01T00:00:00Z';
+    const posts = [];
+    let puts = 0;
+    await assert.rejects(() => submit({
+      client: {
+        get: async () => ({ data: { actor: { user_id: '11111111-1111-4111-8111-111111111111' }, billing: {
+          account_type: 'user', account_id: '22222222-2222-4222-8222-222222222222',
+        } } }),
+        post: async (url) => {
+          posts.push(url);
+          if (url === '/api/v1/validate') return { data: { normalized_job_spec: { ...spec(), project_type: 'miniprotein' } } };
+          assert.equal(url, '/api/v1/uploads/init');
+          return { data: {
+            upload_intent_id: intentId, expires_at: expiresAt,
+            uploads: [
+              { filename: 'input.pdb', upload_url: 'https://uploads.example/input', upload_method: 'PUT', upload_headers: {} },
+              { filename: 'avoid.fasta', upload_url: 'https://uploads.example/avoid', upload_method: 'PUT', upload_headers: {} },
+            ],
+          } };
+        },
+      },
+      fetchImpl: async () => {
+        puts += 1;
+        if (puts === 2) {
+          const journal = path.join(root, '.ariax', 'operations');
+          fs.rmdirSync(journal);
+          fs.symlinkSync(root, journal, 'dir');
+        }
+        return new Response(null, { status: 200 });
+      },
+      flags: { file: job, name: 'bc2-journal-failure', 'input-dir': directory },
+      config: { rootDir: root, baseUrl: 'https://www.ariax.bio' },
+      json: true,
+    }), (error) => {
+      assert.match(error.message, /Operation storage must use real directories/);
+      assert.match(error.message, new RegExp(intentId));
+      assert.match(error.message, new RegExp(expiresAt));
+      assert.match(error.message, /Project creation was not requested/);
+      assert.match(error.message, /--input-dir INPUT_DIR/);
+      assert.match(error.message, /--root-dir WRITABLE_DIRECTORY/);
+      return true;
+    });
+    assert.deepEqual(posts, ['/api/v1/validate', '/api/v1/uploads/init']);
+    assert.equal(puts, 2);
   });
 
   it('rejects missing upload descriptors before object upload or project creation', async () => {
