@@ -357,7 +357,9 @@ describe('CLI contract', () => {
     const projectId = '11111111-1111-4111-8111-111111111111';
     const ctx = {
       client: {
-        get: async () => ({ data: { actor: { user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, billing: { account_type: 'user', account_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } }),
+        get: async (route) => route === `/api/v1/projects/${projectId}`
+          ? { data: { id: projectId, protocol: 'boltzgen', allowed_gpus: ['H100', 'A100_80GB'] } }
+          : { data: { actor: { user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, billing: { account_type: 'user', account_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } },
         post: async (route, options) => {
           request = { route, options };
           return { data: { project_id: projectId, status: 'pending' } };

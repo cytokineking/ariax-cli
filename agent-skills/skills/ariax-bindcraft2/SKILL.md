@@ -57,11 +57,13 @@ A useful starting suggestion is two accepted designs with `max_trajectories: 20`
 
 Read `ariax pricing --json` and report the current hourly GPU rate. Do not estimate duration or total campaign cost. Turbo permits 2, 4, or 8 GPUs when authorized and available; the server assigns workers. More GPUs increase combined hourly cost and do not pool memory for one worker. Preserve the user's compute and spending authorization, and do not relaunch an exhausted pilot automatically.
 
-Treat canonical `RTX6000PRO` as a primary/core BindCraft2 option when the live
-schema advertises it, alongside other compatible primary choices. It is not
-`RTX6000ADA` or `A6000`. New bundled examples include it in their eligible GPU
-range; keep saved or explicitly supplied project selections unchanged unless
-the user authorizes a replacement policy.
+Include at least one compatible primary/core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
+or `RTX6000PRO`. Select as many compatible options as memory
+and the authorized hourly budget allow; one core choice is valid but reduces availability.
+Supplemental classes alone are insufficient. `RTX6000PRO` differs from
+`RTX6000ADA` and `A6000`. `allowed_gpus` lists alternatives, not a GPU count or
+Turbo request. Keep saved or explicitly supplied selections unless replacement
+is authorized; correct an invalid saved policy before restart.
 
 ## Inspect, validate, and submit
 

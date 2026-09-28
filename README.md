@@ -309,14 +309,19 @@ job finished; use project status to track compute.
 Use `ariax pricing` to check current hourly prices, or `ariax pricing --json`
 for the API rates and pricing source. Prices are USD per complete allocation-hour.
 Turbo hourly pricing is `(single-GPU hourly price + $1) × GPU count`.
-Choose a range of compatible GPUs within the user's hourly price preferences to
-maximize availability. The live schema defines compatible GPU identifiers and
-memory requirements still apply. Do not estimate campaign duration or total cost.
-For new BindCraft, BindCraft2, BoltzGen, and ESMFold2-pipeline selections, treat
-the exact `RTX6000PRO` identifier as a primary supported option when advertised
-by the live schema. It is distinct from `RTX6000ADA` and `A6000`; PXDesign does
-not support it. Keep an existing project's saved or user-specified selection
-unchanged unless the user asks to replace that policy.
+Choose as many compatible GPUs as the user's memory and hourly budget limits
+allow to improve availability. A single compatible core GPU is accepted with an
+availability advisory; limited-only selections are rejected. Core choices are
+`H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO` for BindCraft, BindCraft2, and
+BoltzGen; PXDesign excludes `RTX6000PRO`; ESMFold2-pipeline permits `H100`,
+`A100_80GB`, `RTX6000PRO` as core. `A100_40GB`, `A6000`, `H200`, and `B200` are
+supplemental, not core. The live schema defines full compatibility and defaults;
+memory requirements still apply. `allowed_gpus` lists alternatives for one
+allocation, while `priority_mode` ranks them; it does not enable Turbo or raise
+GPU count. Do not estimate campaign duration or total cost. Keep an existing
+project's saved or user-specified selection unless replacement is authorized.
+If no core class fits, explain the budget or memory conflict; correct invalid
+saved policies with `ariax gpu-preferences` before restart.
 
 GPU preference files replace the saved allocation policy, for example:
 

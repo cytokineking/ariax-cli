@@ -7,6 +7,7 @@ import { createSequencePrompt } from '../sequence-prompt.js';
 import { prepareStructureInput, protocolId } from '../structure-input.js';
 import { isBindcraft2, prepareBindcraft2Bundle } from '../bindcraft2-inputs.js';
 import { compactScientificSettings } from '../campaign-presentation.js';
+import { checkGpuPolicy } from '../gpu-policy.js';
 
 /** @param {{ client: any, flags: Record<string, any>, json: boolean }} ctx */
 export async function run(ctx) {
@@ -61,7 +62,12 @@ export async function run(ctx) {
     body = prepared.spec;
     for (const message of prepared.messages) printProgress(message);
   }
+  await checkGpuPolicy(ctx, body, { source: 'validate' });
   const res = await ctx.client.post('/api/v1/validate', { body });
+  const normalized = res.data?.normalized_job_spec;
+  if (normalized && Object.hasOwn(normalized, 'allowed_gpus')) {
+    await checkGpuPolicy(ctx, { ...body, ...normalized }, { source: 'validate normalized spec', advise: false });
+  }
   const compactDefault = isBindcraft2(body) && ctx.flags.details !== true;
   if (!compactDefault && ctx.json) {
     printJson({ data: res.data, meta: res.meta, request_id: res.requestId });

@@ -3,6 +3,7 @@ import { usageError } from '../args.js';
 import { printJson, printKv, printProgress } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
 import { readJsonFile } from './validate.js';
+import { checkGpuPolicy, projectGpuPolicy } from '../gpu-policy.js';
 
 export async function run(ctx) {
   if (ctx.positionals.length !== 1) throw usageError('gpu-preferences: expected one project UUID or exact unique name.');
@@ -15,6 +16,8 @@ export async function run(ctx) {
     throw usageError('gpu-preferences: preferences file must contain a JSON object.');
   }
   const projectId = await resolveProjectId(ctx.client, ctx.positionals[0]);
+  const project = await projectGpuPolicy(ctx, projectId);
+  await checkGpuPolicy(ctx, { protocol: project.protocol, allowed_gpus: body.allowed_gpus }, { source: 'gpu-preferences' });
   const res = await ctx.client.rawRequest('PUT', `/api/v1/projects/${encodeURIComponent(projectId)}/gpu-preferences`, { body });
   if (ctx.json) {
     printJson({ data: res.data, meta: res.meta, request_id: res.requestId });

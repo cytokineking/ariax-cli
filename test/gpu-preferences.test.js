@@ -35,14 +35,16 @@ describe('GPU preference command', () => {
     const data = { project_id: projectId, ...preferences, applies_to: 'next_provisioning_attempt', active_instances_changed: false };
     const result = await invoke([projectId, '-f', file], async (url, options) => {
       calls.push({ url, options });
+      if (options.method === 'GET') return Response.json({ data: { id: projectId, protocol: 'boltzgen', allowed_gpus: ['H100'] } });
       return Response.json({ data, request_id: 'gpu-request' });
     });
     assert.equal(result.code, 0);
-    assert.equal(calls.length, 1);
-    assert.equal(new URL(calls[0].url).pathname, `/api/v1/projects/${projectId}/gpu-preferences`);
-    assert.equal(calls[0].options.method, 'PUT');
-    assert.equal(calls[0].options.headers.Authorization, 'Bearer arx_testcredential');
-    assert.deepEqual(JSON.parse(calls[0].options.body), preferences);
+    assert.equal(calls.length, 2);
+    assert.equal(new URL(calls[0].url).pathname, `/api/v1/projects/${projectId}`);
+    assert.equal(new URL(calls[1].url).pathname, `/api/v1/projects/${projectId}/gpu-preferences`);
+    assert.equal(calls[1].options.method, 'PUT');
+    assert.equal(calls[1].options.headers.Authorization, 'Bearer arx_testcredential');
+    assert.deepEqual(JSON.parse(calls[1].options.body), preferences);
     assert.deepEqual(JSON.parse(result.stdout), { data, request_id: 'gpu-request' });
     assert.equal(result.stderr, '');
   });
@@ -52,24 +54,49 @@ describe('GPU preference command', () => {
     const result = await invoke(['pilot', '-f', file], async (url, options) => {
       calls.push(options.method);
       if (options.method === 'GET') {
-        assert.equal(new URL(url).searchParams.get('name'), 'pilot');
-        return Response.json({ data: [{ id: projectId, name: 'pilot' }] });
+        if (new URL(url).pathname === '/api/v1/projects') {
+          assert.equal(new URL(url).searchParams.get('name'), 'pilot');
+          return Response.json({ data: [{ id: projectId, name: 'pilot' }] });
+        }
+        return Response.json({ data: { id: projectId, protocol: 'boltzgen', allowed_gpus: ['H100'] } });
       }
       return Response.json({ data: { project_id: projectId, ...preferences } });
     });
     assert.equal(result.code, 0);
-    assert.deepEqual(calls, ['GET', 'PUT']);
+    assert.deepEqual(calls, ['GET', 'GET', 'PUT']);
   });
 
   it('does not retry a failed update or call any compute action', async () => {
     let calls = 0;
     const result = await invoke([projectId, '-f', file], async (_url, options) => {
       calls++;
+      if (options.method === 'GET') return Response.json({ data: { id: projectId, protocol: 'boltzgen', allowed_gpus: ['H100'] } });
       assert.equal(options.method, 'PUT');
       return Response.json({ error: { code: 'dependency_failure', message: 'Try later', retryable: true } }, { status: 503 });
     });
     assert.equal(result.code, 10);
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
+  });
+
+  it('rejects limited-only replacements before PUT and keeps JSON stdout clean for a single core GPU', async () => {
+    const methods = [];
+    const fetchImpl = async (_url, options) => {
+      methods.push(options.method);
+      if (options.method === 'GET') return Response.json({ data: { id: projectId, protocol: 'pxdesign', allowed_gpus: ['H100'] } });
+      return Response.json({ data: { project_id: projectId, allowed_gpus: ['H100'] } });
+    };
+    fs.writeFileSync(file, JSON.stringify({ ...preferences, allowed_gpus: ['RTX6000PRO', 'H200'] }));
+    const rejected = await invoke([projectId, '-f', file], fetchImpl);
+    assert.equal(rejected.code, 5);
+    assert.deepEqual(methods, ['GET']);
+    assert.equal(JSON.parse(rejected.stdout).error.code, 'gpu_policy_validation');
+
+    fs.writeFileSync(file, JSON.stringify({ ...preferences, allowed_gpus: ['H100'] }));
+    const allowed = await invoke([projectId, '-f', file], fetchImpl);
+    assert.equal(allowed.code, 0);
+    assert.deepEqual(methods, ['GET', 'GET', 'PUT']);
+    assert.deepEqual(JSON.parse(allowed.stdout).data.allowed_gpus, ['H100']);
+    assert.match(allowed.stderr, /GPU availability advisory/);
   });
 
   it('rejects missing files, extra operands, unknown flags, and non-object input before requests', async () => {

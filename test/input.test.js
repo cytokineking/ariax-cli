@@ -64,7 +64,7 @@ describe('submit input upload', () => {
 
   it('validates locally, uploads directly, then submits the intent id', async () => {
     const specFile = write('job.json', JSON.stringify({
-      protocol: 'pxdesign',
+      protocol: 'pxdesign', allowed_gpus: ['H100'],
       project_type: 'miniprotein',
       chains: 'A',
     }));
@@ -112,7 +112,7 @@ describe('submit input upload', () => {
   it('rejects unusable operation storage before reserving or uploading input', async () => {
     const rootDir = fs.mkdtempSync(path.join(directory, 'unusable-journal-'));
     fs.symlinkSync(directory, path.join(rootDir, '.ariax'), 'dir');
-    const specFile = write('unusable-journal-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const specFile = write('unusable-journal-job.json', JSON.stringify({ protocol: 'pxdesign', allowed_gpus: ['H100'], project_type: 'miniprotein', chains: 'A' }));
     const inputFile = write('unusable-journal.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
     let requests = 0;
     await assert.rejects(() => submit({
@@ -135,7 +135,7 @@ describe('submit input upload', () => {
 
   it('reports a reusable upload intent if journaling fails after a successful PUT', async () => {
     const rootDir = fs.mkdtempSync(path.join(directory, 'journal-after-upload-'));
-    const specFile = write('journal-after-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const specFile = write('journal-after-upload-job.json', JSON.stringify({ protocol: 'pxdesign', allowed_gpus: ['H100'], project_type: 'miniprotein', chains: 'A' }));
     const inputFile = write('journal-after-upload.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
     const intentId = '11111111-1111-4111-8111-111111111111';
     const expiresAt = '2030-01-01T00:00:00Z';
@@ -176,7 +176,7 @@ describe('submit input upload', () => {
 
   it('explains a failed upload reservation and never creates or journals a project', async () => {
     const rootDir = fs.mkdtempSync(path.join(directory, 'failed-upload-'));
-    const specFile = write('failed-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const specFile = write('failed-upload-job.json', JSON.stringify({ protocol: 'pxdesign', allowed_gpus: ['H100'], project_type: 'miniprotein', chains: 'A' }));
     const inputFile = write('failed-upload.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
     const expiresAt = '2026-09-07T21:30:00Z';
     const posts = [];
@@ -237,7 +237,7 @@ describe('submit input upload', () => {
 
   it('bounds a stalled upload with the configured timeout and gives fallback reservation guidance', async () => {
     const rootDir = fs.mkdtempSync(path.join(directory, 'timed-out-upload-'));
-    const specFile = write('timed-out-upload-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein', chains: 'A' }));
+    const specFile = write('timed-out-upload-job.json', JSON.stringify({ protocol: 'pxdesign', allowed_gpus: ['H100'], project_type: 'miniprotein', chains: 'A' }));
     const inputFile = write('timed-out-upload.pdb', 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
     let uploadSignal;
     const ctx = {
@@ -275,7 +275,7 @@ describe('submit input upload', () => {
   });
 
   it('reuses an uploaded intent for an exact project retry without another PUT', async () => {
-    const specFile = write('retry-job.json', JSON.stringify({ protocol: 'pxdesign', project_type: 'miniprotein' }));
+    const specFile = write('retry-job.json', JSON.stringify({ protocol: 'pxdesign', allowed_gpus: ['H100'], project_type: 'miniprotein' }));
     let submitted;
     const ctx = {
       client: {
@@ -302,7 +302,7 @@ describe('submit input upload', () => {
 
   it('replays local preparation with --input while reusing an upload intent without another PUT', async () => {
     const specFile = write('prepared-retry-job.json', JSON.stringify({
-      protocol: 'pxdesign',
+      protocol: 'pxdesign', allowed_gpus: ['H100'],
       project_type: 'miniprotein',
       chains: 'A',
     }));
@@ -341,7 +341,7 @@ describe('submit input upload', () => {
 
   it('does not contact Ariax or object storage when a required sequence is unavailable', async () => {
     const specFile = write('missing-sequence-job.json', JSON.stringify({
-      protocol: 'pxdesign',
+      protocol: 'pxdesign', allowed_gpus: ['H100'],
       project_type: 'miniprotein',
       chains: 'A',
     }));
@@ -371,7 +371,7 @@ describe('submit input upload', () => {
 
   it('rejects BindCraft CIF after local validation and does not upload', async () => {
     const specFile = write('bindcraft-cif.json', JSON.stringify({
-      protocol: 'BINDCRAFT-V1.5',
+      protocol: 'BINDCRAFT-V1.5', allowed_gpus: ['H100'],
       project_type: 'miniprotein',
     }));
     const inputFile = write(
@@ -406,7 +406,7 @@ describe('submit input upload', () => {
 
   it('uploads CIF for a non-BindCraft protocol', async () => {
     const specFile = write('boltzgen-cif.json', JSON.stringify({
-      protocol: 'boltzgen',
+      protocol: 'boltzgen', allowed_gpus: ['H100'],
       project_type: 'miniprotein',
       chains: 'A',
     }));
@@ -471,7 +471,7 @@ describe('submit input upload', () => {
 
   it('uploads the normalized ESMFold2 CIF bytes without modifying the local file', async () => {
     const specFile = write('esmfold2-cif.json', JSON.stringify({
-      protocol: 'esmfold2-pipeline',
+      protocol: 'esmfold2-pipeline', allowed_gpus: ['H100'],
       protocol_config: {
         design_type: 'miniprotein',
         target: { chains: ['A'] },
@@ -542,7 +542,7 @@ describe('submit input upload', () => {
 describe('validate with structure input', () => {
   it('sends the locally prepared spec to the side-effect-free validation API', async () => {
     const specFile = write('validate-with-input.json', JSON.stringify({
-      protocol: 'pxdesign',
+      protocol: 'pxdesign', allowed_gpus: ['H100'],
       project_type: 'miniprotein',
       chains: 'A',
     }));

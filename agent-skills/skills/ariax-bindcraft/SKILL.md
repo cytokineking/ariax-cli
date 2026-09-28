@@ -33,6 +33,11 @@ Check `ariax pricing --json` for current hourly rates. Pick a range of compatibl
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
 guidance](../../SKILL.md#check-prices-and-choose-gpus); do not estimate duration or total cost.
+For BindCraft and FreeBindCraft, include at least one compatible core class from
+`H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO`. Add as many compatible choices as
+memory and the authorized hourly budget allow. `H200` and `B200` can supplement
+this set but cannot be the only choices. One core choice is valid with reduced
+availability. Keep a supplied policy intact unless replacement is authorized.
 
 Read [campaign planning](../../core/campaigns.md) before choosing the accepted
 count or compute policy. BindCraft runtime depends on acceptance: periodically

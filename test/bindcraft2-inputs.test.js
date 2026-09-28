@@ -21,6 +21,7 @@ function pdbResidues(chain, residues) {
 function spec({ scaffold = false } = {}) {
   return {
     protocol: 'bindcraft2',
+    allowed_gpus: ['H100', 'A100_80GB'],
     protocol_config: {
       schema_version: 1,
       modality: [scaffold ? 'DARPin' : 'binder'],
@@ -239,6 +240,29 @@ describe('BindCraft2 deterministic input bundles', () => {
 });
 
 describe('BindCraft2 signed upload and durable recovery', () => {
+  it('rejects a normalized limited-only policy before upload authorization', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-gpu-policy-'));
+    try {
+      const directory = inputDirectory(root);
+      const file = path.join(root, 'job.json');
+      fs.writeFileSync(file, JSON.stringify(spec()));
+      const calls = [];
+      await assert.rejects(submit({
+        flags: { file, 'input-dir': directory, name: 'gpu-test' }, config: { rootDir: root }, json: true,
+        client: {
+          get: async () => assert.fail('no GET expected'),
+          post: async (url, options) => {
+            calls.push(url);
+            assert.equal(url, '/api/v1/validate');
+            return { data: { normalized_job_spec: { ...options.body, allowed_gpus: ['H200'] } } };
+          },
+        },
+      }), (error) => error.exitCode === 5);
+      assert.deepEqual(calls, ['/api/v1/validate']);
+      assert.equal(fs.existsSync(path.join(root, '.ariax')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
   it('validates, authorizes the exact set, uploads frozen bytes, and writes a v2 journal readable without sources', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-submit-'));
     const directory = inputDirectory(root);

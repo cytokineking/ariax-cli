@@ -628,7 +628,7 @@ export function parseStructureInput(text, targetFilename, esmOnly = false) {
 
 export function protocolId(protocol) {
   const value = String(protocol || '').trim().toLowerCase();
-  if (value === 'bindcraft-v1.5' || value.startsWith('bindcraft v1')) return 'bindcraft';
+  if (value === 'bindcraft' || value === 'bindcraft-v1.5' || value.startsWith('bindcraft v1')) return 'bindcraft';
   if (value === 'bindcraft2' || value === 'boltzgen' || value === 'pxdesign' || value === 'esmfold2-pipeline') return value;
   return null;
 }

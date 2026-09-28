@@ -14,7 +14,7 @@ const fixtures = JSON.parse(fs.readFileSync(new URL('./fixtures/structure-correc
 const write = (name, text) => { const file = path.join(root, name); fs.writeFileSync(file, text); return file; };
 const pdb = write('target.pdb', fixtures.cases[0].text);
 const cif = write('target.cif', fixtures.cases[1].text);
-const job = write('source-job.json', JSON.stringify({protocol:'pxdesign', project_type:'miniprotein', chains:'A', hotspots_by_chain:{A:[102]}, crop_by_chain:{A:'101-103'}}));
+const job = write('source-job.json', JSON.stringify({protocol:'pxdesign', allowed_gpus:['H100','A100_80GB'], project_type:'miniprotein', chains:'A', hotspots_by_chain:{A:[102]}, crop_by_chain:{A:'101-103'}}));
 const noNetwork = async () => { throw new Error('Unexpected network call'); };
 
 async function run(args, runtime = {}, env = {}) {

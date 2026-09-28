@@ -18,6 +18,7 @@ import { accountIdentity, createOperation, sourceIdentity, sendOperation, verify
 import { isBindcraft2, prepareBindcraft2Bundle, requiredBindcraft2Inputs } from '../bindcraft2-inputs.js';
 import { bindCraft2ProgressSummary } from '../bindcraft2-progress.js';
 import { campaignStatusLines, compactCampaign, compactSubmission, usesCompactCampaignPresentation } from '../campaign-presentation.js';
+import { checkGpuPolicy } from '../gpu-policy.js';
 
 /** @param {{ client: any, flags: Record<string, any>, json: boolean, config: { rootDir: string } }} ctx */
 export async function run(ctx) {
@@ -77,6 +78,7 @@ export async function run(ctx) {
       inputFile: flags.input,
       inputDir: flags['input-dir'],
     });
+    await checkGpuPolicy(ctx, bundle.spec, { source: 'submit' });
     sources.push(...bundle.sources);
     preparedInputs = bundle.files.map(({ filename, bytes }) => ({ filename, bytes }));
 
@@ -94,6 +96,10 @@ export async function run(ctx) {
       throw error;
     }
     body = { ...normalized, name: projectName };
+    if (Object.hasOwn(normalized, 'allowed_gpus')
+        && JSON.stringify(normalized.allowed_gpus) !== JSON.stringify(bundle.spec.allowed_gpus)) {
+      await checkGpuPolicy(ctx, body, { source: 'submit normalized spec', advise: false });
+    }
     const projectType = typeof normalized.project_type === 'string' && normalized.project_type
       ? normalized.project_type : bundle.projectType;
 
@@ -157,6 +163,7 @@ export async function run(ctx) {
       prompt.close();
     }
     body = { ...prepared.spec, name: projectName };
+    await checkGpuPolicy(ctx, body, { source: 'submit' });
     preparedBytes = Buffer.from(prepared.text, 'utf8');
     for (const message of prepared.messages) printProgress(message);
 
@@ -206,6 +213,9 @@ export async function run(ctx) {
     }
   }
 
+  if (flags.input === undefined && flags['input-dir'] === undefined) {
+    await checkGpuPolicy(ctx, body, { source: 'submit' });
+  }
   account ??= await accountIdentity(ctx);
   let operation;
   try {

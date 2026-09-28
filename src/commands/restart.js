@@ -7,6 +7,7 @@ import { usageError } from '../args.js';
 import { resolveProjectId } from '../resolve.js';
 import { waitAndReport } from './submit.js';
 import { accountIdentity, createOperation, sendOperation, waitForOperation } from '../operations.js';
+import { checkGpuPolicy, projectGpuPolicy } from '../gpu-policy.js';
 
 /** @param {{ client: any, flags: Record<string, any>, positionals: string[], json: boolean, config: { rootDir: string } }} ctx */
 export async function run(ctx) {
@@ -14,6 +15,8 @@ export async function run(ctx) {
   const operand = ctx.positionals[0];
   if (!operand) throw usageError('restart: missing <project-id> (UUID or exact unique project name).');
   const projectId = await resolveProjectId(ctx.client, String(operand));
+  const project = await projectGpuPolicy(ctx, projectId);
+  await checkGpuPolicy(ctx, project, { source: 'saved policy', saved: true });
   const operation = createOperation(ctx, {
     action: 'project:restart', account: await accountIdentity(ctx),
     request: { method: 'POST', path: `/api/v1/projects/${encodeURIComponent(projectId)}/restart`, body: {} },

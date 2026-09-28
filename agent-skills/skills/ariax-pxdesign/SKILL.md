@@ -36,6 +36,10 @@ Check `ariax pricing --json` for current hourly rates. Pick a range of compatibl
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
 guidance](../../SKILL.md#check-prices-and-choose-gpus); do not estimate duration or total cost.
+Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40`, `L40S`.
+Select every compatible choice within memory and authorized hourly budget limits;
+one core choice is valid but reduces availability. `RTX6000PRO` and Blackwell
+classes do not qualify for PXDesign. Supplemental GPUs alone are insufficient.
 
 If size is unspecified, suggest a **25–50-design pilot**, inspect the generated,
 AF2-IG, and Protenix complexes and their separate pass flags, then consider

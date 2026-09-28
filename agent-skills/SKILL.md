@@ -123,15 +123,29 @@ mmCIF for those targets. PXDesign does not reject numbering differences confined
 Run `ariax pricing --json` when choosing or changing GPU preferences. Use the
 returned hourly rates and the live protocol schema to select a range of
 compatible GPU models within the user's hourly price preferences, maximizing
-availability while meeting memory requirements. Do not narrow to one GPU model
-unless the user's constraints require it. A listed price does not promise stock.
+availability while meeting memory requirements. A single compatible core GPU is
+allowed when the user's constraints require it, but reduces availability; a
+listed price does not promise stock. `allowed_gpus` names alternatives for one
+allocation, not a GPU count. `priority_mode` ranks those alternatives; only
+explicit Turbo settings request multiple GPUs.
 
-For new BindCraft, BindCraft2, BoltzGen, and ESMFold2-pipeline policies, treat
-canonical `RTX6000PRO` as a primary/core supported GPU when it appears in the
-live schema, not as an additional fallback. Do not confuse it with
-`RTX6000ADA` or `A6000`. PXDesign excludes `RTX6000PRO`. Preserve an existing
-project's saved or explicitly supplied `allowed_gpus` unless the user authorizes
-a replacement policy.
+Every effective policy must include at least one compatible core GPU:
+
+| Protocol | Core GPU identifiers |
+| --- | --- |
+| BindCraft / FreeBindCraft, BindCraft2, BoltzGen | `H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO` |
+| PXDesign | `H100`, `A100_80GB`, `L40`, `L40S` |
+| ESMFold2-pipeline | `H100`, `A100_80GB`, `RTX6000PRO` |
+
+`A100_40GB`, `A6000`, `H200`, `B200`, and other supported classes may be
+supplemental; alone they do not meet this rule. `RTX6000PRO` is distinct from
+`RTX6000ADA` and `A6000`; PXDesign excludes it. The live schema and server
+validation still decide full protocol compatibility. Select as many compatible
+classes as the user's memory and hourly budget permit. Preserve explicitly
+supplied or saved policies unless a replacement is authorized. If no core class
+fits those constraints, explain the conflict; never add an undersized or
+unauthorized GPU just to pass validation. Correct an invalid saved policy with
+`ariax gpu-preferences` before restart.
 
 Rates are USD per complete allocation-hour. Turbo hourly pricing is
 `(single-GPU hourly price + $1) × GPU count`; use the API's explicit allocation

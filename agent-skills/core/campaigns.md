@@ -60,6 +60,13 @@ with `ariax schema PROTOCOL --json` before setting GPU preferences. Report hourl
 prices only; do not estimate campaign duration or total cost. Turbo hourly
 pricing is `(single-GPU hourly price + $1) × GPU count`; use the explicit
 allocation rates returned by the API.
+The [shared GPU policy table](../SKILL.md#check-prices-and-choose-gpus) requires
+at least one protocol-compatible core GPU; supplemental classes alone are
+insufficient. A single core GPU is valid but has fewer availability options.
+Select every compatible class within the authorized memory and hourly budget
+limits. If none fits, explain the conflict instead of broadening the policy or
+adding a GPU that cannot fit the workload. `priority_mode` ranks eligible
+alternatives; it does not set a GPU count.
 
 Recommend **Turbo mode for long campaigns** within the user's authorized compute
 policy. Turbo distributes campaign work across GPUs; it does not combine their

@@ -244,6 +244,9 @@ it('journals restart before POST and does not treat a 202 as a completed restart
   const ctx = context();
   ctx.positionals = [project];
   ctx.flags = {};
+  const get = ctx.client.get;
+  ctx.client.get = async (url) => url === `/api/v1/projects/${project}`
+    ? { data: { id: project, protocol: 'boltzgen', allowed_gpus: ['H100', 'A100_80GB'] } } : get(url);
   ctx.client.post = async (_url, opts) => {
     assert.equal(listOperations(ctx.config.rootDir)[0].idempotency_key, opts.idempotencyKey);
     return { status: 202, data: { state: 'in_progress', operation_id: serverId, project_id: project } };
@@ -252,4 +255,50 @@ it('journals restart before POST and does not treat a 202 as a completed restart
   const saved = listOperations(ctx.config.rootDir)[0];
   assert.equal(saved.action, 'project:restart');
   assert.equal(saved.state, 'in_progress');
+});
+
+it('blocks a restart with a saved limited-only policy before journaling or POST', async () => {
+  const ctx = context();
+  ctx.positionals = [project];
+  ctx.flags = {};
+  const get = ctx.client.get;
+  ctx.client.get = async (url) => url === `/api/v1/projects/${project}`
+    ? { data: { id: project, protocol: 'esmfold2-pipeline', allowed_gpus: ['H200'] } } : get(url);
+  ctx.client.post = async () => { throw new Error('must not send'); };
+  await assert.rejects(restart(ctx), (error) => {
+    assert.equal(error.exitCode, 5);
+    assert.match(error.action, /gpu-preferences/);
+    return true;
+  });
+  assert.deepEqual(listOperations(ctx.config.rootDir), []);
+});
+
+it('guards only recovery that would replay an unaccepted GPU policy', async () => {
+  const ctx = context();
+  const request = { method: 'POST', path: '/api/v1/projects',
+    body: { protocol: 'boltzgen', allowed_gpus: ['H200'], name: 'fixture' } };
+  const saved = record(ctx, { request });
+  let posts = 0;
+  ctx.client.post = async () => { posts++; throw new Error('must not send'); };
+  await assert.rejects(recover(recoveryContext(ctx, saved.id)), (error) => error.exitCode === 5);
+  assert.equal(posts, 0);
+  assert.deepEqual(loadOperation(ctx.config.rootDir, saved.id).request, request);
+
+  const get = ctx.client.get;
+  ctx.client.get = async (url) => url.includes('/operations/') ? { data: remote() } : get(url);
+  await recover(recoveryContext(ctx, saved.id));
+  assert.equal(posts, 0);
+  assert.equal(loadOperation(ctx.config.rootDir, saved.id).state, 'completed');
+});
+
+it('rechecks saved GPUs before replaying a restart and preserves its request', async () => {
+  const ctx = context();
+  const request = { method: 'POST', path: `/api/v1/projects/${project}/restart`, body: {} };
+  const saved = record(ctx, { action: 'project:restart', request });
+  const get = ctx.client.get;
+  ctx.client.get = async (url) => url === `/api/v1/projects/${project}`
+    ? { data: { protocol: 'bindcraft2', allowed_gpus: ['H200'] } } : get(url);
+  ctx.client.post = async () => assert.fail('restart must not be sent');
+  await assert.rejects(recover(recoveryContext(ctx, saved.id)), (error) => error.exitCode === 5);
+  assert.deepEqual(loadOperation(ctx.config.rootDir, saved.id).request, request);
 });

@@ -4,6 +4,7 @@ import { printJson, printKv } from '../output.js';
 import { loadOperation, verifyAccount, verifyReplayInputs, lookupOperation, sendOperation,
   operationSummary, operationFailure, waitForOperation } from '../operations.js';
 import { waitAndReport } from './submit.js';
+import { checkGpuPolicy, projectGpuPolicy } from '../gpu-policy.js';
 
 export async function run(ctx) {
   const id = ctx.positionals[0];
@@ -16,6 +17,13 @@ export async function run(ctx) {
   const remote = await lookupOperation(ctx, operation);
   if (!remote || remote.replay_allowed === true) {
     verifyReplayInputs(ctx, operation);
+    if (operation.action === 'project:create') {
+      await checkGpuPolicy(ctx, operation.request.body, { source: 'saved operation' });
+    } else {
+      const projectId = operation.request.path.split('/')[4];
+      const project = await projectGpuPolicy(ctx, projectId);
+      await checkGpuPolicy(ctx, project, { source: 'saved policy', saved: true });
+    }
     await sendOperation(ctx, operation);
   }
   if (operation.state === 'failed') throw operationFailure(operation);

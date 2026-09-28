@@ -55,6 +55,13 @@ Resolve every validation error before submitting. The normalized job spec in the
 response shows what the server accepted. Ariax does not expose a compute-quote
 operation; submission uses the account's existing credit and compute-admission
 checks.
+Before raw submission, apply the [shared GPU policy table](../SKILL.md#check-prices-and-choose-gpus)
+to the effective `allowed_gpus` selection, using the live schema default when the
+field is omitted. Include at least one compatible core class and as many other
+compatible classes as memory and authorized hourly budget allow. Limited-only
+selections are invalid; one core class is allowed but reduces availability. Do
+not silently broaden a supplied or saved policy. The server remains authoritative
+for the complete GPU compatibility and scientific checks.
 
 ## Optional structure upload
 
