@@ -272,6 +272,7 @@ capabilities and input rules.
 | Read candidate tables | `ariax candidates PROJECT_ID [--view final\|all\|diagnostics] [--all] --json` |
 | Export configuration | `ariax projects export PROJECT_ID --output job.json` |
 | Change GPU preferences | `ariax gpu-preferences <PROJECT_ID> -f preferences.json` |
+| Record project feedback | `ariax feedback <PROJECT_ID> --category technical-support --message "Expected behavior, observed behavior, and actions tried" [--job JOB_ID]` |
 | Check or install updates | `ariax upgrade --check`, `ariax upgrade` |
 
 For structure-backed BoltzGen jobs, `--input` is required on both `validate`
@@ -363,6 +364,16 @@ Include available project/job and operation/request IDs, CLI version, the comman
 and public error, expected behavior, and actions tried. Omit credentials, signed
 URLs, and unnecessary input or log dumps. See the
 [shared recovery and support guide](agent-skills/SKILL.md#provisioning-and-job-failures).
+
+Record project-related feedback with `ariax feedback`, using the category
+`technical-support`, `feature-request`, or `other`. It requires a write-scoped
+API key. Each successful submission returns a feedback ID. For assistance, email
+[support@ariax.bio](mailto:support@ariax.bio) with that ID and the project ID.
+Recording feedback does not create a support ticket or send email. Keep
+messages concise (up to 8 KiB of UTF-8 text), and omit credentials, signed
+URLs, and unnecessary scientific inputs. See the
+[feedback guide](agent-skills/core/feedback.md), also available through
+`ariax skills --reference feedback --read`.
 
 To diagnose a job failure:
 

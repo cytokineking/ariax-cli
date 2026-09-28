@@ -339,3 +339,7 @@ inputs, and bulk log dumps.
 
 Recommend emailing that summary; send it only if the user explicitly asks.
 Do not claim a support ticket was created or promise a response time.
+
+To record project-linked feedback and obtain an ID to include in a support
+email, follow [agent feedback](core/feedback.md). The same command accepts
+feature requests and other project-related observations.

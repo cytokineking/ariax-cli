@@ -44,12 +44,14 @@ import * as candidates from './commands/candidates.js';
 import * as runs from './commands/runs.js';
 import * as gpuPreferences from './commands/gpu-preferences.js';
 import * as inputs from './commands/inputs.js';
+import * as feedback from './commands/feedback.js';
 
 const COMMANDS = {
   me, protocols, pricing, schema, validate, submit,
   projects, jobs, status, logs, pause, restart, abort, results, upgrade,
   login, logout,
   skills, operations, recover, inputs, candidates, runs,
+  feedback,
   'gpu-preferences': gpuPreferences,
 };
 
@@ -70,6 +72,7 @@ const COMMAND_OPTIONS = {
   pause: [[], 1],
   restart: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   abort: [[], 1],
+  feedback: [['category', 'message', 'job'], 1],
   operations: [[], 1],
   recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   'gpu-preferences': [['file'], 1],
@@ -189,6 +192,7 @@ const HELP_TOPICS = {
   restart: 'ariax restart <project-id> [--wait]',
   'gpu-preferences': 'ariax gpu-preferences <project-id> -f preferences.json',
   abort: 'ariax abort <project-id>',
+  feedback: 'ariax feedback <project-id-or-exact-name> --category technical-support|feature-request|other --message TEXT [--job JOB_ID]',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
   results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]',
@@ -283,6 +287,14 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   const jsonMode = config.jsonMode;
   const currentBuild = buildInfo();
   const currentVersion = currentBuild.version;
+  let feedbackInput;
+  if (command === 'feedback') {
+    try {
+      feedbackInput = feedback.validateInput({ positionals, flags, currentVersion, currentBuild });
+    } catch (err) {
+      return reportError(err, jsonMode);
+    }
+  }
   const interactive = runtime.interactive ?? Boolean(
     process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY,
   );
@@ -382,6 +394,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     progress: printProgress,
     currentVersion,
     currentBuild,
+    feedbackInput,
     interactive,
   };
   try {

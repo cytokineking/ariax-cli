@@ -28,7 +28,7 @@ describe('bundled skills read-through', () => {
     assert.match(data.shared, /agent-skills\/SKILL\.md$/);
     assert.match(data.skill, /ariax-bindcraft\/SKILL\.md$/);
     assert.deepEqual(Object.keys(data.references), [
-      'shared', 'campaigns', 'candidates', 'engine-choice', 'examples', 'interpretation',
+      'shared', 'campaigns', 'candidates', 'engine-choice', 'examples', 'feedback', 'interpretation',
       'raw-curl', 'recorded-settings', 'outputs',
     ]);
     assert.match(data.references.outputs, /ariax-bindcraft\/outputs\.md$/);
@@ -71,6 +71,15 @@ describe('bundled skills read-through', () => {
   });
 
   it('reads named core and protocol output references', async () => {
+    const feedback = await captureOutput(() => main([
+      'skills', '--reference', 'feedback', '--read', '--json',
+    ], {}));
+    assert.equal(feedback.value, 0);
+    assert.equal(
+      JSON.parse(feedback.stdout).data.content,
+      readFileSync(new URL('../agent-skills/core/feedback.md', import.meta.url), 'utf8'),
+    );
+
     const core = await captureOutput(() => main([
       'skills', '--reference', 'candidates', '--read', '--json',
     ], {}));
