@@ -147,6 +147,73 @@ describe('CLI contract', () => {
     assert.doesNotMatch(out.stdout + out.stderr, /arx_promptedcredential/);
   });
 
+  it('explains a rejected stored key without prompting or replaying the command', async () => {
+    let requests = 0;
+    let prompts = 0;
+    const out = await captureOutput(() => main(['me', '--no-json'], {
+      NO_UPDATE_NOTIFIER: '1',
+    }, {
+      interactive: true,
+      credentialStore: {
+        read: async () => ({ apiKey: 'arx_revokedcredential', storage: 'keychain' }),
+      },
+      promptApiKey: async () => { prompts++; throw new Error('unexpected prompt'); },
+      fetchImpl: async () => {
+        requests++;
+        return new Response(JSON.stringify({
+          error: { code: 'invalid_api_key', message: 'Unauthorized', retryable: false },
+          request_id: 'auth-request',
+        }), { status: 401 });
+      },
+    }));
+    assert.equal(out.value, 2);
+    assert.equal(requests, 1);
+    assert.equal(prompts, 0);
+    assert.equal(out.stdout, '');
+    assert.match(out.stderr, /Ariax rejected the API key/);
+    assert.match(out.stderr, /action: .*ariax login/);
+    assert.match(out.stderr, /request-id: auth-request/);
+    assert.doesNotMatch(out.stderr, /arx_revokedcredential/);
+  });
+
+  it('gives agents the right recovery action for an environment key', async () => {
+    let requests = 0;
+    const out = await captureOutput(() => main(['me', '--json'], {
+      ARIAX_API_KEY: 'arx_revokedcredential',
+    }, {
+      credentialStore: { read: async () => { throw new Error('unexpected credential read'); } },
+      fetchImpl: async () => {
+        requests++;
+        return new Response('Unauthorized', { status: 401 });
+      },
+    }));
+    assert.equal(out.value, 2);
+    assert.equal(requests, 1);
+    assert.equal(out.stderr, '');
+    const error = JSON.parse(out.stdout).error;
+    assert.equal(error.code, 'invalid_api_key');
+    assert.equal(error.retryable, false);
+    assert.match(error.message, /rejected the API key/);
+    assert.match(error.action, /Replace ARIAX_API_KEY/);
+    assert.match(error.action, /overrides saved login/);
+    assert.doesNotMatch(out.stdout, /arx_revokedcredential/);
+  });
+
+  it('does not save a key rejected during login', async () => {
+    let stored = false;
+    const out = await captureOutput(() => main(['login', '--with-token', '--json'], {}, {
+      interactive: false,
+      readTokenFromStdin: async () => 'arx_revokedcredential',
+      credentialStore: { storeSecure: async () => { stored = true; return true; } },
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: { code: 'invalid_api_key', message: 'Unauthorized' },
+      }), { status: 401 }),
+    }));
+    assert.equal(out.value, 2);
+    assert.equal(stored, false);
+    assert.match(JSON.parse(out.stdout).error.action, /run `ariax login` again/);
+  });
+
   it('logs in from stdin without printing the key', async () => {
     let stored;
     const out = await captureOutput(() => main(

@@ -45,6 +45,10 @@ If authentication is missing, ask the user to run `ariax login` in their own
 terminal after creating a key at <https://www.ariax.bio/settings/api-keys>.
 Never request the key in conversation, print it, or put it in a command argument,
 URL, or job file. Secret-manager injection through `ARIAX_API_KEY` is supported.
+If an authenticated command reports a rejected API key, follow its
+`error.action`: ask the user to run `ariax login` in their own terminal with a
+new key, or update `ARIAX_API_KEY` in their secret manager if that override is
+in use. Wait for them to finish before rerunning the command.
 Submit, restart, and recovery need both `read` and `write` scopes.
 
 ```sh

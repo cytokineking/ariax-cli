@@ -109,6 +109,13 @@ Tools that can supply a secret through standard input may use
 The CLI intentionally does not support `--api-key`, because command-line
 secrets can appear in shell history and process lists.
 
+If a key is revoked or rotated, the next authenticated command reports that
+Ariax rejected it and exits with code `2`. Follow the printed `action`: create
+or copy a new key, then run `ariax login` to replace a saved key. If you use
+`ARIAX_API_KEY`, update it in your environment or secret manager instead; it
+takes precedence over saved login. The failed command is not replayed
+automatically, so rerun it after updating the key.
+
 ## Run a project
 
 Discover the live API contract, then copy a starter job file:

@@ -123,18 +123,37 @@ export function exitCodeFor(err) {
   return EXIT.SERVER;
 }
 
-function reportError(err, jsonMode) {
+function rejectedApiKeyAction({ command, apiKeySource } = {}) {
+  const keyUrl = login.API_KEYS_URL;
+  if (command === 'login') {
+    const environmentNote = apiKeySource === 'environment'
+      ? ' Update or unset ARIAX_API_KEY as well; it overrides saved login.'
+      : '';
+    return `Create or copy a valid key at ${keyUrl}, then run \`ariax login\` again.${environmentNote}`;
+  }
+  if (apiKeySource === 'environment') {
+    return `Replace ARIAX_API_KEY with a new key from ${keyUrl} in your environment or secret manager, then rerun the command. It overrides saved login.`;
+  }
+  return `Create or copy a new key at ${keyUrl}, run \`ariax login\` in your terminal to replace the saved key, then rerun the command.`;
+}
+
+function reportError(err, jsonMode, authContext) {
   const code = exitCodeFor(err);
-  const message = err?.message ? String(err.message) : String(err);
+  const rejectedApiKey = err?.status === 401;
+  const message = rejectedApiKey
+    ? 'Ariax rejected the API key. It may have been revoked or rotated.'
+    : (err?.message ? String(err.message) : String(err));
   const requestId = err?.requestId;
-  const apiCode = typeof err?.code === 'string' ? err.code : undefined;
+  const apiCode = typeof err?.code === 'string' ? err.code
+    : (rejectedApiKey ? 'invalid_api_key' : undefined);
+  const action = err?.action ?? (rejectedApiKey ? rejectedApiKeyAction(authContext) : undefined);
   if (jsonMode) {
     printJson({
       error: {
         code: apiCode || 'error',
         message,
-        retryable: err?.retryable === true,
-        ...(typeof err?.action === 'string' && err.action ? { action: err.action } : {}),
+        retryable: !rejectedApiKey && err?.retryable === true,
+        ...(typeof action === 'string' && action ? { action } : {}),
         ...(err?.details === undefined ? {} : { details: err.details }),
       },
       ...(requestId ? { request_id: requestId } : {}),
@@ -142,7 +161,7 @@ function reportError(err, jsonMode) {
   } else {
     printProgress(`error: ${message}`);
     if (apiCode && apiCode !== 'ARIAX_USAGE') printProgress(`code: ${apiCode}`);
-    if (typeof err?.action === 'string' && err.action) printProgress(`action: ${err.action}`);
+    if (typeof action === 'string' && action) printProgress(`action: ${action}`);
     for (const issue of err?.details?.issues || []) {
       printProgress(`${issue.field.join('.') || 'job'} [${issue.rule}]: ${issue.message}`);
     }
@@ -311,7 +330,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
         config.apiKey = result.apiKey;
         config.apiKeySource = result.storage;
       } catch (err) {
-        return reportError(err, jsonMode);
+        return reportError(err, jsonMode, { command: 'login', apiKeySource: config.apiKeySource });
       }
     }
     try {
@@ -371,6 +390,6 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     if (notice) printProgress(formatUpdateNotice(notice));
     return EXIT.OK;
   } catch (err) {
-    return reportError(err, jsonMode);
+    return reportError(err, jsonMode, { command, apiKeySource: config.apiKeySource });
   }
 }
