@@ -21,12 +21,12 @@ the experiment: design mechanism, modality, scoring/filter policy, target
 context, campaign size, and compute authorization. Do not infer a large screen
 or Turbo merely from “find a good binder.”
 
-Use [campaign planning](campaigns.md) to suggest pilot/full-campaign sizes and
-review points when unspecified. Recommend Turbo for long campaigns within the
+Use [campaign planning](campaigns.md) for pilot sizing, evidence-based scaling,
+cost forecasts, and review points. Recommend Turbo for long campaigns within the
 agreed compute scope. Read the chosen engine's GPU guidance: target and binder
 size affect VRAM needs. Check `ariax pricing --json` and select a range of
 compatible GPUs within the user's hourly price preferences to maximize
-availability. Do not estimate campaign duration or total cost.
+availability.
 
 Hosted workflows are narrower than their source repositories. Arbitrary YAML,
 custom frameworks, preview-only modes, rerank-only execution, and unadvertised

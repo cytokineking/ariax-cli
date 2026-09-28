@@ -35,17 +35,16 @@ numeric precision, or analysis-worker controls.
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus); do not estimate duration or total cost.
+guidance](../../SKILL.md#check-prices-and-choose-gpus).
 Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40`, `L40S`.
 Select every compatible choice within memory and authorized hourly budget limits;
 one core choice is valid but reduces availability. `RTX6000PRO` and Blackwell
 classes do not qualify for PXDesign. Supplemental GPUs alone are insufficient.
 
-If size is unspecified, suggest a **25–50-design pilot**, inspect the generated,
-AF2-IG, and Protenix complexes and their separate pass flags, then consider
-**10,000–20,000 designs** for a full campaign. Preserve an explicit smaller test.
-Read [campaign planning](../../core/campaigns.md) before scaling; recommend Turbo
-for long campaigns within the user's agreed compute policy.
+Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,
+and evidence before scaling. Include the intended evaluation stages: inspect
+generated, AF2-IG, and Protenix complexes and their separate pass flags. Generation
+alone does not establish the cost or useful yield of the full workflow.
 
 PXDesign's diffusion workflow has less stringent GPU requirements than the
 inversion workflows, but increase GPU capability and VRAM as target size grows.
