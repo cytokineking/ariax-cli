@@ -25,6 +25,14 @@ function clientFor(items, post) {
     post: post ?? (async (_url, { body }) => ({ data: body.paths.map((key) => ({ path: key, url: `https://storage.example/${key}` })) })),
   };
 }
+function missingManifestClient(items) {
+  const client = clientFor(items);
+  client.get = async (url) => {
+    if (url.endsWith('/archive-manifest')) throw Object.assign(new Error('Manifest not found.'), { status: 404 });
+    return { data: items, meta: { next_cursor: null, archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest` } };
+  };
+  return client;
+}
 
 describe('artifact pagination reliability', () => {
   it('retrieves more than 2,000 entries through empty filtered pages', async () => {
@@ -77,6 +85,84 @@ describe('artifact pagination reliability', () => {
 });
 
 describe('download recovery', () => {
+  it('downloads provenance and loose files after an empty first page when the advertised manifest is missing', async () => {
+    const dir = directory();
+    const provenance = '{"ok":true}';
+    const first = { path: 'output/provenance.json', size: Buffer.byteLength(provenance), sha256: digest(provenance) };
+    const second = { path: 'output/second.txt', size: 6 };
+    const pages = [[], [first], [second]];
+    let page = 0;
+    let manifestLookups = 0;
+    const client = clientFor([]);
+    client.get = async (url) => {
+      if (url.endsWith('/archive-manifest')) {
+        manifestLookups++;
+        throw Object.assign(new Error('Manifest not found.'), { status: 404 });
+      }
+      const index = page++;
+      return { data: pages[index], meta: {
+        next_cursor: index < pages.length - 1 ? `page-${index + 1}` : null,
+        archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest`,
+      } };
+    };
+    const output = await run(context(client, dir, async (url) => new Response(url.endsWith('provenance.json') ? provenance : 'second')));
+    assert.equal(page, 3);
+    assert.equal(manifestLookups, 1);
+    assert.equal(output.archiveVerification, 'unavailable');
+    assert.deepEqual(output.downloads.map(({ path: file, checksum_verified }) => [file, checksum_verified]), [
+      [first.path, true], [second.path, false],
+    ]);
+    assert.equal(fs.readFileSync(path.join(dir, first.path), 'utf8'), provenance);
+    assert.equal(fs.readFileSync(path.join(dir, second.path), 'utf8'), 'second');
+  });
+
+  it('still rejects a declared checksum mismatch when the manifest is missing', async () => {
+    const dir = directory();
+    const file = { path: 'output/loose.txt', sha256: digest('expected') };
+    await assert.rejects(run(context(missingManifestClient([file]), dir, async () => new Response('wrong'))), (error) => {
+      assert.equal(error.code, 'artifact_download_failed');
+      assert.equal(error.details.failures[0].code, 'artifact_integrity_mismatch');
+      return true;
+    });
+    assert.equal(fs.existsSync(path.join(dir, file.path)), false);
+  });
+
+  it('downloads an archive without metadata as unverified when the manifest is missing', async () => {
+    const dir = directory();
+    const archivePath = 'output/archives/results.tar.gz';
+    const output = await run(context(missingManifestClient([{ path: archivePath }]), dir, async () => new Response('archive')));
+    assert.equal(output.archiveVerification, 'unavailable');
+    assert.equal(output.downloads[0].sha256, digest('archive'));
+    assert.equal(output.downloads[0].checksum_verified, false);
+    assert.equal(Object.hasOwn(output.downloads[0], 'verification_source'), false);
+    assert.equal(fs.readFileSync(path.join(dir, archivePath), 'utf8'), 'archive');
+  });
+
+  it('keeps other manifest failures and caller cancellation fatal', async () => {
+    for (const status of [403, 500]) {
+      const client = clientFor([{ path: 'output/a.txt' }]);
+      const failure = Object.assign(new Error(`Manifest HTTP ${status}`), { status });
+      client.get = async (url) => {
+        if (url.endsWith('/archive-manifest')) throw failure;
+        return { data: [{ path: 'output/a.txt' }], meta: { archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest` } };
+      };
+      await assert.rejects(run(context(client, directory(), async () => { throw new Error('must not fetch'); })), (error) => error === failure);
+    }
+
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const client = missingManifestClient([{ path: 'output/a.txt' }]);
+    const originalGet = client.get;
+    client.get = async (url) => {
+      if (url.endsWith('/archive-manifest')) {
+        controller.abort(cancelled);
+        throw Object.assign(new Error('Manifest not found.'), { status: 404 });
+      }
+      return originalGet(url);
+    };
+    await assert.rejects(run(context(client, directory(), async () => { throw new Error('must not fetch'); }, { signal: controller.signal })), (error) => error === cancelled);
+  });
+
   it('loads the BindCraft2 archive manifest and verifies archive bytes and checksum', async () => {
     const dir = directory();
     const content = 'verified archive';

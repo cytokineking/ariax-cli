@@ -191,7 +191,7 @@ const HELP_TOPICS = {
   abort: 'ariax abort <project-id>',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
-  results: 'ariax results <project-id> [--path <artifact-prefix>] [--download <dir>] [--overwrite] [--limit N] [--details]',
+  results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]',
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',
   logout: 'ariax logout',

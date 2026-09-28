@@ -386,6 +386,24 @@ restore manifests. Credentials, orchestration code, opaque content-addressed
 copies, and bundles containing unsanitized logs are excluded; scientific files
 inside intermediate trees remain individually downloadable.
 
+Results default to protocol-specific output roots. Use `--path` to select an
+exact artifact or all files beneath a directory; it does not match globs or
+partial path prefixes:
+
+```sh
+ariax results PROJECT_ID --path output/provenance.json --download ./results --details --json
+ariax results PROJECT_ID --path output/Trajectory --download ./results
+```
+
+The first command saves `./results/output/provenance.json`. `--details` includes
+operational and provenance entries, plus verification information normally
+omitted from compact output. A missing archive manifest (404) does not block
+individual file downloads: available checksums are still checked, and detailed
+output reports archive verification as unavailable. `checksum_verified` is
+false when no expected checksum is available. Invalid or mismatching metadata
+and integrity failures remain errors. Rerun the same download to resume
+completed files.
+
 Structure files are parsed locally and uploaded directly to private object
 storage with a short-lived URL—their bytes do not pass through Ariax
 application servers. `ariax logs` returns only retained project/campaign output
