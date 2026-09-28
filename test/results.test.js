@@ -47,7 +47,7 @@ describe('results command contract', () => {
         positionals: [projectId],
         json: true,
       }),
-      (err) => isUsageError(err) && /--path requires an artifact prefix/.test(err.message),
+      (err) => isUsageError(err) && /--path requires an artifact path/.test(err.message),
     );
   });
 

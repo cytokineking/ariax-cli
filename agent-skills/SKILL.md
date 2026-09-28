@@ -231,13 +231,24 @@ ariax runs PROJECT_ID --job JOB_ID --json
 ariax candidates PROJECT_ID --view final --json
 ariax results PROJECT_ID --json
 ariax results PROJECT_ID --download ./results
+ariax results PROJECT_ID --path output/provenance.json --download ./results --details --json
+ariax results PROJECT_ID --path output/Trajectory --download ./results
 ```
 
-Results discover protocol-specific roots; `--path` narrows discovery. Compact
-listings show user-facing file paths, roles, and sizes. Compact downloads show
-one destination, file statuses, and counts. Verification and resume bookkeeping
-remain automatic and quiet on success; `--details` restores hashes, manifests,
-checkpoints, request IDs, and other diagnostic fields.
+Results default to protocol-specific output roots. `--path` selects an exact
+artifact or all files beneath a directory, without glob or partial-prefix
+matching. The provenance example saves `./results/output/provenance.json`.
+Compact listings show user-facing file paths, roles, and sizes. Compact
+downloads show one destination, file statuses, and counts. Verification and
+resume bookkeeping remain automatic and quiet on success; `--details` includes
+operational and provenance entries, verification information, hashes,
+manifests, checkpoints, request IDs, and other diagnostic fields.
+
+A missing archive manifest (404) does not block individual file downloads.
+Available checksums are still checked; detailed output reports archive
+verification as unavailable and `checksum_verified` as false when no expected
+checksum is available. Invalid or mismatching metadata and integrity failures
+remain errors.
 
 Rerun the same download to resume completed files. JSON failures identify every
 affected path with `code`, `reason`, `retryable`, and `action`. Retry transient

@@ -1,5 +1,5 @@
 /**
- * `ariax results <project-id> [--path <artifact-prefix>] [--download <dir>] [--overwrite] [--limit N] [--details]`
+ * `ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]`
  * List artifacts; with --download, presign + stream each file safely.
  */
 import fs from 'node:fs';
@@ -27,7 +27,7 @@ export async function run(ctx) {
   let artifactPrefix;
   if (ctx.flags.path !== undefined) {
     if (typeof ctx.flags.path !== 'string' || ctx.flags.path === '') {
-      throw usageError('results: --path requires an artifact prefix (e.g. --path output).');
+      throw usageError('results: --path requires an artifact path (e.g. --path output).');
     }
     artifactPrefix = ctx.flags.path;
   }
@@ -321,7 +321,14 @@ async function loadArchiveExpectations(client, projectId, manifestUrl, signal) {
     'Do not use the advertised manifest. Contact Ariax support.',
   );
   signal?.throwIfAborted();
-  const response = await client.get(manifestUrl, { signal });
+  let response;
+  try {
+    response = await client.get(manifestUrl, { signal });
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error?.status === 404) return { state: 'unavailable', expectations: new Map() };
+    throw error;
+  }
   signal?.throwIfAborted();
   const manifest = response.data;
   if (!manifest || manifest.schema_version !== 1 || !Array.isArray(manifest.archives)) {

@@ -165,6 +165,33 @@ describe('compact results and download presentation', () => {
     assert.match(result.stderr, /downloading output\/final\/design\.pdb/);
   });
 
+  it('reports a missing advertised manifest in details while keeping compact downloads stable', async () => {
+    const artifact = { path: 'output/final/design.pdb', size: 6 };
+    const client = downloadClient([artifact]);
+    client.get = async (url) => {
+      if (url.endsWith('/archive-manifest')) throw Object.assign(new Error('Manifest not found.'), { status: 404 });
+      return { data: [artifact], meta: { archive_manifest_url: `/api/v1/projects/${projectId}/artifacts/archive-manifest` } };
+    };
+    const compactDir = directory();
+    const compact = await capture(() => run({
+      client, flags: { download: compactDir }, positionals: [projectId], json: true,
+      fetchImpl: async () => new Response('design'),
+    }));
+    const compactData = JSON.parse(compact.stdout).data;
+    assert.deepEqual(Object.keys(compactData).sort(), ['counts', 'destination', 'files']);
+    assert.deepEqual(compactData.counts, { downloaded: 1, resumed: 0, skipped: 0, failed: 0 });
+    assert.deepEqual(compactData.files, [{ path: artifact.path, role: 'structure', size_bytes: 6, status: 'downloaded' }]);
+
+    const details = await capture(() => run({
+      client, flags: { download: directory(), details: true }, positionals: [projectId], json: true,
+      fetchImpl: async () => new Response('design'),
+    }));
+    const detailsData = JSON.parse(details.stdout).data;
+    assert.equal(detailsData.archive_verification, 'unavailable');
+    assert.equal(detailsData.downloaded[0].checksum_verified, false);
+    assert.equal(Object.hasOwn(detailsData.downloaded[0], 'verification_source'), false);
+  });
+
   it('reports each transient failure with safe resume guidance', async () => {
     const outputDir = directory();
     await assert.rejects(
