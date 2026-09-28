@@ -41,17 +41,16 @@ residue constraints.
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus); do not estimate duration or total cost.
+guidance](../../SKILL.md#check-prices-and-choose-gpus).
 Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
 `RTX6000PRO`. Add every compatible class within the memory and authorized hourly
 budget limits; one core choice is allowed but reduces availability. Supplemental
 classes alone do not qualify, and `allowed_gpus` alternatives do not enable Turbo.
 
-If size is unspecified, suggest a **25–50-design pilot**, inspect generated and
-refolded poses, native filter outcomes, and objective-respecting yield, then
-consider **10,000–20,000 generated designs** for a full campaign. Preserve an
-explicit smaller test. Read [campaign planning](../../core/campaigns.md) before
-scaling; recommend Turbo for long campaigns within the agreed compute policy.
+Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,
+and evidence before scaling. Inspect generated and refolded poses, native filter
+outcomes, and objective-respecting yield. `num_designs` sets generated volume;
+`budget` sets the final selected-set size, not a dollar limit.
 
 BoltzGen's diffusion workflow has less stringent GPU requirements than the
 inversion workflows, but increase GPU capability and VRAM as target size grows.

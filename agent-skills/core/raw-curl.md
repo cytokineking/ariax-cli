@@ -197,6 +197,10 @@ requesting a specific `log_ref`, use only a discovered or documented compute-log
 artifact; the server constrains it to the project's protocol-specific log
 directory.
 
+Apply the [shared provisioning, failure, and support guidance](../SKILL.md#provisioning-and-job-failures)
+to public REST responses as well. Retrying a read or reconciling an uncertain
+request does not authorize restarting compute or creating another campaign.
+
 For pagination, pass the opaque `.meta.next_cursor` back as `cursor` without
 decoding or editing it. During polling, stop at `completed`, `failed`, `paused`,
 or `aborted`. Honor `Retry-After` after `429`/`503`; otherwise back off with a

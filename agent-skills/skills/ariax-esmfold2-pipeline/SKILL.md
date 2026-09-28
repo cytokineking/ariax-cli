@@ -58,20 +58,18 @@ supports some of those controls, but Ariax does not expose them.
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus); do not estimate duration or total cost.
+guidance](../../SKILL.md#check-prices-and-choose-gpus).
 Include at least one compatible core GPU from `H100`, `A100_80GB`, `RTX6000PRO`.
 Add every compatible 80 GB-or-larger class within the authorized hourly budget;
 `H200` and `B200` may supplement but cannot be the only choices. One core choice
 is valid with reduced availability. Never add an undersized GPU to satisfy the
 core rule or broaden a supplied policy without authorization.
 
-If size is unspecified, suggest a **25–50-design pilot** and inspect both
-ESMFold2 and Protenix results against the design objective. Then attempt
-**1,000 designs initially**, review confidence, pose agreement, exclusion stages,
-and distinct useful yield, and consider whether another campaign is worthwhile.
-Preserve explicit smaller tests. Read [campaign planning](../../core/campaigns.md)
-for the review criteria; recommend Turbo for long campaigns within the agreed
-compute policy.
+Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,
+and evidence before scaling. Design counts are total across frameworks. Inspect
+both ESMFold2 and Protenix results against the design objective, including
+confidence, pose agreement, exclusion stages, framework coverage, and distinct
+useful yield; include the intended validation stages in the pilot.
 
 ESMFold2-pipeline requires **at least 80 GB of VRAM per GPU**; the minimum usable
 class is an **A100 80 GB**, not an A100 40 GB. Use the live schema for compatible

@@ -39,7 +39,9 @@ Carry forward the user's existing authorization for the campaign, including
 its size, compute policy, and agreed lifecycle actions. Ask only for a material
 change outside that scope. Validation starts no compute; submission and restart
 can spend credits. There is no compute-quote endpoint or exact campaign spend
-ceiling. Interrupting a local wait leaves remote compute running.
+ceiling. Use [campaign planning](core/campaigns.md) to bound scope and review
+observed cost before scaling. Interrupting a local wait leaves remote compute
+running.
 
 If authentication is missing, ask the user to run `ariax login` in their own
 terminal after creating a key at <https://www.ariax.bio/settings/api-keys>.
@@ -153,7 +155,9 @@ unauthorized GPU just to pass validation. Correct an invalid saved policy with
 
 Rates are USD per complete allocation-hour. Turbo hourly pricing is
 `(single-GPU hourly price + $1) × GPU count`; use the API's explicit allocation
-rates. Report hourly prices only. Do not estimate campaign duration or total cost.
+rates; do not multiply a complete allocation rate by GPU count again. Use
+[observed campaign evidence](core/campaigns.md#forecast-from-observed-work) for
+qualified runtime and cost forecasts.
 The response includes the pricing source; identify fallback rates when returned.
 
 ## Submit and recover
@@ -196,6 +200,8 @@ diagnosis and support; `recover` reconciles an uncertain request and does not
 restart failed compute. Scientific changes require a new project. Use pause, restart,
 or abort when included in the user's authorization. Terminal project states
 are `completed`, `failed`, `paused`, and `aborted`; a local timeout is not one.
+Follow the [provisioning and failure guidance](#provisioning-and-job-failures)
+before choosing a retry or seeking support.
 
 Use `ariax gpu-preferences PROJECT_ID -f preferences.json` to replace the saved
 GPU policy when the campaign authorization includes that change. The file needs
@@ -263,17 +269,8 @@ prove which settings executed or that inference completed. Missing, older, or
 malformed records are reported as unavailable and never block operations.
 See [recorded settings](core/recorded-settings.md).
 
-For recorded runtime or cost, inspect every job allocation and sum its recorded
-values across attempts. The latest `started_at` can describe only the newest
-attempt, so check every allocation state before drawing a project-wide conclusion.
-
-On failure, inspect status, list retained logs, read the campaign summary, and
-then read the failed worker's detailed log using its returned `log_ref`. Campaign
-summaries report worker outcomes; worker tracebacks explain failures. Validation
-passing is not proof that runtime execution will succeed. Separate execution
-failures before designs from completed designs rejected by scientific filters.
-Report the exception and evidence; do not infer scientific failure from zero
-completed designs. Missing retained logs do not promise future availability.
+For recorded runtime, cost, and forecasts, follow
+[campaign evidence guidance](core/campaigns.md#forecast-from-observed-work).
 
 Logs are retained project/campaign compute artifacts; restarts can reuse the
 same object. They are not isolated job transcripts or platform logs. A truncated
@@ -294,3 +291,40 @@ into a new spending attempt.
 For scripts, follow the [safe stdout/stderr and exit-code example](core/examples.md#safe-scripted-output)
 before parsing JSON. Write `ariax help COMMAND` to a separate text file; never
 mix help text into a JSON capture.
+
+## Provisioning and job failures
+
+Use public status, returned actions, and retained campaign logs. Do not expose
+internal provisioning diagnostics, seek platform/provider access, or guess a
+provider failure from a generic status. Follow explicit user instructions and
+server retry guidance; the defaults below do not expand spending authorization.
+
+| Public evidence | Action |
+| --- | --- |
+| Provisioning or compute is still in progress | Poll the same project. Do not submit a duplicate, restart a running project, or change scientific settings to address unexplained provisioning delays. |
+| Public status clearly identifies a restartable provisioning pause | Within existing restart authorization, make at most one delayed retry on the same project. If it recurs, seek support instead of looping restarts. A generic pause alone does not establish a provisioning failure. |
+| GPU choices are narrow | Suggest broadening to compatible classes within authorized memory and hourly limits, retaining at least one core GPU. Preserve the saved policy unless its replacement is authorized; broader choices do not guarantee availability. |
+| Submission or restart outcome is uncertain | Use [operation recovery](#submit-and-recover). Reconcile the existing request before considering a replacement campaign. |
+| A requested stop or cleanup is unconfirmed, or allocation/status evidence conflicts | Continue read-only status checks and seek support. A local timeout or interrupted wait does not confirm remote compute stopped. |
+| Execution failed | Inspect status, discover retained logs, read the campaign summary, then the failed worker's returned `log_ref`. Diagnose a supported input or scientific correction before proposing new paid compute; missing evidence is not a diagnosis. Failed projects cannot be restarted. |
+| Workflow completed with zero accepted designs | Review scientific outcomes using [campaign planning](core/campaigns.md#decide-the-next-wave-from-evidence). This is not automatically a platform incident or authorization to relaunch. |
+
+Campaign summaries report worker outcomes; retained worker tracebacks may
+explain execution failures. Validation passing is not proof of runtime success.
+Distinguish failure before designs were produced from completed designs rejected
+by filters. Report only what the evidence supports. Missing retained logs do
+not promise future availability.
+
+### Seek technical support
+
+Recommend [support@ariax.bio](mailto:support@ariax.bio) for repeated provisioning
+problems after the bounded retry, failures with missing logs or no supported
+correction, inconsistent public status/results/allocation evidence, or an
+unconfirmed stop. Prepare a short summary with available project/job IDs,
+request/operation IDs, CLI version/revision, the command and public error,
+expected versus observed behavior, and actions already tried. Missing fields
+should not delay seeking help. Exclude credentials, signed URLs, unnecessary
+inputs, and bulk log dumps.
+
+Recommend emailing that summary; send it only if the user explicitly asks.
+Do not claim a support ticket was created or promise a response time.

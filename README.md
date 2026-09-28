@@ -325,10 +325,18 @@ BoltzGen; PXDesign excludes `RTX6000PRO`; ESMFold2-pipeline permits `H100`,
 supplemental, not core. The live schema defines full compatibility and defaults;
 memory requirements still apply. `allowed_gpus` lists alternatives for one
 allocation, while `priority_mode` ranks them; it does not enable Turbo or raise
-GPU count. Do not estimate campaign duration or total cost. Keep an existing
-project's saved or user-specified selection unless replacement is authorized.
+GPU count. Keep an existing project's saved or user-specified selection unless
+replacement is authorized.
 If no core class fits, explain the budget or memory conflict; correct invalid
 saved policies with `ariax gpu-preferences` before restart.
+
+Plan campaign scope with a representative pilot or comparable prior campaign
+evidence. Before that evidence exists, report hourly prices and runtime
+uncertainty; afterward, use observed work, runtime, and recorded costs for a
+qualified forecast before scaling. Design counts and trajectory caps bound work,
+not exact dollar spend. Preserve explicit small tests and existing authorization.
+See [campaign planning](agent-skills/core/campaigns.md) for pilot suggestions and
+forecast limits.
 
 GPU preference files replace the saved allocation policy, for example:
 
@@ -342,8 +350,19 @@ to `false`; when it is `true`, omitted or empty `turbo_multiples` selects
 does not change active GPU instances or restart the project.
 
 Only paused projects can be restarted. Failed projects cannot be restarted;
-inspect retained worker logs and contact support. `ariax recover` reconciles an
-uncertain create/restart request, rather than restarting failed compute.
+inspect retained worker logs and contact [support@ariax.bio](mailto:support@ariax.bio).
+`ariax recover` reconciles an uncertain create/restart request, rather than
+restarting failed compute.
+
+While provisioning is in progress, poll the same project. For a clearly
+restartable provisioning pause, the default is one delayed retry within existing
+authorization, then support if it recurs; follow explicit user and server guidance.
+Also seek support for failures with missing logs or no supported correction,
+inconsistent public status/results/allocation evidence, or an unconfirmed stop.
+Include available project/job and operation/request IDs, CLI version, the command
+and public error, expected behavior, and actions tried. Omit credentials, signed
+URLs, and unnecessary input or log dumps. See the
+[shared recovery and support guide](agent-skills/SKILL.md#provisioning-and-job-failures).
 
 To diagnose a job failure:
 

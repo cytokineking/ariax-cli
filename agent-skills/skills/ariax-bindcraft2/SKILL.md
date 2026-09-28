@@ -51,11 +51,25 @@ threshold, including for VHH. An explicit `0` starts the first recovery rung
 on the first trajectory when `desperation` is enabled. This adjusts search
 behavior; `campaign.max_trajectories` still limits total attempts.
 
+If desperation is enabled but its threshold is unreachable within the campaign
+cap (for example, 750 with `max_trajectories: 20`), explain that this pilot will
+not exercise that recovery behavior. Do not automatically enable desperation,
+lower the threshold, or raise the cap. Preserve the distinction between omitted
+defaults, an explicit `0`, and disabled desperation.
+
 ## Plan a bounded pilot
 
-A useful starting suggestion is two accepted designs with `max_trajectories: 20`, leaving native scientific defaults unchanged. This is a review point, not a guarantee or spend cap. Accepted designs and attempted trajectories are separate counts; an exhausted pilot can complete with zero accepted designs.
+Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,
+and evidence before scaling. `max_trajectories` caps attempts, not spending;
+accepted designs and attempted trajectories are separate counts. An exhausted
+pilot can complete with zero accepted designs. Trajectory cost varies with the
+stages reached, and zero accepted designs cannot establish cost per accepted design.
 
-Read `ariax pricing --json` and report the current hourly GPU rate. Do not estimate duration or total campaign cost. Turbo permits 2, 4, or 8 GPUs when authorized and available; the server assigns workers. More GPUs increase combined hourly cost and do not pool memory for one worker. Preserve the user's compute and spending authorization, and do not relaunch an exhausted pilot automatically.
+Follow the [shared pricing guidance](../../SKILL.md#check-prices-and-choose-gpus).
+Turbo permits 2, 4, or 8 GPUs when authorized and available; the server assigns
+workers. More GPUs increase combined hourly cost and do not pool memory for one
+worker. Preserve the user's compute and spending authorization, and do not
+relaunch an exhausted pilot automatically.
 
 Include at least one compatible primary/core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
 or `RTX6000PRO`. Select as many compatible options as memory
