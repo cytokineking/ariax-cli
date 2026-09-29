@@ -94,9 +94,40 @@ function safePathParts(artifactPath) {
   return parts;
 }
 
+/** Validate only a server-selected BindCraft2 archive basename; remote paths stay conservative. */
+export function validateBindcraft2ArchiveFilename(filename) {
+  const suffix = '-bindcraft2-results.tar.gz';
+  if (typeof filename !== 'string'
+    || !/^[\p{L}\p{N}\p{M}](?:[\p{L}\p{N}\p{M}_-]*[\p{L}\p{N}\p{M}])?-bindcraft2-results\.tar\.gz$/u.test(filename)
+    || Buffer.byteLength(filename, 'utf8') > 160 + Buffer.byteLength(suffix)) {
+    throw new UnsafePathError('Unsafe BindCraft2 archive download filename.');
+  }
+  return filename;
+}
+
+/** Read the same signed attachment name used by the webapp, before existing-file checks. */
+export function bindcraft2ArchiveDownloadFilename(url) {
+  const disposition = new URL(validateTransferUrl(url, 'Download')).searchParams.get('response-content-disposition');
+  if (!disposition) return undefined; // Older servers keep the historical artifact basename.
+  const extended = /(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]*)/i.exec(disposition);
+  const fallback = /(?:^|;)\s*filename\s*=\s*"([^"\\]*)"/i.exec(disposition);
+  let filename;
+  try {
+    filename = extended ? decodeURIComponent(extended[1].trim()) : fallback?.[1];
+  } catch {
+    throw new UnsafePathError('Invalid BindCraft2 archive download filename encoding.');
+  }
+  if (filename === 'bindcraft2-results.tar.gz') return undefined;
+  return validateBindcraft2ArchiveFilename(filename);
+}
+
 /** Resolve a destination after rejecting symlinked parents beneath the download root. */
-export function prepareDestPath(destDir, artifactPath) {
+export function prepareDestPath(destDir, artifactPath, { filename } = {}) {
   const parts = safePathParts(artifactPath);
+  if (filename !== undefined) {
+    validateBindcraft2ArchiveFilename(filename);
+    parts[parts.length - 1] = filename;
+  }
   const requestedBase = path.resolve(destDir);
   fs.mkdirSync(requestedBase, { recursive: true, mode: 0o700 });
   const base = fs.realpathSync(requestedBase);

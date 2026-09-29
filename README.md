@@ -415,6 +415,14 @@ false when no expected checksum is available. Invalid or mismatching metadata
 and integrity failures remain errors. Rerun the same download to resume
 completed files.
 
+BindCraft2 results archives use the webapp's project-specific attachment name:
+`./results/output/archives/<project-name>-bindcraft2-results.tar.gz`. The remote
+artifact path remains `output/archives/bindcraft2-results.tar.gz` for `--path`,
+checksums, and checkpoints. Download summaries report each local `dest`, including
+resumed or skipped files. Older servers without an attachment name keep the
+original basename; existing generic archives are left untouched. Other engines
+and loose artifact paths retain their existing filenames.
+
 Structure files are parsed locally and uploaded directly to private object
 storage with a short-lived URL—their bytes do not pass through Ariax
 application servers. `ariax logs` returns only retained project/campaign output

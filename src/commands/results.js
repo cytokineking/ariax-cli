@@ -8,8 +8,10 @@ import { printData, printJson, printTable, printProgress } from '../output.js';
 import { usageError } from '../args.js';
 import { EXIT } from '../exit-codes.js';
 import { resolveProjectId } from '../resolve.js';
-import { prepareDestPath, declaredSha256, downloadUrl } from '../download.js';
+import { prepareDestPath, declaredSha256, downloadUrl, bindcraft2ArchiveDownloadFilename } from '../download.js';
 import { openDownloadState } from '../download-state.js';
+
+const BINDCRAFT2_ARCHIVE_PATH = 'output/archives/bindcraft2-results.tar.gz';
 
 /** @param {{ client: any, flags: Record<string, any>, positionals: string[], json: boolean, fetchImpl?: typeof fetch }} ctx */
 export async function run(ctx) {
@@ -160,15 +162,23 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
       }
       const artifacts = listedArtifacts.map((artifact) => applyArchiveExpectation(artifact, archiveExpectations));
       const pending = [];
+      const namedArchiveUrls = new Map();
       for (const artifact of artifacts) {
         ctx.signal?.throwIfAborted();
         const rel = artifactPath(artifact);
         let dest;
         try {
-          dest = prepareDestPath(downloadDir, rel);
+          let filename;
+          if (rel === BINDCRAFT2_ARCHIVE_PATH) {
+            const entry = (await presignBatch(ctx.client, projectId, [rel], ctx.signal)).get(rel);
+            if (!entry) throw serverError('No download URL was returned.');
+            filename = bindcraft2ArchiveDownloadFilename(entry.url);
+            namedArchiveUrls.set(rel, entry);
+          }
+          dest = prepareDestPath(downloadDir, rel, { filename });
           if (await state.matches({ ...artifact, path: rel }, dest, ctx.signal)) {
             resumed.push(rel);
-            completed.push({ ...presentArtifact(artifact), status: 'resumed' });
+            completed.push({ ...presentArtifact(artifact), dest, status: 'resumed' });
             continue;
           }
         } catch (error) {
@@ -181,7 +191,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
         if (!overwrite && fs.existsSync(dest)) {
           if (ctx.flags.details === true) printProgress(`skip: exists (pass --overwrite to replace): ${dest}`);
           skipped.push(rel);
-          completed.push({ ...presentArtifact(artifact), status: 'skipped_existing' });
+          completed.push({ ...presentArtifact(artifact), dest, status: 'skipped_existing' });
           continue;
         }
         pending.push({ ...artifact, path: rel, dest });
@@ -192,7 +202,13 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
         const batch = pending.slice(offset, offset + 100);
         let signed;
         try {
-          signed = await presignBatch(ctx.client, projectId, batch.map((a) => a.path), ctx.signal);
+          const unsigned = batch.filter((artifact) => !namedArchiveUrls.has(artifact.path));
+          signed = unsigned.length
+            ? await presignBatch(ctx.client, projectId, unsigned.map((a) => a.path), ctx.signal)
+            : new Map();
+          for (const artifact of batch) {
+            if (namedArchiveUrls.has(artifact.path)) signed.set(artifact.path, namedArchiveUrls.get(artifact.path));
+          }
         } catch (error) {
           ctx.signal?.throwIfAborted();
           for (const artifact of batch) {
@@ -239,7 +255,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
               checksum_verified: Boolean(expected),
               ...(artifact.archive_manifest_verified === true ? { verification_source: 'archive_manifest' } : {}),
             });
-            completed.push({ ...presentArtifact({ ...artifact, size: out.bytes }), status: 'downloaded' });
+            completed.push({ ...presentArtifact({ ...artifact, size: out.bytes }), dest: out.path, status: 'downloaded' });
           } catch (error) {
             ctx.signal?.throwIfAborted();
             const failure = presentFailure(rel, error);
@@ -273,7 +289,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
     printData(`Results: ${downloaded.length} downloaded, ${resumed.length} resumed, ${skipped.length} skipped, ${failures.length} failed`);
     printData(`Destination: ${destination}`);
     const visible = completed.filter((artifact) => !isOperationalArtifact(artifact));
-    if (visible.length) printTable(['path', 'role', 'size', 'status'], visible.map((item) => [item.path, humanRole(item.role), item.size_bytes ?? 'unknown', item.status]));
+    if (visible.length) printTable(['path', 'role', 'size', 'status', 'destination'], visible.map((item) => [item.path, humanRole(item.role), item.size_bytes ?? 'unknown', item.status, item.dest]));
     if (ctx.flags.details === true) {
       printData(`checkpoint: ${state.path}`);
       printData(`archive verification: ${archiveVerification}`);

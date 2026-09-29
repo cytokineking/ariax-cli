@@ -180,7 +180,7 @@ describe('compact results and download presentation', () => {
     const compactData = JSON.parse(compact.stdout).data;
     assert.deepEqual(Object.keys(compactData).sort(), ['counts', 'destination', 'files']);
     assert.deepEqual(compactData.counts, { downloaded: 1, resumed: 0, skipped: 0, failed: 0 });
-    assert.deepEqual(compactData.files, [{ path: artifact.path, role: 'structure', size_bytes: 6, status: 'downloaded' }]);
+    assert.deepEqual(compactData.files, [{ path: artifact.path, role: 'structure', size_bytes: 6, dest: path.join(fs.realpathSync(compactData.destination), artifact.path), status: 'downloaded' }]);
 
     const details = await capture(() => run({
       client, flags: { download: directory(), details: true }, positionals: [projectId], json: true,
