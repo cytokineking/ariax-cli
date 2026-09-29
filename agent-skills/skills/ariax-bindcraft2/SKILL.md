@@ -57,6 +57,35 @@ not exercise that recovery behavior. Do not automatically enable desperation,
 lower the threshold, or raise the cap. Preserve the distinction between omitted
 defaults, an explicit `0`, and disabled desperation.
 
+### Amino-acid preferences
+
+Use the optional `protocol_config.advanced.aa_bias` map in job JSON; no extra CLI
+flag is needed. For example, `"aa_bias": {"C": 0, "W": 0.4}` excludes cysteine
+and discourages tryptophan at mutable binder positions. `0` excludes, `1` is an
+explicit neutral override, values between `0` and `1` discourage, and values
+above `1` favor. These are relative propensities, not logit biases, percentages,
+exact counts, or composition guarantees. Leave native log conversion to the engine.
+
+Submit only explicit overrides. Unset residues inherit native presets: for VHH,
+`{"W": 0.4}` retains native `C=0`, `F=0.9`, and `Y=0.9`. Explicit `{"C": 1}`
+re-enables cysteine for the binder preset; removing C instead restores its
+preset preference. Explicit `C=0` overrides the disulfide-staple preference but
+does not remove cysteines in fixed scaffold residues. Preferences do not affect
+target residues. Do not fill all 20 entries with `1` or normalize weights.
+
+Use only the 20 standard uppercase one-letter codes and finite nonnegative
+JSON numbers. The server rejects strings, booleans, negative weights, and
+exclusion of all 20 residues. If 19 residues are explicitly excluded, give the
+remaining residue an explicit positive value so it cannot inherit exclusion.
+Omitted, `null`, and empty `{}` maps normalize to omission; retain explicit
+`0` and `1`. Fetch `ariax schema bindcraft2 --raw` and use
+`ariax validate -f job.json --input-dir ./bc2-inputs --details --json` to review
+`.data.normalized_job_spec.protocol_config.advanced.aa_bias`; the compact
+validation summary omits advanced settings. `ariax projects export PROJECT
+--output job.json` preserves the public saved map for reuse with the original
+inputs. Scientific changes, including these preferences, require a new campaign;
+restart keeps the existing settings.
+
 ## Plan a bounded pilot
 
 Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,

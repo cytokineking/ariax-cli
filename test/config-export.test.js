@@ -43,3 +43,38 @@ it('rejects bad nested project commands and incompatible export flags before req
     assert.equal(result.code, 1, result.stdout);
   }
 });
+
+for (const cysteine of [0, 1]) it(`BindCraft2 export and detailed validation preserve sparse preferences with C=${cysteine}`, async () => {
+  const root = rootDir(), output = path.join(root, 'job.json');
+  const input = path.join(root, 'input.pdb');
+  fs.writeFileSync(input, 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
+  const aaBias = { C: cysteine, W: 0.4, Y: 2 };
+  const spec = {
+    protocol: 'bindcraft2',
+    allowed_gpus: ['H100'],
+    protocol_config: {
+      schema_version: 1, modality: ['binder'], properties: [],
+      targets: [{ name: 'target', input_file: 'input.pdb', chains: ['A'], objective: 'target', weight: 1 }],
+      binder: { lengths: [60, 90] }, campaign: { num_designs: 2, max_trajectories: 20 },
+      advanced: { aa_bias: aaBias },
+    },
+  };
+  const calls = [];
+  const fetch = async (url, opts) => {
+    const route = new URL(url).pathname;
+    calls.push([opts.method, route]);
+    if (route === `/api/v1/projects/${parent}/config`) return response({ job_spec: spec });
+    assert.equal(route, '/api/v1/validate');
+    const body = JSON.parse(opts.body);
+    assert.deepEqual(body.protocol_config.advanced.aa_bias, aaBias);
+    return response({ valid: true, normalized_job_spec: body });
+  };
+  const exported = await run(['projects', 'export', parent, '--output', output], root, fetch);
+  assert.equal(exported.code, 0, exported.stdout);
+  assert.deepEqual(JSON.parse(fs.readFileSync(output)), spec);
+  assert.deepEqual(exported.parsed.data.job_spec.protocol_config.advanced.aa_bias, aaBias);
+  const validated = await run(['validate', '-f', output, '--input', input, '--details'], root, fetch);
+  assert.equal(validated.code, 0, validated.stdout);
+  assert.deepEqual(validated.parsed.data.normalized_job_spec.protocol_config.advanced.aa_bias, aaBias);
+  assert.deepEqual(calls, [['GET', `/api/v1/projects/${parent}/config`], ['POST', '/api/v1/validate']]);
+});

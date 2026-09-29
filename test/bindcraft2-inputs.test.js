@@ -221,12 +221,17 @@ describe('BindCraft2 deterministic input bundles', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-commands-'));
     const directory = inputDirectory(root);
     const job = path.join(root, 'job.json');
-    fs.writeFileSync(job, JSON.stringify(spec()));
+    const requested = spec();
+    const aaBias = { C: 0, F: 1, W: 0.4, Y: 2 };
+    requested.protocol_config.advanced.aa_bias = aaBias;
+    fs.writeFileSync(job, JSON.stringify(requested));
     const currentBuild = { version: 'test', channel: 'source', source_revision: 'a'.repeat(40), source_dirty: false };
     await inputs({ positionals: ['inspect'], flags: { file: job, 'input-dir': directory }, json: true, currentBuild });
     const output = path.join(root, 'prepared');
     await inputs({ positionals: ['prepare'], flags: { file: job, 'input-dir': directory, output }, json: true, currentBuild });
     assert.deepEqual(fs.readdirSync(output).sort(), ['avoid.fasta', 'input-manifest.json', 'input.pdb', 'job.json']);
+    const prepared = JSON.parse(fs.readFileSync(path.join(output, 'job.json')));
+    assert.deepEqual(prepared.protocol_config.advanced.aa_bias, aaBias);
     let validated;
     await validate({ flags: { file: job, 'input-dir': directory }, json: true, client: { post: async (url, options) => {
       assert.equal(url, '/api/v1/validate');
@@ -234,6 +239,7 @@ describe('BindCraft2 deterministic input bundles', () => {
       return { data: { valid: true, protocol_id: 'bindcraft2', normalized_job_spec: options.body } };
     } } });
     assert.equal(validated.protocol, 'bindcraft2');
+    assert.deepEqual(validated.protocol_config.advanced.aa_bias, aaBias);
     await assert.rejects(validate({ flags: { file: job, input: path.join(directory, 'input.pdb'), 'input-dir': directory },
       json: true, client: { post: async () => assert.fail('must not call server') } }), /choose only one input source/i);
   });
@@ -270,6 +276,8 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     const requested = spec();
     requested.protocol_config.advanced.desperation = true;
     requested.protocol_config.advanced.desperation_trajectories = 0;
+    const aaBias = { C: 0, F: 1, W: 0.4, Y: 2 };
+    requested.protocol_config.advanced.aa_bias = aaBias;
     fs.writeFileSync(job, JSON.stringify(requested));
     const posts = [];
     const puts = [];
@@ -308,6 +316,9 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     await submit(ctx);
     assert.equal(posts.find((entry) => entry.url === '/api/v1/validate').options.body.protocol_config.advanced.desperation_trajectories, 0);
     assert.equal(posts.find((entry) => entry.url === '/api/v1/projects').options.body.protocol_config.advanced.desperation_trajectories, 0);
+    for (const url of ['/api/v1/validate', '/api/v1/projects']) {
+      assert.deepEqual(posts.find((entry) => entry.url === url).options.body.protocol_config.advanced.aa_bias, aaBias);
+    }
     const init = posts.find((entry) => entry.url === '/api/v1/uploads/init').options.body;
     assert.deepEqual(init, { project_name: 'bc2-test', project_type: 'miniprotein', target_filename: 'input.pdb', input_files: ['avoid.fasta', 'input.pdb'] });
     assert.equal(puts.length, 2);
@@ -316,6 +327,7 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     const operation = listOperations(root)[0];
     assert.equal(operation.version, 2);
     assert.equal(operation.request.body.protocol_config.advanced.desperation_trajectories, 0);
+    assert.deepEqual(operation.request.body.protocol_config.advanced.aa_bias, aaBias);
     assert.deepEqual(operation.prepared_inputs.map((entry) => entry.filename), ['avoid.fasta', 'input.pdb']);
     fs.rmSync(job);
     fs.rmSync(directory, { recursive: true });

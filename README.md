@@ -504,6 +504,36 @@ small syntax/preparation cases. The repository's [agent evidence recorder](https
 records exact inputs, CLI identity, commands, validation responses, and completion
 separately. It is an offline evidence tool, not a claim of completed compute.
 
+### BindCraft2 amino-acid preferences
+
+Set optional preferences in `protocol_config.advanced.aa_bias` in the job JSON.
+For example, merge this field into the existing `advanced` object:
+
+```json
+"aa_bias": { "C": 0, "W": 0.4 }
+```
+
+`0` excludes, values between `0` and `1` discourage, and values above `1` favor.
+An explicit `1` removes the preset preference for that amino acid; omitting its
+entry inherits the native preset. Use uppercase standard one-letter codes and
+finite nonnegative JSON numbers. Keep only explicit overrides. These relative
+propensities apply to editable binder residues, not target or fixed scaffold
+residues, and do not specify exact counts or percentages.
+
+Fetch the live schema and inspect the normalized settings before submission:
+
+```sh
+ariax schema bindcraft2 --raw
+ariax validate -f job.json --input-dir ./bc2-inputs --details --json
+ariax projects export PROJECT --output saved-job.json
+```
+
+Export preserves preferences returned by the public config API. Reuse the
+exported job and original inputs for a new campaign; changing preferences
+requires a new project, while `ariax restart` retains scientific settings.
+See the [BindCraft2 guide](agent-skills/skills/ariax-bindcraft2/SKILL.md#amino-acid-preferences)
+for preset examples and validation rules.
+
 ### Saved structures
 
 Use the live server schema and validation with the existing job JSON `protocol_config.advanced`. New campaigns default `save_design_trajectory`, `save_failed_trajectories`, `save_failed_refolds`, and `save_binder_monomers` to true; explicit false values are preserved. Packaged BindCraft2 examples show these choices. No additional flags or settings DSL are needed. Retain these values when exporting or reusing a job.
