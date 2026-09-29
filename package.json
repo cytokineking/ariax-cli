@@ -1,6 +1,6 @@
 {
   "name": "ariax-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Thin Node CLI for Ariax REST with local structure preparation and direct object-storage uploads.",
   "type": "module",
   "license": "Elastic-2.0",
