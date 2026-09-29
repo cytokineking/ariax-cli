@@ -10,7 +10,11 @@ import assert from 'node:assert/strict';
 import { main } from '../src/main.js';
 
 const project = '11111111-1111-4111-8111-111111111111';
-const mutations = [['submit', '-f', 'job.json', '--name', 'example'], ...['restart', 'pause', 'abort'].map(command => [command, project])];
+const mutations = [
+  ['submit', '-f', 'job.json', '--name', 'example'],
+  ...['restart', 'pause', 'abort'].map(command => [command, project]),
+  ['feedback', project, '--category', 'other', '--message', 'hello'],
+];
 
 async function capture(fn) {
   const out = process.stdout.write, err = process.stderr.write;
@@ -44,7 +48,7 @@ it('rejects mutation options and surplus operands before credentials, prompts, H
 });
 
 it('validates all command surfaces before credential access or network', async () => {
-  const commands = ['me', 'protocols', 'pricing', 'schema', 'skills', 'validate', 'submit', 'projects', 'jobs', 'status', 'logs', 'pause', 'restart', 'abort', 'operations', 'recover', 'gpu-preferences', 'runs', 'candidates', 'results', 'upgrade', 'login', 'logout'];
+  const commands = ['me', 'protocols', 'pricing', 'schema', 'skills', 'validate', 'submit', 'projects', 'jobs', 'status', 'logs', 'pause', 'restart', 'abort', 'feedback', 'operations', 'recover', 'gpu-preferences', 'runs', 'candidates', 'results', 'upgrade', 'login', 'logout'];
   let effects = 0;
   const forbidden = async () => { effects++; throw new Error('unexpected side effect'); };
   for (const command of commands) {
@@ -88,6 +92,7 @@ it('preserves supported authenticated options and existing aliases at dispatch',
     ['logs', project, '--tail=10', '--log-ref=run.log'],
     ['logs', project, '--list'],
     ['gpu-preferences', project, '-f', 'preferences.json'],
+    ['feedback', project, '--category=other', '--message=hello', '--job=22222222-2222-4222-8222-222222222222'],
     ['runs', project, '--job=id', '--limit=5', '--cursor=x', '--all'],
     ['candidates', project, '--view=final', '--limit=5', '--cursor=x', '--all', '--eligible', '--output=x', '--overwrite', '--details'],
     ['results', project, '--path=x', '--download=x', '--overwrite', '--limit=5', '--details'],

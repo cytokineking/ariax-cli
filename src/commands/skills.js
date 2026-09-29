@@ -20,6 +20,7 @@ const CORE_REFERENCES = Object.freeze({
   candidates: join(ROOT, 'core', 'candidates.md'),
   'engine-choice': join(ROOT, 'core', 'engine-choice.md'),
   examples: join(ROOT, 'core', 'examples.md'),
+  feedback: join(ROOT, 'core', 'feedback.md'),
   interpretation: join(ROOT, 'core', 'interpretation.md'),
   'raw-curl': join(ROOT, 'core', 'raw-curl.md'),
   'recorded-settings': join(ROOT, 'core', 'recorded-settings.md'),
