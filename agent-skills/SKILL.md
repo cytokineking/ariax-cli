@@ -154,7 +154,7 @@ unauthorized GPU just to pass validation. Correct an invalid saved policy with
 `ariax gpu-preferences` before restart.
 
 Rates are USD per complete allocation-hour. Turbo hourly pricing is
-`(single-GPU hourly price + $1) × GPU count`; use the API's explicit allocation
+`single-GPU hourly price × GPU count`; use the API's explicit allocation
 rates; do not multiply a complete allocation rate by GPU count again. Use
 [observed campaign evidence](core/campaigns.md#forecast-from-observed-work) for
 qualified runtime and cost forecasts.
@@ -343,3 +343,5 @@ Do not claim a support ticket was created or promise a response time.
 To record project-linked feedback and obtain an ID to include in a support
 email, follow [agent feedback](core/feedback.md). The same command accepts
 feature requests and other project-related observations.
+
+CLI 0.1.2 identifies authenticated launches for the October 2026 offer. Use `ariax pricing --json` to read the current CLI preview and promotion window before estimating cost. The server locks a rate when it records the GPU allocation request. Queued jobs, replacement allocations, and explicit restarts are evaluated at that point. Viewing results on the website preserves the running allocation’s rate. Public price previews do not grant promotional eligibility.

@@ -7,7 +7,7 @@ const data = {
   proration: 'elapsed_seconds / 3600', availability_guaranteed: false,
   rates: [
     { gpu_id: 'H100', gpu_count: 1, currency: 'USD', hourly_rate: '6.000000', turbo: false },
-    { gpu_id: 'H100', gpu_count: 4, currency: 'USD', hourly_rate: '28.000000', turbo: true },
+    { gpu_id: 'H100', gpu_count: 4, currency: 'USD', hourly_rate: '24.000000', turbo: true },
   ],
 };
 
@@ -24,12 +24,15 @@ async function invoke(args, fetchImpl) {
 
 it('fetches current pricing each invocation and preserves the JSON envelope and exact rates', async () => {
   let calls = 0;
-  for (const hourly_rate of ['28.000000', '29.125001']) {
+  for (const hourly_rate of ['24.000000', '29.125001']) {
     const updated = { ...data, rates: [data.rates[0], { ...data.rates[1], hourly_rate }] };
     const result = await invoke(['--json'], async (url, options) => {
       calls++;
       assert.equal(new URL(url).pathname, '/api/v1/pricing');
       assert.equal(options.method, 'GET');
+      assert.equal(new URL(url).searchParams.get('channel'), 'cli');
+      assert.equal(options.headers['X-Ariax-Client'], 'cli');
+      assert.equal(options.headers['X-Ariax-CLI-Version'], '0.1.2');
       assert.equal(options.body, undefined);
       return Response.json({ data: updated, request_id: 'prices' });
     });
@@ -46,9 +49,9 @@ it('shows single and Turbo allocation totals with units and pricing source', asy
     assert.equal(result.code, 0);
     assert.match(result.stdout, /USD\/allocation-hour/);
     assert.match(result.stdout, /H100\s+1\s+6\.00/);
-    assert.match(result.stdout, /H100\s+4\s+28\.00/);
+    assert.match(result.stdout, /H100\s+4\s+24\.00/);
     assert.ok(result.stdout.includes(`Source: ${source}`));
-    assert.ok(result.stdout.includes('(single-GPU hourly price + $1) × GPU count'));
+    assert.ok(result.stdout.includes('single-GPU hourly price × GPU count'));
     assert.equal(result.stderr, '');
   }
 });

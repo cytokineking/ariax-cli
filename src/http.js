@@ -9,6 +9,7 @@
  * - Retry-After honored for retry-safe GETs with bounded exponential
  *   backoff + jitter. Mutations (POST) are NEVER auto-retried.
  */
+import { buildInfo } from './build-info.js';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { EXIT, httpStatusToExit, errorCodeToExit } from './exit-codes.js';
@@ -189,6 +190,7 @@ export function createClient({
   onRetry,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
+  const cliVersion = buildInfo().version;
 
   async function rawRequest(method, path, { query, body, idempotencyKey, timeout, signal } = {}) {
     if (signal?.aborted) throw interrupted(signal);
@@ -196,6 +198,8 @@ export function createClient({
     const requestId = randomUUID();
     const headers = {
       Accept: 'application/json',
+      'X-Ariax-Client': 'cli',
+      'X-Ariax-CLI-Version': cliVersion,
       'X-Request-Id': requestId,
     };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;

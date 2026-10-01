@@ -168,6 +168,8 @@ describe('createClient: success envelope handling', () => {
     assert.equal(seen.opts.headers['Idempotency-Key'], 'k-1');
     assert.equal(seen.opts.headers['Content-Type'], 'application/json');
     assert.ok(seen.opts.headers['X-Request-Id']);
+    assert.equal(seen.opts.headers['X-Ariax-Client'], 'cli');
+    assert.equal(seen.opts.headers['X-Ariax-CLI-Version'], '0.1.2');
     assert.equal(seen.opts.redirect, 'error');
   });
   it('parses error envelopes into ApiError with exit codes', async () => {

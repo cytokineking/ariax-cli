@@ -3,7 +3,7 @@ import { printData, printJson, printTable } from '../output.js';
 import { EXIT } from '../exit-codes.js';
 
 export async function run(ctx) {
-  const res = await ctx.client.get('/api/v1/pricing', { signal: ctx.signal });
+  const res = await ctx.client.get('/api/v1/pricing', { signal: ctx.signal, query: { channel: 'cli' } });
   const data = res.data;
   if (data?.billing_unit !== 'allocation_hour' || typeof data.source !== 'string'
       || !Array.isArray(data.rates) || data.rates.length === 0
@@ -22,5 +22,9 @@ export async function run(ctx) {
     Number(rate.hourly_rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }),
   ]));
   printData(`Source: ${data.source}`);
-  printData('Turbo hourly total: (single-GPU hourly price + $1) × GPU count.');
+  printData('Turbo standard total: single-GPU hourly price × GPU count.');
+  if (data.preview_channel === 'cli') {
+    printData('CLI preview. The rate locks when Ariax records the GPU allocation request.');
+    if (data.promotion?.active) printData(`October offer: one-third off for authenticated CLI launches until ${data.promotion.ends_at}. Existing purchased credits qualify.`);
+  }
 }
