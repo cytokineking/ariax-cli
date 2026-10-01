@@ -317,6 +317,15 @@ job finished; use project status to track compute.
 Use `ariax pricing` to check current hourly prices, or `ariax pricing --json`
 for the API rates and pricing source. Prices are USD per complete allocation-hour.
 Turbo hourly pricing is `single-GPU hourly price × GPU count`.
+
+`data.rates[].hourly_rate` is the current CLI price for the complete GPU allocation.
+Use `standard_hourly_rate` for comparison and `promotion` metadata for the offer
+label, active flag, and dates. The server selects the price and handles expiry.
+Read `quote_is_binding` and `rate_lock_event` before estimating cost; recheck
+prices for a new allocation or restart. Existing allocations retain their
+recorded rate. Launching through the website or an unmarked API client can
+change eligibility.
+
 Choose as many compatible GPUs as the user's memory and hourly budget limits
 allow to improve availability. A single compatible core GPU is accepted with an
 availability advisory; limited-only selections are rejected. Core choices are
@@ -551,5 +560,3 @@ Use the live server schema and validation with the existing job JSON `protocol_c
 A missing saved structure is distinct from scientific rejection or acceptance. No finite prediction can mean no structure; an early exit can have a structure but no scored metrics. Never invent scores or claim to recover historical unsaved structures. The website defaults to trajectories with structures while keeping full CSV downloads and attempt counts. The candidates API supports `view=diagnostics&structures_only=true` for BindCraft2; it filters before pagination, reports `total` and `overall_total`, and invalidates cursors when publication/filter changes. Omitted/false keeps all rows. Older publications use bounded discovery and may require retrieving the CSV and artifacts directly.
 
 BindCraft2 `protocol_config.targets[].hotspots` and `coldspots` accept whole selected chains (`A`) as well as numbered selections (`A54,B12-16`). Shorthand is validated against the input and expanded by the server for native execution; no new CLI flags are required.
-
-CLI 0.1.2 identifies authenticated launches for the October 2026 offer. Use `ariax pricing --json` to read the current CLI preview and promotion window before estimating cost. The server locks a rate when it records the GPU allocation request. Queued jobs, replacement allocations, and explicit restarts are evaluated at that point. Viewing results on the website preserves the running allocation’s rate. Public price previews do not grant promotional eligibility.

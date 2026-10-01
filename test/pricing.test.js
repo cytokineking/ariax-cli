@@ -25,7 +25,10 @@ async function invoke(args, fetchImpl) {
 it('fetches current pricing each invocation and preserves the JSON envelope and exact rates', async () => {
   let calls = 0;
   for (const hourly_rate of ['24.000000', '29.125001']) {
-    const updated = { ...data, rates: [data.rates[0], { ...data.rates[1], hourly_rate }] };
+    const updated = { ...data, preview_channel: 'cli',
+      promotion: { label: 'Seasonal compute offer', active: calls === 0, ends_at: '2027-03-01T00:00:00Z' },
+      rates: [{ ...data.rates[0], hourly_rate: '4.750000', standard_hourly_rate: '6.000000' },
+        { ...data.rates[1], hourly_rate, standard_hourly_rate: '32.000000' }] };
     const result = await invoke(['--json'], async (url, options) => {
       calls++;
       assert.equal(new URL(url).pathname, '/api/v1/pricing');
@@ -45,12 +48,15 @@ it('fetches current pricing each invocation and preserves the JSON envelope and 
 
 it('shows single and Turbo allocation totals with units and pricing source', async () => {
   for (const source of ['database', 'python', 'frontend_fallback']) {
-    const result = await invoke(['--no-json'], async () => Response.json({ data: { ...data, source } }));
+    const active = source === 'database';
+    const result = await invoke(['--no-json'], async () => Response.json({ data: { ...data, source, preview_channel: 'cli',
+      promotion: { active, label: 'Seasonal compute offer', ends_at: '2027-03-01T00:00:00Z' } } }));
     assert.equal(result.code, 0);
     assert.match(result.stdout, /USD\/allocation-hour/);
     assert.match(result.stdout, /H100\s+1\s+6\.00/);
     assert.match(result.stdout, /H100\s+4\s+24\.00/);
     assert.ok(result.stdout.includes(`Source: ${source}`));
+    assert.equal(result.stdout.includes('Seasonal compute offer'), active);
     assert.ok(result.stdout.includes('single-GPU hourly price × GPU count'));
     assert.equal(result.stderr, '');
   }
