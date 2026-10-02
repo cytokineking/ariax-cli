@@ -39,9 +39,7 @@ Session `available` means the host and base workspace accept commands. Each
 scientific tool separately reports `queued`, `installing`, `ready`, or `failed`.
 Wait for the requested tool to be ready. A tool failure does not revoke host
 availability. Adding tools preserves ready tools. Explicitly adding a failed
-tool can retry installation; status and wait never start that retry. Scientific
-installation is not yet implemented. Until it is available, surface the API's
-unavailable or unready-tool error and keep the user's tool selection intact.
+tool can retry installation; status and wait never start that retry. Tool preparation runs in the background. Inspect a failed tool and use an explicit tools add request when a retry is appropriate.
 
 ## Execute and observe
 
@@ -108,7 +106,10 @@ Close stops the session and releases its allocation. Poll session status until
 with an error. A failed HTTP request does not establish VM loss or cleanup.
 Repeated close observes the same closure.
 
-File import, listing, downloads, and durable output storage are currently
-deferred. `persistence.state: pending` with a null checkpoint does not establish
-durability. Treat current files as VM-local; do not promise that closing,
-expiry, or VM loss preserves them.
+## Inputs and durable outputs
+
+Stage a local file, an authorized Ariax artifact, or an individual public HTTPS object with `ariax forge inputs add SESSION --file FILE --path targets/input.yaml`. Use `--artifact PROJECT_ID:PATH` or `--url URL` for the other sources. Published inputs appear under read-only `/inputs`; inspect readiness with `inputs status SESSION INPUT_ID` before a command reads them.
+
+Run `ariax forge sync SESSION --wait` to publish a checkpoint, then use `files` or `download`. The `outputs` reference describes these commands and restore. Checkpoints preserve stable file versions and ready inputs. Concurrent writers can fail a sync. Inspect `persistence.checkpoint` and `persistence.error` after close or expiry to learn what became durable.
+
+Create a new session from a terminal source with `--restore-session SOURCE --checkpoint CHECKPOINT`. Restore finishes before command admission. The new session uses normal allocation and billing. Scientific commands require explicit submission after restore.

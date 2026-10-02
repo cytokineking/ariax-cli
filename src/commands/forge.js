@@ -11,15 +11,21 @@ import { ApiError } from '../http.js';
 import { EXIT } from '../exit-codes.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 
+import { runFiles } from './forge-files.js';
+
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
 const OPTIONS = {
-  create: [['name', 'gpu', 'provider', 'tools', 'priority', 'max-hours', 'session-id'], 1],
+  create: [['name', 'gpu', 'provider', 'tools', 'priority', 'max-hours', 'session-id', 'restore-session', 'checkpoint'], 1],
   list: [[], 1], status: [[], 2], tools: [[], 2],
   'tools add': [['tools', 'priority'], 3],
   'tools wait': [['timeout'], 4],
   run: [['tool', 'cwd', 'timeout-seconds', 'command-id'], 2],
   commands: [[], 2], command: [[], 3], watch: [['timeout'], 3],
+  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
+  'inputs list': [[], 3], 'inputs status': [[], 4],
+  sync: [['wait', 'checkpoint-id', 'timeout'], 2], checkpoints: [[], 2], checkpoint: [[], 3],
+  files: [['path', 'checkpoint'], 2], download: [['dest', 'checkpoint'], 3],
   logs: [['tail'], 3], cancel: [[], 3], close: [[], 2],
 };
 
@@ -35,9 +41,21 @@ export const help = `ariax forge create --name NAME --gpu GPU [--provider hypers
   ariax forge watch SESSION COMMAND_ID [--timeout SECONDS]
   ariax forge logs SESSION COMMAND_ID [--tail 1000]
   ariax forge cancel SESSION COMMAND_ID
-  ariax forge close SESSION`;
+  ariax forge close SESSION
+  ariax forge inputs add SESSION --file FILE --path PATH [--input-id UUID]
+  ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path PATH [--input-id UUID]
+  ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID]
+  ariax forge inputs list SESSION
+  ariax forge inputs status SESSION INPUT_ID
+  ariax forge sync SESSION [--wait] [--checkpoint-id UUID] [--timeout SECONDS]
+  ariax forge checkpoints SESSION
+  ariax forge checkpoint SESSION CHECKPOINT_ID
+  ariax forge files SESSION [--path /workspace] [--checkpoint UUID]
+  ariax forge download SESSION PATH --dest LOCAL [--checkpoint UUID]
+  ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint UUID [usual create options]`;
 
 function actionOf(positionals) {
+  if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
   if (positionals[0] === 'tools' && ['add', 'wait'].includes(positionals[1])) return `tools ${positionals[1]}`;
   return positionals[0];
 }
@@ -57,12 +75,12 @@ export function validateArguments({ positionals, flags, passthrough, globals }) 
   if (action === 'run' && !passthrough?.length) throw usageError('forge run: supply a command and its arguments after --.');
 }
 
-function uuid(value, label) {
+export function uuid(value, label) {
   if (!isUUID(value)) throw usageError(`forge: ${label} must be a UUID.`);
   return value.trim().toLowerCase();
 }
 
-function required(value, flag) {
+export function required(value, flag) {
   if (typeof value !== 'string' || !value.trim()) throw usageError(`forge: --${flag} is required and must be nonempty.`);
   return value.trim();
 }
@@ -94,7 +112,7 @@ function selection(flags, adding = false) {
   return { tools, priority };
 }
 
-function recordPath(ctx, id, create = false) {
+export function recordPath(ctx, id, create = false) {
   let dir = path.resolve(ctx.config.rootDir);
   for (const name of ['.ariax', 'forge']) {
     dir = path.join(dir, name);
@@ -109,7 +127,7 @@ function recordPath(ctx, id, create = false) {
   return path.join(dir, `${uuid(id, 'request ID')}.json`);
 }
 
-function readRecord(file) {
+export function readRecord(file) {
   if (!file) return null;
   let fd;
   try { fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW); }
@@ -120,7 +138,7 @@ function readRecord(file) {
   } finally { fs.closeSync(fd); }
 }
 
-function saveResult(file, record, result) {
+export function saveResult(file, record, result) {
   const next = { ...record, result,
     ...(isUUID(result?.project_id) ? { project_id: result.project_id } : {}) };
   atomicWrite(file, JSON.stringify(next, null, 2) + '\n');
@@ -164,17 +182,20 @@ function remember(ctx, id, resourcePath, result) {
       && record.api_origin === new URL(ctx.config.baseUrl).origin) saveResult(file, record, result);
 }
 
-function report(ctx, res, kind) {
+export function report(ctx, res, kind) {
   if (ctx.json) { printJson({ data: res.data, meta: res.meta, request_id: res.requestId }); return; }
   const data = res.data;
   if (kind === 'sessions') printTable(['session_id', 'name', 'state', 'gpu'], data.sessions.map(s => [s.session_id, s.name, s.state, s.gpu_type]));
   else if (kind === 'commands') printTable(['command_id', 'tool', 'state', 'exit_code'], data.commands.map(c => [c.command_id, c.tool, c.state, c.exit_code]));
   else if (kind === 'tools') printTable(['tool', 'state', 'error'], data.tools.map(t => [t.tool, t.state, t.error?.message]));
+  else if (kind === 'inputs') printTable(['input_id', 'path', 'state', 'size_bytes'], data.inputs.map(i => [i.input_id, i.path, i.state, i.size_bytes]));
+  else if (kind === 'checkpoints') printTable(['checkpoint_id', 'state', 'file_count', 'size_bytes'], data.checkpoints.map(c => [c.checkpoint_id, c.state, c.file_count, c.size_bytes]));
+  else if (kind === 'files') printTable(['path', 'kind', 'size_bytes'], data.entries.map(e => [e.path, e.kind, e.size_bytes]));
   else if (kind === 'logs') printData(data.text || '(no log lines)');
   else printKv(data);
 }
 
-async function poll(ctx, resourcePath, id, inspect, resume) {
+export async function poll(ctx, resourcePath, id, inspect, resume) {
   const timeoutMs = ctx.flags.timeout === undefined ? 0 : number(ctx.flags.timeout, 'timeout', { zero: true }) * 1000;
   const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   const controller = new AbortController();
@@ -207,7 +228,7 @@ async function poll(ctx, resourcePath, id, inspect, resume) {
   } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
 }
 
-function failed(code, message, error) {
+export function failed(code, message, error) {
   throw new ApiError({ status: 500, code, message: `${message}${error?.message ? `: ${error.message}` : ''}`, retryable: false });
 }
 
@@ -218,15 +239,18 @@ export async function run(ctx) {
     const sessionId = flags['session-id'] === undefined ? randomUUID() : uuid(flags['session-id'], 'session ID');
     const provider = flags.provider === undefined ? 'hyperstack' : required(flags.provider, 'provider');
     if (provider !== 'hyperstack') throw usageError('forge: --provider must be hyperstack.');
-    const body = { session_id: sessionId, name: required(flags.name, 'name'), provider,
+    if ((flags['restore-session'] === undefined) !== (flags.checkpoint === undefined)) throw usageError('forge create: --restore-session and --checkpoint are required together.');
+    const restore = flags['restore-session'] === undefined ? null : {session_id:uuid(flags['restore-session'], 'restore session ID'),checkpoint_id:uuid(flags.checkpoint, 'checkpoint ID')};
+    const body = { session_id: sessionId, restore, name: required(flags.name, 'name'), provider,
       gpu_type: required(flags.gpu, 'gpu'), ...selection(flags),
       ...(flags['max-hours'] === undefined ? {} : { max_hours: number(flags['max-hours'], 'max-hours') }) };
     return report(ctx, await submit(ctx, sessionId, { method: 'POST', path: `${API}/sessions`, body }, 'session_id',
       `Retry the same create request with --session-id ${sessionId}, the same --root-dir, account, and API origin.`));
   }
   if (action === 'list') return report(ctx, await ctx.client.get(`${API}/sessions`), 'sessions');
-  const sessionId = uuid(ctx.positionals[action.startsWith('tools ') ? 2 : 1], 'session ID');
+  const sessionId = uuid(ctx.positionals[(action.startsWith('tools ') || action.startsWith('inputs ')) ? 2 : 1], 'session ID');
   const sessionPath = `${API}/sessions/${sessionId}`;
+  if (action.startsWith('inputs ') || ['sync','checkpoints','checkpoint','files','download'].includes(action)) return runFiles(ctx, action, sessionId, sessionPath);
   if (action === 'tools add') {
     const id = randomUUID();
     return report(ctx, await submit(ctx, id, { method: 'POST', path: `${sessionPath}/tools`, body: selection(flags, true) }, 'request_id',

@@ -244,7 +244,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   }
   const { command, positionals, flags, globals } = parsed;
   // Forge's local wait timeout is specified in seconds by its public contract.
-  if (command === 'forge' && (positionals[0] === 'watch'
+  if (command === 'forge' && (positionals[0] === 'watch' || positionals[0] === 'sync'
       || (positionals[0] === 'tools' && positionals[1] === 'wait')) && globals.timeout !== undefined) {
     flags.timeout = globals.timeout;
     delete globals.timeout;

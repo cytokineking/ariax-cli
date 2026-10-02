@@ -265,7 +265,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const beforeInvalid = state.posts;
     await invoke(['forge', 'run', sessionId, '--tool', 'base', '--cwd', '/workspace/../etc', '--', 'true'], { code: 1 });
     await invoke(['forge', 'create', '--name', 'Unsafe ID', '--gpu', 'L40', '--session-id', '../outside'], { code: 1 });
-    await invoke(['forge', 'files', sessionId], { code: 1 });
+    await invoke(['forge', 'files', sessionId, '--path', '/etc'], { code: 1 });
     await invoke(['forge', 'create', '--name', 'Direct host', '--gpu', 'L40', '--endpoint', api.origin], { code: 1 });
     const storage = path.join(root, '.ariax/forge');
     await fs.rename(storage, `${storage}-saved`);
