@@ -1,6 +1,8 @@
 # Choosing a hosted engine
 
 Preserve the user's chosen engine when it supports the requested experiment.
+For native command execution in a compute session, read the
+[Forge platform guide](../skills/ariax-forge/SKILL.md).
 If several engines fit, use the scientific workflow and input requirements to
 choose; there is no universal best engine or comparable cross-engine score.
 

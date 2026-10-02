@@ -22,6 +22,9 @@ next design wave, and [result interpretation](core/interpretation.md) when
 reviewing a pilot or shortlist. Both are readable through the CLI using reference
 IDs `campaigns` and `interpretation`.
 Use [raw REST](core/raw-curl.md) only when the CLI is unavailable.
+For native commands in an Ariax Forge compute session, read the
+[Forge platform guide](skills/ariax-forge/SKILL.md) with
+`ariax skills forge --read --json`.
 
 This guide owns authentication, authorization, recovery, and transfers.
 Protocol guides explain scientific settings and results. The live catalog and

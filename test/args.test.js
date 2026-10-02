@@ -35,6 +35,7 @@ describe('args: command and positionals', () => {
     const p = parseArgv(['status', '--', '--wait', 'abc']);
     assert.equal(p.command, 'status');
     assert.deepEqual(p.positionals, ['--wait', 'abc']);
+    assert.deepEqual(p.passthrough, ['--wait', 'abc']);
     assert.equal(p.flags.wait, undefined);
   });
   it('rejects empty flag name', () => {

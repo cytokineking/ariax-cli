@@ -14,6 +14,10 @@ const mutations = [
   ['submit', '-f', 'job.json', '--name', 'example'],
   ...['restart', 'pause', 'abort'].map(command => [command, project]),
   ['feedback', project, '--category', 'other', '--message', 'hello'],
+  ['forge', 'create', '--name', 'example', '--gpu', 'L40'],
+  ['forge', 'tools', 'add', project, '--tools', 'boltz2'],
+  ['forge', 'cancel', project, '22222222-2222-4222-8222-222222222222'],
+  ['forge', 'close', project],
 ];
 
 async function capture(fn) {
@@ -80,6 +84,10 @@ it('validates all command surfaces before credential access or network', async (
 
 it('preserves supported authenticated options and existing aliases at dispatch', async () => {
   const cases = [
+    ['forge', 'create', '--name=example', '--gpu=L40', '--session-id=11111111-1111-4111-8111-111111111111'],
+    ['forge', 'run', project, '--tool=base', '--command-id=22222222-2222-4222-8222-222222222222', '--', 'python', '--json'],
+    ['forge', 'tools', 'wait', project, 'boltz2', '--timeout=5'],
+    ['forge', 'watch', project, '22222222-2222-4222-8222-222222222222', '--timeout=5'],
     ['submit', '--file=job.json', '--name=test', '--input=input.pdb', '--input-upload-intent-id=id', '--wait', '--resume', '--poll-interval=2', '--wait-timeout=4', '--details'],
     ['submit', '--f=job.json'], ['submit', '--f=job.json', '--input-dir=inputs'],
     ['validate', '-f', 'job.json', '--input=input.pdb', '--details'], ['validate', '--f=job.json', '--input-dir=inputs'], ['validate', '--f=job.json'],

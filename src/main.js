@@ -45,13 +45,14 @@ import * as runs from './commands/runs.js';
 import * as gpuPreferences from './commands/gpu-preferences.js';
 import * as inputs from './commands/inputs.js';
 import * as feedback from './commands/feedback.js';
+import * as forge from './commands/forge.js';
 
 const COMMANDS = {
   me, protocols, pricing, schema, validate, submit,
   projects, jobs, status, logs, pause, restart, abort, results, upgrade,
   login, logout,
   skills, operations, recover, inputs, candidates, runs,
-  feedback,
+  feedback, forge,
   'gpu-preferences': gpuPreferences,
 };
 
@@ -174,6 +175,7 @@ function reportError(err, jsonMode, authContext) {
 }
 
 const HELP_TOPICS = {
+  forge: forge.help,
   me: 'ariax me',
   protocols: 'ariax protocols',
   pricing: 'ariax pricing',
@@ -206,6 +208,7 @@ function printHelp(topic) {
     printData(`usage: ${HELP_TOPICS[topic]}`);
     printData('');
     printData('Global flags: --json, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --timeout <ms>');
+    if (topic === 'forge') printData('Forge tools wait/watch: --timeout SECONDS limits local polling; remote work continues.');
     return;
   }
   printData('usage: ariax <command> [options]');
@@ -240,6 +243,12 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     return EXIT.USAGE;
   }
   const { command, positionals, flags, globals } = parsed;
+  // Forge's local wait timeout is specified in seconds by its public contract.
+  if (command === 'forge' && (positionals[0] === 'watch'
+      || (positionals[0] === 'tools' && positionals[1] === 'wait')) && globals.timeout !== undefined) {
+    flags.timeout = globals.timeout;
+    delete globals.timeout;
+  }
 
   const argumentJsonMode = globals.json === true || (globals['no-json'] !== true && !process.stdout.isTTY);
   try {
@@ -248,7 +257,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     }
     // Bare `inputs --help` still displays its topic without requiring a subcommand.
     if (!(command === 'inputs' && positionals.length === 0 && Object.keys(flags).length === 0 && globals.help)) {
-      validateCommandArguments(parsed);
+      if (command === 'forge') forge.validateArguments(parsed);
+      else validateCommandArguments(parsed);
     }
   } catch (err) {
     return reportError(err, argumentJsonMode);
@@ -302,8 +312,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   const credentialStore = runtime.credentialStore ?? createCredentialStore();
 
   let timeoutMs = 30_000;
-  if (merged.timeout !== undefined) {
-    timeoutMs = Number(merged.timeout);
+  if (globals.timeout !== undefined) {
+    timeoutMs = Number(globals.timeout);
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       return reportError(usageError('--timeout must be a positive number of milliseconds.'), jsonMode);
     }
@@ -380,6 +390,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     client,
     flags,
     positionals,
+    passthrough: parsed.passthrough,
     config,
     json: jsonMode,
     fetchImpl,

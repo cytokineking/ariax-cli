@@ -31,13 +31,13 @@ export function operationPath(rootDir, id) {
   return path.join(directory(rootDir), `${id}.json`);
 }
 
-function atomicWrite(file, bytes, exclusive = false) {
+export function atomicWrite(file, bytes, exclusive = false) {
   if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw usageError('Operation file must be a regular file.');
   const temp = `${file}.${randomUUID()}.tmp`;
   const fd = fs.openSync(temp, 'wx', 0o600);
-  try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); }
-  finally { fs.closeSync(fd); }
   try {
+    try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); }
+    finally { fs.closeSync(fd); }
     if (exclusive) { fs.linkSync(temp, file); fs.unlinkSync(temp); }
     else fs.renameSync(temp, file);
     const parent = fs.openSync(path.dirname(file), 'r');

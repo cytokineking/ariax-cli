@@ -13,6 +13,10 @@ Protocol-specific scientific guidance is independently discoverable:
 - [`ariax-pxdesign`](skills/ariax-pxdesign/SKILL.md)
 - [`ariax-esmfold2-pipeline`](skills/ariax-esmfold2-pipeline/SKILL.md)
 
+The [Forge platform skill](skills/ariax-forge/SKILL.md) covers sessions, tool
+readiness, native commands, recovery, cancellation, and close. Read it with
+`ariax skills forge --read --json`.
+
 Use the matching protocol skill to choose and configure a design engine, then
 use the shared workflow for credentials and lifecycle operations. These skills
 drive the CLI or REST API; they are not separate implementations of protocol

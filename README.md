@@ -261,6 +261,7 @@ capabilities and input rules.
 | Local input inspection/preparation | `ariax inputs inspect --input FILE`, `ariax inputs prepare --input FILE -f job.json --output DIR` |
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
+| Forge compute sessions | `ariax forge create`, `list`, `status`, `tools`, `run`, `commands`, `command`, `watch`, `logs`, `cancel`, `close`; read `ariax skills forge --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
 | Launch | `ariax submit -f job.json --name NAME [--input target.pdb] [--wait]` |

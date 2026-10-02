@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { buildInfo, PACKAGE_ROOT } from '../src/build-info.js';
 import { installGitHub, verifyInstallation } from '../src/installation.js';
 import { releaseUpdateAvailable } from '../src/update-check.js';
+import { exerciseForgeCli } from '../test/helpers/forge-http.js';
 
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-package-smoke-'));
 const prefix = path.join(temporary, 'prefix');
@@ -45,6 +46,10 @@ try {
     const root = execute(npm, ['root', '--global'], { shell: process.platform === 'win32' }).trim();
     assert.equal((await fs.lstat(path.join(root, 'ariax-cli'))).isSymbolicLink(), false);
     const script = path.join(root, 'ariax-cli/bin/ariax.js');
+    if (index < 2) {
+      await exerciseForgeCli(script, env);
+      console.log(`Installed ${channel} Forge HTTP recovery and lifecycle verified.`);
+    }
     assert.match(execute(process.execPath, [script, 'help']), /ariax skills/);
     const skills = JSON.parse(execute(process.execPath, [script, 'skills', '--json']));
     assert.ok(JSON.stringify(skills).includes('ariax-boltzgen'));

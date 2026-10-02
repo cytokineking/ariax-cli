@@ -64,6 +64,7 @@ export function parseArgv(argv) {
   const flags = Object.create(null);
   const globals = Object.create(null);
   let command;
+  let passthrough;
 
   const takeValue = (i, name, raw) => {
     const next = argv[i + 1];
@@ -78,6 +79,7 @@ export function parseArgv(argv) {
     const tok = argv[i];
     if (tok === '--') {
       // Everything after `--` is positional.
+      passthrough = argv.slice(i + 1);
       for (let j = i + 1; j < argv.length; j++) positionals.push(argv[j]);
       break;
     }
@@ -149,7 +151,8 @@ export function parseArgv(argv) {
   // `--file`/`-f` may be spelled `--file`; normalize aliases.
   if (flags.file === undefined && flags.f !== undefined) flags.file = flags.f;
 
-  return { command, positionals, flags: { ...flags }, globals: { ...globals } };
+  return { command, positionals, flags: { ...flags }, globals: { ...globals },
+    ...(passthrough === undefined ? {} : { passthrough }) };
 }
 
 /**
