@@ -1,6 +1,6 @@
 **Forge implementation contract**
 
-Accepted for bites 01–07; the B05–B07 extension was settled on October 2, 2026. The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
+Accepted through B08 on October 2, 2026. The live campaign and its limits are recorded in [the B08 qualification report](forge-b08-qualification.md). The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
 
 **Implementation rules**
 
@@ -15,6 +15,8 @@ Keep authentication and project authorization, workload isolation, path safety, 
 The backend owns account access, selected tools and priority, the broker allocation, existing instance billing, and the session lifecycle. The VM daemon owns command execution, the preparation queue, and file operations in its SQLite journal. The file service saves workspace checkpoints to project-scoped object storage. The CLI uses the existing public Next.js agent API, which authenticates the API key and forwards signed compute requests to the backend.
 
 Use one full-VM runtime on Ubuntu with systemd, Docker, the NVIDIA driver/container runtime, writable local storage, and an outbound tunnel. Hyperstack is the sole implementation in bite 03. Vast is a separate later adapter. Use on-demand single-GPU offers. An unavailable requested provider/GPU produces an error. An uncertain create is reconciled using its recorded ownership before any subsequent allocation attempt.
+
+Keep all GHCR packages private. The backend receives `FORGE_GHCR_USERNAME` and a separate `FORGE_GHCR_READ_TOKEN` limited to package reads. Bootstrap writes standard Docker auth into `/etc/ariax-forged/docker/config.json`, with root-only directory/file modes 0700/0600. The daemon uses that directory through `DOCKER_CONFIG`. Registry credentials and temporary authorized model URLs belong in protected deployment configuration and stay outside workload mounts, public responses, evidence bundles and Git.
 
 The user requires image builds and qualification on remote GPU VMs. Stage source, fixtures, and model assets on those VMs and run Docker commands there through SSH. Keep the user's workstation free of image builds and treat its Docker daemon as outside the requirements for this campaign. Docker on each remote Forge VM supplies workload isolation and container execution.
 
@@ -172,7 +174,7 @@ Workers commit their bite in their own worktree and finish with changed files, t
 
 **B05–B07 shared boundary, October 2, 2026**
 
-B05–B07 code and guides are integrated and have passed local acceptance. The current B08 handoff is `docs/forge-next-turn-plan.md`; `docs/forge-integration-bite.md` records the completed worker assignments. The orchestrator owns integration branches and lifecycle decisions.
+B05–B07 code and guides are integrated and have passed local acceptance. The current B09/B10 handoff is `docs/forge-next-turn-plan.md`; `docs/forge-integration-bite.md` records the completed worker assignments. The orchestrator owns integration branches and lifecycle decisions.
 
 B05 keeps the catalog shape above: each tool has `image`, `gpu`, and `model_mounts`; each asset has `url` and `archive` (`tar` or `zip`). The selected tool order at bootstrap is already the desired priority. Later `SelectTools` requests prioritize the named selected tools and retain other selections. One durable queue prepares base first, then scientific tools. Ready tools remain usable while the queue works. Published named assets remain read-only. An asset that is complete at its final path is reused directly. Unsafe archive entries and incomplete transfer are failures; there is no checksum or digest protocol.
 
@@ -237,3 +239,7 @@ ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint U
 The three input sources are mutually exclusive. Print and retain input/checkpoint IDs before mutation, and use the existing atomic writer for private request records. Keep credentials and signed URLs out of logs. Persist durable IDs and safe source metadata; temporary upload/download grants are not saved as ordinary request results. After a lost reply, query the same ID before resubmitting. A URL import can require the original user-supplied URL again if no accepted operation is found. Wait timeouts end local polling and leave accepted work intact. CLI downloads stream directly to the chosen local destination using a temporary file and final rename. Reuse existing CLI file/output conventions.
 
 Forge reference dispatch and guide indexes expose `outputs`, `base`, `ipsae`, and `boltz2` through both platform aliases. The Forge platform guide describes the public workflow; each tool guide describes its native inputs, invocation, output inspection, and qualification status.
+
+**B08 live acceptance, October 2, 2026**
+
+Remote base/ipSAE/Boltz2 images and the installed-CLI Hyperstack workflow passed. The campaign used private GHCR pulls, real native GPU execution and private R2 persistence. A new VM restored the selected checkpoint after source deletion; checkers passed and closed-session downloads matched the saved source bytes. Provider, tunnel, DNS and billing cleanup were verified for both sessions, and the separate builder was deleted. The control plane used disposable Supabase services. Production release and later tool/provider combinations retain their separate gates in the B09–B11 plan.

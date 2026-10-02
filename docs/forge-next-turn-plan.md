@@ -1,8 +1,8 @@
-# Forge next bite: B08 image preparation and Hyperstack qualification
+# Forge next bites: design tools and Vast full VMs
 
-Updated October 2, 2026. The local integration gate passed against the accepted code and installed CLI review package. Continue from the three `codex/forge-v2-integration` workspaces. The orchestrator owns the campaign, deployment decisions, and final acceptance. Keep worker execution bounded to an assigned repository or build task, using the existing GPT-6.1 xhigh chats and a maximum of three concurrent workers.
+Updated October 2, 2026. B08 passed the remote build and Hyperstack campaign recorded in [the qualification report](forge-b08-qualification.md). Continue from the three `codex/forge-v2-integration` workspaces. The orchestrator owns shared contracts, integration and live qualification. Reuse the existing GPT-6.1 xhigh worker chats, with at most three workers active.
 
-## Starting point
+## Accepted starting point
 
 | Repository | Integration workspace |
 |---|---|
@@ -10,47 +10,28 @@ Updated October 2, 2026. The local integration gate passed against the accepted 
 | Runtime | `/Users/aaronring/Forge-rebuild/2026-10-01/forged` |
 | CLI | `/Users/aaronring/Forge-rebuild/2026-10-01/cli` |
 
-The accepted implementation commits are listed below. Documentation-only handoff commits may follow them.
+Check each branch and working tree before dispatch. Preserve the existing worker branches and unrelated primary-checkout work. The [contract](forge-contract.md) governs behavior, and [the earlier audit](forge-worker-wave2-audit-2026-10-02.md) retains the local review history. Current implementation commits and campaign evidence are in the B08 report; documentation commits can follow them.
 
-| Repository | Accepted implementation |
-|---|---|
-| Backend | `11d26b4e756f322fad2ea3a33c64289742cb54b3` |
-| Runtime | `f6b96921b65f20ea8de3a0bebbfb3054b7e10e31` |
-| CLI | `2ea139018bfea323c48e7b548c6d83d109e1da39` |
+Base, ipSAE and Boltz2 have passed their remote image checks and the installed-CLI workflow on fresh Hyperstack VMs. The campaign exercised partial readiness, private pulls, scoped input transfers, native GPU execution, checkpoint versions, deletion, download after close and restore. Billing and resource cleanup were verified. Its control plane used disposable Supabase services; production deployment remains a separate release step.
 
-Check branch names and working-tree state before assigning work. Preserve the original worker branches and unrelated primary-checkout changes. The [contract](forge-contract.md) governs the runtime and API; [the audit](forge-worker-wave2-audit-2026-10-02.md) records accepted commits and local evidence. The [joined acceptance instructions](/Users/aaronring/.codex/worktrees/forge-v2-integration/Ariax-Bio-Backend/docs/forge-joined-acceptance.md) require explicit paths to the runtime source and installed CLI.
+All image builds and image qualification run on remote Linux amd64 GPU full VMs. Keep GHCR packages private. Supply `FORGE_GHCR_USERNAME` with a separate `FORGE_GHCR_READ_TOKEN` limited to `read:packages`; bootstrap stores standard Docker auth in a root-only host directory. Model URLs and registry credentials belong in protected deployment configuration. The B08 model URL expires; generate a fresh authorized HTTPS URL before reusing its catalog. The workstation does not need Docker.
 
-The preparation queue, file workflow, lifecycle fixes, and guide-reference dispatch are integrated. Close stops workspace writers before saving a final checkpoint within a shared sixty-second deadline. Preparation can still be cancelling when the daemon returns `closing`; public `closed` requires confirmed provider cleanup. File recovery starts after the existing daemon lock is acquired. Expiry saves changed output when valid transfer credentials are available.
+## B09: BindCraft2 and FreeBindCraft
 
-## Prepare the actual deployment material
+Assign the runtime recipes and native cases to one existing worker. A second worker can prepare the shared AF2 asset and CLI guides in a separate assigned path. Establish each tool's native executable, input format, weight layout and bounded output checks before building. Choose one maintained AF2 asset name for the directory shared by both tools, and agree on its exact layout in the contract before either implementation depends on it.
 
-Build and qualify images on a remote Linux amd64 GPU full VM, as directed by the user. The workstation's Docker daemon is outside the requirements for this campaign. The orchestrator owns provisioning and the spending bound for the remote build/qualification VM. Before allocation, check the current Hyperstack GPU offer and record the budget and cleanup deadline. Stage the accepted source and fixtures on that VM, configure Docker's GPU access, and execute the build and qualification commands there through SSH.
+Retain ordinary image tags and native command arguments. Keep the shared weights read-only and compilation/cache writes in scratch. Check the expected scientific output files after execution. A corrected run uses a fresh output directory and an explicit new command ID.
 
-The runtime's [science instructions](/Users/aaronring/Forge-rebuild/2026-10-01/forged/science/README.md) contain the build commands. Run them from the staged runtime checkout on the GPU VM. Build the ordinary base, ipSAE, and Boltz2 image tags and run `science/checks/container_cpu.sh` there. Prepare the complete model directory on the same VM, then execute the bounded Boltz2 fixture in the built GPU image and inspect its native outputs. Preserve the workload UID and restricted container mounts. Record GPU access and native execution before accepting the images for publication. The existing host CPU checks and constructed output tests retain their recorded scope.
+The orchestrator provisions the remote builder, records its current price and cleanup deadline, and supplies workers with bounded remote directories. Account for completed B08 spending against the user's $100 compute ceiling if this remains the same authorized campaign. Publication follows native image qualification and the user's private-package requirement. B11 records the full advertised combinations.
 
-Prepare the model bundle on the remote VM. Create one named Boltz2 tar archive containing `mols.tar`, the extracted `mols/` directory, `boltz2_conf.ckpt`, and `boltz2_aff.ckpt` at its root. Use the reviewed upstream assets or complete retained Ariax copies, and preserve the expected native file structure. Publish to an actual Ariax-controlled HTTPS location. Add that URL and the Boltz2 tool entry to `science/catalog.json` after publication. The `UNQUALIFIED` example must remain outside deployment.
+## B10: Vast full-VM adapter
 
-Publish the accepted image tags and make the same catalog available to backend validation and VM bootstrap. `FORGE_CATALOG_PATH` selects the backend catalog; `FORGE_RUNTIME_PATH` must contain the accepted runtime source, `pyproject.toml`, and `deploy/`. Verify the deployment environment has the existing compute-signing, Hyperstack, tunnel, and project-scoped storage configuration. Record the exact environment and database migration plan before changing it. The new schema consists of `20261002000000_forge_sessions.sql` and `20261002010000_forge_files.sql`.
+This can proceed alongside B09 from the accepted backend branch. One existing worker owns the adapter and its meaningful application-flow coverage. Select only full VMs with Docker/GPU support. Keep the session API and catalog unchanged. Provider-specific ownership, address/SSH readiness and deletion stay inside the adapter and existing lifecycle boundaries.
 
-This preparation can use one worker for remote image builds and native container checks and another for the model bundle on the same GPU VM. Coordinate separate remote directories and wait for complete assets before GPU qualification. The orchestrator controls VM provisioning, publication, catalog changes, and deployment. Workers report the image tags, asset location, actual build logs, and remaining failures. Keep ordinary tags and named assets; preserve the user's prohibition on content hashes, digest pins, compatibility paths, and fallback execution.
+Cover allocation acknowledgment loss, recovery of an owned VM, close/expiry and verified deletion through the real application path, with the provider boundary substituted when a paid scenario adds no useful evidence. Preserve billing cutoffs and project authorization. Vast remains unavailable to ordinary sessions until its B11 live gate passes.
 
-## Run one bounded campaign
+## B11 and dispatch boundary
 
-Review the remote build/qualification results and deployment material before starting the Forge pilot. Account for the build VM and both later Forge sessions in the campaign cost bound. Use one Hyperstack full VM at a time, release the build VM after accepted artifacts are published, and then create the source session. Set a one-hour expiry on each Forge session. Confirm source cleanup before creating the restore session. A failed attempt returns to diagnosis after cleanup.
+The orchestrator reviews and integrates B09/B10, then runs bounded native and lifecycle qualification for each advertised tool/provider combination. Record output checks and actual cleanup, including interruption/cancellation and recovery cases. Keep failed scientific attempts and use explicit new requests after a correction.
 
-Use the installed CLI and the native inputs in [science/B08.md](/Users/aaronring/Forge-rebuild/2026-10-01/forged/science/B08.md). Drive the following observable workflow:
-
-1. Create the source session with ipSAE and Boltz2 selected. Once base is ready, import its fixture and execute the base command while Boltz2 still prepares. Record base readiness and each science tool's preparation time.
-2. Stage the native inputs, wait for the required tool, and run the documented ipSAE and Boltz2 commands. Require actual GPU execution for Boltz2. Inspect the requested output files and native logs with the bundled checkers; retain command IDs and fresh output directories for any later explicit run.
-3. Save a completed checkpoint, download and inspect the outputs, then close. Confirm owned VM and tunnel removal and stopped billing from the actual provider/control-plane path. Record the persistence outcome separately.
-4. Create a new session from the completed checkpoint after source cleanup. Verify restored files and staged inputs, including the chosen version and any deleted path, through explicit checker commands. Close that session and confirm cleanup again.
-
-Capture elapsed startup, asset transfer, native execution, and final cost alongside the observed cleanup state. Native command success and structurally complete files qualify this small execution case. Scientific usefulness still requires the appropriate domain evaluation.
-
-Run the maintained local acceptance again only after a change affects its covered behavior. This campaign removes the Docker, object-storage, tunnel, and provider substitutes used by the local tests. Keep the ordinary authentication, durable request IDs, explicit command recovery, and existing billing path.
-
-## Work after the gate
-
-B09 adds BindCraft2 and FreeBindCraft recipes with shared AF2 assets. B10 can then add the Vast full-VM adapter in parallel. B11 qualifies each advertised scientific/provider combination. Wider tools, custom installation, multi-GPU scheduling, warm pools, snapshots, and migration remain deferred.
-
-The next action is to prepare the concrete B08 remote GPU build, qualification, and publication campaign from the integrated branches. The current integration bite ends with local acceptance and this handoff; cloud allocation and publication require the B08 task to be taken up.
+B09 and B10 have not been dispatched by the completed B08 campaign. The next action is to prepare their concrete worker briefs from these accepted branches. Broader tools, custom installation, multi-GPU execution, warm pools, snapshots and migration remain deferred.

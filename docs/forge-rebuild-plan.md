@@ -1,6 +1,6 @@
 **Forge rebuild and worker plan**
 
-Updated October 2, 2026. B00–B06 and the B07 reference recipes/guides are integrated after review and correction. Local acceptance passes with the installed CLI. Image builds, the complete published Boltz2 asset, and native GPU qualification carry into B08. The [implementation contract](forge-contract.md) is authoritative; the [next-turn plan](forge-next-turn-plan.md) prepares the B08 campaign.
+Updated October 2, 2026. B00–B08 are complete. Remote base/ipSAE/Boltz2 image checks and the installed-CLI Hyperstack campaign passed, including restore, private pulls, billing and resource cleanup. See the [B08 qualification report](forge-b08-qualification.md). The [implementation contract](forge-contract.md) governs the rebuild; the [next-bite plan](forge-next-turn-plan.md) prepares B09 and B10.
 
 Ariax provisions on-demand full VMs and runs workloads in Docker. The initial tools are Boltz2, BindCraft2, FreeBindCraft, ipSAE, and a base workspace. Hyperstack is the reference provider. Vast full VMs follow after the first integrated pilot. User-supplied hosts and custom tool installation are outside this release.
 
@@ -8,7 +8,7 @@ Ariax provisions on-demand full VMs and runs workloads in Docker. The initial to
 
 Image builds and native container qualification run on remote GPU full VMs. The orchestrator provisions those VMs and records their cost and cleanup bounds. The user's workstation runs the CLI and editing/review tools; its Docker daemon is outside the requirements for this work.
 
-Ariax controls the deployed images and weights. Use ordinary image tags and named assets. Share weight directories by their declared asset names, and publish completed downloads with an atomic move. Docker handles image transfer. Ready tools remain usable while other tools prepare.
+All GHCR packages remain private. Use the dedicated package-read credential in protected host configuration, and refresh temporary model URLs before a later launch. Ariax controls the deployed images and weights. Use ordinary image tags and named assets. Share weight directories by their declared asset names, and publish completed downloads with an atomic move. Docker handles image transfer. Ready tools remain usable while other tools prepare.
 
 The implementation has one current API and runtime format. It contains no artifact checksums, digest pins, request hashes, content-addressed cache, deployment identity graph, compatibility adapters, fallback transports, provider fallback, or automatic scientific replay. Keep ordinary authentication, authorization, isolation, direct request comparison, command journaling, owned-resource reconciliation, and billing cleanup.
 
@@ -67,7 +67,7 @@ B05 proves that tool A runs while B installs or fails, and that named shared ass
 
 B06 provides immutable staged inputs, writable `/workspace`, and disposable `/scratch`. `sync --wait` confirms a completed checkpoint containing stable file versions. Changed-file detection avoids rereading every unchanged output. Restore respects deletion. Expiry and cleanup use a bounded final sync and report any durability gap.
 
-B07 supplies the reference recipes, native cases, and skills. Their actual image builds and container checks remain part of B08 preparation. B08 drives the installed CLI through import, partial readiness, execution, persistence, restore, and close using the actual backend and daemon. Then one bounded Hyperstack run proves native GPU execution and verified resource cleanup. Record useful startup and transfer measurements.
+B07 supplied the reference recipes, native cases, and skills. B08 built and qualified their images remotely, then drove the installed CLI through import, partial readiness, execution, persistence, restore and close using the actual backend and daemon. Native L40 execution and cleanup passed. The report records transfer/startup observations and the elapsed provider-cost estimate.
 
 B09 builds the design tools and prepares their native cases for B11. Share AF2 by the maintained asset name and expected format. B10 adds only the Vast adapter and tests its ownership/cleanup behavior. B11 runs the advertised tool/provider combinations, cancellation and recovery cases, and records costs and cleanup. A provider remains unavailable until its gate passes.
 

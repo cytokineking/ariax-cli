@@ -17,8 +17,7 @@ ariax forge status "$SESSION" --json
 `SESSION` is an actual session UUID. Read this guide with
 `ariax skills forge --reference ipsae --read --json`. Use the absolute
 `data.examples.root` path from `ariax skills forge --json` for `EXAMPLES`.
-The image still awaits Docker build/publication and native container
-qualification. The native executable `ipsae` is on PATH and forwards
+B08 qualified the private image and this native fixture through the installed CLI on Hyperstack, including restored output checks. Live tool metadata determines availability. The native executable `ipsae` is on PATH and forwards
 positional argv to the preserved script. There are no model assets for this
 tool.
 

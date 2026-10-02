@@ -6,11 +6,7 @@ from a supplied biomolecular specification. The case here is one small
 synthetic protein pair; it is an execution qualification case, with no
 biological success threshold.
 
-The recipe is prepared, but B07 did not build/publish its image or run a GPU.
-The deployment catalog omits Boltz2 until the orchestrator publishes its
-complete named asset at an actual Ariax-controlled URL. A visibly unqualified
-catalog example is not deployable. Use live tool metadata after B08 gates
-pass, not this guide, to establish availability.
+B08 qualified the private image and complete named model asset through the installed CLI on an L40. Its bounded native prediction and restored output checks passed. Availability depends on the live deployment catalog and tool readiness; operators must refresh temporary authorized model URLs before a later deployment.
 
 For an authorized session with Boltz2 in its deployed catalog:
 

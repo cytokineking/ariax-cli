@@ -1,6 +1,6 @@
 # Forge B05–B07 review, October 2, 2026
 
-The reviewed B05/B06/B07 code and guides are integrated, including both lifecycle fixes and the shared hooks. The maintained workflow passes against the integration branches and installed CLI. Integration also exposed and fixed a proxy error that converted a backend denial into a 500 response. Image builds, the complete published Boltz2 asset, and GPU execution remain B08 gates.
+The reviewed B05/B06/B07 code and guides are integrated, including both lifecycle fixes and the shared hooks. The maintained workflow passes against the integration branches and installed CLI. Integration also exposed and fixed a proxy error that converted a backend denial into a 500 response. Those local results were followed by the completed [B08 remote qualification](forge-b08-qualification.md), including private publication, native GPU execution, restore and verified cleanup.
 
 The initial review and fix recheck used temporary copies. The later integration described below merged the accepted commits into the dedicated integration branches. No cloud resources were rented, artifacts published, or production migrations applied during this bite.
 
@@ -117,3 +117,7 @@ The orchestrator's first final-workflow invocation stopped at environment setup 
 The user clarified that all image builds and qualification belong on remote GPU VMs. The workstation's Docker status is outside this campaign's requirements. Follow the [B08 handoff](forge-next-turn-plan.md): provision a bounded remote Linux amd64 GPU VM, build the three images there, and run the native CPU checks and Boltz2 GPU fixture before publication. Publish the complete named Boltz2 asset and accepted images, then set the actual catalog location through the existing deployment path. The concrete campaign records its deployment/migration target and cost bound before allocation.
 
 The bounded Hyperstack campaign runs base during science preparation, inspects real Boltz2 GPU output, and proves checkpoint/download/restore with verified VM/tunnel cleanup. Source and restore sessions run sequentially. B09 design recipes and B10 Vast full-VM work follow that gate.
+
+## B08 follow-through
+
+The subsequent B08 campaign completed remote image builds and published all packages privately. Fresh Hyperstack sessions exercised the installed CLI, native GPU prediction, durable checkpoints and restore. Live testing fixed private Docker SDK setup and an S3 client context-manager error. The [B08 report](forge-b08-qualification.md) records accepted code, regression coverage, scientific scope, costs and confirmed resource cleanup. Historical statements above describe the B05–B07 review at that time.

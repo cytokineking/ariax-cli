@@ -13,8 +13,7 @@ ariax forge tools "$SESSION" --json
 ```
 
 `SESSION` is the actual session UUID. Read this guide with `ariax skills forge --reference base --read --json`.
-The reference image still awaits Docker build/publication and native container
-qualification. `ariax skills forge --json` returns `data.examples.root`; use
+B08 qualified the private image and this workflow on fresh Hyperstack VMs, including persistence and restore. Use live session/tool status to establish readiness. `ariax skills forge --json` returns `data.examples.root`; use
 that absolute path for `EXAMPLES`. [Example files](examples/README.md) ship
 beside this guide.
 
