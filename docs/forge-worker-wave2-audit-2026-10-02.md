@@ -114,6 +114,6 @@ The orchestrator's first final-workflow invocation stopped at environment setup 
 
 ## Next work
 
-Follow the [B08 handoff](forge-next-turn-plan.md): prepare the three Linux amd64 images on a working Docker builder and run their native CPU checks. Publish the complete named Boltz2 asset and accepted images, then set the actual catalog location through the existing deployment path. The concrete campaign records its deployment/migration target and cost bound before allocation.
+The user clarified that all image builds and qualification belong on remote GPU VMs. The workstation's Docker status is outside this campaign's requirements. Follow the [B08 handoff](forge-next-turn-plan.md): provision a bounded remote Linux amd64 GPU VM, build the three images there, and run the native CPU checks and Boltz2 GPU fixture before publication. Publish the complete named Boltz2 asset and accepted images, then set the actual catalog location through the existing deployment path. The concrete campaign records its deployment/migration target and cost bound before allocation.
 
 The bounded Hyperstack campaign runs base during science preparation, inspects real Boltz2 GPU output, and proves checkpoint/download/restore with verified VM/tunnel cleanup. Source and restore sessions run sequentially. B09 design recipes and B10 Vast full-VM work follow that gate.

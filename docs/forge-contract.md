@@ -16,6 +16,8 @@ The backend owns account access, selected tools and priority, the broker allocat
 
 Use one full-VM runtime on Ubuntu with systemd, Docker, the NVIDIA driver/container runtime, writable local storage, and an outbound tunnel. Hyperstack is the sole implementation in bite 03. Vast is a separate later adapter. Use on-demand single-GPU offers. An unavailable requested provider/GPU produces an error. An uncertain create is reconciled using its recorded ownership before any subsequent allocation attempt.
 
+The user requires image builds and qualification on remote GPU VMs. Stage source, fixtures, and model assets on those VMs and run Docker commands there through SSH. Keep the user's workstation free of image builds and treat its Docker daemon as outside the requirements for this campaign. Docker on each remote Forge VM supplies workload isolation and container execution.
+
 Each repository uses its existing language and test tools. The original worker briefs record implementation ownership. The orchestrator now owns the combined integration branches and assigns later work through the current handoff in docs/forge-next-turn-plan.md. Changes to this contract need orchestrator review before other workers consume them.
 
 **Public API**

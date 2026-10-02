@@ -6,6 +6,8 @@ Ariax provisions on-demand full VMs and runs workloads in Docker. The initial to
 
 **Simplicity requirements**
 
+Image builds and native container qualification run on remote GPU full VMs. The orchestrator provisions those VMs and records their cost and cleanup bounds. The user's workstation runs the CLI and editing/review tools; its Docker daemon is outside the requirements for this work.
+
 Ariax controls the deployed images and weights. Use ordinary image tags and named assets. Share weight directories by their declared asset names, and publish completed downloads with an atomic move. Docker handles image transfer. Ready tools remain usable while other tools prepare.
 
 The implementation has one current API and runtime format. It contains no artifact checksums, digest pins, request hashes, content-addressed cache, deployment identity graph, compatibility adapters, fallback transports, provider fallback, or automatic scientific replay. Keep ordinary authentication, authorization, isolation, direct request comparison, command journaling, owned-resource reconciliation, and billing cleanup.
