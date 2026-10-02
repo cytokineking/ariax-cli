@@ -1,6 +1,6 @@
 **Forge rebuild and worker plan**
 
-Updated October 2, 2026. B00–B04 are complete within their assigned scopes, and B02–B04 have been integrated after independent audit and correction. The [implementation contract](forge-contract.md) is authoritative. The [next-turn plan](forge-next-turn-plan.md) prepares B05, B06, and B07 for parallel work.
+Updated October 2, 2026. B00–B06 and the B07 reference recipes/guides are integrated after review and correction. Local acceptance passes with the installed CLI. Image builds, the complete published Boltz2 asset, and native GPU qualification carry into B08. The [implementation contract](forge-contract.md) is authoritative; the [next-turn plan](forge-next-turn-plan.md) prepares the B08 campaign.
 
 Ariax provisions on-demand full VMs and runs workloads in Docker. The initial tools are Boltz2, BindCraft2, FreeBindCraft, ipSAE, and a base workspace. Hyperstack is the reference provider. Vast full VMs follow after the first integrated pilot. User-supplied hosts and custom tool installation are outside this release.
 
@@ -10,7 +10,7 @@ Ariax controls the deployed images and weights. Use ordinary image tags and name
 
 The implementation has one current API and runtime format. It contains no artifact checksums, digest pins, request hashes, content-addressed cache, deployment identity graph, compatibility adapters, fallback transports, provider fallback, or automatic scientific replay. Keep ordinary authentication, authorization, isolation, direct request comparison, command journaling, owned-resource reconciliation, and billing cleanup.
 
-The backend owns desired session state and the VM lifecycle. SQLite on the VM owns commands and the future preparation queue. The CLI uses the existing public agent API. A ready tool, a completed command, and a durable output checkpoint have separate statuses.
+The backend owns desired session state and the VM lifecycle. SQLite on the VM owns commands and the preparation queue. The CLI uses the existing public agent API. A ready tool, a completed command, and a durable output checkpoint have separate statuses.
 
 **B00: source preservation and cleanup**
 
@@ -49,23 +49,23 @@ Each worker receives the same contract and the user's repository/testing instruc
 
 B02, B03, and B04 run in separate chats and worktrees using GPT-6.1 at xhigh. At most three implementation workers run together. B05, B06, and B07 can subsequently overlap under their dependencies. B09 and B10 run in parallel after the Hyperstack pilot. The orchestrator owns integration and all live VM runs.
 
-**Acceptance for the current workers**
+**B02–B04 acceptance record**
 
 B02 must exercise actual HTTP handlers and a durable command store with Docker substituted at the external boundary when needed. Cover one execution after a lost acknowledgment, restart reconciliation, cancellation, and uncertain GPU ownership. Protect workload mounts and network access. Bootstrap follows one supported Ubuntu/full-VM path with systemd and a loopback daemon behind the existing tunnel. GPU execution is qualified in B08.
 
 B03 must use the real application path for session creation, authorization, lifecycle, credit admission, and cleanup, substituting provider calls where necessary. A lost allocation response must not allocate another VM. Closing an unreachable runtime must still release its owned resource and update the existing billing path. The Next.js API-key boundary forwards signed requests to private backend routes through current helpers. Do not create a second billing system.
 
-B04 must exercise the installed CLI against an HTTP boundary. Preserve create/run request IDs after lost acknowledgments; allow explicit recovery with the same stored request. Wait/watch timeouts end local waiting. Add a platform skill that explains tool readiness and deferred file support. Existing managed-job commands keep their current behavior.
+B04 must exercise the installed CLI against an HTTP boundary. Preserve create/run request IDs after lost acknowledgments; allow explicit recovery with the same stored request. Wait/watch timeouts end local waiting. The original B04 platform skill explained tool readiness; B06 and integration added the file workflow and native guide references. Existing managed-job commands keep their current behavior.
 
 Full briefs are in `docs/forge-worker-b02.md`, `docs/forge-worker-b03.md`, and `docs/forge-worker-b04.md`.
 
-**Later acceptance gates**
+**B05–B11 acceptance gates**
 
 B05 proves that tool A runs while B installs or fails, and that named shared assets are downloaded/extracted once. Successful transfer and atomic publication protect incomplete downloads. Keep one queue and bounded concurrency. A readiness record describes installed tools; it is not an identity-verification protocol.
 
 B06 provides immutable staged inputs, writable `/workspace`, and disposable `/scratch`. `sync --wait` confirms a completed checkpoint containing stable file versions. Changed-file detection avoids rereading every unchanged output. Restore respects deletion. Expiry and cleanup use a bounded final sync and report any durability gap.
 
-B07 builds only the reference tool set and pairs each tool with its native cases and skill. B08 drives the installed CLI through import, partial readiness, execution, persistence, restore, and close using the actual backend and daemon. Then one bounded Hyperstack run proves native GPU execution and verified resource cleanup. Record useful startup and transfer measurements.
+B07 supplies the reference recipes, native cases, and skills. Their actual image builds and container checks remain part of B08 preparation. B08 drives the installed CLI through import, partial readiness, execution, persistence, restore, and close using the actual backend and daemon. Then one bounded Hyperstack run proves native GPU execution and verified resource cleanup. Record useful startup and transfer measurements.
 
 B09 builds the design tools and prepares their native cases for B11. Share AF2 by the maintained asset name and expected format. B10 adds only the Vast adapter and tests its ownership/cleanup behavior. B11 runs the advertised tool/provider combinations, cancellation and recovery cases, and records costs and cleanup. A provider remains unavailable until its gate passes.
 

@@ -16,4 +16,4 @@ The user directs a robustly simple implementation. Ariax controls the images and
 - Prefer existing integration coverage through real application paths. Add a test only for a named plausible failure and an actual coverage gap. Mock only impractical external boundaries. Avoid source inspection, constant assertions, duplicated schema snapshots, private call-sequence checks, and tests that only echo configured mocks.
 - Commit the completed bite, then report its changes, test commands/results, and integration needs in the worker chat. The orchestrator reads that chat.
 
-For the current integration bite, read docs/forge-integration-bite.md. Its assignments supersede the original B05/B06/B07 file split. The orchestrator owns integration branches and lifecycle decisions.
+Local Forge integration is accepted. Read docs/forge-next-turn-plan.md for the current B08 handoff and docs/forge-worker-wave2-audit-2026-10-02.md for accepted evidence. The orchestrator owns integration branches and live qualification; workers follow the isolated assignment supplied in their chat.

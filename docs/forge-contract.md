@@ -12,11 +12,11 @@ Keep authentication and project authorization, workload isolation, path safety, 
 
 **Ownership and scope**
 
-The backend owns account access, selected tools and priority, the broker allocation, existing instance billing, and the session lifecycle. The VM daemon owns command execution and its SQLite journal. Bite 05 adds its installation queue. Bite 06 adds file import and durable output storage. The CLI uses the existing public Next.js agent API, which authenticates the API key and forwards signed compute requests to the backend.
+The backend owns account access, selected tools and priority, the broker allocation, existing instance billing, and the session lifecycle. The VM daemon owns command execution, the preparation queue, and file operations in its SQLite journal. The file service saves workspace checkpoints to project-scoped object storage. The CLI uses the existing public Next.js agent API, which authenticates the API key and forwards signed compute requests to the backend.
 
 Use one full-VM runtime on Ubuntu with systemd, Docker, the NVIDIA driver/container runtime, writable local storage, and an outbound tunnel. Hyperstack is the sole implementation in bite 03. Vast is a separate later adapter. Use on-demand single-GPU offers. An unavailable requested provider/GPU produces an error. An uncertain create is reconciled using its recorded ownership before any subsequent allocation attempt.
 
-Each repository uses its existing language and test tools. B02 owns the runtime code and bootstrap. B03 is the sole writer of new backend Forge routes, services, database migration, the thin Next.js agent API proxy, and necessary shared wiring. B04 owns the CLI Forge commands, dispatch, request records, and platform skill. Changes to this contract need orchestrator review before other workers consume them.
+Each repository uses its existing language and test tools. The original worker briefs record implementation ownership. The orchestrator now owns the combined integration branches and assigns later work through the current handoff in docs/forge-next-turn-plan.md. Changes to this contract need orchestrator review before other workers consume them.
 
 **Public API**
 
@@ -132,7 +132,7 @@ Catalog example, with illustrative URLs only:
 }
 ```
 
-`tools` maps names to image tags and the named model assets they mount. `assets` maps those names to Ariax-controlled download locations. The catalog is deployed as an ordinary file. The backend reads the same format to validate selection, then copies the intended catalog to the host. Use catalog names to share weights intentionally; each asset downloads/extracts once into `data_dir/models/{asset}`. Bite 05 implements that path. There are no catalog version negotiations or digest fields.
+`tools` maps names to image tags and the named model assets they mount. `assets` maps those names to Ariax-controlled download locations. The catalog is deployed as an ordinary file. The backend reads the same format to validate selection, then copies the intended catalog to the host. Use catalog names to share weights intentionally; each asset downloads/extracts once into `data_dir/models/{asset}`. The durable preparation queue implements that path. There are no catalog version negotiations or digest fields.
 
 The bootstrap creates state, inputs, workspace, scratch, and models directories under the configured data directory. Mount `/inputs` and model directories read-only. `/workspace` and `/scratch` are writable workload mounts. The daemon, SQLite journal, credentials, Docker socket, and host root remain outside workload access. Preserve the existing container/network isolation policy and protect against path traversal and unsafe archive extraction.
 
@@ -170,7 +170,7 @@ Workers commit their bite in their own worktree and finish with changed files, t
 
 **B05–B07 shared boundary, October 2, 2026**
 
-B05–B07 commits are combined for local acceptance. The current assignment is `docs/forge-integration-bite.md`. The original worker briefs record ownership during implementation. The orchestrator owns integration branches and lifecycle decisions.
+B05–B07 code and guides are integrated and have passed local acceptance. The current B08 handoff is `docs/forge-next-turn-plan.md`; `docs/forge-integration-bite.md` records the completed worker assignments. The orchestrator owns integration branches and lifecycle decisions.
 
 B05 keeps the catalog shape above: each tool has `image`, `gpu`, and `model_mounts`; each asset has `url` and `archive` (`tar` or `zip`). The selected tool order at bootstrap is already the desired priority. Later `SelectTools` requests prioritize the named selected tools and retain other selections. One durable queue prepares base first, then scientific tools. Ready tools remain usable while the queue works. Published named assets remain read-only. An asset that is complete at its final path is reused directly. Unsafe archive entries and incomplete transfer are failures; there is no checksum or digest protocol.
 
@@ -234,4 +234,4 @@ ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint U
 
 The three input sources are mutually exclusive. Print and retain input/checkpoint IDs before mutation, and use the existing atomic writer for private request records. Keep credentials and signed URLs out of logs. Persist durable IDs and safe source metadata; temporary upload/download grants are not saved as ordinary request results. After a lost reply, query the same ID before resubmitting. A URL import can require the original user-supplied URL again if no accepted operation is found. Wait timeouts end local polling and leave accepted work intact. CLI downloads stream directly to the chosen local destination using a temporary file and final rename. Reuse existing CLI file/output conventions.
 
-The integration assignment completes reference dispatch and guide indexes for `outputs`, `base`, `ipsae`, and `boltz2`. The Forge platform guide describes the public workflow; each tool guide describes its native inputs, invocation, output inspection, and qualification status.
+Forge reference dispatch and guide indexes expose `outputs`, `base`, `ipsae`, and `boltz2` through both platform aliases. The Forge platform guide describes the public workflow; each tool guide describes its native inputs, invocation, output inspection, and qualification status.

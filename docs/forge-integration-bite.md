@@ -1,6 +1,6 @@
 # Forge integration and local acceptance
 
-The user authorized the next bite on October 2, 2026. The orchestrator combines the reviewed B05/B06/B07 commits, applies the lifecycle hooks and existing-test corrections, and owns acceptance decisions. This bite finishes the local integration gate before image publication and the live B08 Hyperstack campaign.
+Completed October 2, 2026. The orchestrator integrated the reviewed B05/B06/B07 commits, applied the lifecycle hooks and existing-test corrections, and accepted the final installed-CLI workflow. The assignments below record this completed bite. Continue from docs/forge-next-turn-plan.md for B08 image preparation and the Hyperstack campaign.
 
 The current contract is `docs/forge-contract.md`. Preserve the user's requirements for ordinary image tags and named assets. Keep one current API and runtime format, existing authentication and billing, and explicit scientific commands. Do not add hashes/checksums, digest pins, compatibility machinery, fallback paths, or automatic scientific replay.
 
