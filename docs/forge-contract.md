@@ -1,6 +1,6 @@
 **Forge implementation contract**
 
-Accepted for bites 01–04 on October 1, 2026. The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
+Accepted for bites 01–07; the B05–B07 extension was settled on October 2, 2026. The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
 
 **Implementation rules**
 
@@ -166,4 +166,72 @@ File commands belong to B06. Keep their deferred status clear in the platform sk
 
 Reuse meaningful existing tests. Exercise public paths with provider/Docker boundaries substituted when local execution requires it. Cover duplicate submission and lost acknowledgments, restart reconciliation, cancellation, unauthorized access, and cleanup after host failure. Avoid source-inspection tests, schema snapshot matrices, and tests that only assert configured mocks.
 
-Workers commit their bite in their own worktree and finish with changed files, test results, and remaining integration needs. Do not create additional worker chats, rent VMs, publish artifacts, or deploy during B02–04. The orchestrator reads worker progress and integrates accepted work. Live GPU qualification belongs to B08.
+Workers commit their bite in their own worktree and finish with changed files, test results, and remaining integration needs. Do not create additional worker chats, rent VMs, publish artifacts, or deploy during B02–07. The orchestrator reads worker progress and integrates accepted work. Live GPU qualification belongs to B08.
+
+**B05–B07 shared boundary, October 2, 2026**
+
+B02–B04 are integrated. The assignments in `docs/forge-next-turn-plan.md` and the B05/B06/B07 worker briefs govern this wave. B05 owns preparation and the command-runtime files. B06 owns file APIs, storage, and its backend/CLI path. B07 supplies recipes and native guidance. The orchestrator applies any small changes where those ownership areas meet.
+
+B05 keeps the catalog shape above: each tool has `image`, `gpu`, and `model_mounts`; each asset has `url` and `archive` (`tar` or `zip`). The selected tool order at bootstrap is already the desired priority. Later `SelectTools` requests prioritize the named selected tools and retain other selections. One durable queue prepares base first, then scientific tools. Ready tools remain usable while the queue works. Published named assets remain read-only. An asset that is complete at its final path is reused directly. Unsafe archive entries and incomplete transfer are failures; there is no checksum or digest protocol.
+
+B07 supplies `science/catalog.json`, image build contexts, and native fixtures. The image must expose its documented executable on PATH because Forge passes argv directly. Model paths in native commands must agree with the catalog mount destinations. The reference keys are `base`, `ipsae`, and `boltz2`; base and ipSAE use CPU, and Boltz2 uses GPU. A base workspace contains a POSIX shell and Python 3. Science guides live under `agent-skills/skills/ariax-forge/tools/`. Publication and native GPU qualification belong to B08.
+
+**B06 public file API**
+
+All paths below have the existing public prefix `/api/v1/forge`; the backend uses `/api/forge` with signed compute authentication. Keep the normal data/error envelopes. UUID operation IDs are durable and compare validated fields directly. Repeating an accepted ID observes that operation; different fields produce 409. Foreign sessions, source projects, inputs, and checkpoints return 404. Every operation authorizes the destination session, and imported/restored data also authorizes its source.
+
+`path` in an input request is a relative POSIX file path within `/inputs`, such as `targets/target.yaml`. Reject absolute paths, empty/dot/traversal components, backslashes, NULs, symlink traversal, and destinations outside that root. Imports create regular files. A published destination cannot be overwritten. Enforce configured transfer size/time limits. The worker chooses and documents those limits without adding another general policy service.
+
+| Method and suffix | Body or result |
+|---|---|
+| `POST /sessions/{id}/uploads` | `{input_id, path, size_bytes}` reserves a local-file upload and returns `{input_id, upload_url, upload_method:"PUT", upload_headers, expires_at}`. Same ID and fields may renew the short-lived PUT grant. |
+| `POST /sessions/{id}/inputs` | `{input_id, path, source}` returns 202 with the input record. Source forms are listed below. |
+| `GET /sessions/{id}/inputs` | `{inputs:[...]}`, most recent 100. |
+| `GET /sessions/{id}/inputs/{input_id}` | One input record. |
+| `POST /sessions/{id}/checkpoints` | `{checkpoint_id}` starts or observes a checkpoint; returns 202 with its record. |
+| `GET /sessions/{id}/checkpoints` | `{checkpoints:[...]}`, most recent 100. |
+| `GET /sessions/{id}/checkpoints/{checkpoint_id}` | One checkpoint record, available after the VM closes. |
+| `GET /sessions/{id}/files?path=/workspace&checkpoint=UUID&cursor=...` | A bounded listing from a completed checkpoint: `{checkpoint, entries:[{path,kind,size_bytes}], next_cursor}`. Omitted checkpoint selects the latest completed checkpoint. |
+| `POST /sessions/{id}/files/presign` | `{path, checkpoint}` returns `{path, checkpoint, download_url, expires_at, size_bytes}` for one checkpoint file. Omitted checkpoint selects the latest completed checkpoint. |
+
+Input `source` is one of `{"kind":"upload"}`, `{"kind":"artifact","project_id":"UUID","path":"artifact/path"}`, or `{"kind":"url","url":"https://..."}`. For uploads, the same `input_id` identifies the preceding upload reservation. The control plane derives the object key from that reservation and confirms the uploaded size before import. Keep the existing managed `/uploads/init` behavior unchanged; it accepts managed PDB/CIF inputs. Reuse its storage/auth helpers where applicable.
+
+An input record has `input_id`, `session_id`, `path`, `state`, `size_bytes`, and `error`. States are `queued`, `importing`, `ready`, or `failed`. The record excludes signed URLs and credentials. `ready` means the file is published at `/inputs/{path}` with permissions allowing the workload UID to read it. Retain a durable Ariax-owned copy or reference for checkpoints; an expiring external URL cannot be the only restore source. Inputs that fail before publication leave no partially visible destination. A new explicit import can replace a failed attempt only after its unfinished work has stopped.
+
+Checkpoints have `checkpoint_id`, `session_id`, `state`, `created_at`, `completed_at`, `file_count`, `size_bytes`, and `error`. States are `queued`, `syncing`, `synced`, or `failed`. A checkpoint is published only after all referenced file objects and its index are durable. Its index covers workspace files and ready staged inputs. It excludes scratch, models, runtime journals, and credentials. Preserve the previous good checkpoint after a failed attempt. Use file metadata for changed-file detection and reject a file version that changes during copying. Checkpoints preserve stable file versions; they do not claim a simultaneous database-style snapshot across files while commands write.
+
+`files` and `download` describe completed checkpoint content. Without a completed checkpoint they return 409 `checkpoint_required`; with an incomplete chosen checkpoint they return 409 `checkpoint_unready`. The CLI explains that `sync --wait` creates the checkpoint needed for inspection/download. This makes source selection explicit after a session closes. Inputs have their own readiness/list API before the first checkpoint.
+
+The session's existing `persistence` fields become real stored state. `checkpoint` names the latest completed checkpoint and remains that value when a later sync fails. `state` describes the current/most recent persistence attempt. Reconciliation stores it in the backend, so status survives VM loss. Periodic sync uses a bounded cadence and changed-file detection; explicit sync queues an immediate attempt. One checkpoint runs at a time. A concurrent explicit request can return 409 `sync_busy` with the active checkpoint ID. Status polling only observes work.
+
+**Restore, daemon calls, and closure**
+
+`CreateSession` gains optional `restore: {session_id, checkpoint_id}`, default null. The source session must be terminal (`closed` or `failed`) and the chosen checkpoint must be complete. Authorize both the source session and its project before admission. Persist the restore source in the ordinary create request so its retry keeps the current idempotency behavior. Restore into the newly allocated session before command admission. Restore the chosen index exactly, including deletion between checkpoints. Commands and old runtime credentials are never restored or replayed. A restored session has a new project/job/session and the normal allocation/billing path.
+
+B06 adds daemon `/inputs`, `/inputs/{input_id}`, `/checkpoints`, `/checkpoints/{checkpoint_id}`, and `/restore` endpoints over the existing bearer-authenticated tunnel. They use the operation IDs and status records above. The backend supplies validated transfer locations and temporary project-scoped grants through private request fields. Public callers cannot choose bucket prefixes or submit those grants. B06 owns the exact private transfer structures across its three worktrees and records them in its handoff; these are internal to that bite. `/health` and `/close` gain the existing public-shaped `persistence` object without secrets. A pending restore keeps health at `starting` and command admission unavailable.
+
+Use the existing project-scoped R2 credential facilities with an ordinary storage client. Never send parent credentials to the VM. Temporary credentials remain outside workloads and last only for bounded transfers. Existing authentication signing is retained. The prohibition on new content hashes does not replace standard SDK/authentication internals. Runtime `boto3` is the approved storage dependency for this wave; backend can use its existing botocore client. Additional package-manifest changes return to the orchestrator.
+
+Close and expiry first stop command admission and work, then allow at most 60 seconds for final sync. The controller's close request must allow that bounded attempt plus its small transport overhead. Resource cleanup continues when storage or the host is unavailable. Preserve the last completed checkpoint and report the durability gap in `persistence.error`; `closed` still confirms resource release. Do not let a storage exception erase provider ownership or block VM deletion indefinitely.
+
+B06 owns `app.py`, `config.py`, and `paths.py`, and should keep storage logic in its new modules. B05 owns `runtime.py`, `store.py`, `models.py`, and `docker_runtime.py`. B06 must return any final command/expiry hook edits in those B05-owned files as a small patch for the orchestrator to apply after B05 integrates. This is a temporary work split, not a runtime extension framework. B06's private file journal may add its own tables through its module, using the existing SQLite file, without editing B05's command-store implementation.
+
+**B06 CLI surface**
+
+```text
+ariax forge inputs add SESSION --file FILE --path RELATIVE_PATH [--input-id UUID]
+ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path RELATIVE_PATH [--input-id UUID]
+ariax forge inputs add SESSION --url URL --path RELATIVE_PATH [--input-id UUID]
+ariax forge inputs list SESSION
+ariax forge inputs status SESSION INPUT_ID
+ariax forge sync SESSION [--wait] [--checkpoint-id UUID] [--timeout SECONDS]
+ariax forge checkpoints SESSION
+ariax forge checkpoint SESSION CHECKPOINT_ID
+ariax forge files SESSION [--path /workspace] [--checkpoint UUID]
+ariax forge download SESSION PATH --dest LOCAL [--checkpoint UUID]
+ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint UUID [usual create options]
+```
+
+The three input sources are mutually exclusive. Print and retain input/checkpoint IDs before mutation, and use the existing atomic writer for private request records. Keep credentials and signed URLs out of logs. Persist durable IDs and safe source metadata; temporary upload/download grants are not saved as ordinary request results. After a lost reply, query the same ID before resubmitting. A URL import can require the original user-supplied URL again if no accepted operation is found. Wait timeouts end local polling and leave accepted work intact. CLI downloads stream directly to the chosen local destination using a temporary file and final rename. Reuse existing CLI file/output conventions.
+
+B06 updates the Forge platform guide and `outputs.md`. B07 adds tool guides. The orchestrator owns `src/commands/skills.js` and shared guide indexes and will expose the references `outputs`, `base`, `ipsae`, and `boltz2` after integration.
