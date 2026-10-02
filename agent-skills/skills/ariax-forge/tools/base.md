@@ -12,17 +12,17 @@ ariax forge status "$SESSION" --json
 ariax forge tools "$SESSION" --json
 ```
 
-`SESSION` is the actual session UUID. The command examples remain unqualified
-until B05/B06 integration and the reference image build/publication gate
-pass. `EXAMPLES` is an absolute path to this guide's sibling `examples/`
-directory. B07 provides examples as files; the orchestrator links this guide
-as the platform's `base` reference during integration.
+`SESSION` is the actual session UUID. Read this guide with `ariax skills forge --reference base --read --json`.
+The reference image still awaits Docker build/publication and native container
+qualification. `ariax skills forge --json` returns `data.examples.root`; use
+that absolute path for `EXAMPLES`. [Example files](examples/README.md) ship
+beside this guide.
 
 ## Stage and execute the small example
 
 The [text input](examples/base/message.txt), [Python program](examples/base/run.py),
 and [result checker](examples/base/check.py) produce a one-line JSON result.
-Use relative import destinations, which B06 publishes under read-only inputs:
+Use relative import destinations, published under read-only inputs:
 
 ```sh
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/base/message.txt" --path base/message.txt --json
@@ -68,8 +68,8 @@ ariax forge status "$SESSION" --json
 Use the returned completed checkpoint UUID for `CHECKPOINT`, require `synced`,
 and confirm the source session is `closed`. File listing and download read
 completed checkpoint content, so a successful command alone does not make
-workspace bytes durable. Read the Forge `outputs` reference for full storage
-behavior after integration.
+workspace bytes durable. Read the [outputs reference](../outputs.md) with
+`ariax skills forge --reference outputs --read --json` for storage behavior.
 
 Restore only a terminal source session and a completed checkpoint:
 

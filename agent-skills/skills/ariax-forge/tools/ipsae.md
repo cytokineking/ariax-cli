@@ -14,12 +14,13 @@ ariax forge tools wait "$SESSION" ipsae --timeout 1800 --json
 ariax forge status "$SESSION" --json
 ```
 
-`SESSION` is an actual session UUID. `EXAMPLES` is the absolute sibling
-`examples/` directory. These commands remain unqualified until B05/B06 and
-image publication/build qualification pass. The native executable `ipsae`
-is on PATH and forwards positional argv to the preserved script. There are
-no model assets for this tool. The orchestrator exposes this guide as the
-Forge `ipsae` reference during integration.
+`SESSION` is an actual session UUID. Read this guide with
+`ariax skills forge --reference ipsae --read --json`. Use the absolute
+`data.examples.root` path from `ariax skills forge --json` for `EXAMPLES`.
+The image still awaits Docker build/publication and native container
+qualification. The native executable `ipsae` is on PATH and forwards
+positional argv to the preserved script. There are no model assets for this
+tool.
 
 ## Matched inputs and the inspectable fixture
 
@@ -108,7 +109,9 @@ ariax forge download "$SESSION" /workspace/ipsae-demo/toy_10_10.txt --checkpoint
 ```
 
 `CHECKPOINT` is the returned completed checkpoint UUID; require `synced`.
-Use the Forge `outputs` reference for full durability/restore behavior and
+Read the [outputs reference](../outputs.md) with
+`ariax skills forge --reference outputs --read --json` for durability/restore
+behavior and
 [base](base.md) for the settled restore command. Restore recovers files for
 explicit future checks and does not rerun scoring. Finish with `forge close`
 and confirm the session is closed. B08 must still prove the built image and

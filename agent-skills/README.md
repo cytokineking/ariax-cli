@@ -14,8 +14,22 @@ Protocol-specific scientific guidance is independently discoverable:
 - [`ariax-esmfold2-pipeline`](skills/ariax-esmfold2-pipeline/SKILL.md)
 
 The [Forge platform skill](skills/ariax-forge/SKILL.md) covers sessions, tool
-readiness, native commands, recovery, cancellation, and close. Read it with
-`ariax skills forge --read --json`.
+readiness, native commands, recovery, cancellation, inputs, checkpoints,
+restore, and close. Read it with `ariax skills forge --read --json` (alias
+`ariax-forge`). `ariax skills forge --json` returns its reference paths and
+`data.examples`, including the example root and each tool's directory.
+
+| Forge reference | Guide |
+| --- | --- |
+| `outputs` | [Inputs, checkpoints, and restore](skills/ariax-forge/outputs.md) |
+| `base` | [Shell/Python workspace](skills/ariax-forge/tools/base.md) |
+| `ipsae` | [CPU interface scoring](skills/ariax-forge/tools/ipsae.md) |
+| `boltz2` | [GPU structure prediction](skills/ariax-forge/tools/boltz2.md) |
+
+Read a reference with `ariax skills forge --reference NAME --read --json`.
+Small [native examples](skills/ariax-forge/tools/examples/README.md) ship with
+the package. Image builds/publication and native GPU qualification remain
+pending; live catalog metadata and tool readiness establish availability.
 
 Use the matching protocol skill to choose and configure a design engine, then
 use the shared workflow for credentials and lifecycle operations. These skills
@@ -26,7 +40,7 @@ For CLI authentication, direct the user to run `ariax login` in their own
 terminal. Never ask them to paste an API key into an agent conversation or pass
 one as a command-line argument.
 
-Run `ariax skills --json` to locate the shared and protocol-specific guides in
+Run `ariax skills --json` to locate shared, protocol, and platform guides in
 any supported global Node installation.
 
 Read [campaign planning](core/campaigns.md) for pilot sizes, scaling, compute

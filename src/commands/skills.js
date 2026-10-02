@@ -16,6 +16,19 @@ const PROTOCOLS = Object.freeze({
   'esmfold2-pipeline': 'ariax-esmfold2-pipeline',
 });
 const PLATFORMS = Object.freeze({ forge: 'ariax-forge', 'ariax-forge': 'ariax-forge' });
+const FORGE_ROOT = join(ROOT, 'skills', 'ariax-forge');
+const FORGE_REFERENCES = Object.freeze({
+  outputs: join(FORGE_ROOT, 'outputs.md'),
+  base: join(FORGE_ROOT, 'tools', 'base.md'),
+  ipsae: join(FORGE_ROOT, 'tools', 'ipsae.md'),
+  boltz2: join(FORGE_ROOT, 'tools', 'boltz2.md'),
+});
+const FORGE_EXAMPLES = Object.freeze({
+  root: join(FORGE_ROOT, 'tools', 'examples'),
+  base: join(FORGE_ROOT, 'tools', 'examples', 'base'),
+  ipsae: join(FORGE_ROOT, 'tools', 'examples', 'ipsae'),
+  boltz2: join(FORGE_ROOT, 'tools', 'examples', 'boltz2'),
+});
 const CORE_REFERENCES = Object.freeze({
   campaigns: join(ROOT, 'core', 'campaigns.md'),
   candidates: join(ROOT, 'core', 'candidates.md'),
@@ -52,6 +65,8 @@ function paths() {
     examples: join(ROOT, 'examples'),
     references: { shared: join(ROOT, 'SKILL.md'), ...CORE_REFERENCES },
     protocol_references: { outputs: outputPaths() },
+    platform_references: { forge: FORGE_REFERENCES },
+    platform_examples: { forge: FORGE_EXAMPLES },
   };
 }
 
@@ -75,10 +90,12 @@ function readTarget(requested, reference, all) {
   if (Object.prototype.hasOwnProperty.call(CORE_REFERENCES, reference)) {
     return { id: reference, scope: 'core', path: CORE_REFERENCES[reference] };
   }
+  if (Object.hasOwn(PLATFORMS, requested) && Object.hasOwn(FORGE_REFERENCES, reference)) {
+    return { id: reference, scope: 'platform', platform: 'forge', path: FORGE_REFERENCES[reference] };
+  }
   if (reference === 'outputs') {
-    if (Object.hasOwn(PLATFORMS, requested)) throw usageError('Forge file commands and output durability are deferred. Read: ariax skills forge --read');
     if (!requested) {
-      throw usageError('Reference "outputs" requires a protocol, for example: ariax skills boltzgen --reference outputs --read');
+      throw usageError('Reference "outputs" requires a protocol or platform, for example: ariax skills boltzgen --reference outputs --read');
     }
     return {
       id: reference,
@@ -87,7 +104,9 @@ function readTarget(requested, reference, all) {
       path: join(ROOT, 'skills', PROTOCOLS[requested], 'outputs.md'),
     };
   }
-  const names = ['shared', ...Object.keys(CORE_REFERENCES), 'outputs'].join(', ');
+  const names = Object.keys({ ...all.references,
+    ...(Object.hasOwn(PLATFORMS, requested) ? FORGE_REFERENCES : { outputs: null }),
+  }).join(', ');
   throw usageError(`Unknown skills reference "${reference}". Available references: ${names}.`);
 }
 
@@ -119,7 +138,10 @@ export async function run(ctx) {
   if (requested) {
     const path = protocolSkill(requested);
     if (Object.hasOwn(PLATFORMS, requested)) {
-      if (ctx.json) printJson({ data: { platform: 'forge', shared: all.shared, skill: path, references: all.references } });
+      if (ctx.json) printJson({ data: {
+        platform: 'forge', shared: all.shared, skill: path,
+        references: { ...all.references, ...FORGE_REFERENCES }, examples: FORGE_EXAMPLES,
+      } });
       else printData(path);
       return;
     }
@@ -144,4 +166,6 @@ export async function run(ctx) {
   printData(`Examples: ${all.examples}`);
   printData(`Readable references: ${Object.keys(all.references).join(', ')}`);
   printData('Protocol reference: outputs');
+  printData(`Forge references: ${Object.keys(FORGE_REFERENCES).join(', ')}`);
+  printData(`Forge examples: ${FORGE_EXAMPLES.root}`);
 }

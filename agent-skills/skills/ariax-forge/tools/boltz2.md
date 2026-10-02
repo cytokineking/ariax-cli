@@ -23,8 +23,8 @@ ariax forge status "$SESSION" --json
 Require host `available` and `boltz2` ready. The tool is GPU-class; execution
 uses the assigned GPU and never a CPU substitute. `boltz` is on PATH for
 direct argv. `SESSION` is an actual session UUID. `EXAMPLES` is the absolute
-sibling `examples/` directory. The orchestrator exposes this guide as the
-Forge `boltz2` reference during integration.
+`data.examples.root` path from `ariax skills forge --json`. Read this guide
+with `ariax skills forge --reference boltz2 --read --json`.
 
 ## Read-only model mount and inputs
 
@@ -126,7 +126,7 @@ ariax forge status "$SESSION" --json
 
 Use the returned completed checkpoint UUID and require `synced`, then confirm
 source `closed`. Listing/download reads completed checkpoint bytes. To
-restore that terminal source through B06's ordinary create path:
+restore that terminal source through the ordinary create path:
 
 ```sh
 ariax forge create --name Boltz2-restored --gpu L40 --tools boltz2 --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --max-hours 1 --json
@@ -138,6 +138,7 @@ ariax forge run "$RESTORED_SESSION" --tool boltz2 --timeout-seconds 60 --json --
 Use the new session ID, require host/tool readiness, and watch its check
 command before closure. Restore recovers inputs/workspace without replaying
 prediction or restoring model caches. The new session prepares named assets
-normally. Read the Forge `outputs` reference for storage semantics. Close
+normally. Read the [outputs reference](../outputs.md) with
+`ariax skills forge --reference outputs --read --json` for storage semantics. Close
 and confirm cleanup for the restored session, too. B08 records native GPU
 results, elapsed time/cost, and persistence/cleanup qualification.

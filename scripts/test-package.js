@@ -57,6 +57,30 @@ try {
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-boltzgen/SKILL.md'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/SKILL.md'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/outputs.md'));
+    for (const platform of ['forge', 'ariax-forge']) {
+      const forge = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--json'])).data;
+      assert.equal(forge.platform, 'forge');
+      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2']) {
+        const guide = JSON.parse(execute(process.execPath, [script, 'skills', platform,
+          '--reference', reference, '--read', '--json'])).data;
+        assert.equal(guide.path, forge.references[reference]);
+        assert.equal(guide.scope, 'platform');
+        assert.equal(guide.platform, 'forge');
+        assert.equal(guide.content, await fs.readFile(forge.references[reference], 'utf8'));
+        assert.equal(guide.size_bytes, Buffer.byteLength(guide.content));
+      }
+      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml' })) {
+        assert.equal(forge.examples[tool], path.join(forge.examples.root, tool));
+        assert.ok((await fs.readFile(path.join(forge.examples[tool], filename))).length > 0);
+      }
+      assert.equal(forge.examples.root, skills.data.platform_examples.forge.root);
+    }
+    // Exercise the managed output reader from the same installed package.
+    const managedOutput = JSON.parse(execute(process.execPath, [script, 'skills', 'boltzgen',
+      '--reference', 'outputs', '--read', '--json'])).data;
+    assert.equal(managedOutput.scope, 'protocol');
+    assert.equal(managedOutput.content, await fs.readFile(managedOutput.path, 'utf8'));
+    console.log(`Installed ${channel} Forge reference discovery, reads, and native examples verified.`);
     if (channel === 'github') githubBuild = installed.build;
     else {
       const release = { channel: 'npm', latest_version: installed.build.version, latest_revision: null };

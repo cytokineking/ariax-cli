@@ -9,7 +9,7 @@ Use the `ariax` CLI. Run `ariax skills --read --json` for this guide and
 `ariax skills PROTOCOL --read --json` for the matching protocol guide; the
 Markdown is in `data.content`. Reference IDs are discoverable with
 `ariax skills --json`; read one with
-`ariax skills [PROTOCOL] --reference ID --read --json`. Read the matching
+`ariax skills [PROTOCOL|forge] --reference ID --read --json`. Read the matching
 scientific guide before configuring a run:
 [BindCraft](skills/ariax-bindcraft/SKILL.md),
 [BindCraft2](skills/ariax-bindcraft2/SKILL.md),
@@ -24,7 +24,14 @@ IDs `campaigns` and `interpretation`.
 Use [raw REST](core/raw-curl.md) only when the CLI is unavailable.
 For native commands in an Ariax Forge compute session, read the
 [Forge platform guide](skills/ariax-forge/SKILL.md) with
-`ariax skills forge --read --json`.
+`ariax skills forge --read --json`. Discover Forge references and bundled
+example paths with `ariax skills forge --json` (alias `ariax-forge`). Read
+[inputs, checkpoints, and restore](skills/ariax-forge/outputs.md) with
+`ariax skills forge --reference outputs --read --json`. Native guides are
+[base](skills/ariax-forge/tools/base.md), [ipSAE](skills/ariax-forge/tools/ipsae.md),
+and [Boltz2](skills/ariax-forge/tools/boltz2.md), with reference IDs `base`,
+`ipsae`, and `boltz2`. The supplied recipes still require Docker/image and
+native GPU qualification; a bundled guide does not establish live availability.
 
 This guide owns authentication, authorization, recovery, and transfers.
 Protocol guides explain scientific settings and results. The live catalog and

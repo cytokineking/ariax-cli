@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
@@ -105,6 +106,63 @@ describe('bundled skills read-through', () => {
     );
   });
 
+  it('discovers and reads Forge references and bundled examples through both platform names', async () => {
+    for (const platform of ['forge', 'ariax-forge']) {
+      const found = await captureOutput(() => main(['skills', platform, '--json'], {}));
+      assert.equal(found.value, 0);
+      assert.equal(found.stderr, '');
+      const discovery = JSON.parse(found.stdout).data;
+      assert.equal(discovery.platform, 'forge');
+      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2']) {
+        const read = await captureOutput(() => main([
+          'skills', platform, '--reference', reference, '--read', '--json',
+        ], {}));
+        assert.equal(read.value, 0);
+        assert.equal(read.stderr, '');
+        const guide = JSON.parse(read.stdout).data;
+        assert.equal(guide.id, reference);
+        assert.equal(guide.scope, 'platform');
+        assert.equal(guide.platform, 'forge');
+        assert.equal(guide.path, discovery.references[reference]);
+        assert.equal(guide.content, readFileSync(discovery.references[reference], 'utf8'));
+        assert.equal(guide.size_bytes, Buffer.byteLength(guide.content));
+      }
+      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml' })) {
+        assert.equal(discovery.examples[tool], join(discovery.examples.root, tool));
+        assert.ok(statSync(discovery.examples[tool]).isDirectory());
+        assert.ok(readFileSync(join(discovery.examples[tool], filename)).length > 0);
+      }
+      const shared = await captureOutput(() => main([
+        'skills', platform, '--reference', 'shared', '--read', '--json',
+      ], {}));
+      assert.equal(shared.value, 0);
+      assert.equal(JSON.parse(shared.stdout).data.content, readFileSync(discovery.shared, 'utf8'));
+      const core = await captureOutput(() => main([
+        'skills', platform, '--reference', 'candidates', '--read', '--json',
+      ], {}));
+      assert.equal(core.value, 0);
+      assert.equal(JSON.parse(core.stdout).data.content, readFileSync(discovery.references.candidates, 'utf8'));
+    }
+  });
+
+  it('includes Forge reference paths in global discovery and keeps human reads available', async () => {
+    const out = await captureOutput(() => main(['skills', '--json'], {}));
+    assert.equal(out.value, 0);
+    const discovery = JSON.parse(out.stdout).data;
+    for (const reference of ['outputs', 'base', 'ipsae', 'boltz2']) {
+      const read = await captureOutput(() => main([
+        'skills', 'forge', '--reference', reference, '--read', '--no-json',
+      ], {}));
+      assert.equal(read.value, 0);
+      assert.equal(read.stdout, readFileSync(discovery.platform_references.forge[reference], 'utf8'));
+    }
+    assert.ok(statSync(discovery.platform_examples.forge.root).isDirectory());
+    const human = await captureOutput(() => main(['skills', '--no-json'], {}));
+    assert.equal(human.value, 0);
+    assert.match(human.stdout, /Forge references: outputs, base, ipsae, boltz2/);
+    assert.ok(human.stdout.includes(discovery.platform_examples.forge.root));
+  });
+
   it('documents the compact BindCraft2 candidate contract without losing target or completion semantics', () => {
     const candidates = readFileSync(new URL('../agent-skills/core/candidates.md', import.meta.url), 'utf8');
     const outputs = readFileSync(new URL('../agent-skills/skills/ariax-bindcraft2/outputs.md', import.meta.url), 'utf8');
@@ -132,6 +190,10 @@ describe('bundled skills read-through', () => {
       [['skills', '--reference', 'outputs', '--read', '--json'], /requires a protocol/],
       [['skills', 'boltzgen', '--reference', 'outputs', '--json'], /requires --read/],
       [['skills', 'constructor', '--read', '--json'], /Unknown protocol/],
+      [['skills', 'forge', '--reference', '../outputs.md', '--read', '--json'], /Unknown skills reference/],
+      [['skills', 'ariax-forge', '--reference', 'constructor', '--read', '--json'], /Unknown skills reference/],
+      [['skills', 'forge', '--reference', 'base', '--json'], /requires --read/],
+      [['skills', 'boltzgen', '--reference', 'base', '--read', '--json'], /Unknown skills reference/],
     ]) {
       const out = await captureOutput(() => main(argv, {}));
       assert.equal(out.value, 1);

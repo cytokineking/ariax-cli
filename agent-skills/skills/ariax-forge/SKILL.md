@@ -16,16 +16,27 @@ Use `ariax forge --help` for the installed command surface. Responses support
 the usual `--json`; data is in `data`, diagnostics and printed IDs are on stderr.
 The CLI uses `/api/v1/forge` on the existing Ariax API origin.
 
+Discover references and bundled example paths with `ariax skills forge --json`.
+Use `ariax skills forge --reference NAME --read --json` to read
+[inputs/checkpoints/restore](outputs.md) (`outputs`),
+[base shell/Python](tools/base.md) (`base`), [CPU ipSAE](tools/ipsae.md) (`ipsae`),
+or [GPU Boltz2](tools/boltz2.md) (`boltz2`). The `ariax-forge` alias accepts the
+same references. `data.examples.root` is the local directory used by native
+examples; `data.examples.base`, `.ipsae`, and `.boltz2` locate individual
+fixture directories. The supplied recipes await image builds/publication
+and native GPU qualification. Use the deployed catalog and tool readiness.
+
 ## Start and select tools
 
 ```sh
-ariax forge create --name "Binding experiment" --gpu L40 --tools boltz2,bindcraft2 --priority boltz2 --max-hours 2 --json
+ariax forge create --name "Base workspace" --gpu L40 --max-hours 2 --json
 ariax forge list --json
 ariax forge status SESSION --json
 ariax forge tools SESSION --json
 ariax forge tools wait SESSION base --timeout 600 --json
-ariax forge tools wait SESSION boltz2 --timeout 1800 --json
-ariax forge tools add SESSION --tools bindcraft2 --json
+# When ipsae is in the deployed catalog:
+ariax forge tools add SESSION --tools ipsae --priority ipsae --json
+ariax forge tools wait SESSION ipsae --timeout 1800 --json
 ```
 
 Omit `--tools` for a base workspace. Base is always included; leave it out of
@@ -110,6 +121,7 @@ Repeated close observes the same closure.
 
 Stage a local file, an authorized Ariax artifact, or an individual public HTTPS object with `ariax forge inputs add SESSION --file FILE --path targets/input.yaml`. Use `--artifact PROJECT_ID:PATH` or `--url URL` for the other sources. Published inputs appear under read-only `/inputs`; inspect readiness with `inputs status SESSION INPUT_ID` before a command reads them.
 
-Run `ariax forge sync SESSION --wait` to publish a checkpoint, then use `files` or `download`. The `outputs` reference describes these commands and restore. Checkpoints preserve stable file versions and ready inputs. Concurrent writers can fail a sync. Inspect `persistence.checkpoint` and `persistence.error` after close or expiry to learn what became durable.
+Run `ariax forge sync SESSION --wait` to publish a checkpoint, then use `files` or `download`. Read `ariax skills forge --reference outputs --read --json` for these commands
+and restore. Checkpoints preserve stable file versions and ready inputs. Concurrent writers can fail a sync. Inspect `persistence.checkpoint` and `persistence.error` after close or expiry to learn what became durable.
 
 Create a new session from a terminal source with `--restore-session SOURCE --checkpoint CHECKPOINT`. Restore finishes before command admission. The new session uses normal allocation and billing. Scientific commands require explicit submission after restore.

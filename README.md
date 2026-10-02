@@ -131,7 +131,11 @@ ariax skills bindcraft-v1.5 --reference outputs --read --no-json
 `ariax skills --json` lists every bundled guide and reference identifier. The
 `--read --no-json` forms print the selected Markdown directly; `--read --json`
 returns it in `data.content`, so an agent does not need a separate filesystem
-tool. When consuming the normal schema envelope instead of `--raw`, use the
+tool. Forge discovery uses `ariax skills forge --json` (alias `ariax-forge`)
+and returns the `outputs`, `base`, `ipsae`, and `boltz2` references plus bundled
+example paths. Read one with `ariax skills forge --reference NAME --read --json`.
+The supplied recipes still await image and native GPU qualification.
+When consuming the normal schema envelope instead of `--raw`, use the
 exact schema at `.data.json_schema`.
 
 Edit `job.json` for your target, then validate it with the structure file.
@@ -262,6 +266,7 @@ capabilities and input rules.
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
 | Forge compute sessions | `ariax forge create`, `list`, `status`, `tools`, `run`, `commands`, `command`, `watch`, `logs`, `cancel`, `close`; read `ariax skills forge --read` |
+| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs list`, `inputs status`, `sync`, `checkpoints`, `checkpoint`, `files`, `download`; read `ariax skills forge --reference outputs --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
 | Launch | `ariax submit -f job.json --name NAME [--input target.pdb] [--wait]` |

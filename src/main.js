@@ -180,7 +180,7 @@ const HELP_TOPICS = {
   protocols: 'ariax protocols',
   pricing: 'ariax pricing',
   schema: 'ariax schema <protocol> [--raw] [--kind job|submission] [-o, --output FILE]',
-  skills: 'ariax skills [protocol] [--read] [--reference NAME]',
+  skills: 'ariax skills [protocol|forge] [--read] [--reference NAME]\nForge references: outputs, base, ipsae, boltz2. Use ariax skills forge --json for guide and example paths.',
   inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
   validate: 'ariax validate -f job.json [--input FILE | --input-dir DIR] [--details]',
   submit: 'ariax submit -f job.json --name <name> [--input FILE | --input-dir DIR] [--wait] [--details]',

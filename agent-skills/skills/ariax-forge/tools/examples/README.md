@@ -2,10 +2,11 @@ These files are small synthetic native examples, bundled beside the Forge
 tool guides. They match runtime `science/fixtures/`. They are not biological
 predictions or records of image/GPU success.
 
-Set `EXAMPLES` to this directory's absolute path in the guide commands. Obtain
-the guide location from `ariax skills forge --reference base --read --json`
-after the orchestrator adds reference dispatch; `examples/` is beside that
-guide. Before dispatch integration, use this source directory directly.
+Set `EXAMPLES` to the absolute `data.examples.root` path returned by
+`ariax skills forge --json`. The same response exposes `data.examples.base`,
+`.ipsae`, and `.boltz2` for each fixture directory. Read a native guide with
+`ariax skills forge --reference base|ipsae|boltz2 --read --json`, selecting one
+reference ID. The `ariax-forge` alias works for discovery and reads.
 
 The base and ipSAE programs/checkers need Python; native ipSAE also needs
 NumPy and is supplied by its image. The Boltz2 output checker needs the
