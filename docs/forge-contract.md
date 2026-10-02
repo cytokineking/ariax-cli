@@ -30,7 +30,7 @@ Successful JSON responses use `{"data": ...}`. Public errors use the existing `{
 | `POST /sessions` | `CreateSession` below. Persist acceptance before queueing allocation; return 202 and a session. |
 | `GET /sessions/{session_id}` | Return the session. |
 | `GET /sessions` | Return `{"sessions": [...]}` for the authenticated actor, newest first, bounded to the most recent 100. |
-| `POST /sessions/{session_id}/tools` | `SelectTools` below. Return 202 and current session/tool states. Installation belongs to B05; until it exists return an explicit unavailable error for additions that need it. |
+| `POST /sessions/{session_id}/tools` | `SelectTools` below. Return 202 and current session/tool states. Preparation queues the selected tools and retains ready tools while other work installs. |
 | `POST /sessions/{session_id}/commands` | `RunCommand` below. Return 202 and the command after durable admission. A replay of an already accepted ID returns the existing command. |
 | `GET /sessions/{session_id}/commands` | Return `{"commands": [...]}`, most recent 100. |
 | `GET /sessions/{session_id}/commands/{command_id}` | Return the command. |
@@ -81,7 +81,7 @@ Session fields:
 
 Session states are `provisioning`, `starting`, `available`, `closing`, `closed`, and `failed`. `available` means the host and base workspace accept commands. Each scientific tool has its own `queued`, `installing`, `ready`, or `failed` state. Tool failure does not revoke host availability. The backend reports `closed` only after its owned resources have been released; a cleanup problem leaves it `closing` with an error. Provider-resource discovery/termination works even when the host is unreachable.
 
-The persistence fields reserve the B06 boundary. Until storage is implemented they remain `pending` with a null checkpoint. They must never imply that unsynced files are durable. Future values are `syncing`, `synced`, and `failed`, with a simple checkpoint identifier unrelated to file hashes.
+Persistence begins as `pending` with a null checkpoint. `syncing`, `synced`, and `failed` describe the current or most recent persistence attempt. The checkpoint ID retains the latest completed checkpoint when a later attempt fails. Unsynced files remain local to the VM.
 
 `RunCommand`:
 
@@ -101,7 +101,7 @@ The command response includes `command_id`, `tool`, `argv`, `cwd`, `timeout_seco
 
 **Daemon HTTP and configuration**
 
-Daemon routes are `/health`, `/tools`, `/commands`, `/commands/{id}`, `/commands/{id}/logs`, `/commands/{id}/cancel`, and `/close`, using the methods and command payloads above. `/tools` GET returns `{"data": {"tools": [...]}}`; POST accepts `SelectTools`. `/health` returns `{"data": {"session_id": "...", "state": "available", "tools": [...], "active_command_id": null}}`. `/close` returns `{"data": {"session_id": "...", "state": "closed"}}` after local command admission is closed and containers are stopped. Backend resource termination remains independent of the daemon's response.
+Daemon routes are `/health`, `/tools`, `/commands`, `/commands/{id}`, `/commands/{id}/logs`, `/commands/{id}/cancel`, and `/close`, using the methods and command payloads above. `/tools` GET returns `{"data": {"tools": [...]}}`; POST accepts `SelectTools`. `/health` returns `{"data": {"session_id": "...", "state": "available", "tools": [...], "active_command_id": null}}`. `/close` fences admission and confirms that command writers have stopped before attempting final sync. Its response contains `session_id`, `state`, and `persistence`. Local state can remain `closing` while image preparation finishes cancellation; `closed` confirms local work has stopped. The backend confirms provider-resource release before reporting public session state `closed`.
 
 Every daemon route requires the per-session bearer token over the existing authenticated tunnel. Keep the daemon listening on loopback. Its root-only configuration is a single JSON file selected by `FORGED_CONFIG`, default `/etc/ariax-forged/config.json`:
 
@@ -136,9 +136,9 @@ Catalog example, with illustrative URLs only:
 
 The bootstrap creates state, inputs, workspace, scratch, and models directories under the configured data directory. Mount `/inputs` and model directories read-only. `/workspace` and `/scratch` are writable workload mounts. The daemon, SQLite journal, credentials, Docker socket, and host root remain outside workload access. Preserve the existing container/network isolation policy and protect against path traversal and unsafe archive extraction.
 
-B02 implements base-image preparation and command execution. Missing science preparation returns a clear unready-tool response until B05 is integrated. The seed's `/health` reports `starting`; it must not claim execution readiness before B02 adds the real runtime.
+Base preparation runs first. Its readiness makes the host available while other selected tools prepare. Each science command requires its named tool to be ready. A pending restore keeps admission unavailable until its chosen files are restored.
 
-**CLI surface for B04**
+**CLI command surface**
 
 Use the existing CLI client, output conventions, errors, and atomic writer. The commands are:
 
@@ -160,7 +160,7 @@ ariax forge close SESSION
 
 Support existing global JSON output. Wait/watch timeouts end local waiting and retain the remote operation. Save a small request record under `.ariax/forge/{id}.json` containing its ID, API origin, actor, method/path/body, and the latest known result. Reuse/export the existing atomic writer and account lookup. The managed-job operation format includes request hashes and compatibility checks, so leave that format untouched and keep Forge's record plain. Do not build another journal framework. Expose explicit `--session-id` on create and `--command-id` on run for retry/recovery. A retry must use the same saved request and account. Return the IDs promptly so an agent can continue later.
 
-File commands belong to B06. Keep their deferred status clear in the platform skill. B04's local tests should exercise the installed CLI against an HTTP boundary and preserve existing managed-job command behavior.
+The file command surface is specified below. Local acceptance exercises the installed CLI through the public API and preserves existing managed-job command behavior.
 
 **Verification and handoff**
 
@@ -170,7 +170,7 @@ Workers commit their bite in their own worktree and finish with changed files, t
 
 **B05–B07 shared boundary, October 2, 2026**
 
-B02–B04 are integrated. The assignments in `docs/forge-next-turn-plan.md` and the B05/B06/B07 worker briefs govern this wave. B05 owns preparation and the command-runtime files. B06 owns file APIs, storage, and its backend/CLI path. B07 supplies recipes and native guidance. The orchestrator applies any small changes where those ownership areas meet.
+B05–B07 commits are combined for local acceptance. The current assignment is `docs/forge-integration-bite.md`. The original worker briefs record ownership during implementation. The orchestrator owns integration branches and lifecycle decisions.
 
 B05 keeps the catalog shape above: each tool has `image`, `gpu`, and `model_mounts`; each asset has `url` and `archive` (`tar` or `zip`). The selected tool order at bootstrap is already the desired priority. Later `SelectTools` requests prioritize the named selected tools and retain other selections. One durable queue prepares base first, then scientific tools. Ready tools remain usable while the queue works. Published named assets remain read-only. An asset that is complete at its final path is reused directly. Unsafe archive entries and incomplete transfer are failures; there is no checksum or digest protocol.
 
@@ -212,9 +212,9 @@ B06 adds daemon `/inputs`, `/inputs/{input_id}`, `/checkpoints`, `/checkpoints/{
 
 Use the existing project-scoped R2 credential facilities with an ordinary storage client. Never send parent credentials to the VM. Temporary credentials remain outside workloads and last only for bounded transfers. Existing authentication signing is retained. The prohibition on new content hashes does not replace standard SDK/authentication internals. Runtime `boto3` is the approved storage dependency for this wave; backend can use its existing botocore client. Additional package-manifest changes return to the orchestrator.
 
-Close and expiry first stop command admission and work, then allow at most 60 seconds for final sync. The controller's close request must allow that bounded attempt plus its small transport overhead. Resource cleanup continues when storage or the host is unavailable. Preserve the last completed checkpoint and report the durability gap in `persistence.error`; `closed` still confirms resource release. Do not let a storage exception erase provider ownership or block VM deletion indefinitely.
+Close fences command admission and stops workspace writers. Its handler shares a sixty-second deadline across that stop and the final checkpoint. Image preparation can finish cancellation while the checkpoint saves workspace bytes. Expiry stops local work and permits a final sync of up to sixty seconds. The controller bounds close at seventy seconds including transport and bookkeeping. Resource cleanup continues when storage or the host is unavailable. Preserve the last completed checkpoint and report any durability gap in `persistence.error`; public session `closed` confirms resource release.
 
-B06 owns `app.py`, `config.py`, and `paths.py`, and should keep storage logic in its new modules. B05 owns `runtime.py`, `store.py`, `models.py`, and `docker_runtime.py`. B06 must return any final command/expiry hook edits in those B05-owned files as a small patch for the orchestrator to apply after B05 integrates. This is a temporary work split, not a runtime extension framework. B06's private file journal may add its own tables through its module, using the existing SQLite file, without editing B05's command-store implementation.
+File recovery runs after successful acquisition of the existing daemon lock and before preparation or watchers start. Constructing a second app leaves active transfer state untouched. The file service keeps its tables in the existing SQLite database. Lifecycle hooks are part of the integrated runtime; the current worker boundaries are in the integration brief.
 
 **B06 CLI surface**
 
@@ -234,4 +234,4 @@ ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint U
 
 The three input sources are mutually exclusive. Print and retain input/checkpoint IDs before mutation, and use the existing atomic writer for private request records. Keep credentials and signed URLs out of logs. Persist durable IDs and safe source metadata; temporary upload/download grants are not saved as ordinary request results. After a lost reply, query the same ID before resubmitting. A URL import can require the original user-supplied URL again if no accepted operation is found. Wait timeouts end local polling and leave accepted work intact. CLI downloads stream directly to the chosen local destination using a temporary file and final rename. Reuse existing CLI file/output conventions.
 
-B06 updates the Forge platform guide and `outputs.md`. B07 adds tool guides. The orchestrator owns `src/commands/skills.js` and shared guide indexes and will expose the references `outputs`, `base`, `ipsae`, and `boltz2` after integration.
+The integration assignment completes reference dispatch and guide indexes for `outputs`, `base`, `ipsae`, and `boltz2`. The Forge platform guide describes the public workflow; each tool guide describes its native inputs, invocation, output inspection, and qualification status.

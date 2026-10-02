@@ -15,3 +15,5 @@ The user directs a robustly simple implementation. Ariax controls the images and
 - Work only in your assigned worktree and bite. Coordinate contract changes through the orchestrator. Do not create more chats/worktrees, rent compute, publish, or deploy during bites 02–07.
 - Prefer existing integration coverage through real application paths. Add a test only for a named plausible failure and an actual coverage gap. Mock only impractical external boundaries. Avoid source inspection, constant assertions, duplicated schema snapshots, private call-sequence checks, and tests that only echo configured mocks.
 - Commit the completed bite, then report its changes, test commands/results, and integration needs in the worker chat. The orchestrator reads that chat.
+
+For the current integration bite, read docs/forge-integration-bite.md. Its assignments supersede the original B05/B06/B07 file split. The orchestrator owns integration branches and lifecycle decisions.
