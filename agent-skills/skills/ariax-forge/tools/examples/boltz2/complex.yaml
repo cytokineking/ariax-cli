@@ -1,0 +1,11 @@
+# Synthetic execution fixture: two eight-residue proteins, no MSA service.
+version: 1
+sequences:
+  - protein:
+      id: A
+      sequence: AGSTAGST
+      msa: empty
+  - protein:
+      id: B
+      sequence: GSTAGSTA
+      msa: empty
