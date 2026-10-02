@@ -1,6 +1,6 @@
 **Forge rebuild and worker plan**
 
-Updated October 1, 2026 after the user authorized bites 00 and 01 and requested three GPT-6.1 workers at xhigh. The [implementation contract](forge-contract.md) is authoritative for the new work.
+Updated October 2, 2026. B00–B04 are complete within their assigned scopes, and B02–B04 have been integrated after independent audit and correction. The [implementation contract](forge-contract.md) is authoritative. The [next-turn plan](forge-next-turn-plan.md) prepares B05, B06, and B07 for parallel work.
 
 Ariax provisions on-demand full VMs and runs workloads in Docker. The initial tools are Boltz2, BindCraft2, FreeBindCraft, ipSAE, and a base workspace. Hyperstack is the reference provider. Vast full VMs follow after the first integrated pilot. User-supplied hosts and custom tool installation are outside this release.
 
