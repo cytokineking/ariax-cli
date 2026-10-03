@@ -1,6 +1,6 @@
 **Forge rebuild and worker plan**
 
-Updated October 3, 2026. B00–B09 are complete. B10 is integrated with Vast admission disabled. B11 passed the Hyperstack native and checkpoint workflows, while an unexplained early source closure and the Vast host gate remain unresolved. All campaign resources have been cleaned up. Read the [B11 report](forge-b11-qualification.md), [remaining gates](forge-next-turn-plan.md) and [contract](forge-contract.md).
+Updated October 3, 2026. B00–B09 are complete. B10 is integrated with Vast admission disabled. B11 passed the Hyperstack native and checkpoint workflows, while an unexplained early source closure and the Vast host gate remain unresolved. Earlier campaign resources were cleaned up. The approved B12 campaign covers reliability, tools add, automatic model grants, Vast host support and normal worker schedules. Read the [B11 report](forge-b11-qualification.md), [remaining gates](forge-next-turn-plan.md) and [contract](forge-contract.md).
 
 Ariax provisions on-demand full VMs and runs workloads in Docker. The initial tools are Boltz2, BindCraft2, FreeBindCraft, ipSAE, and a base workspace. Hyperstack is the reference provider. Vast full VMs follow after the first integrated pilot. User-supplied hosts and custom tool installation are outside this release.
 
@@ -8,7 +8,7 @@ Ariax provisions on-demand full VMs and runs workloads in Docker. The initial to
 
 Image builds and native container qualification run on remote GPU full VMs. The orchestrator provisions those VMs and records their cost and cleanup bounds. The user's workstation runs the CLI and editing/review tools; its Docker daemon is outside the requirements for this work.
 
-All GHCR packages remain private. Use the dedicated package-read credential in protected host configuration, and refresh temporary model URLs before a later launch. Ariax controls the deployed images and weights. Use ordinary image tags and named assets. Share weight directories by their declared asset names, and publish completed downloads with an atomic move. Docker handles image transfer. Ready tools remain usable while other tools prepare.
+All GHCR packages remain private. Use the dedicated package-read credential in protected host configuration. The approved model-grant path issues temporary URLs when preparation needs them from stable configured object keys. Ariax controls the deployed images and weights. Use ordinary image tags and named assets. Share weight directories by their declared asset names, and publish completed downloads with an atomic move. Docker handles image transfer. Ready tools remain usable while other tools prepare.
 
 The implementation has one current API and runtime format. It contains no artifact checksums, digest pins, request hashes, content-addressed cache, deployment identity graph, compatibility adapters, fallback transports, provider fallback, or automatic scientific replay. Keep ordinary authentication, authorization, isolation, direct request comparison, command journaling, owned-resource reconciliation, and billing cleanup.
 

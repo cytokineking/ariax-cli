@@ -1,6 +1,6 @@
 **Forge implementation contract**
 
-Accepted through B08 on October 2, 2026. The live campaign and its limits are recorded in [the B08 qualification report](forge-b08-qualification.md). The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
+Updated October 2, 2026 (Pacific), including the approved B12 reliability, tool-selection and host-support interfaces. Implementation acceptance is tracked in [the remaining gates](forge-next-turn-plan.md). The live campaign and its limits are recorded in [the B08 qualification report](forge-b08-qualification.md). The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
 
 **Implementation rules**
 
@@ -16,7 +16,7 @@ The backend owns account access, selected tools and priority, the broker allocat
 
 Use one full-VM runtime on Ubuntu with systemd, Docker, the NVIDIA driver/container runtime, writable local storage, and an outbound tunnel. Hyperstack is the sole implementation in bite 03. Vast is a separate later adapter. Use on-demand single-GPU offers. An unavailable requested provider/GPU produces an error. An uncertain create is reconciled using its recorded ownership before any subsequent allocation attempt.
 
-Keep all GHCR packages private. The backend receives `FORGE_GHCR_USERNAME` and a separate `FORGE_GHCR_READ_TOKEN` limited to package reads. Bootstrap writes standard Docker auth into `/etc/ariax-forged/docker/config.json`, with root-only directory/file modes 0700/0600. The daemon uses that directory through `DOCKER_CONFIG`. Registry credentials and temporary authorized model URLs belong in protected deployment configuration and stay outside workload mounts, public responses, evidence bundles and Git.
+Keep all GHCR packages private. The backend receives `FORGE_GHCR_USERNAME` and a separate `FORGE_GHCR_READ_TOKEN` limited to package reads. Bootstrap writes standard Docker auth into `/etc/ariax-forged/docker/config.json`, with root-only directory/file modes 0700/0600. The daemon uses that directory through `DOCKER_CONFIG`. Registry credentials stay in protected host configuration. The backend issues temporary authorized model URLs when preparation needs them; grants remain in memory during transfer. Credentials and grant URLs stay outside workload mounts, public responses, logs, evidence bundles and Git.
 
 The user requires image builds and qualification on remote GPU VMs. Stage source, fixtures, and model assets on those VMs and run Docker commands there through SSH. Keep the user's workstation free of image builds and treat its Docker daemon as outside the requirements for this campaign. Docker on each remote Forge VM supplies workload isolation and container execution.
 
@@ -24,7 +24,7 @@ Each repository uses its existing language and test tools. The original worker b
 
 **Public API**
 
-Public routes are under `/api/v1/forge` on the existing CLI API origin. The matching private backend routes are under `/api/forge`. The Next.js routes use the existing agent route handler for API-key scopes/rate limits and the existing signed compute client. Extend its concrete route allowlist for Forge. Private Forge handlers require signed compute authentication and use the existing project ownership helpers. Derive the actor from authentication; a foreign session returns 404. Do not add direct host credentials or an alternate backend URL mode to the CLI.
+Public routes are under `/api/v1/forge` on the existing CLI API origin. The matching private backend routes are under `/api/forge`. The Next.js routes use the existing agent route handler for API-key scopes/rate limits and the existing signed compute client. Extend its concrete route allowlist for Forge. CLI-facing private Forge handlers require signed compute authentication and use the existing project ownership helpers. The narrowly scoped runtime asset callback below authenticates the existing per-session token. Derive the actor from authentication; a foreign session returns 404. Do not add direct host credentials or an alternate backend URL mode to the CLI.
 
 Successful JSON responses use `{"data": ...}`. Public errors use the existing `{"error": {"code": "...", "message": "...", "retryable": false}}` envelope and normal request metadata. Use 422 for invalid input, 409 for conflicting request IDs, a busy GPU, or an unready tool, and 503 when the host cannot be reached. Runtime errors use `{"error": {"code": "...", "message": "..."}}`.
 
@@ -60,7 +60,7 @@ The CLI generates and persists `session_id` before sending. The backend creates 
 
 `provider` defaults to `hyperstack`. `gpu_type` is required. `tools` defaults to an empty list for a base workspace. The base image is always included and is omitted from selection lists. Tool names are explicit catalog keys. Reject duplicates and unknown tool names. `priority` can name any subset of selected tools; append the remaining selected tools in their supplied order. Omitted priority uses selection order. `max_hours` is optional and positive when supplied; expiry counts from allocation. Duration caps and balance exhaustion terminate through the normal backend lifecycle.
 
-`SelectTools` contains `tools` and optional `priority` with the same rules, and at least one tool. It adds selections; ready tools retain their running containers. Ensuring a ready/queued/installing tool again is harmless. A failed tool can be explicitly requested again. Status polling never initiates that retry.
+`SelectTools` contains a UUID `selection_id`, `tools` and optional `priority` with the same ordering rules, and at least one tool. The CLI generates and saves the ID before dispatch. The backend persists the ordered selection independently of the immutable create request and delivers pending selections in order. The daemon records the ID and compares validated fields directly on redelivery. Repeating an ID observes its existing acceptance; changed fields return 409. Ready tools retain their running containers. Priority affects queued preparation without interrupting active work. A failed tool can be explicitly requested again with a new selection ID. Polling and redelivery of an existing selection never initiate that retry.
 
 Session fields:
 
@@ -116,13 +116,14 @@ Every daemon route requires the per-session bearer token over the existing authe
   "data_dir": "/var/lib/ariax-forge",
   "catalog_path": "/etc/ariax-forged/catalog.json",
   "selected_tools": [],
+  "control_plane_url": "https://compute.example",
   "expires_at": null
 }
 ```
 
 The backend creates the token with the existing secret-handling facilities and retains it only in private control-plane storage. Never include it in public responses, CLI logs, source, or workload environments. A host replacement gets a fresh token and is activated only after the old VM is confirmed terminated. Both the backend and daemon honor the configured expiry. HTTP failure does not prove VM loss or command failure.
 
-Catalog example, with illustrative URLs only:
+Backend catalog example, with an illustrative object key:
 
 ```json
 {
@@ -131,12 +132,14 @@ Catalog example, with illustrative URLs only:
     "boltz2": {"image": "registry.example/ariax/forge-boltz2:current", "gpu": true, "model_mounts": {"boltz2": "/models/boltz2"}}
   },
   "assets": {
-    "boltz2": {"url": "https://models.example/boltz2.tar", "archive": "tar"}
+    "boltz2": {"object_key": "ariax-forge/science-models/boltz2.tar", "archive": "tar"}
   }
 }
 ```
 
-`tools` maps names to image tags and the named model assets they mount. `assets` maps those names to Ariax-controlled download locations. The catalog is deployed as an ordinary file. The backend reads the same format to validate selection, then copies the intended catalog to the host. Use catalog names to share weights intentionally; each asset downloads/extracts once into `data_dir/models/{asset}`. The durable preparation queue implements that path. There are no catalog version negotiations or digest fields.
+`tools` maps names to image tags and the named model assets they mount. Backend `assets` entries contain an `object_key` within the configured model bucket and `archive` (`tar` or `zip`). Deployment supplies this ordinary catalog file and the existing `MODEL_ARTIFACT_R2_*` storage settings. The host receives the same tool entries and an asset map containing only archive types. Use catalog names to share weights intentionally; each asset downloads/extracts once into `data_dir/models/{asset}`. Completed named assets are reused. There are no catalog version negotiations or digest fields.
+
+The backend supplies `FORGE_CONTROL_PLANE_URL` as the daemon's configured HTTPS `control_plane_url`. Immediately before downloading an absent asset, the daemon calls `POST /api/forge-runtime/sessions/{session_id}/assets/{asset}/url` with its existing session bearer token. The backend authorizes that live session and an asset required by its selected tools, then issues an ordinary signed object URL with a lifetime bounded by the transfer window and session expiry. The exact callback route has its own session-authenticated middleware path. Parent storage and compute-signing credentials remain in the control plane. Queued work and late additions obtain fresh grants when preparation reaches them. A failed preparation requires an explicit new selection to retry; that attempt obtains a fresh grant.
 
 The bootstrap creates state, inputs, workspace, scratch, and models directories under the configured data directory. Mount `/inputs` and model directories read-only. `/workspace` and `/scratch` are writable workload mounts. The daemon, SQLite journal, credentials, Docker socket, and host root remain outside workload access. Preserve the existing container/network isolation policy and protect against path traversal and unsafe archive extraction.
 
@@ -151,7 +154,7 @@ ariax forge create --name NAME --gpu GPU [--provider hyperstack] [--tools boltz2
 ariax forge list
 ariax forge status SESSION
 ariax forge tools SESSION
-ariax forge tools add SESSION --tools boltz2 [--priority boltz2]
+ariax forge tools add SESSION --tools boltz2 [--priority boltz2] [--selection-id UUID]
 ariax forge tools wait SESSION TOOL [--timeout SECONDS]
 ariax forge run SESSION --tool TOOL [--cwd /workspace] [--timeout-seconds 3600] -- COMMAND ARG...
 ariax forge commands SESSION
@@ -162,7 +165,7 @@ ariax forge cancel SESSION COMMAND_ID
 ariax forge close SESSION
 ```
 
-Support existing global JSON output. Wait/watch timeouts end local waiting and retain the remote operation. Save a small request record under `.ariax/forge/{id}.json` containing its ID, API origin, actor, method/path/body, and the latest known result. Reuse/export the existing atomic writer and account lookup. The managed-job operation format includes request hashes and compatibility checks, so leave that format untouched and keep Forge's record plain. Do not build another journal framework. Expose explicit `--session-id` on create and `--command-id` on run for retry/recovery. A retry must use the same saved request and account. Return the IDs promptly so an agent can continue later.
+Support existing global JSON output. Wait/watch timeouts end local waiting and retain the remote operation. Save a small request record under `.ariax/forge/{id}.json` containing its ID, API origin, actor, method/path/body, and the latest known result. Reuse/export the existing atomic writer and account lookup. The managed-job operation format includes request hashes and compatibility checks, so leave that format untouched and keep Forge's record plain. Do not build another journal framework. Expose explicit `--session-id` on create, `--command-id` on run and `--selection-id` on tools add for retry/recovery. A retry must use the same saved request and account. Return the IDs promptly so an agent can continue later.
 
 The file command surface is specified below. Local acceptance exercises the installed CLI through the public API and preserves existing managed-job command behavior.
 
@@ -176,7 +179,7 @@ Workers commit their bite in their own worktree and finish with changed files, t
 
 B05–B07 code and guides are integrated and have passed local acceptance. The current B09/B10 handoff is `docs/forge-next-turn-plan.md`; `docs/forge-integration-bite.md` records the completed worker assignments. The orchestrator owns integration branches and lifecycle decisions.
 
-B05 keeps the catalog shape above: each tool has `image`, `gpu`, and `model_mounts`; each asset has `url` and `archive` (`tar` or `zip`). The selected tool order at bootstrap is already the desired priority. Later `SelectTools` requests prioritize the named selected tools and retain other selections. One durable queue prepares base first, then scientific tools. Ready tools remain usable while the queue works. Published named assets remain read-only. An asset that is complete at its final path is reused directly. Unsafe archive entries and incomplete transfer are failures; there is no checksum or digest protocol.
+Each tool retains `image`, `gpu`, and `model_mounts`. The current backend catalog uses `object_key` and `archive` for assets, and the daemon obtains temporary download URLs through the runtime callback described above. The selected tool order at bootstrap is already the desired priority. Later `SelectTools` requests prioritize the named selected tools and retain other selections. One durable queue prepares base first, then scientific tools. Ready tools remain usable while the queue works. Published named assets remain read-only. An asset that is complete at its final path is reused directly. Unsafe archive entries and incomplete transfer are failures; there is no checksum or digest protocol.
 
 B07 supplies `science/catalog.json`, image build contexts, and native fixtures. The image must expose its documented executable on PATH because Forge passes argv directly. Model paths in native commands must agree with the catalog mount destinations. The reference keys are `base`, `ipsae`, and `boltz2`; base and ipSAE use CPU, and Boltz2 uses GPU. A base workspace contains a POSIX shell and Python 3. Science guides live under `agent-skills/skills/ariax-forge/tools/`. Publication and native GPU qualification belong to B08.
 
@@ -259,3 +262,10 @@ The B08 campaign cost estimate was $2.60. Count later compute against the same $
 **B09–B11 campaign, October 3, 2026**
 
 B09 native qualification and private publication are complete. The installed CLI passed all five native tool workflows on Hyperstack and restored persisted results onto fresh VMs. Runtime health carries nullable `close_reason`; policy failures retain their reason through backend cleanup. The unexpected early source closure remains an unresolved reliability finding. B10 is integrated with Vast admission disabled because the actual probed guest failed the Ubuntu 24.04 requirement. Read [the B11 report](forge-b11-qualification.md) and [remaining gates](forge-next-turn-plan.md) before another live campaign.
+
+
+**B12 host and release boundary, October 2, 2026 (Pacific)**
+
+The user approved Ubuntu 22.04 and 24.04 hosts with managed Python 3.12 through one installer. Verify a real amd64 VM, systemd, one supported NVIDIA GPU and suitable local storage. Query actual Docker/containerd inventories before changing storage. Unknown inventory or existing workload data stops installation before mutation. Preserve existing stores. Keep Vast admission disabled for ordinary users until its native and lifecycle acceptance passes.
+
+Tools add, automatic model grants and normal worker schedules are explicit release gates. The orchestrator repeats the original workload with bounded sanitized diagnostics retained outside the VM, then runs integrated acceptance including expiry, credit exhaustion, cross-provider restore and cleanup. Policy inspection may be consolidated while preserving enforced isolation and failure closure. The earlier unexpected closure remains historically unexplained unless evidence establishes its cause.
