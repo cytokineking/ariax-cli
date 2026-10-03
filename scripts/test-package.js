@@ -60,7 +60,7 @@ try {
     for (const platform of ['forge', 'ariax-forge']) {
       const forge = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--json'])).data;
       assert.equal(forge.platform, 'forge');
-      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2', 'bindcraft2', 'freebindcraft']) {
+      for (const reference of Object.keys(skills.data.platform_references.forge)) {
         const guide = JSON.parse(execute(process.execPath, [script, 'skills', platform,
           '--reference', reference, '--read', '--json'])).data;
         assert.equal(guide.path, forge.references[reference]);
@@ -79,6 +79,20 @@ try {
         }
       }
       assert.equal(forge.examples.root, skills.data.platform_examples.forge.root);
+      const science = forge.examples.science;
+      const checkedTarget = JSON.parse(execute('python3', [forge.references['freebindcraft-preflight'],
+        '--settings', path.join(science, 'freebindcraft/target.json'),
+        '--pdb', path.join(science, 'freebindcraft/target.pdb'), '--family', 'miniprotein']));
+      assert.equal(checkedTarget.target_residues, 3);
+      const checkedAffinity = JSON.parse(execute('python3', [forge.references['boltz2-affinity-check'],
+        path.join(science, 'affinity/affinity_affinity.json'), '--record-id', 'affinity']));
+      assert.equal(checkedAffinity.predicted_pIC50, 9);
+      for (const predictor of ['af3', 'boltz2']) {
+        const handoff = JSON.parse(await fs.readFile(path.join(science, predictor, 'handoff.json'), 'utf8'));
+        for (const file of Object.values(handoff.files)) {
+          assert.ok((await fs.readFile(path.join(science, predictor, file))).length > 0);
+        }
+      }
     }
     // Exercise the managed output reader from the same installed package.
     const managedOutput = JSON.parse(execute(process.execPath, [script, 'skills', 'boltzgen',

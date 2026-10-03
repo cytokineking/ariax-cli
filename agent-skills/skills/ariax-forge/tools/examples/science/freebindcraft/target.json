@@ -1,0 +1,12 @@
+{
+  "design_path": "/workspace/toy/results",
+  "binder_name": "toy",
+  "starting_pdb": "/inputs/toy/target.pdb",
+  "chains": "A",
+  "target_hotspot_residues": "A56",
+  "lengths": [
+    65,
+    100
+  ],
+  "number_of_final_designs": 1
+}

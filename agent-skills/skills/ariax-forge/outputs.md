@@ -1,10 +1,12 @@
 # Forge inputs, checkpoints, and restore
 
 Read this reference with `ariax skills forge --reference outputs --read --json`
-(alias `ariax-forge`). [Base](tools/base.md), [ipSAE](tools/ipsae.md), and
-[Boltz2](tools/boltz2.md) cover native inputs, commands, and output checks.
-Use `ariax skills forge --json` to locate their bundled examples. Image and
-native GPU qualification remain separate from the CLI file workflow.
+(alias `ariax-forge`). [Base](tools/base.md), [ipSAE](tools/ipsae.md),
+[Boltz2](tools/boltz2.md), [BindCraft2](tools/bindcraft2.md) and
+[FreeBindCraft](tools/freebindcraft.md) cover native inputs, commands and output
+checks. Use `ariax skills forge --json` to locate their bundled examples.
+B12 passed these bounded workflows and saved-output restoration on both
+qualified providers; broader scientific recipes retain their stated limits.
 
 Write native outputs under `/workspace`. `/scratch` is disposable. Read-only inputs live under `/inputs`. Checkpoints cover workspace files and ready inputs; the host keeps its journal, credentials, and model assets outside that index.
 

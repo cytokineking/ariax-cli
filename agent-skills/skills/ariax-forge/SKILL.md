@@ -34,6 +34,14 @@ on Hyperstack and Vast, cross-provider restoration, tool selection and normal
 worker lifecycle checks. Production availability depends on the deployed
 catalog, provider admission and tool readiness.
 
+For scientific preparation, follow the selected tool's linked input and result
+references. Read [shared interpretation](../../core/interpretation.md)
+(`interpretation`) before comparing structures or ranking candidates.
+[Offline checks](references/science-checks.md) (`science-checks`) documents
+packaged helpers and synthetic cases. [Future native sources](references/future-sources.md)
+(`future-sources`) is a maintainer index for archived tool families; it does
+not add tools to the deployed catalog or establish runnable workflows.
+
 ## Start and select tools
 
 ```sh

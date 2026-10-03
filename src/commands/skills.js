@@ -24,6 +24,19 @@ const FORGE_REFERENCES = Object.freeze({
   boltz2: join(FORGE_ROOT, 'tools', 'boltz2.md'),
   bindcraft2: join(FORGE_ROOT, 'tools', 'bindcraft2.md'),
   freebindcraft: join(FORGE_ROOT, 'tools', 'freebindcraft.md'),
+  'freebindcraft-inputs': join(FORGE_ROOT, 'references', 'freebindcraft-inputs.md'),
+  'freebindcraft-results': join(FORGE_ROOT, 'references', 'freebindcraft-results.md'),
+  'boltz2-inputs': join(FORGE_ROOT, 'references', 'boltz2-inputs.md'),
+  'boltz2-results': join(FORGE_ROOT, 'references', 'boltz2-results.md'),
+  'boltz2-affinity': join(FORGE_ROOT, 'references', 'boltz2-affinity.md'),
+  'ipsae-inputs': join(FORGE_ROOT, 'references', 'ipsae-inputs.md'),
+  'ipsae-metrics': join(FORGE_ROOT, 'references', 'ipsae-metrics.md'),
+  'bindcraft2-science': join(FORGE_ROOT, 'references', 'bindcraft2-science.md'),
+  'science-checks': join(FORGE_ROOT, 'references', 'science-checks.md'),
+  'future-sources': join(FORGE_ROOT, 'references', 'future-sources.md'),
+  'freebindcraft-preflight': join(FORGE_ROOT, 'scripts', 'freebindcraft-preflight.py'),
+  'ipsae-preflight': join(FORGE_ROOT, 'scripts', 'ipsae-preflight.py'),
+  'boltz2-affinity-check': join(FORGE_ROOT, 'scripts', 'boltz2-affinity-check.py'),
 });
 const FORGE_EXAMPLES = Object.freeze({
   root: join(FORGE_ROOT, 'tools', 'examples'),
@@ -32,6 +45,7 @@ const FORGE_EXAMPLES = Object.freeze({
   boltz2: join(FORGE_ROOT, 'tools', 'examples', 'boltz2'),
   bindcraft2: join(FORGE_ROOT, 'tools', 'examples', 'bindcraft2'),
   freebindcraft: join(FORGE_ROOT, 'tools', 'examples', 'freebindcraft'),
+  science: join(FORGE_ROOT, 'tools', 'examples', 'science'),
 });
 const CORE_REFERENCES = Object.freeze({
   campaigns: join(ROOT, 'core', 'campaigns.md'),

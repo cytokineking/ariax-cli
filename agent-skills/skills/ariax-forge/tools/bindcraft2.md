@@ -1,5 +1,11 @@
 # Forge BindCraft2 binder design
 
+For real inputs and result review, read
+[native scientific preparation and interpretation](../references/bindcraft2-science.md) (`bindcraft2-science`).
+Use those IDs with
+`ariax skills forge --reference ID --read --json`. The [shared interpretation
+guide](../../../core/interpretation.md) covers structure stages and fair comparisons.
+
 BindCraft2 is a GPU tool for designing candidate protein binders. B09 uses
 native package 1.0.1 from the reviewed [PacesaLab source](https://github.com/PacesaLab/BindCraft2/tree/e6d30f6ea2e5bbc2f62ae7fa722f183da6c6c29f).
 The private image and this bounded native fixture passed on an L40 builder

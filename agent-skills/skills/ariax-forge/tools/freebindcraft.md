@@ -1,5 +1,11 @@
 # Forge FreeBindCraft binder design
 
+For real inputs and result review, read
+[target preparation and budgets](../references/freebindcraft-inputs.md) (`freebindcraft-inputs`) and [filters, placeholders and ranking](../references/freebindcraft-results.md) (`freebindcraft-results`).
+Use those IDs with
+`ariax skills forge --reference ID --read --json`. The [shared interpretation
+guide](../../../core/interpretation.md) covers structure stages and fair comparisons.
+
 FreeBindCraft is a GPU tool for designing candidate protein binders. B09 uses
 the retained [native source](https://github.com/cytokineking/FreeBindCraft/tree/d12747dbc907435622559b81891ad73e0a45c2e4)
 with ColabDesign 1.1.3, JAX 0.6.0 and OpenMM 8.3.1 plus its CUDA plugin.

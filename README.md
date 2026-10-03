@@ -132,9 +132,12 @@ ariax skills bindcraft-v1.5 --reference outputs --read --no-json
 `--read --no-json` forms print the selected Markdown directly; `--read --json`
 returns it in `data.content`, so an agent does not need a separate filesystem
 tool. Forge discovery uses `ariax skills forge --json` (alias `ariax-forge`)
-and returns the `outputs`, `base`, `ipsae`, and `boltz2` references plus bundled
-example paths. Read one with `ariax skills forge --reference NAME --read --json`.
-The supplied recipes still await image and native GPU qualification.
+and returns native guides for `base`, `ipsae`, `boltz2`, `bindcraft2` and
+`freebindcraft`, linked scientific references, and packaged helper/example paths.
+Read one with `ariax skills forge --reference NAME --read --json`.
+All five bounded examples passed B12 on Hyperstack and Vast; broader scientific
+recipes retain their stated source/offline qualification limits. The deployed
+catalog, provider admission and tool readiness determine availability.
 When consuming the normal schema envelope instead of `--raw`, use the
 exact schema at `.data.json_schema`.
 

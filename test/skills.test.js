@@ -113,7 +113,8 @@ describe('bundled skills read-through', () => {
       assert.equal(found.stderr, '');
       const discovery = JSON.parse(found.stdout).data;
       assert.equal(discovery.platform, 'forge');
-      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2', 'bindcraft2', 'freebindcraft']) {
+      const global = await captureOutput(() => main(['skills', '--json'], {}));
+      for (const reference of Object.keys(JSON.parse(global.stdout).data.platform_references.forge)) {
         const read = await captureOutput(() => main([
           'skills', platform, '--reference', reference, '--read', '--json',
         ], {}));
@@ -154,7 +155,7 @@ describe('bundled skills read-through', () => {
     const out = await captureOutput(() => main(['skills', '--json'], {}));
     assert.equal(out.value, 0);
     const discovery = JSON.parse(out.stdout).data;
-    for (const reference of ['outputs', 'base', 'ipsae', 'boltz2', 'bindcraft2', 'freebindcraft']) {
+    for (const reference of Object.keys(discovery.platform_references.forge)) {
       const read = await captureOutput(() => main([
         'skills', 'forge', '--reference', reference, '--read', '--no-json',
       ], {}));

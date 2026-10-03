@@ -1,12 +1,18 @@
 # Forge Boltz2 structure prediction
 
+For real inputs and result review, read
+[native input preparation](../references/boltz2-inputs.md) (`boltz2-inputs`), [rank/token/metric semantics](../references/boltz2-results.md) (`boltz2-results`) and [small-molecule affinity](../references/boltz2-affinity.md) (`boltz2-affinity`).
+Use those IDs with
+`ariax skills forge --reference ID --read --json`. The [shared interpretation
+guide](../../../core/interpretation.md) covers structure stages and fair comparisons.
+
 Boltz2 is a GPU tool. B07 preserves native package 2.2.1 and the historical
 PyTorch 2.9/CUDA 12.8 family using ordinary image tags. It predicts structure
 from a supplied biomolecular specification. The case here is one small
 synthetic protein pair; it is an execution qualification case, with no
 biological success threshold.
 
-B08 qualified the private image and complete named model asset through the installed CLI on an L40. Its bounded native prediction and restored output checks passed. Availability depends on the live deployment catalog and tool readiness; operators must refresh temporary authorized model URLs before a later deployment.
+B08 qualified the private image and complete named model asset through the installed CLI on an L40. Its bounded native prediction and restored output checks passed. Availability depends on the live deployment catalog and tool readiness; the runtime obtains fresh authorized model URLs when preparation needs them.
 
 For an authorized session with Boltz2 in its deployed catalog:
 

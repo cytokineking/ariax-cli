@@ -25,11 +25,17 @@ restore, and close. Read it with `ariax skills forge --read --json` (alias
 | `base` | [Shell/Python workspace](skills/ariax-forge/tools/base.md) |
 | `ipsae` | [CPU interface scoring](skills/ariax-forge/tools/ipsae.md) |
 | `boltz2` | [GPU structure prediction](skills/ariax-forge/tools/boltz2.md) |
+| `bindcraft2` | [Native binder design](skills/ariax-forge/tools/bindcraft2.md) |
+| `freebindcraft` | [OpenMM binder design](skills/ariax-forge/tools/freebindcraft.md) |
+| `science-checks` | [Offline scientific checks and limits](skills/ariax-forge/references/science-checks.md) |
+| `future-sources` | [Maintainer archive index for future native tools](skills/ariax-forge/references/future-sources.md) |
 
 Read a reference with `ariax skills forge --reference NAME --read --json`.
 Small [native examples](skills/ariax-forge/tools/examples/README.md) ship with
-the package. Image builds/publication and native GPU qualification remain
-pending; live catalog metadata and tool readiness establish availability.
+the package. All five bounded native examples passed the B12 live campaign
+on Hyperstack and Vast. The tool guides link scientific references with
+separate source/offline and live evidence limits. Live catalog metadata,
+provider admission and tool readiness establish availability.
 
 Use the matching protocol skill to choose and configure a design engine, then
 use the shared workflow for credentials and lifecycle operations. These skills

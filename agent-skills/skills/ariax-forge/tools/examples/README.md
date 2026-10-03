@@ -1,5 +1,5 @@
 These are small native execution cases bundled beside the Forge tool guides.
-They match runtime `science/fixtures/`. Base, ipSAE and Boltz2 use synthetic
+The original five tool directories match runtime `science/fixtures/`. Base, ipSAE and Boltz2 use synthetic
 fixtures. BindCraft2 and FreeBindCraft use the retained PD-L1 example target
 with one bounded design trajectory per tool: BindCraft2 requests 31 binder
 residues and FreeBindCraft requests 80. No generated binder is supplied.
@@ -29,3 +29,9 @@ container input/output paths, so update them when changing staged locations
 or choosing a fresh output root. Use the actual checker and matching native
 version from the tool guide. GPU execution and scientific interpretation
 remain distinct gates.
+
+The separate [`science/`](science/) directory contains offline synthetic
+preflight and mapping cases recovered from the skill archive, plus a toy
+affinity output. Locate it with `data.examples.science` and read
+[scientific checks](../../references/science-checks.md) through reference
+`science-checks`. These cases add no live workflow qualification.

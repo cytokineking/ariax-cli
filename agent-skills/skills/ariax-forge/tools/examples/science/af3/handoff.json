@@ -1,0 +1,48 @@
+{
+  "predictor": "af3",
+  "run_id": "synthetic-run-101",
+  "seed": "101",
+  "pae_units": "angstrom",
+  "plddt_scale": "0-100",
+  "files": {
+    "structure": "toy_model_0.cif",
+    "pae": "toy_full_data_0.json",
+    "summary": "toy_summary_confidences_0.json"
+  },
+  "chain_order": [
+    "A",
+    "B"
+  ],
+  "sequences": {
+    "A": "AG",
+    "B": "GA"
+  },
+  "residues": [
+    [
+      "A",
+      1,
+      "ALA"
+    ],
+    [
+      "A",
+      2,
+      "GLY"
+    ],
+    [
+      "B",
+      1,
+      "GLY"
+    ],
+    [
+      "B",
+      2,
+      "ALA"
+    ]
+  ],
+  "synthetic": true,
+  "input_id": "synthetic-AG-GA",
+  "sample": {
+    "record_id": "toy",
+    "index": 0
+  }
+}

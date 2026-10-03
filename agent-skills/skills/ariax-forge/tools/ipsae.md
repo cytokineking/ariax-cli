@@ -1,5 +1,11 @@
 # Forge ipSAE interface scoring
 
+For real inputs and result review, read
+[format and mapping limits](../references/ipsae-inputs.md) (`ipsae-inputs`) and [complete metric semantics](../references/ipsae-metrics.md) (`ipsae-metrics`).
+Use those IDs with
+`ariax skills forge --reference ID --read --json`. The [shared interpretation
+guide](../../../core/interpretation.md) covers structure stages and fair comparisons.
+
 ipSAE is a CPU tool. It scores a supplied structure and matched PAE data;
 it does not fold sequences. B07 preserves Ariax's vendored ipSAE v3 source,
 including its archived chain-index/partner-mask corrections. The bounded
@@ -113,5 +119,6 @@ Read the [outputs reference](../outputs.md) with
 behavior and
 [base](base.md) for the settled restore command. Restore recovers files for
 explicit future checks and does not rerun scoring. Finish with `forge close`
-and confirm the session is closed. B08 must still prove the built image and
-VM path; host-Python source checks do not establish image qualification.
+and confirm the session is closed. B08/B12 passed this AF2 fixture through
+the installed CLI, including restored checks. AF3/Boltz2 mapping retains the
+separate source-reviewed and offline-tested limits in the scientific reference.

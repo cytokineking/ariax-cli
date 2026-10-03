@@ -29,9 +29,13 @@ example paths with `ariax skills forge --json` (alias `ariax-forge`). Read
 [inputs, checkpoints, and restore](skills/ariax-forge/outputs.md) with
 `ariax skills forge --reference outputs --read --json`. Native guides are
 [base](skills/ariax-forge/tools/base.md), [ipSAE](skills/ariax-forge/tools/ipsae.md),
-and [Boltz2](skills/ariax-forge/tools/boltz2.md), with reference IDs `base`,
-`ipsae`, and `boltz2`. The supplied recipes still require Docker/image and
-native GPU qualification; a bundled guide does not establish live availability.
+[Boltz2](skills/ariax-forge/tools/boltz2.md),
+[BindCraft2](skills/ariax-forge/tools/bindcraft2.md), and
+[FreeBindCraft](skills/ariax-forge/tools/freebindcraft.md), with matching
+reference IDs `base`, `ipsae`, `boltz2`, `bindcraft2`, and `freebindcraft`.
+All five bounded native examples passed the B12 live campaign on Hyperstack
+and Vast. The deployed catalog, provider admission and tool readiness determine
+availability; each scientific guide states the broader workflow limits.
 
 This guide owns authentication, authorization, recovery, and transfers.
 Protocol guides explain scientific settings and results. The live catalog and
