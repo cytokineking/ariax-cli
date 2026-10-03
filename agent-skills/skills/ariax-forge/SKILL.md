@@ -56,8 +56,9 @@ shared model assets.
 Session `available` means the host and base workspace accept commands. Each
 scientific tool separately reports `queued`, `installing`, `ready`, or `failed`.
 Wait for the requested tool to be ready. A tool failure does not revoke host
-availability. Adding tools preserves ready tools. Explicitly adding a failed
-tool can retry installation; status and wait never start that retry. Tool preparation runs in the background. Inspect a failed tool and use an explicit tools add request when a retry is appropriate.
+availability. Ready tools remain usable while preparation runs in the background.
+
+The CLI saves a `selection_id` and the request before dispatch. If a response is uncertain, repeat the request with `--selection-id` set to that saved ID, identical tool and priority fields, and the same CLI root directory, account and API origin. An accepted selection keeps its outcome across repeat delivery and daemon restart. To retry a confirmed preparation failure, submit a new selection ID; omitting `--selection-id` generates one. Status and wait commands observe progress. Model downloads obtain a fresh grant when preparation reaches an absent asset.
 
 ## Execute and observe
 
