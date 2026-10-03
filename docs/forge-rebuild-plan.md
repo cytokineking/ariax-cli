@@ -1,6 +1,6 @@
 **Forge rebuild and worker plan**
 
-Updated October 3, 2026. B00–B09 are complete. B10 is integrated with Vast admission disabled. B11 passed the Hyperstack native and checkpoint workflows, while an unexplained early source closure and the Vast host gate remain unresolved. Earlier campaign resources were cleaned up. The approved B12 campaign covers reliability, tools add, automatic model grants, Vast host support and normal worker schedules. Read the [B11 report](forge-b11-qualification.md), [remaining gates](forge-next-turn-plan.md) and [contract](forge-contract.md).
+Updated October 3, 2026. B00–B12 implementation and staging qualification are complete. All five native tool workflows ran on Hyperstack and Vast. Durable tool selection, fresh model grants, cross-provider restore and normal-worker credit exhaustion and expiry passed. Every campaign resource was cleaned up. The B11 early-close trigger remains historically unexplained. Production rollout is separate, and Vast admission remains disabled by default. Read the [B12 report](forge-b12-qualification.md), [release handoff](forge-next-turn-plan.md) and [contract](forge-contract.md).
 
 Ariax provisions on-demand full VMs and runs workloads in Docker. The initial tools are Boltz2, BindCraft2, FreeBindCraft, ipSAE, and a base workspace. Hyperstack is the reference provider. Vast full VMs follow after the first integrated pilot. User-supplied hosts and custom tool installation are outside this release.
 
@@ -48,6 +48,7 @@ Each worker receives the same contract and the user's repository/testing instruc
 | 09 | BindCraft2/FreeBindCraft recipes, shared AF2 assets, skills | 08 |
 | 10 | Vast full-VM adapter | 08 |
 | 11 | Scientific and lifecycle release qualification | 09, plus 10 for Vast |
+| 12 | Reliability, tool selection, model grants and normal-worker acceptance | 11 |
 
 B02, B03, and B04 run in separate chats and worktrees using GPT-6.1 at xhigh. At most three implementation workers run together. B05, B06, and B07 can subsequently overlap under their dependencies. B09 and B10 run in parallel after the Hyperstack pilot. The orchestrator owns integration and all live VM runs.
 

@@ -1,49 +1,33 @@
-# Forge remaining release gates
+# Forge release handoff
 
-Updated October 2, 2026 (Pacific). The user approved this plan and reuse of the existing executor chats. B09 recipes, AF2 assets and CLI guides passed private qualification. All five native workflows and checkpoint recovery passed on Hyperstack. The [B11 report](forge-b11-qualification.md) preserves the unexpected early closure and incomplete Vast host qualification. Earlier campaign resources have been deleted; the recorded cumulative compute estimate is approximately $6.00 of the authorized $100 ceiling.
+Updated October 3, 2026. The approved B12 work and live staging acceptance are complete. Read the [B12 qualification report](forge-b12-qualification.md) for the results, failures retained during qualification, revisions and cleanup. The [contract](forge-contract.md) defines the supported behavior. Cumulative compute is estimated at $10.28 of the authorized $100 ceiling; every campaign VM and tunnel has been deleted.
 
-Continue from the existing integration workspaces:
+## Accepted behavior
 
-| Repository | Workspace |
-|---|---|
-| Backend | `/Users/aaronring/.codex/worktrees/forge-v2-integration/Ariax-Bio-Backend` |
-| Runtime | `/Users/aaronring/Forge-rebuild/2026-10-01/forged` |
-| CLI | `/Users/aaronring/Forge-rebuild/2026-10-01/cli` |
+The installed CLI passed durable tool selection, queued priority changes, explicit preparation retry and create idempotency while commands ran. Model downloads obtained fresh session-authorized URLs at preparation time. The runtime consolidated policy checks and verified timeout cleanup while preserving failure closure.
 
-The [contract](forge-contract.md) governs implementation. Preserve unrelated primary-checkout changes. The orchestrator owns shared interfaces, integration, live qualification, credentials and cleanup. At most two paid VMs may run concurrently. Image work stays on remote GPU VMs. Every paid resource needs a recorded owner and a cleanup deadline; cleanup must proceed after failed acceptance as well as successful acceptance.
+The Ubuntu 22.04 Vast guest and Ubuntu 24.04 Hyperstack guest both passed the managed Python 3.12 installer. All five native tools ran on both providers during the campaign. FreeBindCraft's first Vast trajectory was scientifically rejected; one additional explicit attempt passed MPNN and three native CUDA relaxations. Both outcomes are retained. Cross-provider restore compared all saved files by bytes and initiated zero native predictions. Normal worker schedules closed sessions on credit exhaustion and natural expiry, with billing cutoff and provider/tunnel/DNS absence verified.
 
-## Executor assignments
+## Integration workspaces
 
-The runtime executor reuses `b07-forged` to simplify policy inspection and test timeout handling. The tool-installation executor uses backend `b724`, runtime `b05-forged` and CLI `b07-cli` to finish tool selection and automatic model URL issuance. The Vast executor prepares host changes in backend `0256` and runtime `b06-forged`; implementation follows agreement on the shared bootstrap interface. Executors preserve their old branches and work from the accepted integration revisions. The orchestrator alone edits the integration branches and shared documents.
+| Repository | Workspace | Qualified implementation |
+|---|---|---|
+| Backend | `/Users/aaronring/.codex/worktrees/forge-v2-integration/Ariax-Bio-Backend` | `fbb993b` |
+| Runtime | `/Users/aaronring/Forge-rebuild/2026-10-01/forged` | `0c3c8fe` |
+| CLI | `/Users/aaronring/Forge-rebuild/2026-10-01/cli` | `92036ce` |
 
-## 1. Session reliability
+Preserve unrelated primary-checkout changes. The shared documentation in these repositories describes the accepted implementation. Existing executor chats are idle and retain their isolated work and handoffs.
 
-Source session `f4db6cbe-ac96-4a89-8059-c175c46b983c` closed before expiry without an orchestrator close request. The runtime journal was lost on deletion, and its trigger remains unproven. Later restores and restarts passed. Runtime health now preserves `close_reason`, and the backend retains policy failure through cleanup.
+## Deployment work
 
-Repeat the original workload against the accepted release while retaining bounded, sanitized runtime, Docker, tunnel and control-plane diagnostics outside the VM. Record each observed close origin before deletion. Preserve failed attempts and distinguish them from harness errors.
+Production rollout is a separate task. Deploy the coordinated backend, runtime and CLI revisions with migration `20261003000000_forge_tool_selections.sql`. Configure the daemon's reachable HTTPS origin through `FORGE_CONTROL_PLANE_URL` and retain model storage credentials in the control plane. Catalog assets use `object_key` and `archive`; host catalogs contain archive formats and obtain URLs through the authenticated callback. Keep GHCR packages private and registry credentials outside workloads.
 
-Consolidate the monitor's repeated firewall queries, preserve the enforced network policy, and distinguish a policy mismatch from failure to observe it. Verify subprocess timeout cleanup. Changes to recovery semantics need review of how isolation remains enforced. A successful repeat leaves the historical cause unresolved.
+Vast admission remains disabled by default. Its live host, native and lifecycle acceptance passed. Changing admission is part of the rollout decision. Existing admitted sessions continue reconciliation and cleanup when admission is disabled.
 
-## 2. On-demand tool installation
+## Retained finding
 
-Make `tools add` an explicit release gate. Connect the public endpoint to the existing durable preparation queue, preserving ownership checks and create idempotency. Added selections and priorities must not mutate the original create request. Ready tools remain usable during preparation, explicit requests can retry failed preparation, and polling never initiates a retry. Priority changes affect queued preparation without interrupting active work.
+The B11 source session's unexpected early closure has no proven trigger because its runtime journal was lost when that VM was deleted. B12 repeated the original workload beyond that failure interval and passed delayed persistence, new commands and restart recovery with diagnostics retained outside the VM. The integrated Vast session also completed its workload and recovery checks before deliberate credit exhaustion. Keep the historical finding and current diagnostic capture available during rollout.
 
-Installed-CLI acceptance must create a base workspace, start a command, add a scientific tool while that command runs, observe readiness and execute the tool. Exercise queued priority changes and a meaningful preparation failure followed by explicit retry. Check the same create request remains idempotent after tool selection changes.
+## Deferred scope
 
-## 3. Automatic model URLs
-
-Issue ordinary short-lived authorized URLs through existing storage signing when preparation needs them. Cover queue delay, late tool addition and explicit retry after an earlier URL expires. Deployment supplies stable named asset locations. Keep credentials and temporary URLs outside workload mounts, public responses, logs, evidence and Git. Preserve named shared assets and atomic completed-download publication. Agree on the backend-to-daemon interface before changing shared bootstrap code.
-
-## 4. Vast host support and qualification
-
-The user approved support for the actual Ubuntu 22.04 guest with managed Python 3.12. Keep one installer with an explicit OS branch and retain Ubuntu 24.04 support. Probe `53957680` was deleted; its image label did not match the guest. Docker/containerd storage suitability remains unproven.
-
-Inspect engine inventories before changing storage and preserve existing workload data. Run the real installer on a full VM, then qualify all native tools, persistence, cross-provider restore, controller recovery, billing cutoff and provider/tunnel/DNS cleanup. Keep `FORGE_ENABLE_VASTAI=false` for ordinary users until acceptance passes. Existing admitted sessions must reconcile and clean up with admission disabled.
-
-## 5. Final staging under normal schedules
-
-Use the normal worker configuration, including Forge reconciliation, credit/resource management and orphan cleanup, against isolated staging data. Exercise expiry and credit exhaustion and verify billing cutoff, resource absence and retained diagnostics. Run acceptance through the installed CLI and public API with the integrated runtime. Keep publication private and prepare coordinated release revisions after these gates pass.
-
-## Deferred work
-
-Extract shared Vast operations after behavior stabilizes. Preserve the accepted checkpoint semantics; simplify individual persistence responsibilities when a concrete change exposes duplication. Broader tools, custom installation, multi-GPU execution, warm pools and migration remain deferred.
+Broader tool families, custom installation, multi-GPU execution, warm pools and migration remain deferred. Extract shared provider operations when a concrete change exposes useful duplication. Preserve the accepted checkpoint semantics and direct native command execution.

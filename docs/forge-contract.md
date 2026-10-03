@@ -1,6 +1,6 @@
 **Forge implementation contract**
 
-Updated October 2, 2026 (Pacific), including the approved B12 reliability, tool-selection and host-support interfaces. Implementation acceptance is tracked in [the remaining gates](forge-next-turn-plan.md). The live campaign and its limits are recorded in [the B08 qualification report](forge-b08-qualification.md). The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
+Updated October 3, 2026, after B12 qualification of reliability, tool selection, model grants and host support. Read the [B12 report](forge-b12-qualification.md) and [release handoff](forge-next-turn-plan.md). The live campaign and its limits are recorded in [the B08 qualification report](forge-b08-qualification.md). The user's latest instruction governs this rebuild: use a clean, simple implementation for infrastructure and content that Ariax controls. This document replaces the historical Forge contracts.
 
 **Implementation rules**
 
@@ -269,3 +269,7 @@ B09 native qualification and private publication are complete. The installed CLI
 The user approved Ubuntu 22.04 and 24.04 hosts with managed Python 3.12 through one installer. Verify a real amd64 VM, systemd, one supported NVIDIA GPU and suitable local storage. Query actual Docker/containerd inventories before changing storage. Unknown inventory or existing workload data stops installation before mutation. Preserve existing stores. Keep Vast admission disabled for ordinary users until its native and lifecycle acceptance passes.
 
 Tools add, automatic model grants and normal worker schedules are explicit release gates. The orchestrator repeats the original workload with bounded sanitized diagnostics retained outside the VM, then runs integrated acceptance including expiry, credit exhaustion, cross-provider restore and cleanup. Policy inspection may be consolidated while preserving enforced isolation and failure closure. The earlier unexpected closure remains historically unexplained unless evidence establishes its cause.
+
+**B12 qualification completed, October 3, 2026**
+
+The approved implementation and live staging gates passed. Both supported Ubuntu versions passed the managed installer. Durable tool selection, fresh model grants, native execution on Hyperstack and Vast, cross-provider byte restoration, controller/runtime recovery, cancellation, normal-worker credit exhaustion and expiry all completed with billing and resource cleanup verified. The original B11 close trigger remains historically unexplained. The default Vast admission switch remains false; production rollout is separate. The [B12 report](forge-b12-qualification.md) retains failed preparation, the rejected first Vast FreeBindCraft trajectory, the explicit additional native attempt and final cleanup evidence.

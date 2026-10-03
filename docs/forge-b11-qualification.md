@@ -1,5 +1,7 @@
 # Forge B09–B11 qualification
 
+This historical report records the B09–B11 campaign. The [B12 report](forge-b12-qualification.md) records the subsequent accepted host support, repeated workload, integrated acceptance and final cleanup.
+
 Updated October 3, 2026. B09 native qualification and CLI guides are complete. Both images and the shared AF2 asset were published privately. B10 is integrated with `FORGE_ENABLE_VASTAI=false`. The Hyperstack campaign exercised all five tools through the installed CLI. Vast live acceptance remains blocked by the selected full VM's Ubuntu version, and an unexpected closure during the first Hyperstack session remains an unresolved reliability finding.
 
 ## Native recipes and private publication

@@ -29,9 +29,10 @@ same references. `data.examples.root` is the local directory used by native
 examples; `data.examples.base`, `.ipsae`, `.boltz2`, `.bindcraft2`, and
 `.freebindcraft` locate individual fixture directories. B08 qualified base,
 ipSAE and Boltz2. B09 qualified the BindCraft2 and FreeBindCraft images and
-bounded examples on the native GPU builder. Private publication and live
-Forge session qualification are separate gates. Use the deployed catalog
-and tool readiness.
+bounded examples on the native GPU builder. B12 passed live native workflows
+on Hyperstack and Vast, cross-provider restoration, tool selection and normal
+worker lifecycle checks. Production availability depends on the deployed
+catalog, provider admission and tool readiness.
 
 ## Start and select tools
 
