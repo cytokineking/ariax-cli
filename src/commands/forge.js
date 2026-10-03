@@ -18,7 +18,7 @@ const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrup
 const OPTIONS = {
   create: [['name', 'gpu', 'provider', 'tools', 'priority', 'max-hours', 'session-id', 'restore-session', 'checkpoint'], 1],
   list: [[], 1], status: [[], 2], tools: [[], 2],
-  'tools add': [['tools', 'priority'], 3],
+  'tools add': [['tools', 'priority', 'selection-id'], 3],
   'tools wait': [['timeout'], 4],
   run: [['tool', 'cwd', 'timeout-seconds', 'command-id'], 2],
   commands: [[], 2], command: [[], 3], watch: [['timeout'], 3],
@@ -33,7 +33,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--provider hypers
   ariax forge list
   ariax forge status SESSION
   ariax forge tools SESSION
-  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...]
+  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
   ariax forge tools wait SESSION TOOL [--timeout SECONDS]
   ariax forge run SESSION --tool TOOL [--cwd /workspace] [--timeout-seconds 3600] [--command-id UUID] -- COMMAND ARG...
   ariax forge commands SESSION
@@ -163,7 +163,7 @@ async function submit(ctx, id, request, label, recovery) {
   printProgress(`${label}: ${id}`);
   try {
     const res = await ctx.client.post(request.path, { body: record.request.body });
-    if (['session_id', 'command_id'].includes(label) && res.data?.[label] !== id) {
+    if (['session_id', 'command_id', 'selection_id'].includes(label) && res.data?.[label] !== id) {
       throw new Error(`Forge response has no matching ${label}; inspect or retry the saved request.`);
     }
     saveResult(file, record, res.data);
@@ -252,9 +252,9 @@ export async function run(ctx) {
   const sessionPath = `${API}/sessions/${sessionId}`;
   if (action.startsWith('inputs ') || ['sync','checkpoints','checkpoint','files','download'].includes(action)) return runFiles(ctx, action, sessionId, sessionPath);
   if (action === 'tools add') {
-    const id = randomUUID();
-    return report(ctx, await submit(ctx, id, { method: 'POST', path: `${sessionPath}/tools`, body: selection(flags, true) }, 'request_id',
-      `Inspect ariax forge tools ${sessionId}; repeat the same tools add request if needed.`));
+    const id = flags['selection-id'] === undefined ? randomUUID() : uuid(flags['selection-id'], 'selection ID');
+    return report(ctx, await submit(ctx, id, { method: 'POST', path: `${sessionPath}/tools`, body: { selection_id: id, ...selection(flags, true) } }, 'selection_id',
+      `Inspect ariax forge tools ${sessionId}; retry with --selection-id ${id}, identical fields, and the same --root-dir, account, and API origin.`));
   }
   if (action === 'status' || action === 'tools') {
     const res = await ctx.client.get(sessionPath);

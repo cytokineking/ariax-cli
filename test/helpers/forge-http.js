@@ -15,7 +15,7 @@ const key = 'arx_forge_testcredential';
 
 async function boundary(root) {
   const sessions = new Map(), children = new Set(), heldResponses = new Set();
-  const state = { sessions, allocations: 0, executions: 0, releases: 0, posts: 0,
+  const state = { sessions, allocations: 0, executions: 0, releases: 0, posts: 0, preparations: 0,
     drop: 'create', holdReads: false, unknown: false, cleanupBlocked: false, fault: null };
   const reply = (res, status, data) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data })); };
   const error = (res, status, code, message) => {
@@ -51,7 +51,7 @@ async function boundary(root) {
         if (session && (session.owner !== user || !isDeepStrictEqual(session.request, body))) return error(res, 409, 'request_conflict', 'Session request differs');
         if (!session) {
           state.allocations++;
-          session = { owner: user, request: body, commands: new Map(), data: {
+          session = { owner: user, request: body, commands: new Map(), selections: new Map(), data: {
             session_id: body.session_id, project_id: randomUUID(), name: body.name,
             state: 'starting', provider: body.provider, gpu_type: body.gpu_type,
             tools: [{ tool: 'base', state: 'queued', error: null }, ...body.tools.map(tool => ({ tool, state: 'queued', error: null }))],
@@ -69,7 +69,19 @@ async function boundary(root) {
       if (parts.length === 5) { assert.equal(req.method, 'GET'); return reply(res, 200, session.data); }
       if (parts[5] === 'tools') {
         assert.equal(req.method, 'POST');
-        return error(res, 503, 'tools_unavailable', 'Scientific tool installation is unavailable until bite 05');
+        const previous = session.selections.get(body.selection_id);
+        if (previous && !isDeepStrictEqual(previous, body)) return error(res, 409, 'idempotency_conflict', 'Selection request differs');
+        if (!previous) {
+          if (session.data.state !== 'available') return error(res, 409, 'session_unready', 'Session is not available');
+          session.selections.set(body.selection_id, body);
+          for (const tool of body.tools) {
+            let item = session.data.tools.find(item => item.tool === tool);
+            if (!item) { item = { tool, state: 'queued', error: null }; session.data.tools.push(item); state.preparations++; }
+            else if (item.state === 'failed') { item.state = 'queued'; item.error = null; state.preparations++; }
+          }
+        }
+        if (state.drop === 'tools') { state.drop = null; req.socket.destroy(); return; }
+        return reply(res, 202, { ...session.data, selection_id: body.selection_id });
       }
       if (parts[5] === 'close') {
         assert.equal(req.method, 'POST');
@@ -207,8 +219,37 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     session.data.tools[1].state = 'failed';
     session.data.tools[1].error = { code: 'install_failed', message: 'Model download failed' };
     assert.equal((await invoke(['forge', 'tools', 'wait', sessionId, 'boltz2'], { code: 10 })).payload.error.code, 'tool_failed');
-    assert.equal((await invoke(['forge', 'tools', 'add', sessionId, '--tools', 'boltz2'], { code: 10 })).payload.error.code, 'tools_unavailable');
     assert.equal((await invoke(['forge', 'run', sessionId, '--tool', 'boltz2', '--', process.execPath, '-e', 'process.exit(0)'], { code: 7 })).payload.error.code, 'tool_unready');
+
+    state.drop = 'tools';
+    const selectionArgs = ['forge', 'tools', 'add', sessionId, '--tools', 'boltz2', '--priority', 'boltz2'];
+    const lostSelection = await invoke(selectionArgs, { code: 9 });
+    const selectionId = lostSelection.stderr.match(/selection_id: ([0-9a-f-]{36})/)[1];
+    const retrySelection = [...selectionArgs, '--selection-id', selectionId];
+    assert.equal((await record(selectionId)).result, null);
+    assert.equal(state.preparations, 1);
+    const boltz = session.data.tools.find(item => item.tool === 'boltz2');
+    boltz.state = 'failed';
+    boltz.error = { code: 'tool_preparation_failed', message: 'Private image pull failed' };
+    const retriedSelection = await invoke(retrySelection);
+    assert.equal(retriedSelection.payload.data.selection_id, selectionId);
+    assert.equal((await record(selectionId)).project_id, accepted.payload.data.project_id);
+    assert.equal(boltz.state, 'failed');
+    const beforePoll = state.posts;
+    await invoke(['forge', 'tools', 'wait', sessionId, 'boltz2'], { code: 10 });
+    await invoke(['forge', 'status', sessionId]);
+    assert.equal(state.posts, beforePoll, 'tool polling replayed a selection');
+    assert.equal(state.preparations, 1, 'same selection ID restarted failed preparation');
+    await invoke([...retrySelection, '--tools', 'ipsae,boltz2'], { code: 7 });
+    await invoke(retrySelection, { code: 1, actorKey: 'arx_forge_othercredential' });
+    assert.equal(state.posts, beforePoll, 'conflicting selection reached the API');
+    const explicitRetry = await invoke(['forge', 'tools', 'add', sessionId, '--tools', 'boltz2,ipsae', '--priority', 'ipsae']);
+    assert.notEqual(explicitRetry.payload.data.selection_id, selectionId);
+    assert.equal(state.preparations, 3);
+    assert.deepEqual(session.selections.get(explicitRetry.payload.data.selection_id).priority, ['ipsae', 'boltz2']);
+    assert.equal(session.data.tools[0].state, 'ready');
+    assert.equal((await invoke(retryCreate)).payload.data.session_id, sessionId);
+    assert.equal(state.allocations, 1, 'adding tools changed create idempotency');
 
     state.drop = 'run';
     const nativeArgs = ['--json', '--cwd', '/somewhere', '; touch injected', 'two words', ''];
