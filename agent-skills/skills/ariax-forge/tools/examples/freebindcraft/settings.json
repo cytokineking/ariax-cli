@@ -1,0 +1,12 @@
+{
+  "design_path": "/workspace/b09/freebindcraft",
+  "binder_name": "forge_b09",
+  "starting_pdb": "/inputs/freebindcraft/PDL1.pdb",
+  "chains": "A",
+  "target_hotspot_residues": "56",
+  "lengths": [
+    31,
+    31
+  ],
+  "number_of_final_designs": 1
+}

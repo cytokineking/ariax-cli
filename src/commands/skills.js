@@ -22,12 +22,16 @@ const FORGE_REFERENCES = Object.freeze({
   base: join(FORGE_ROOT, 'tools', 'base.md'),
   ipsae: join(FORGE_ROOT, 'tools', 'ipsae.md'),
   boltz2: join(FORGE_ROOT, 'tools', 'boltz2.md'),
+  bindcraft2: join(FORGE_ROOT, 'tools', 'bindcraft2.md'),
+  freebindcraft: join(FORGE_ROOT, 'tools', 'freebindcraft.md'),
 });
 const FORGE_EXAMPLES = Object.freeze({
   root: join(FORGE_ROOT, 'tools', 'examples'),
   base: join(FORGE_ROOT, 'tools', 'examples', 'base'),
   ipsae: join(FORGE_ROOT, 'tools', 'examples', 'ipsae'),
   boltz2: join(FORGE_ROOT, 'tools', 'examples', 'boltz2'),
+  bindcraft2: join(FORGE_ROOT, 'tools', 'examples', 'bindcraft2'),
+  freebindcraft: join(FORGE_ROOT, 'tools', 'examples', 'freebindcraft'),
 });
 const CORE_REFERENCES = Object.freeze({
   campaigns: join(ROOT, 'core', 'campaigns.md'),

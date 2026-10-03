@@ -20,11 +20,15 @@ Discover references and bundled example paths with `ariax skills forge --json`.
 Use `ariax skills forge --reference NAME --read --json` to read
 [inputs/checkpoints/restore](outputs.md) (`outputs`),
 [base shell/Python](tools/base.md) (`base`), [CPU ipSAE](tools/ipsae.md) (`ipsae`),
-or [GPU Boltz2](tools/boltz2.md) (`boltz2`). The `ariax-forge` alias accepts the
+[GPU Boltz2](tools/boltz2.md) (`boltz2`),
+[BindCraft2 design](tools/bindcraft2.md) (`bindcraft2`), or
+[FreeBindCraft design](tools/freebindcraft.md) (`freebindcraft`). The
+`ariax-forge` alias accepts the
 same references. `data.examples.root` is the local directory used by native
-examples; `data.examples.base`, `.ipsae`, and `.boltz2` locate individual
-fixture directories. The supplied recipes await image builds/publication
-and native GPU qualification. Use the deployed catalog and tool readiness.
+examples; `data.examples.base`, `.ipsae`, `.boltz2`, `.bindcraft2`, and
+`.freebindcraft` locate individual fixture directories. B08 qualified base,
+ipSAE and Boltz2. The B09 design-tool recipes and examples await their
+native GPU and live deployment gates. Use the deployed catalog and tool readiness.
 
 ## Start and select tools
 
@@ -62,9 +66,11 @@ ariax forge watch SESSION COMMAND_ID --timeout 600 --json
 ariax forge logs SESSION COMMAND_ID --tail 1000 --no-json
 ```
 
-Put the native program and every native argument after `--`. The CLI sends an
-argv array directly; it does not build a host shell command. Invoke a shell
-explicitly through argv when the task needs one. `--cwd` defaults to
+The agent chooses native argv inside the selected Docker image. Put the
+native executable and every native argument after `--`; Forge passes that
+argv unchanged. Include an explicit shell through argv when the task needs
+one. The native guides provide examples, with the workflow chosen by the
+agent for the user’s task. `--cwd` defaults to
 `/workspace` and must stay under it. `--timeout-seconds` controls remote command
 execution and defaults to 86400 seconds. Native tool options and scientific
 interpretation require that tool's documentation; a command record is not its

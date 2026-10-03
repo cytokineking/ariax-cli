@@ -113,7 +113,7 @@ describe('bundled skills read-through', () => {
       assert.equal(found.stderr, '');
       const discovery = JSON.parse(found.stdout).data;
       assert.equal(discovery.platform, 'forge');
-      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2']) {
+      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2', 'bindcraft2', 'freebindcraft']) {
         const read = await captureOutput(() => main([
           'skills', platform, '--reference', reference, '--read', '--json',
         ], {}));
@@ -127,10 +127,15 @@ describe('bundled skills read-through', () => {
         assert.equal(guide.content, readFileSync(discovery.references[reference], 'utf8'));
         assert.equal(guide.size_bytes, Buffer.byteLength(guide.content));
       }
-      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml' })) {
+      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml', bindcraft2: 'settings.json', freebindcraft: 'settings.json' })) {
         assert.equal(discovery.examples[tool], join(discovery.examples.root, tool));
         assert.ok(statSync(discovery.examples[tool]).isDirectory());
         assert.ok(readFileSync(join(discovery.examples[tool], filename)).length > 0);
+        if (['bindcraft2', 'freebindcraft'].includes(tool)) {
+          for (const input of ['PDL1.pdb', 'check.py', ...(tool === 'freebindcraft' ? ['advanced.json', 'filters.json', 'check-limit.py'] : [])]) {
+            assert.ok(readFileSync(join(discovery.examples[tool], input)).length > 0);
+          }
+        }
       }
       const shared = await captureOutput(() => main([
         'skills', platform, '--reference', 'shared', '--read', '--json',
@@ -149,7 +154,7 @@ describe('bundled skills read-through', () => {
     const out = await captureOutput(() => main(['skills', '--json'], {}));
     assert.equal(out.value, 0);
     const discovery = JSON.parse(out.stdout).data;
-    for (const reference of ['outputs', 'base', 'ipsae', 'boltz2']) {
+    for (const reference of ['outputs', 'base', 'ipsae', 'boltz2', 'bindcraft2', 'freebindcraft']) {
       const read = await captureOutput(() => main([
         'skills', 'forge', '--reference', reference, '--read', '--no-json',
       ], {}));
@@ -159,7 +164,7 @@ describe('bundled skills read-through', () => {
     assert.ok(statSync(discovery.platform_examples.forge.root).isDirectory());
     const human = await captureOutput(() => main(['skills', '--no-json'], {}));
     assert.equal(human.value, 0);
-    assert.match(human.stdout, /Forge references: outputs, base, ipsae, boltz2/);
+    assert.match(human.stdout, /Forge references: outputs, base, ipsae, boltz2, bindcraft2, freebindcraft/);
     assert.ok(human.stdout.includes(discovery.platform_examples.forge.root));
   });
 

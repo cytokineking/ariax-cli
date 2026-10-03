@@ -60,7 +60,7 @@ try {
     for (const platform of ['forge', 'ariax-forge']) {
       const forge = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--json'])).data;
       assert.equal(forge.platform, 'forge');
-      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2']) {
+      for (const reference of ['outputs', 'base', 'ipsae', 'boltz2', 'bindcraft2', 'freebindcraft']) {
         const guide = JSON.parse(execute(process.execPath, [script, 'skills', platform,
           '--reference', reference, '--read', '--json'])).data;
         assert.equal(guide.path, forge.references[reference]);
@@ -69,9 +69,14 @@ try {
         assert.equal(guide.content, await fs.readFile(forge.references[reference], 'utf8'));
         assert.equal(guide.size_bytes, Buffer.byteLength(guide.content));
       }
-      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml' })) {
+      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml', bindcraft2: 'settings.json', freebindcraft: 'settings.json' })) {
         assert.equal(forge.examples[tool], path.join(forge.examples.root, tool));
         assert.ok((await fs.readFile(path.join(forge.examples[tool], filename))).length > 0);
+        if (['bindcraft2', 'freebindcraft'].includes(tool)) {
+          for (const input of ['PDL1.pdb', 'check.py', ...(tool === 'freebindcraft' ? ['advanced.json', 'filters.json', 'check-limit.py'] : [])]) {
+            assert.ok((await fs.readFile(path.join(forge.examples[tool], input))).length > 0);
+          }
+        }
       }
       assert.equal(forge.examples.root, skills.data.platform_examples.forge.root);
     }
