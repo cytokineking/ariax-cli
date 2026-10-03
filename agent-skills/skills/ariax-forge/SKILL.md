@@ -6,9 +6,10 @@ description: Create and operate Ariax Forge compute sessions, select tools, run 
 # Ariax Forge
 
 Use `ariax forge` within the user's authorized hardware, task, and spending
-scope. Creation and idle VM time incur charges. Hyperstack is the supported
-provider. Choose a GPU explicitly; `--max-hours` optionally limits the session
-from allocation. Authentication uses the normal `ariax login` or secret-manager
+scope. Creation and idle VM time incur charges. Hyperstack is the default
+provider. Use `--provider vastai` for Vast full VMs when the deployed backend
+admits that provider. Choose a GPU explicitly; `--max-hours` optionally limits
+the session from allocation. Authentication uses the normal `ariax login` or secret-manager
 injection of `ARIAX_API_KEY`. Never place credentials in argv or saved notes.
 
 Read this guide with `ariax skills forge --read --json` (alias `ariax-forge`).

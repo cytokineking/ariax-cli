@@ -180,6 +180,8 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const retryCreate = [...createArgs, '--session-id', sessionId];
     const accepted = await invoke(retryCreate);
     assert.equal(accepted.payload.data.session_id, sessionId);
+    assert.equal(accepted.payload.data.provider, 'hyperstack');
+    assert.equal(state.sessions.get(sessionId).request.provider, 'hyperstack');
     assert.equal(state.allocations, 1, 'retry allocated another VM');
     assert.equal((await record(sessionId)).project_id, accepted.payload.data.project_id);
     await invoke([...retryCreate, '--gpu', 'A100'], { code: 7 });
@@ -267,12 +269,22 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     await invoke(['forge', 'create', '--name', 'Unsafe ID', '--gpu', 'L40', '--session-id', '../outside'], { code: 1 });
     await invoke(['forge', 'files', sessionId, '--path', '/etc'], { code: 1 });
     await invoke(['forge', 'create', '--name', 'Direct host', '--gpu', 'L40', '--endpoint', api.origin], { code: 1 });
+    const invalidProvider = await invoke(['forge', 'create', '--name', 'Invalid provider', '--gpu', 'L40', '--provider', 'aws'], { code: 1 });
+    assert.match(invalidProvider.payload.error.message, /hyperstack or vastai/);
     const storage = path.join(root, '.ariax/forge');
     await fs.rename(storage, `${storage}-saved`);
     await fs.symlink(`${storage}-saved`, storage, 'dir');
     try { await invoke(['forge', 'create', '--name', 'Unsafe storage', '--gpu', 'L40'], { code: 1 }); }
     finally { await fs.unlink(storage); await fs.rename(`${storage}-saved`, storage); }
     assert.equal(state.posts, beforeInvalid, 'unsafe paths or unsupported surfaces sent a mutation');
+    const vast = await invoke(['forge', 'create', '--name', 'Vast workspace', '--gpu', 'L40', '--provider', 'vastai']);
+    const vastId = vast.payload.data.session_id;
+    assert.equal(vast.payload.data.provider, 'vastai');
+    assert.equal(state.sessions.get(vastId).request.provider, 'vastai');
+    assert.equal((await record(vastId)).request.body.provider, 'vastai');
+    assert.equal(state.allocations, 2);
+    await invoke(['forge', 'close', vastId]);
+    assert.equal(state.releases, 2);
     for (const name of await fs.readdir(path.join(root, '.ariax/forge'))) {
       const bytes = await fs.readFile(path.join(root, '.ariax/forge', name), 'utf8');
       assert.doesNotMatch(bytes, new RegExp(key));

@@ -29,7 +29,7 @@ const OPTIONS = {
   logs: [['tail'], 3], cancel: [[], 3], close: [[], 2],
 };
 
-export const help = `ariax forge create --name NAME --gpu GPU [--provider hyperstack] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-hours 2] [--session-id UUID]
+export const help = `ariax forge create --name NAME --gpu GPU [--provider hyperstack|vastai] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-hours 2] [--session-id UUID]
   ariax forge list
   ariax forge status SESSION
   ariax forge tools SESSION
@@ -238,7 +238,7 @@ export async function run(ctx) {
   if (action === 'create') {
     const sessionId = flags['session-id'] === undefined ? randomUUID() : uuid(flags['session-id'], 'session ID');
     const provider = flags.provider === undefined ? 'hyperstack' : required(flags.provider, 'provider');
-    if (provider !== 'hyperstack') throw usageError('forge: --provider must be hyperstack.');
+    if (!['hyperstack', 'vastai'].includes(provider)) throw usageError('forge: --provider must be hyperstack or vastai.');
     if ((flags['restore-session'] === undefined) !== (flags.checkpoint === undefined)) throw usageError('forge create: --restore-session and --checkpoint are required together.');
     const restore = flags['restore-session'] === undefined ? null : {session_id:uuid(flags['restore-session'], 'restore session ID'),checkpoint_id:uuid(flags.checkpoint, 'checkpoint ID')};
     const body = { session_id: sessionId, restore, name: required(flags.name, 'name'), provider,
