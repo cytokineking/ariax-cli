@@ -21,7 +21,16 @@ def require(value: object, message: str) -> None:
         raise ValueError(message)
 
 
+def json_numbers(value: object) -> bool:
+    if isinstance(value, list):
+        return all(json_numbers(item) for item in value)
+    return type(value) in (int, float)
+
+
 def array(value: object, shape: tuple, maximum: float | None = None) -> np.ndarray:
+    # NumPy would coerce a boolean mixed with JSON numbers into numeric 0/1.
+    if not isinstance(value, np.ndarray):
+        require(json_numbers(value), 'confidence must be numeric, not strings or booleans')
     raw = np.asarray(value)
     require(raw.dtype.kind in 'fiu', 'confidence must be numeric, not strings or booleans')
     a = raw.astype(float)

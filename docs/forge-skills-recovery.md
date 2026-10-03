@@ -57,6 +57,12 @@ The skill-creator validator checks the Forge and shared SKILL.md entrypoints.
 A link/fixture smoke check verifies local references and all 18 unchanged
 runtime fixture files.
 
+Parent review found that NumPy could coerce a boolean mixed into a numeric
+JSON PAE matrix into 0 or 1. The helper now validates JSON number types before
+array conversion. The added CLI-level corruption case failed before the fix;
+it protects against treating a threshold mask as measured PAE. The scientific
+suite now covers 44 cases when native ipSAE scoring is included.
+
 ## Qualification limits
 
 B08/B09/B12 live evidence for the existing native examples is unchanged.

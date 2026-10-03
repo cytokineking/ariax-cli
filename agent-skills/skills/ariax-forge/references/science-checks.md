@@ -6,7 +6,7 @@ The helpers are readable references and ordinary local Python files:
 | Reference ID | Purpose | Dependencies |
 | --- | --- | --- |
 | `freebindcraft-preflight` | Selected PDB author register, hotspots, family/count settings | Python standard library |
-| `ipsae-preflight` | AF2/AF3/standard-protein Boltz2 structure/confidence correspondence | Python and NumPy |
+| `ipsae-preflight` | AF2/AF3/standard-protein Boltz2 structure/confidence correspondence | Python 3.10+ and NumPy |
 | `boltz2-affinity-check` | Native affinity filename, finite values, probability range and ensemble completeness | Python standard library |
 
 `data.examples.science` locates the synthetic examples; it is separate from

@@ -122,6 +122,7 @@ def main():
             handoff("missing-CB", structure(lambda s: "\n".join(line for line in s.splitlines()
                     if not (line.startswith("ATOM") and line.split()[3] == "CB"))))
             if predictor == "af3":
+                handoff("boolean-in-numeric-PAE", confidence(lambda data: data["pae"][0].__setitem__(1, True)))
                 handoff("token-chain-order", confidence(lambda data: data["token_chain_ids"].reverse()))
                 handoff("token-register", confidence(lambda data: data["token_res_ids"].__setitem__(0, 2)))
                 handoff("atom-confidence-shape", confidence(lambda data: data["atom_plddts"].pop()))
