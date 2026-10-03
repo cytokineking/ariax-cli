@@ -40,9 +40,10 @@ The [settings](examples/freebindcraft/settings.json) select the bundled
 [PD-L1 structure](examples/freebindcraft/PDL1.pdb), chain A with 115 residues
 numbered 18–132 and hotspot 56. They request a 31-residue chain B binder.
 The [advanced settings](examples/freebindcraft/advanced.json) bound the case
-to one trajectory and one MPNN sequence, with native four-stage iterations
-50/1/1/1 and one recycle for design and validation. Model sampling and beta
-reoptimization are disabled; two held-out models validate the redesigned
+to one trajectory and one MPNN sequence, with the native three-stage
+algorithm: logits 100, softmax 20 and one-hot 10 iterations, plus one recycle
+for design and validation. Model sampling and beta reoptimization are
+disabled; two held-out models validate the redesigned
 complex and binder alone. [Filters](examples/freebindcraft/filters.json)
 are `{}`, clearing optional refold/final thresholds. Native trajectory
 confidence, contact and clash checks remain.

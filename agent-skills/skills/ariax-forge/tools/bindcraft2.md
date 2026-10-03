@@ -88,7 +88,7 @@ name is discovered from its CSV, rather than predicted in advance:
 
 ```text
 1_Trajectories/!_Trajectories.csv
-1_Trajectories/<trajectory>/trajectory.cif
+1_Trajectories/<trajectory>/<trajectory>_trajectory.cif
 2_Refolded/!_Refolded.csv
 2_Refolded/Complexes/<trajectory>_candidate1.cif
 3_Ranked/!_Ranked.csv
@@ -107,9 +107,9 @@ the image's Gemmi package, requires one completed row per stage and a passed
 native refold. It checks candidate/ranked identifiers and binder sequences,
 then parses the trajectory, refolded and ranked CIFs. Each must have target
 chain A matching the staged PD-L1 sequence, binder B31 and finite coordinates.
-Refolded pLDDT/pTM/i_pTM must be finite on 0–1. Candidate `_candidate1` and
-ranked `_seq0` are distinct native identifiers. No binder monomer prediction
-is requested by the cleared optional filters.
+The emitted refolded pLDDT and i_pTM must be finite on 0–1. Candidate
+`_candidate1` and ranked `_seq0` are distinct native identifiers. No binder
+monomer prediction is requested by the cleared optional filters.
 
 An exit-zero command can still produce incomplete or header-only output.
 The checker must pass. A completed gradient trajectory is separate from an

@@ -73,7 +73,7 @@ def check(output: Path, target: Path) -> dict[str, object]:
     if refolded["outcome"] != "passed":
         raise ValueError("The native redesign did not pass its configured filters")
     trajectory_binder = sequence(trajectory["Binder_Sequence"])
-    trajectory_structure = output / "1_Trajectories" / trajectory["design"] / "trajectory.cif"
+    trajectory_structure = output / "1_Trajectories" / trajectory["design"] / f"{trajectory['design']}_trajectory.cif"
     inspect_complex(trajectory_structure, target_sequence, trajectory_binder)
     candidate = refolded["design"]
     refold_structure = output / "2_Refolded/Complexes" / f"{candidate}.cif"
@@ -81,7 +81,7 @@ def check(output: Path, target: Path) -> dict[str, object]:
     inspect_complex(refold_structure, target_sequence, binder)
     inspect_complex(ranked_structure, target_sequence, binder)
     return {"design": ranked["design"], "refold_design": candidate, "binder_sequence": binder, "target_residues": len(target_sequence),
-            "confidence": confidence(refolded, ("pLDDT", "pTM", "i_pTM")),
+            "confidence": confidence(refolded, ("pLDDT", "i_pTM")),
             "structures": [str(path) for path in (trajectory_structure, refold_structure, ranked_structure)]}
 
 
