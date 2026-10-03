@@ -5,8 +5,8 @@
   "chains": "A",
   "target_hotspot_residues": "56",
   "lengths": [
-    31,
-    31
+    80,
+    80
   ],
   "number_of_final_designs": 1
 }

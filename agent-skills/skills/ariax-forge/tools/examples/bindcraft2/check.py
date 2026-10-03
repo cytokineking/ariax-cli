@@ -7,7 +7,10 @@ import math
 from pathlib import Path
 import sys
 
-import gemmi
+import numpy as np
+from biotite.sequence import ProteinSequence
+from biotite.structure import AtomArrayStack
+from biotite.structure.io import load_structure
 
 AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
@@ -25,17 +28,18 @@ def rows(path: Path) -> list[dict[str, str]]:
 def chain_sequences(path: Path) -> dict[str, str]:
     if not path.is_file() or path.stat().st_size == 0:
         raise ValueError(f"Missing/empty structure: {path}")
-    structure = gemmi.read_structure(str(path))
-    if len(structure) != 1:
-        raise ValueError(f"Expected one model in {path}")
+    structure = load_structure(path)
+    if isinstance(structure, AtomArrayStack):
+        if structure.stack_depth() != 1:
+            raise ValueError(f"Expected one model in {path}")
+        structure = structure[0]
+    if not np.isfinite(structure.coord).all():
+        raise ValueError(f"Non-finite coordinates in {path}")
+    alpha_carbons = structure[structure.atom_name == "CA"]
     result = {}
-    for chain in structure[0]:
-        residues = [res for res in chain if res.find_atom("CA", "*")]
-        result[chain.name] = "".join(gemmi.find_tabulated_residue(res.name).one_letter_code for res in residues)
-        for residue in residues:
-            for atom in residue:
-                if not all(math.isfinite(value) for value in (atom.pos.x, atom.pos.y, atom.pos.z)):
-                    raise ValueError(f"Non-finite coordinates in {path}")
+    for chain in np.unique(alpha_carbons.chain_id):
+        names = alpha_carbons.res_name[alpha_carbons.chain_id == chain]
+        result[str(chain)] = "".join(ProteinSequence.convert_letter_3to1(name) for name in names)
     return result
 
 

@@ -2,7 +2,9 @@
 
 BindCraft2 is a GPU tool for designing candidate protein binders. B09 uses
 native package 1.0.1 from the reviewed [PacesaLab source](https://github.com/PacesaLab/BindCraft2/tree/e6d30f6ea2e5bbc2f62ae7fa722f183da6c6c29f).
-The recipe and bundled case await native image and live qualification.
+B09 qualified the image and this bounded fixture on the assigned L40
+builder. Private publication and live Forge session qualification are
+separate gates.
 Availability depends on the deployed catalog and tool readiness. A completed
 command and consistent files establish execution, without establishing
 binding, specificity, expression or experimental affinity.
@@ -103,9 +105,9 @@ ariax forge logs "$SESSION" "$CHECK_COMMAND_ID" --tail 1000 --json
 ```
 
 Record the new checker ID. The [checker](examples/bindcraft2/check.py), using
-the image's Gemmi package, requires one completed row per stage and a passed
-native refold. It checks candidate/ranked identifiers and binder sequences,
-then parses the trajectory, refolded and ranked CIFs. Each must have target
+the image's Biotite reader and NumPy, requires one completed row per stage
+and a passed native refold. It checks candidate/ranked identifiers and
+binder sequences, then parses the trajectory, refolded and ranked CIFs. Each must have target
 chain A matching the staged PD-L1 sequence, binder B31 and finite coordinates.
 The emitted refolded pLDDT and i_pTM must be finite on 0–1. Candidate
 `_candidate1` and ranked `_seq0` are distinct native identifiers. No binder

@@ -46,8 +46,8 @@ def inspect_complex(path: Path, target_sequence: str, binder_sequence: str) -> N
 
 
 def sequence(value: str) -> str:
-    if len(value) != 31 or not set(value) <= AMINO_ACIDS:
-        raise ValueError(f"Expected a 31-residue native binder sequence, got {value!r}")
+    if len(value) != 80 or not set(value) <= AMINO_ACIDS:
+        raise ValueError(f"Expected an 80-residue native binder sequence, got {value!r}")
     return value
 
 

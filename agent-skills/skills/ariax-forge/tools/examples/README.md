@@ -1,7 +1,8 @@
 These are small native execution cases bundled beside the Forge tool guides.
 They match runtime `science/fixtures/`. Base, ipSAE and Boltz2 use synthetic
 fixtures. BindCraft2 and FreeBindCraft use the retained PD-L1 example target
-with deliberately reduced design searches; no generated binder is supplied.
+with one bounded design trajectory per tool: BindCraft2 requests 31 binder
+residues and FreeBindCraft requests 80. No generated binder is supplied.
 These files are inputs and checkers, not prediction results or records of
 image/GPU success.
 
@@ -15,10 +16,11 @@ reads.
 
 The base and ipSAE programs/checkers need Python; native ipSAE also needs
 NumPy and is supplied by its image. The Boltz2 output checker needs the
-image's NumPy and Gemmi packages. Both binder output checkers need Gemmi,
-provided by their respective images. FreeBindCraft's `check-limit.py` is an
-operator probe for the native attempt budget inside that image, with scratch
-available. It is separate from design and output inspection.
+image's NumPy and Gemmi packages. The BindCraft2 checker uses its image's
+Biotite reader and NumPy; the FreeBindCraft checker uses its image's Gemmi.
+FreeBindCraft's `check-limit.py` is an operator probe for the native attempt
+budget inside that image, with scratch available. It is separate from design
+and output inspection.
 
 Stage every input used by the chosen command through `forge inputs add`,
 require ready inputs and invoke native argv in the selected image. The agent

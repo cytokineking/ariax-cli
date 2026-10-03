@@ -3,7 +3,9 @@
 FreeBindCraft is a GPU tool for designing candidate protein binders. B09 uses
 the retained [native source](https://github.com/cytokineking/FreeBindCraft/tree/d12747dbc907435622559b81891ad73e0a45c2e4)
 with ColabDesign 1.1.3, JAX 0.6.0 and OpenMM 8.3.1 plus its CUDA plugin.
-The recipe and bundled case await native image and live qualification.
+B09 qualified the image and this bounded fixture on the assigned L40
+builder. Private publication and live Forge session qualification are
+separate gates.
 Availability depends on the deployed catalog and tool readiness. A completed
 command and consistent files establish execution, without establishing
 binding, specificity, expression or experimental affinity.
@@ -38,20 +40,23 @@ use scratch; host credentials remain outside workloads.
 
 The [settings](examples/freebindcraft/settings.json) select the bundled
 [PD-L1 structure](examples/freebindcraft/PDL1.pdb), chain A with 115 residues
-numbered 18–132 and hotspot 56. They request a 31-residue chain B binder.
+numbered 18–132 and hotspot 56. They request an 80-residue chain B binder,
+within the native PD-L1 example's 65–150-residue range.
 The [advanced settings](examples/freebindcraft/advanced.json) bound the case
-to one trajectory and one MPNN sequence, with the native three-stage
-algorithm: logits 100, softmax 20 and one-hot 10 iterations, plus one recycle
-for design and validation. Model sampling and beta reoptimization are
-disabled; two held-out models validate the redesigned
+to one trajectory and one MPNN sequence, with the native standard four-stage
+optimizer: logits 75, softmax 45, one-hot 5 and semigreedy 15 iterations.
+Model sampling is enabled. Beta reoptimization is disabled, with one recycle
+for design and validation; two held-out models validate the redesigned
 complex and binder alone. [Filters](examples/freebindcraft/filters.json)
 are `{}`, clearing optional refold/final thresholds. Native trajectory
 confidence, contact and clash checks remain.
 
-The random seed is stochastic, so this bounded case can reject its single
-trajectory. That fails qualification; no second trajectory or automatic
-replay follows. These reduced settings are execution checks, not a scientific
-search recommendation. For real work establish the user's target construct,
+The pinned native CLI has no seed argument or config selector; it draws
+each trajectory seed internally. The accepted B09 native case used seed
+171558. A later single trajectory can be rejected by the same native gates.
+Rejection fails the case; no second trajectory or automatic replay follows.
+These bounded settings are execution checks, not a scientific search
+recommendation. For real work establish the user's target construct,
 chain, hotspots, binder scope and evaluation criteria. The target is a
 retained example structure, and no generated binder is supplied in advance.
 
@@ -103,7 +108,7 @@ or substitute CPU execution after a GPU failure.
 ## Check native outputs
 
 Paths below are inside `/workspace/b09/freebindcraft`. The native trajectory
-name is `forge_b09_l31_s<randomseed>` and must be read from its CSV:
+name is `forge_b09_l80_s<randomseed>` and must be read from its CSV:
 
 ```text
 trajectory_stats.csv
@@ -132,7 +137,7 @@ matching redesigned/final identities and sequences, and a matching native
 FASTA. It parses the original and relaxed trajectory, both unrelaxed and
 relaxed refolded complexes, and one accepted relaxed PDB. Each checked
 complex must have target chain A matching the staged PD-L1 sequence, binder
-B31 and finite coordinates. Native average pLDDT/pTM/i_pTM must be finite
+B80 and finite coordinates. Native average pLDDT/pTM/i_pTM must be finite
 on 0–1. The log inspection above supplies separate CUDA relaxation evidence.
 
 An exit-zero command can still produce incomplete or header-only output.

@@ -28,8 +28,10 @@ Use `ariax skills forge --reference NAME --read --json` to read
 same references. `data.examples.root` is the local directory used by native
 examples; `data.examples.base`, `.ipsae`, `.boltz2`, `.bindcraft2`, and
 `.freebindcraft` locate individual fixture directories. B08 qualified base,
-ipSAE and Boltz2. The B09 design-tool recipes and examples await their
-native GPU and live deployment gates. Use the deployed catalog and tool readiness.
+ipSAE and Boltz2. B09 qualified the BindCraft2 and FreeBindCraft images and
+bounded examples on the native GPU builder. Private publication and live
+Forge session qualification are separate gates. Use the deployed catalog
+and tool readiness.
 
 ## Start and select tools
 
