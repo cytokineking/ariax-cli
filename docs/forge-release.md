@@ -16,11 +16,11 @@ The Ubuntu 22.04 Vast guest and Ubuntu 24.04 Hyperstack guest both passed the ma
 | Runtime | `/Users/aaronring/Forge-rebuild/2026-10-01/forged` | `0c3c8fe` |
 | CLI | `/Users/aaronring/Forge-rebuild/2026-10-01/cli` | `92036ce` |
 
-Preserve unrelated primary-checkout changes. The shared documentation in these repositories describes the accepted implementation. Existing executor chats are idle and retain their isolated work and handoffs.
+Each repository retains `main` and one `codex/forge-v2-integration` branch. Completed worker assignments and intermediate plans are preserved in [the history archive](forge-history.md). The CLI also includes scientific skill recovery commits `88042c5` and `430cf4d`; their offline checks leave broader native qualification limits explicit.
 
 ## Deployment work
 
-Production rollout is a separate task. Deploy the coordinated backend, runtime and CLI revisions with migration `20261003000000_forge_tool_selections.sql`. Configure the daemon's reachable HTTPS origin through `FORGE_CONTROL_PLANE_URL` and retain model storage credentials in the control plane. Catalog assets use `object_key` and `archive`; host catalogs contain archive formats and obtain URLs through the authenticated callback. Keep GHCR packages private and registry credentials outside workloads.
+Production rollout is a separate task. Deploy the coordinated backend, runtime and CLI revisions with migrations `20261002000000_forge_sessions.sql`, `20261002010000_forge_files.sql`, and `20261003000000_forge_tool_selections.sql`, applied through the normal migration process. Configure the daemon's reachable HTTPS origin through `FORGE_CONTROL_PLANE_URL` and retain model storage credentials in the control plane. Catalog assets use `object_key` and `archive`; host catalogs contain archive formats and obtain URLs through the authenticated callback. Keep GHCR packages private and registry credentials outside workloads.
 
 Vast admission remains disabled by default. Its live host, native and lifecycle acceptance passed. Changing admission is part of the rollout decision. Existing admitted sessions continue reconciliation and cleanup when admission is disabled.
 
@@ -31,3 +31,7 @@ The B11 source session's unexpected early closure has no proven trigger because 
 ## Deferred scope
 
 Broader tool families, custom installation, multi-GPU execution, warm pools and migration remain deferred. Extract shared provider operations when a concrete change exposes useful duplication. Preserve the accepted checkpoint semantics and direct native command execution.
+
+## Repository locations
+
+The control plane and public API live in [Ariax-Bio](https://github.com/cytokineking/Ariax-Bio). Native runtime, images and fixtures live in the private [ariax-forged](https://github.com/cytokineking/ariax-forged) repository. The public [ariax-cli](https://github.com/cytokineking/ariax-cli) repository contains the client and agent guides. Keep the coordinated Forge release separate from ordinary branding and managed-job fixes already on backend main.

@@ -78,4 +78,4 @@ The builder `1078494` was confirmed absent at 2026-10-02T22:54:01.039018+00:00. 
 
 Evidence is preserved at `/Users/aaronring/Forge-rebuild/2026-10-01/evidence/b08-2026-10-02`. Its manifest lists native logs, output files, checkpoint/session records, publication metadata, cleanup and billing records, and the small remote image evidence bundle. A credential scan passed before copying. Credentials and temporary authorized URLs remain outside that evidence directory and Git.
 
-The [next-bite plan](forge-next-turn-plan.md) prepares B09 BindCraft2/FreeBindCraft and parallel B10 Vast work. B11 will qualify the additional advertised combinations and remaining release lifecycle cases.
+The subsequent [B12 report](forge-b12-qualification.md) records completed native and lifecycle acceptance across both providers. Current deployment requirements are in [the release handoff](forge-release.md).
