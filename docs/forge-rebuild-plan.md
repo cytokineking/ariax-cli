@@ -1,6 +1,6 @@
 **Forge rebuild and worker plan**
 
-Updated October 2, 2026. B00–B08 are complete. Remote base/ipSAE/Boltz2 image checks and the installed-CLI Hyperstack campaign passed, including restore, private pulls, billing and resource cleanup. See the [B08 qualification report](forge-b08-qualification.md). The [implementation contract](forge-contract.md) governs the rebuild; the [next-bite plan](forge-next-turn-plan.md) prepares B09 and B10.
+Updated October 3, 2026. B00–B09 are complete. B10 is integrated with Vast admission disabled. B11 passed the Hyperstack native and checkpoint workflows, while an unexplained early source closure and the Vast host gate remain unresolved. All campaign resources have been cleaned up. Read the [B11 report](forge-b11-qualification.md), [remaining gates](forge-next-turn-plan.md) and [contract](forge-contract.md).
 
 Ariax provisions on-demand full VMs and runs workloads in Docker. The initial tools are Boltz2, BindCraft2, FreeBindCraft, ipSAE, and a base workspace. Hyperstack is the reference provider. Vast full VMs follow after the first integrated pilot. User-supplied hosts and custom tool installation are outside this release.
 

@@ -121,3 +121,7 @@ The bounded Hyperstack campaign runs base during science preparation, inspects r
 ## B08 follow-through
 
 The subsequent B08 campaign completed remote image builds and published all packages privately. Fresh Hyperstack sessions exercised the installed CLI, native GPU prediction, durable checkpoints and restore. Live testing fixed private Docker SDK setup and an S3 client context-manager error. The [B08 report](forge-b08-qualification.md) records accepted code, regression coverage, scientific scope, costs and confirmed resource cleanup. Historical statements above describe the B05–B07 review at that time.
+
+## B09–B11 follow-through
+
+The design-tool recipes, shared AF2 asset and native CLI guides passed remote qualification and private publication. All five tool workflows ran through the installed CLI on Hyperstack. The [B11 report](forge-b11-qualification.md) records checkpoint recovery, verified cleanup, the unresolved early closure and the failed Vast Ubuntu-version gate. The next-bite plan now lists those remaining release gates.

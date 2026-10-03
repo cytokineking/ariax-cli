@@ -3,9 +3,8 @@
 FreeBindCraft is a GPU tool for designing candidate protein binders. B09 uses
 the retained [native source](https://github.com/cytokineking/FreeBindCraft/tree/d12747dbc907435622559b81891ad73e0a45c2e4)
 with ColabDesign 1.1.3, JAX 0.6.0 and OpenMM 8.3.1 plus its CUDA plugin.
-B09 qualified the image and this bounded fixture on the assigned L40
-builder. Private publication and live Forge session qualification are
-separate gates.
+The private image and this bounded native fixture passed on an L40 builder
+and through the installed Forge CLI on Hyperstack.
 Availability depends on the deployed catalog and tool readiness. A completed
 command and consistent files establish execution, without establishing
 binding, specificity, expression or experimental affinity.

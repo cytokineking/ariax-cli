@@ -2,9 +2,8 @@
 
 BindCraft2 is a GPU tool for designing candidate protein binders. B09 uses
 native package 1.0.1 from the reviewed [PacesaLab source](https://github.com/PacesaLab/BindCraft2/tree/e6d30f6ea2e5bbc2f62ae7fa722f183da6c6c29f).
-B09 qualified the image and this bounded fixture on the assigned L40
-builder. Private publication and live Forge session qualification are
-separate gates.
+The private image and this bounded native fixture passed on an L40 builder
+and through the installed Forge CLI on Hyperstack.
 Availability depends on the deployed catalog and tool readiness. A completed
 command and consistent files establish execution, without establishing
 binding, specificity, expression or experimental affinity.
