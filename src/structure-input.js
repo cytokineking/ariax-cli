@@ -1,5 +1,5 @@
 import { EXIT } from './exit-codes.js';
-import { pxSequenceMappingError, effectiveSelectorsError, structureRecordsError, metadataSequenceError } from './structure-validation.js';
+import { pxSequenceMappingError, effectiveSelectorsError, structureRecordsError, metadataSequenceError, esmfold2RegisterCompatibilityError } from './structure-validation.js';
 
 const AA3_TO_1 = {
   ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
@@ -1244,6 +1244,12 @@ export async function prepareStructureInput({ spec, text, targetFilename, prompt
           ? 'does not match polymer metadata at the coordinate label positions' : null)
         : sequenceAlignmentError(resolved.sequence, view[chain].residues);
       if (alignmentError) throw invalid(`ESMFold2 sequence for chain ${chain} ${alignmentError}.`);
+      if (parsed.format === 'cif') {
+        const compatibilityError = esmfold2RegisterCompatibilityError({
+          chain, atoms: parsed.atoms, loops: parsed.cif.parsed.loops,
+        });
+        if (compatibilityError) throw invalid(compatibilityError);
+      }
       sequences[chain] = resolved.sequence;
       messages.push(`ESMFold2 target sequence ${chain} prepared from ${resolved.source}.`);
     }
