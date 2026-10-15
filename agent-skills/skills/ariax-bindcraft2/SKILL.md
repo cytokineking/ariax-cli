@@ -38,6 +38,8 @@ For a secondary FASTA target, select the intended record. FASTA targets cannot c
 
 Bundled scaffold formats use hosted defaults. Do not download or redistribute bundled scaffold assets. A custom scaffold requires a PDB/mmCIF `scaffold_file` and native `mutate_positions`, such as `A50-55(5-8)` for a variable-length edit; omit de novo `lengths`. Validate positions against that exact scaffold rather than copying an edit range from another construct.
 
+For the bundled VHH scaffold, leave `binder` empty to inherit its qualified mutation selection. Supplying `mutate_positions` replaces that selection. A plain span declares editable paratope residues; `*` marks editable framework residues. The VHH preset's `binder_intra_coldspot` loss requires both kinds of position. If the experiment intentionally edits only paratope/CDR residues, set `advanced.weights_binder_intra_coldspot` to `0` and confirm that the live schema accepts it. The custom-scaffold example demonstrates this choice; replace its illustrative residue ranges with positions from your own scaffold. Adding `*` positions changes which framework residues can mutate and needs a scientific reason.
+
 ## Configure properties and controls
 
 The nine optional properties are `bigbang`, `disulfide_staple`, `forced_targeting`, `humanize`, `initial_guess`, `mixed_topology`, `protease_stable`, `termini_accessible`, and `termini_together`. Compatibility depends on format and targets. Humanization, protease, and disulfide objectives optimize proxies.
