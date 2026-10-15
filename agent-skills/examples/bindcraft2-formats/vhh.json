@@ -19,9 +19,7 @@
         "weight": 1
       }
     ],
-    "binder": {
-      "mutate_positions": "A26-35,A50-65,A95-110"
-    },
+    "binder": {},
     "campaign": {
       "num_designs": 2,
       "max_trajectories": 20
