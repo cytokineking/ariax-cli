@@ -42,7 +42,7 @@ For the bundled VHH scaffold, leave `binder` empty to inherit its qualified muta
 
 ## Configure properties and controls
 
-The nine optional properties are `bigbang`, `disulfide_staple`, `forced_targeting`, `humanize`, `initial_guess`, `mixed_topology`, `protease_stable`, `termini_accessible`, and `termini_together`. Compatibility depends on format and targets. Humanization, protease, and disulfide objectives optimize proxies.
+The nine optional properties are `bigbang`, `disulfide_staple`, `forced_targeting`, `humanize`, `initial_guess`, `mixed_topology`, `protease_stable`, `termini_accessible`, and `termini_together`. Compatibility depends on format and targets. `forced_targeting` reshapes every target state around its hotspots, off-targets included, so it needs structure targets that each carry hotspots and cannot be combined with `objective: "detarget"` or FASTA targets. Validation and submission reject these combinations. Ask the user whether to drop forced targeting or the off-target; do not add off-target hotspots as a workaround, because the runtime would then reshape the off-target structure. Humanization, protease, and disulfide objectives optimize proxies.
 
 `bigbang` seeds gradient stages and re-prediction from coordinates on hand; de novo binders start at the origin. `initial_guess` seeds re-prediction from the trajectory pose while ordinary gradient initialization remains unchanged.
 
