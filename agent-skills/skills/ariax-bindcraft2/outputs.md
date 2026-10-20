@@ -41,9 +41,48 @@ Use a CSV parser. Quoted fields may contain commas. Multi-target vectors are sem
 
 `i_pDAE` is BC2's 0–1 interface ranking measure; higher is better. `i_pTM` is a 0–1 interface-confidence fraction. CSV mean binder `pLDDT` is a 0–1 fraction, while a structure B-factor field can use 0–100. Normalized `i_pAE` is not an ångström PAE matrix. Units and directions belong to each named metric; do not compare them directly with another engine's score.
 
-Requested/saved campaign settings record the experiment. Resolved defaults describe effective starting settings. A trajectory's `autotuned` and related fields record per-attempt adaptation. Report all three scopes explicitly. `initial_guess` and `bigbang` can alter pose seeding; they do not make every validation stage equivalent.
+Requested/saved campaign settings record the experiment. Resolved defaults describe effective starting settings. A trajectory's `autotuned` and related fields record per-attempt adaptation. Report all three scopes explicitly. `hard_target` and `large_complex` alter pose seeding; older saved settings may call them `initial_guess` and `bigbang`. Preserve those recorded spellings and the recorded engine identity when interpreting a historical campaign.
 
 Rejected structures appear only when retention settings requested them. Native and relaxed complexes can represent different stages. A missing file may still be syncing or may not have been retained.
+
+## Conformational metrics in v1.0.4
+
+These meanings are verified against upstream v1.0.4 commit
+`d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. Check recorded engine metadata
+before applying them to an older campaign; absent historical metadata is
+unknown. The current schema's capability metadata describes the default for
+new campaigns and does not establish the engine used by a saved campaign.
+
+| Metric | Meaning in v1.0.4 |
+| --- | --- |
+| `Binder_RMSD` | Aligned free-to-bound binder displacement in Å over shared coordinates; it does not apply the conformational confidence weighting. |
+| `Induced_Fit_RMSD` | Aligned free-to-bound binder displacement in Å, weighted by confidence in both states. |
+| `Induced_Fit_Interface_RMSD` | Confidence-weighted binding-surface movement in Å after core alignment. Larger values support requested induced fit. |
+| `Induced_Fit_TM` | Confidence-weighted aligned free-to-bound fold similarity from 0 to 1; 1 means unchanged. Its length scale uses the structurally paired length. A switching design requests a ceiling. |
+
+`advanced.confidence_floor` is a finite fraction from `0` through `1`, with
+native default `0.7` on omission. The lower per-residue pLDDT of the two states
+sets the weight: at or below the floor the weight is zero, and above it the
+weight rises toward one. The conformational objectives and all three
+`Induced_Fit_*` checks use this campaign-wide value. Insufficient confident
+coordinate support makes a metric unavailable; do not replace it with zero.
+A floor of `1` leaves no confident support. `Binder_RMSD` and a final confidence
+filter answer different questions from these weighted conformational checks.
+
+The v1.0.4 `induced_fit` preset optimizes toward 5 Å of interface movement and
+uses an acceptance minimum of 2 Å for `Induced_Fit_Interface_RMSD`. The
+`fold_switch` preset optimizes toward TM `0.6` and 1 Å displacement; its
+acceptance gates are `Induced_Fit_TM` at most `0.85` and `Induced_Fit_RMSD`
+at least 1 Å. Both presets disable the ordinary `Binder_RMSD` acceptance gate.
+Explicit named `filters` can override these choices; inspect the resolved
+settings and native outcomes rather than inferring acceptance from a rounded
+CSV value. Reporting `Induced_Fit_RMSD` alone does not prove it was a rejecting
+gate, since it can also be installed for measurement.
+
+`advanced.mutate_gate_draws` selects the lowest weighted-loss prediction from
+1–8 fresh draws at the mutate gate, with native default 1 when omitted. More
+draws add prediction work. The selected draw supplies the gate's metrics;
+scores are not averages or evidence of independent experimental replication.
 
 ## Downloads and troubleshooting
 

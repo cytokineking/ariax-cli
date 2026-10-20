@@ -177,6 +177,21 @@ function nativeSelections(value, chains, { scaffold, label }) {
       }
     }
     const endpoints = [Number(startText), Number(endText || startText)].sort((left, right) => left - right);
+    // Native scaffold edits start with DESIGN|CONTACT and apply deltas in
+    // order. `!` drops DESIGN; a later +DESIGN restores it. Every possible
+    // replacement must preserve a held span, rather than failing at random
+    // after the runtime samples a length.
+    let designed = true;
+    for (const [delta] of flags.matchAll(/[+-][A-Za-z]+|[*!]/g)) {
+      if (delta === '!' || delta === '-DESIGN') designed = false;
+      else if (delta === '+DESIGN') designed = true;
+    }
+    if (scaffold && !designed && lengths) {
+      const spanLength = endpoints[1] - endpoints[0] + 1;
+      if ([...lengths.matchAll(/\d+/g)].some(([choice]) => Number(choice) !== spanLength)) {
+        throw invalid(`${label}: a held span that drops DESIGN must keep its length (${spanLength}): ${match[0]}.`);
+      }
+    }
     parsed.push({ token: match[0], chain, first: endpoints[0], last: endpoints[1] });
   }
   if (!parsed.length || selection.slice(position)) {
@@ -247,6 +262,10 @@ function validateBundle(spec, files) {
     const scaffold = files.find((item) => item.filename === config.binder.scaffold_file);
     const validated = validateStructure(scaffold.bytes, scaffold.filename, []);
     validateScaffoldSelection(config.binder.mutate_positions, validated.parsed.author, scaffold.filename);
+  } else {
+    // Bundled scaffold coordinates stay on the server, but their edit syntax
+    // and held-length invariant can still be checked locally.
+    nativeSelections(config.binder.mutate_positions, [], { scaffold: true, label: 'BindCraft2 scaffold edit' });
   }
 }
 

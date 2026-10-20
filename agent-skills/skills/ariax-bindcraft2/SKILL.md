@@ -9,6 +9,28 @@ Read the shared [Ariax workflow](../../SKILL.md) before using this protocol. Fet
 
 BindCraft2 optimizes a binder with AlphaFold2, redesigns sequences with ProteinMPNN, then validates and filters candidates. An accepted design passed computational filters. It does not establish affinity, specificity, immunogenicity, stability, or experimental success.
 
+## Engine version and continuation
+
+This guide covers the hosted contract for upstream v1.0.4, pinned to
+`d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. Deployment and default-generation
+promotion are separate. Run `ariax schema bindcraft2 --json` for schema metadata
+and `ariax schema bindcraft2 --raw` for the actual job schema. When supplied,
+`native_capabilities.engine_version`, `source_commit`, and `source_tree_sha256`
+describe the active default generation; `properties` lists supported property
+choices and `advanced_controls` lists supported advanced field names. Use the
+two new controls only when their names appear in `advanced_controls` and the
+live schema accepts them. Absent metadata means unknown, not v1.0.4 support.
+
+A saved campaign continues with its compatible recorded engine and scientific
+settings. A current default version does not identify a historical run. Keep
+optional engine metadata supplied with recorded settings or config exports;
+the immutable source-tree hash identifies the generation, while version and
+commit describe it. Do not put runtime identity fields into `advanced` or
+rewrite saved aliases to migrate a checkpoint. `ariax restart` continues the
+existing campaign subject to server compatibility checks; exporting settings
+and using `ariax submit` creates a new campaign under the server-selected
+generation. An export cannot guarantee historical execution equivalence.
+
 ## Choose the format
 
 Use the exact case-sensitive modality token in `protocol_config.modality`. `induced_fit` and `fold_switch` are optional modifiers after the base format and require one prepared target state.
@@ -38,15 +60,50 @@ For a secondary FASTA target, select the intended record. FASTA targets cannot c
 
 Bundled scaffold formats use hosted defaults. Do not download or redistribute bundled scaffold assets. A custom scaffold requires a PDB/mmCIF `scaffold_file` and native `mutate_positions`, such as `A50-55(5-8)` for a variable-length edit; omit de novo `lengths`. Validate positions against that exact scaffold rather than copying an edit range from another construct.
 
-For the bundled VHH scaffold, leave `binder` empty to inherit its qualified mutation selection. Supplying `mutate_positions` replaces that selection. A plain span declares editable paratope residues; `*` marks editable framework residues. The VHH preset's `binder_intra_coldspot` loss requires both kinds of position. If the experiment intentionally edits only paratope/CDR residues, set `advanced.weights_binder_intra_coldspot` to `0` and confirm that the live schema accepts it. The custom-scaffold example demonstrates this choice; replace its illustrative residue ranges with positions from your own scaffold. Adding `*` positions changes which framework residues can mutate and needs a scientific reason.
+`!` holds a scaffold span unredesigned, retaining its existing residues and
+coordinates; `-DESIGN` has the same DESIGN effect. A held span cannot change
+length: `A50-55(6)!` is valid, while `A50-55(5-8)!` is rejected locally because
+some choices resize it. Flag deltas apply in order, so a later `+DESIGN` makes
+the span editable again. Local checks cover edit syntax and held lengths for
+bundled scaffolds too; their coordinate bounds remain a server check.
+
+For the bundled VHH scaffold, leave `binder` empty to inherit its qualified mutation selection. Supplying `mutate_positions` replaces that selection. A plain span declares editable paratope residues; `*` keeps DESIGN and drops CONTACT for editable framework residues. The VHH preset's `binder_intra_coldspot` loss requires both kinds of position. If the experiment intentionally edits only paratope/CDR residues, set `advanced.weights_binder_intra_coldspot` to `0` and confirm that the live schema accepts it. The custom-scaffold example demonstrates this choice; replace its illustrative residue ranges with positions from your own scaffold. Adding `*` positions changes which framework residues can mutate and needs a scientific reason.
 
 ## Configure properties and controls
 
-The nine optional properties are `bigbang`, `disulfide_staple`, `forced_targeting`, `humanize`, `initial_guess`, `mixed_topology`, `protease_stable`, `termini_accessible`, and `termini_together`. Compatibility depends on format and targets. `forced_targeting` reshapes every target state around its hotspots, off-targets included, so it needs structure targets that each carry hotspots and cannot be combined with `objective: "detarget"` or FASTA targets. Validation and submission reject these combinations. Ask the user whether to drop forced targeting or the off-target; do not add off-target hotspots as a workaround, because the runtime would then reshape the off-target structure. Humanization, protease, and disulfide objectives optimize proxies.
+The nine canonical optional properties are `hard_target`, `large_complex`, `disulfide_staple`, `forced_targeting`, `humanize`, `mixed_topology`, `protease_stable`, `termini_accessible`, and `termini_together`. Use the live capability `properties` list for availability. Compatibility depends on format and targets. `forced_targeting` reshapes every target state around its hotspots, off-targets included, so it needs structure targets that each carry hotspots and cannot be combined with `objective: "detarget"` or FASTA targets. Validation and submission reject these combinations. Ask the user whether to drop forced targeting or the off-target; do not add off-target hotspots as a workaround, because the runtime would then reshape the off-target structure. Humanization, protease, and disulfide objectives optimize proxies.
 
-`bigbang` seeds gradient stages and re-prediction from coordinates on hand; de novo binders start at the origin. `initial_guess` seeds re-prediction from the trajectory pose while ordinary gradient initialization remains unchanged.
+`large_complex` seeds gradient stages and re-prediction from coordinates on hand;
+de novo binders start at the origin. `hard_target` seeds re-prediction from the
+trajectory pose while ordinary gradient initialization remains unchanged.
+`bigbang` and `initial_guess` are deprecated aliases for `large_complex` and
+`hard_target`, respectively, on new submissions. The server canonicalizes and
+deduplicates alias/canonical pairs for new jobs. Local preparation and config
+export preserve saved property spellings; they do not migrate historical jobs.
 
 Use only fields accepted by the live schema. Preserve omitted fields, explicit zeroes, and `false`: they are different requests. `sequence_candidates` controls ProteinMPNN proposals; `kept_sequences` controls retained proposals. Detarget rotation thresholds and `max_detarget_iptm_final` serve different stages. Filters have exact native names, directions, units, and optional state scope. Shell commands, model paths, arbitrary native settings, provider knobs, upstream sweeps, and custom reranking are outside the hosted contract.
+
+Two optional v1.0.4 controls belong in `protocol_config.advanced`, with no new
+CLI flags:
+
+- `confidence_floor`: a finite fraction from `0` through `1`; native default
+  `0.7` when omitted. Conformational objectives and the three `Induced_Fit_*`
+  checks use the same floor. Residues at or below it contribute no weight;
+  higher-confidence residues receive increasing weight using the lower pLDDT
+  of the free and bound predictions. This is distinct from a final pLDDT gate.
+- `mutate_gate_draws`: an integer from `1` through `8`; omission preserves the
+  native default of `1`. At the mutate-stage gate, the engine takes that many
+  fresh predictions and selects the draw with the lowest weighted design loss.
+  It does not average scores or choose the highest i_pTM. More draws increase
+  prediction work per trajectory; retain the user's explicit choice.
+
+Keep acceptance thresholds in the existing named `filters`. In v1.0.4 the
+`induced_fit` preset asks for at least 2 Å of confident interface movement;
+`fold_switch` asks for `Induced_Fit_TM` at most `0.85` and
+`Induced_Fit_RMSD` at least 1 Å. Their optimization targets differ from these
+acceptance gates. Read [the metric details](outputs.md#conformational-metrics-in-v104)
+before interpreting these values or comparing historical campaigns. Rematerialization,
+attention selection, and worker packing remain runtime-managed.
 
 Omit `advanced.desperation_trajectories` to keep the native 750-trajectory
 threshold, including for VHH. An explicit `0` starts the first recovery rung
@@ -113,6 +170,9 @@ is authorized; correct an invalid saved policy before restart.
 ## Inspect, validate, and submit
 
 Start from [`bindcraft2-pilot.json`](../../examples/bindcraft2-pilot.json) or an example in [`bindcraft2-formats/`](../../examples/bindcraft2-formats/). Put every configured input file in one directory.
+
+The cyclic example deliberately uses lengths `[8, 14]`. Keep that explicit
+choice even though upstream v1.0.4's cyclic preset defaults to `[7, 20]`.
 
 ```sh
 ariax inputs inspect --input-dir ./bc2-inputs -f bc2-job.json --json

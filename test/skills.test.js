@@ -68,6 +68,14 @@ describe('bundled skills read-through', () => {
     assert.equal(data.protocol, 'bindcraft2');
     assert.match(data.skill, /ariax-bindcraft2\/SKILL\.md$/);
     assert.match(data.references.outputs, /ariax-bindcraft2\/outputs\.md$/);
+    for (const reference of [null, 'outputs', 'recorded-settings', 'examples']) {
+      const args = ['skills', 'bindcraft2', '--read', '--json'];
+      if (reference) args.push('--reference', reference);
+      const read = await captureOutput(() => main(args, {}));
+      assert.equal(read.value, 0);
+      assert.equal(JSON.parse(read.stdout).data.content,
+        readFileSync(reference ? data.references[reference] : data.skill, 'utf8'));
+    }
   });
 
   it('reads named core and protocol output references', async () => {

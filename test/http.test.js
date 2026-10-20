@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   sanitize,
   ApiError,
@@ -15,6 +16,8 @@ import {
   MAX_GET_ATTEMPTS,
 } from '../src/http.js';
 import { EXIT } from '../src/exit-codes.js';
+
+const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 function headersOf(obj = {}) {
   const lower = {};
@@ -169,7 +172,7 @@ describe('createClient: success envelope handling', () => {
     assert.equal(seen.opts.headers['Content-Type'], 'application/json');
     assert.ok(seen.opts.headers['X-Request-Id']);
     assert.equal(seen.opts.headers['X-Ariax-Client'], 'cli');
-    assert.equal(seen.opts.headers['X-Ariax-CLI-Version'], '0.1.2');
+    assert.equal(seen.opts.headers['X-Ariax-CLI-Version'], packageVersion);
     assert.equal(seen.opts.redirect, 'error');
   });
   it('parses error envelopes into ApiError with exit codes', async () => {

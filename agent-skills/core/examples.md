@@ -30,6 +30,26 @@ Use `ariax inputs inspect`/`prepare` to resolve the RCSB entry locally before
 validating its prepared upload. A target example is not an assertion of binding
 site accessibility or expected activity.
 
+## BindCraft2 explicit settings
+
+The cyclic-peptide recipe keeps its explicit `[8, 14]` length range; upstream
+v1.0.4's `[7, 20]` default does not replace a supplied range. The templates
+omit `confidence_floor` and `mutate_gate_draws` so that native defaults remain
+in effect. When the live schema and `native_capabilities.advanced_controls`
+support both fields, merge explicit choices into `protocol_config.advanced`,
+for example `"confidence_floor": 0.7` and `"mutate_gate_draws": 2`.
+The latter chooses the lowest weighted-loss draw from two fresh mutate-gate
+predictions, increasing work without averaging scores.
+
+Use canonical `hard_target` and `large_complex` properties for new v1.0.4
+submissions when listed by the live capabilities. Keep historical exported
+`initial_guess`/`bigbang` spellings until the server normalizes a new submission.
+For custom scaffold edits, `A50-55(5-8)` can resize an editable span, while
+`A50-55!` holds the existing span and cannot resize it. Check these illustrative
+positions against the actual scaffold. See the
+[BindCraft2 guide](../skills/ariax-bindcraft2/SKILL.md) for capability gating and
+the distinction between continuation and a new campaign.
+
 ## Safe scripted output
 
 Capture stdout, stderr, and the original CLI status before invoking a JSON

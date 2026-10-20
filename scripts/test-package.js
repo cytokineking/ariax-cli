@@ -52,6 +52,17 @@ try {
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-boltzgen/SKILL.md'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/SKILL.md'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/outputs.md'));
+    for (const relative of [
+      'agent-skills/skills/ariax-bindcraft2/SKILL.md',
+      'agent-skills/skills/ariax-bindcraft2/outputs.md',
+      'agent-skills/core/recorded-settings.md',
+      'agent-skills/core/examples.md',
+      'agent-skills/examples/bindcraft2-formats/cyclic-peptide.json',
+      'agent-skills/examples/bindcraft2-formats/custom-scaffold.json',
+    ]) {
+      assert.deepEqual(await fs.readFile(path.join(root, 'ariax-cli', relative)),
+        await fs.readFile(path.join(PACKAGE_ROOT, relative)), `Packaged content differs: ${relative}`);
+    }
     if (channel === 'github') githubBuild = installed.build;
     else {
       const release = { channel: 'npm', latest_version: installed.build.version, latest_revision: null };

@@ -44,7 +44,7 @@ it('rejects bad nested project commands and incompatible export flags before req
   }
 });
 
-for (const cysteine of [0, 1]) it(`BindCraft2 export and detailed validation preserve sparse preferences with C=${cysteine}`, async () => {
+for (const cysteine of [0, 1]) it(`BindCraft2 export and detailed validation preserve scientific settings with C=${cysteine}`, async () => {
   const root = rootDir(), output = path.join(root, 'job.json');
   const input = path.join(root, 'input.pdb');
   fs.writeFileSync(input, 'ATOM      1  N   ALA A   1      10.000  10.000  10.000  1.00 20.00           N\n');
@@ -53,10 +53,11 @@ for (const cysteine of [0, 1]) it(`BindCraft2 export and detailed validation pre
     protocol: 'bindcraft2',
     allowed_gpus: ['H100'],
     protocol_config: {
-      schema_version: 1, modality: ['binder'], properties: [],
+      schema_version: 1, modality: ['binder'],
+      properties: cysteine === 0 ? ['hard_target', 'large_complex'] : ['initial_guess', 'bigbang'],
       targets: [{ name: 'target', input_file: 'input.pdb', chains: ['A'], objective: 'target', weight: 1 }],
       binder: { lengths: [60, 90] }, campaign: { num_designs: 2, max_trajectories: 20 },
-      advanced: { aa_bias: aaBias },
+      advanced: { aa_bias: aaBias, confidence_floor: cysteine, mutate_gate_draws: cysteine === 0 ? 1 : 8 },
     },
   };
   const calls = [];
@@ -66,7 +67,7 @@ for (const cysteine of [0, 1]) it(`BindCraft2 export and detailed validation pre
     if (route === `/api/v1/projects/${parent}/config`) return response({ job_spec: spec });
     assert.equal(route, '/api/v1/validate');
     const body = JSON.parse(opts.body);
-    assert.deepEqual(body.protocol_config.advanced.aa_bias, aaBias);
+    assert.deepEqual(body.protocol_config, spec.protocol_config);
     return response({ valid: true, normalized_job_spec: body });
   };
   const exported = await run(['projects', 'export', parent, '--output', output], root, fetch);
@@ -75,6 +76,19 @@ for (const cysteine of [0, 1]) it(`BindCraft2 export and detailed validation pre
   assert.deepEqual(exported.parsed.data.job_spec.protocol_config.advanced.aa_bias, aaBias);
   const validated = await run(['validate', '-f', output, '--input', input, '--details'], root, fetch);
   assert.equal(validated.code, 0, validated.stdout);
-  assert.deepEqual(validated.parsed.data.normalized_job_spec.protocol_config.advanced.aa_bias, aaBias);
+  assert.deepEqual(validated.parsed.data.normalized_job_spec.protocol_config, spec.protocol_config);
   assert.deepEqual(calls, [['GET', `/api/v1/projects/${parent}/config`], ['POST', '/api/v1/validate']]);
+});
+
+it('BindCraft2 export keeps omitted v1.0.4 controls and historical property spellings intact', async () => {
+  const root = rootDir(), output = path.join(root, 'job.json');
+  const spec = { protocol: 'bindcraft2', protocol_config: {
+    schema_version: 1, modality: ['VHH'], properties: ['initial_guess', 'bigbang'],
+    binder: {}, advanced: { save_failed_refolds: false },
+  } };
+  const exported = await run(['projects', 'export', parent, '--output', output], root,
+    async () => response({ job_spec: spec }));
+  assert.equal(exported.code, 0, exported.stdout);
+  assert.deepEqual(JSON.parse(fs.readFileSync(output)), spec);
+  assert.deepEqual(exported.parsed.data.job_spec, spec);
 });

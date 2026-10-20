@@ -521,6 +521,45 @@ small syntax/preparation cases. The repository's [agent evidence recorder](https
 records exact inputs, CLI identity, commands, validation responses, and completion
 separately. It is an offline evidence tool, not a claim of completed compute.
 
+### BindCraft2 v1.0.4 settings and continuation
+
+Use `ariax schema bindcraft2 --json` to inspect the live `native_capabilities`,
+then `ariax schema bindcraft2 --raw` for the job schema. Optional
+`engine_version`, `source_commit`, and `source_tree_sha256` identify or describe
+the active default generation. Absent historical metadata stays unknown; the
+current default does not establish which engine ran an existing campaign.
+
+For new v1.0.4 submissions, `hard_target` and `large_complex` replace the
+deprecated `initial_guess` and `bigbang` property names. The server normalizes
+and deduplicates aliases for new jobs; local preparation and export retain
+recorded spellings. Use property choices listed in the live capabilities.
+Two optional settings use the existing nested `protocol_config.advanced` JSON:
+
+- `confidence_floor`: finite `0..1`, native default `0.7` when omitted; shared
+  by conformational objectives and the three `Induced_Fit_*` checks.
+- `mutate_gate_draws`: integer `1..8`, native default `1` when omitted; chooses
+  the prediction with the lowest weighted design loss from fresh mutate-gate
+  draws. More draws add prediction work; scores are not averaged.
+
+Use these controls only when listed in `native_capabilities.advanced_controls`
+and accepted by the live schema. Preparation, validation, and export retain
+explicit values and omission; no new flags are required. Use validation's
+`--details --json` response to inspect the full normalized settings.
+Conformational acceptance uses existing named filters; see the
+[versioned metric meanings](agent-skills/skills/ariax-bindcraft2/outputs.md#conformational-metrics-in-v104).
+
+Scaffold `!` or `-DESIGN` holds existing residues and coordinates. A held span
+cannot resize: `A50-55(6)!` is valid but `A50-55(5-8)!` fails local validation.
+Flag deltas apply in order; a later `+DESIGN` restores editability. The bundled
+cyclic example retains its explicit `[8, 14]` lengths despite upstream's new
+`[7, 20]` default.
+
+`ariax restart` continues a saved campaign with its compatible recorded engine
+and scientific settings. `ariax projects export` preserves public settings;
+submitting that JSON creates a new campaign using the server-selected engine.
+Export does not migrate a checkpoint or guarantee the same historical runtime.
+See [recorded settings](agent-skills/core/recorded-settings.md) for provenance.
+
 ### BindCraft2 amino-acid preferences
 
 Set optional preferences in `protocol_config.advanced.aa_bias` in the job JSON.

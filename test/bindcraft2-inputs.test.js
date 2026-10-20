@@ -55,6 +55,8 @@ describe('BindCraft2 deterministic input bundles', () => {
     assert.equal(bundle.spec.protocol_config.modality[0], 'ARP');
     assert.deepEqual(bundle.required, ['avoid.fasta', 'input.pdb', 'scaffold.pdb']);
     assert.equal(Object.hasOwn(bundle.spec.protocol_config.advanced, 'desperation_trajectories'), false);
+    assert.equal(Object.hasOwn(bundle.spec.protocol_config.advanced, 'confidence_floor'), false);
+    assert.equal(Object.hasOwn(bundle.spec.protocol_config.advanced, 'mutate_gate_draws'), false);
     assert.deepEqual(Object.keys(bundle.manifest.files), bundle.required);
     const output = path.join(root, 'prepared');
     writeBindcraft2Bundle(output, bundle);
@@ -203,7 +205,7 @@ describe('BindCraft2 deterministic input bundles', () => {
     const directory = inputDirectory(root, { scaffold: true });
     fs.writeFileSync(path.join(directory, 'scaffold.pdb'), pdbResidues('X', [7, 54, 100]));
     const selected = spec({ scaffold: true });
-    selected.protocol_config.binder.mutate_positions = 'X7(5,8),X100-54(2-4)*!+COLDSPOT-DESIGN';
+    selected.protocol_config.binder.mutate_positions = 'X7(5,8),X100-54(2-4)*!+COLDSPOT-DESIGN+DESIGN';
     assert.doesNotThrow(() => prepareBindcraft2Bundle({ spec: selected, inputDir: directory }));
 
     for (const value of ['X7+FAKE', 'X7+', 'X7(0,8)', 'X7(5,2001)', '7*', 'X7(5,8', 'Z7*']) {
@@ -217,6 +219,55 @@ describe('BindCraft2 deterministic input bundles', () => {
     }
   });
 
+  it('preserves held scaffold spans and applies DESIGN deltas in native order', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-held-spans-'));
+    try {
+      const directory = inputDirectory(root, { scaffold: true });
+      fs.writeFileSync(path.join(directory, 'scaffold.pdb'), pdbResidues('X', [7, 8, 9]));
+      for (const custom of [true, false]) {
+        const selected = spec({ scaffold: true });
+        if (!custom) delete selected.protocol_config.binder.scaffold_file;
+        for (const edit of [
+          'X7!', 'X7-DESIGN', 'X9-7(3)!', 'X7-9(3,3-3)-DESIGN',
+          'X7-9(3)!*+CONTACT', 'X7-9(5-8)!+DESIGN',
+          'X7-9(5,8)-DESIGN+DESIGN', 'X7-9(5-8)*',
+        ]) {
+          selected.protocol_config.binder.mutate_positions = edit;
+          const bundle = prepareBindcraft2Bundle({ spec: selected, inputDir: directory });
+          assert.equal(bundle.spec.protocol_config.binder.mutate_positions, edit);
+        }
+        for (const edit of [
+          'X7(2)!', 'X7-9(2-3)!', 'X9-7(3,4)-DESIGN',
+          'X7-9(3-4)+DESIGN!', 'X7-9(5-8)!+CONTACT',
+          'X7-9(3,4)-DESIGN+DESIGN-DESIGN',
+        ]) {
+          selected.protocol_config.binder.mutate_positions = edit;
+          assert.throws(() => prepareBindcraft2Bundle({ spec: selected, inputDir: directory }),
+            /held span that drops DESIGN must keep its length/, `${custom ? 'custom' : 'bundled'}: ${edit}`);
+        }
+      }
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('rejects a resized held span before validation, upload authorization, or submission', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-held-submit-'));
+    try {
+      const directory = inputDirectory(root, { scaffold: true });
+      const requested = spec({ scaffold: true });
+      requested.protocol_config.binder.mutate_positions = 'X7(2)!';
+      const file = path.join(root, 'job.json');
+      fs.writeFileSync(file, JSON.stringify(requested));
+      const ctx = { flags: { file, 'input-dir': directory, name: 'held-span' }, json: true,
+        config: { rootDir: root }, client: {
+          get: async () => assert.fail('no GET expected'),
+          post: async () => assert.fail('no POST expected'),
+        } };
+      await assert.rejects(validate(ctx), /held span that drops DESIGN/);
+      await assert.rejects(submit(ctx), /held span that drops DESIGN/);
+      assert.equal(fs.existsSync(path.join(root, '.ariax')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
   it('shares bundle preparation across inspect, prepare, and server validation', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-bc2-commands-'));
     const directory = inputDirectory(root);
@@ -224,6 +275,9 @@ describe('BindCraft2 deterministic input bundles', () => {
     const requested = spec();
     const aaBias = { C: 0, F: 1, W: 0.4, Y: 2 };
     requested.protocol_config.advanced.aa_bias = aaBias;
+    requested.protocol_config.advanced.confidence_floor = 0;
+    requested.protocol_config.advanced.mutate_gate_draws = 8;
+    requested.protocol_config.properties = ['hard_target', 'large_complex'];
     fs.writeFileSync(job, JSON.stringify(requested));
     const currentBuild = { version: 'test', channel: 'source', source_revision: 'a'.repeat(40), source_dirty: false };
     await inputs({ positionals: ['inspect'], flags: { file: job, 'input-dir': directory }, json: true, currentBuild });
@@ -232,6 +286,7 @@ describe('BindCraft2 deterministic input bundles', () => {
     assert.deepEqual(fs.readdirSync(output).sort(), ['avoid.fasta', 'input-manifest.json', 'input.pdb', 'job.json']);
     const prepared = JSON.parse(fs.readFileSync(path.join(output, 'job.json')));
     assert.deepEqual(prepared.protocol_config.advanced.aa_bias, aaBias);
+    assert.deepEqual(prepared.protocol_config, requested.protocol_config);
     let validated;
     await validate({ flags: { file: job, 'input-dir': directory }, json: true, client: { post: async (url, options) => {
       assert.equal(url, '/api/v1/validate');
@@ -240,6 +295,7 @@ describe('BindCraft2 deterministic input bundles', () => {
     } } });
     assert.equal(validated.protocol, 'bindcraft2');
     assert.deepEqual(validated.protocol_config.advanced.aa_bias, aaBias);
+    assert.deepEqual(validated.protocol_config, requested.protocol_config);
     await assert.rejects(validate({ flags: { file: job, input: path.join(directory, 'input.pdb'), 'input-dir': directory },
       json: true, client: { post: async () => assert.fail('must not call server') } }), /choose only one input source/i);
   });
@@ -276,12 +332,17 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     const requested = spec();
     requested.protocol_config.advanced.desperation = true;
     requested.protocol_config.advanced.desperation_trajectories = 0;
+    requested.protocol_config.advanced.confidence_floor = 0.7;
+    requested.protocol_config.advanced.mutate_gate_draws = 8;
+    requested.protocol_config.properties = ['initial_guess', 'hard_target', 'bigbang', 'large_complex'];
     const aaBias = { C: 0, F: 1, W: 0.4, Y: 2 };
     requested.protocol_config.advanced.aa_bias = aaBias;
     fs.writeFileSync(job, JSON.stringify(requested));
     const posts = [];
     const puts = [];
-    const normalized = { ...requested, project_type: 'miniprotein' };
+    const normalized = { ...requested, project_type: 'miniprotein', protocol_config: {
+      ...requested.protocol_config, properties: ['hard_target', 'large_complex'],
+    } };
     const client = {
       get: async (url) => {
         assert.equal(url, '/api/v1/me');
@@ -318,6 +379,8 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     assert.equal(posts.find((entry) => entry.url === '/api/v1/projects').options.body.protocol_config.advanced.desperation_trajectories, 0);
     for (const url of ['/api/v1/validate', '/api/v1/projects']) {
       assert.deepEqual(posts.find((entry) => entry.url === url).options.body.protocol_config.advanced.aa_bias, aaBias);
+      assert.deepEqual(posts.find((entry) => entry.url === url).options.body.protocol_config,
+        (url === '/api/v1/validate' ? requested : normalized).protocol_config);
     }
     const init = posts.find((entry) => entry.url === '/api/v1/uploads/init').options.body;
     assert.deepEqual(init, { project_name: 'bc2-test', project_type: 'miniprotein', target_filename: 'input.pdb', input_files: ['avoid.fasta', 'input.pdb'] });
@@ -328,6 +391,7 @@ describe('BindCraft2 signed upload and durable recovery', () => {
     assert.equal(operation.version, 2);
     assert.equal(operation.request.body.protocol_config.advanced.desperation_trajectories, 0);
     assert.deepEqual(operation.request.body.protocol_config.advanced.aa_bias, aaBias);
+    assert.deepEqual(operation.request.body.protocol_config, normalized.protocol_config);
     assert.deepEqual(operation.prepared_inputs.map((entry) => entry.filename), ['avoid.fasta', 'input.pdb']);
     fs.rmSync(job);
     fs.rmSync(directory, { recursive: true });

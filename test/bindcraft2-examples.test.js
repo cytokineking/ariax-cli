@@ -63,6 +63,7 @@ describe('BindCraft2 packaged examples', () => {
     const custom = load('custom-scaffold.json');
     assert.equal(custom.protocol_config.binder.scaffold_file, 'custom-vhh.cif');
     assert.match(custom.protocol_config.binder.mutate_positions, /A50-65/);
+    assert.deepEqual(load('cyclic-peptide.json').protocol_config.binder.lengths, [8, 14]);
   });
 
   it('offers RTX6000PRO as a primary eligible GPU in every new BindCraft2 template', () => {
@@ -100,6 +101,10 @@ describe('BindCraft2 packaged examples', () => {
         assert.deepEqual(fs.readdirSync(output).sort(), expected);
         const manifest = JSON.parse(fs.readFileSync(path.join(output, 'input-manifest.json'), 'utf8'));
         assert.deepEqual(Object.keys(manifest.files).sort(), requiredBindcraft2Inputs(job));
+        const preparedJob = load(path.join(output, 'job.json'));
+        assert.deepEqual(preparedJob.protocol_config, job.protocol_config);
+        assert.equal(Object.hasOwn(preparedJob.protocol_config.advanced, 'confidence_floor'), false);
+        assert.equal(Object.hasOwn(preparedJob.protocol_config.advanced, 'mutate_gate_draws'), false);
       }
     } finally {
       fs.rmSync(temporary, { recursive: true, force: true });
@@ -147,6 +152,8 @@ describe('BindCraft2 packaged examples', () => {
       'A50-55(5-8)',
       'A54*',
       'A54!',
+      'A55-50(6)!',
+      'A50-55(6,6-6)-DESIGN',
       'A54+NONE,A55-DESIGN,A56+TEMPLATE,A57-SEQUENCE,A58+CONTACT,A59-HOTSPOT,A60+COLDSPOT,A61-CYCLIC,A62+PADDING',
     ]) {
       const job = structuredClone(base);
@@ -166,7 +173,7 @@ describe('BindCraft2 packaged examples', () => {
     }
 
     const scaffold = load(path.join(root, 'bindcraft2-formats', 'custom-scaffold.json'));
-    for (const edit of ['54', 'Z7', 'A111', 'A7+UNKNOWN', 'A7(0)', 'A7(2001)', 'A7(8,,9)', 'A7,,A8', 'A7-', 'A-8']) {
+    for (const edit of ['54', 'Z7', 'A111', 'A7+UNKNOWN', 'A7(0)', 'A7(2001)', 'A7(8,,9)', 'A7,,A8', 'A7-', 'A-8', 'A50-55(5-8)!', 'A55-50(5,6)-DESIGN']) {
       const job = structuredClone(scaffold);
       job.protocol_config.targets[0].hotspots = '';
       job.protocol_config.targets[0].coldspots = '';

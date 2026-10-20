@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { it } from 'node:test';
 import { main } from '../src/main.js';
+
+const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 const data = {
   source: 'database', billing_unit: 'allocation_hour',
@@ -35,7 +38,7 @@ it('fetches current pricing each invocation and preserves the JSON envelope and 
       assert.equal(options.method, 'GET');
       assert.equal(new URL(url).searchParams.get('channel'), 'cli');
       assert.equal(options.headers['X-Ariax-Client'], 'cli');
-      assert.equal(options.headers['X-Ariax-CLI-Version'], '0.1.2');
+      assert.equal(options.headers['X-Ariax-CLI-Version'], packageVersion);
       assert.equal(options.body, undefined);
       return Response.json({ data: updated, request_id: 'prices' });
     });

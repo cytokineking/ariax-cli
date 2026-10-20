@@ -24,6 +24,25 @@ inputs, review the settings, then use normal `ariax submit` for a new authorized
 billable project. PXDesign regenerates its MSA. RCSB identifiers are retained,
 but fetching them again may return changed source data.
 
+For BindCraft2, optional `engine_version`, `source_commit`, and
+`source_tree_sha256` metadata describe the recorded engine when supplied on a
+public provenance surface. The source-tree hash identifies the immutable
+generation; missing historical metadata stays unknown. The live schema's
+`native_capabilities` describes the active default for new campaigns and cannot
+fill gaps in an old record. Client settings cannot choose runtime artifacts.
+
+The CLI writes the config API's public `job_spec` verbatim, retaining explicit
+`advanced.confidence_floor`, `advanced.mutate_gate_draws`, and historical
+property spellings supplied by the server. It does not insert v1.0.4 defaults,
+canonicalize a saved campaign, or migrate its checkpoint. Retain the JSON
+response separately when export provenance is needed; `--output` writes only
+the reusable job spec, while stdout includes the server's export metadata.
+`ariax restart` requests continuation with the campaign's compatible engine and
+existing scientific settings. Reusing exported JSON with `ariax submit` starts
+a new campaign, whose accepted settings and server-selected engine can differ.
+Review the live schema and normalized validation response before submitting;
+the server decides compatibility before compute allocation.
+
 Output groups and candidate tables describe mutable current project outputs.
 A restart can change them; retain downloaded tables, structures and checksums
 when comparing results historically.
