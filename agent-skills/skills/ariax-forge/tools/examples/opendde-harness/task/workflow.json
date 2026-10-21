@@ -1,0 +1,38 @@
+{
+  "target": "insulin-file-boundary",
+  "design_type": "minibinder",
+  "fold_backend": "opendde",
+  "cycles": 1,
+  "target_chains": {
+    "A": {
+      "sequence": "GIVEQCCTSICSLYQLENYCN"
+    }
+  },
+  "binder_chains": {
+    "B": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT"
+  },
+  "fold_options": {
+    "design_type": "minibinder",
+    "execution_mode": "local",
+    "use_msa": false,
+    "enable_msa_search": false,
+    "use_templates": false,
+    "need_atom_confidence": true,
+    "deterministic": true,
+    "seeds": [
+      101
+    ],
+    "recycling_cycles": 1,
+    "diffusion_steps": 20,
+    "diffusion_samples": 1,
+    "checkpoint_path": "/models/opendde-v1/checkpoint/opendde.pt",
+    "target_chains": {
+      "A": {
+        "sequence": "GIVEQCCTSICSLYQLENYCN"
+      }
+    },
+    "binder_chain_ids": [
+      "B"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "creator",
+    "sequences": {
+      "H": "QVQLVESGGGLVQPGESLRLSCAASGSIFGIYAVHWFRMAPGKEREFTAGFGSHGSTNYAASVKGRFTMSRDNAKNTTYLQMNSLKPADTAVYYCHALIKNELGFLDYWGPGTQVTVSS"
+    },
+    "source_chains": {
+      "H": "original_H"
+    }
+  },
+  {
+    "id": "variant",
+    "sequences": {
+      "H": "EVQLVESGGGLVQPGESLRLSCAASGSIFGIYAVHWFRMAPGKEREFTAGFGSHGSTNYAASVKGRFTMSRDNAKNTTYLQMNSLKPADTAVYYCHALIKNELGFLDYWGPGTQVTVSS"
+    },
+    "source_chains": {
+      "H": "variant_H"
+    }
+  }
+]

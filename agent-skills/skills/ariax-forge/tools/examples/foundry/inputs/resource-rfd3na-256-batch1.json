@@ -1,0 +1,7 @@
+{
+  "resource-rfd3na-256-batch1": {
+    "length": "256",
+    "contig": "256-256R",
+    "input": "/inputs/foundry/inputs/rna.pdb"
+  }
+}

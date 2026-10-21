@@ -1,0 +1,8 @@
+{
+  "rfd3na-dna": {
+    "input": "/inputs/foundry/inputs/AMP-generation.pdb",
+    "ligand": "AMP",
+    "contig": "24-24D",
+    "length": "24"
+  }
+}

@@ -1,0 +1,25 @@
+[
+  {
+    "name": "rf3-complex",
+    "components": [
+      {
+        "seq": "AGSTAGSTAGSTAGSTAGSTAGST",
+        "chain_id": "A"
+      },
+      {
+        "seq": "ACGT",
+        "chain_type": "POLYDEOXYRIBONUCLEOTIDE",
+        "chain_id": "B"
+      },
+      {
+        "seq": "ACGU",
+        "chain_type": "POLYRIBONUCLEOTIDE",
+        "chain_id": "C"
+      },
+      {
+        "ccd_code": "AMP",
+        "chain_id": "D"
+      }
+    ]
+  }
+]

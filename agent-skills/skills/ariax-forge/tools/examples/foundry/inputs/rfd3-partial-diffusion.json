@@ -1,0 +1,9 @@
+{
+  "rfd3-partial-diffusion": {
+    "input": "/inputs/foundry/inputs/protein.pdb",
+    "partial_t": 10.0,
+    "select_fixed_atoms": {
+      "E6-13": "BKBN"
+    }
+  }
+}

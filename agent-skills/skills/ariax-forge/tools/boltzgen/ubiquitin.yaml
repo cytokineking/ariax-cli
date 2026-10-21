@@ -1,0 +1,10 @@
+# B43 bounded execution pilot: 40-residue de novo binder against full 1UBQ.
+entities:
+  - protein:
+      id: B
+      sequence: 40
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A

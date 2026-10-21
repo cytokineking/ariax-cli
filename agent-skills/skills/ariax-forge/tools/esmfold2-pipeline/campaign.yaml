@@ -1,0 +1,53 @@
+# Qualified small native execution case: two 40-residue miniproteins.
+# Reuses the existing full 1UBQ source fixture, with no crop or hotspots.
+target:
+  name: b47b_1ubq
+  structure:
+    path: /inputs/esmfold2-pipeline/1ubq.cif
+  chains: [A]
+  structure_indexing: auth_seq_id
+  conditioning:
+    mode: distogram
+    assembly: false
+    partial: false
+    require_resolved: true
+binder:
+  scaffold: miniprotein
+  length: 40
+campaign:
+  num_designs: 2
+  seed_start: 7
+  steps: 8
+  inversion_model: cutoff2025
+  critics: [cutoff2025]
+validation:
+  model: protenix-v2
+  top_k: 1
+  min_esm_iptm: 0
+  min_validation_iptm: 0.6
+  require_hotspot_contact: never
+  max_attempts: 1
+  protenix:
+    python: /opt/protenix-env/bin/python
+    root: /opt/protenix
+    checkpoint_dir: /models/protenix-v2/checkpoint
+    scratch_root: /workspace/esmfold2-pipeline/b47b/validation-debug
+    keep_debug: true
+    batch_size: 1
+    seeds: [101]
+    n_sample: 1
+    n_step: 200
+    n_cycle: 10
+    use_template: true
+    timeout_seconds: 900
+    token_limit: 2560
+  msa:
+    target: none
+    binder: none
+analysis:
+  top_k: 1
+  ranking:
+    mode: auto
+    max_binder_rmsd_angstrom: 2.5
+    rmsd_weight: 0.10
+output: /workspace/esmfold2-pipeline/b47b

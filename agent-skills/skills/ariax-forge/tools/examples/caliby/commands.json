@@ -1,0 +1,794 @@
+[
+  {
+    "case": "clean-monomer",
+    "argv": [
+      "caliby",
+      "clean",
+      "input_cfg.pdb_dir=/inputs/caliby/monomer",
+      "out_dir=/workspace/caliby/clean-monomer",
+      "num_workers=1"
+    ]
+  },
+  {
+    "case": "clean-multichain",
+    "argv": [
+      "caliby",
+      "clean",
+      "input_cfg.pdb_dir=/inputs/caliby/multichain",
+      "out_dir=/workspace/caliby/clean-multichain",
+      "num_workers=1"
+    ]
+  },
+  {
+    "case": "generate-monomer",
+    "argv": [
+      "caliby",
+      "ensembles",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "model_params_path=/models/caliby-weights",
+      "out_dir=/workspace/caliby/ensembles-monomer",
+      "num_samples_per_pdb=2",
+      "batch_size=1",
+      "num_workers=1"
+    ],
+    "check": [
+      "caliby-check",
+      "ensemble",
+      "/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150/1crn"
+    ]
+  },
+  {
+    "case": "generate-multichain",
+    "argv": [
+      "caliby",
+      "ensembles",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "model_params_path=/models/caliby-weights",
+      "out_dir=/workspace/caliby/ensembles-multichain",
+      "num_samples_per_pdb=2",
+      "batch_size=1",
+      "num_workers=1"
+    ],
+    "check": [
+      "caliby-check",
+      "ensemble",
+      "/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150/pair"
+    ]
+  },
+  {
+    "case": "caliby-monomer-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/monomer/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby/monomer/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby-monomer-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/monomer/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby/monomer/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby-monomer-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/monomer/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby/monomer/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby-monomer-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/monomer/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby/monomer/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby-multichain-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/multichain/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby/multichain/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby-multichain-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/multichain/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby/multichain/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby-multichain-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/multichain/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby/multichain/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby-multichain-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=caliby",
+      "out_dir=/workspace/caliby/caliby/multichain/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby/multichain/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby-monomer-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/monomer/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby/monomer/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby-monomer-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/monomer/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby/monomer/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby-monomer-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/monomer/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby/monomer/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby-monomer-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/monomer/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby/monomer/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby-multichain-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/multichain/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby/multichain/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby-multichain-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/multichain/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby/multichain/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby-multichain-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/multichain/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby/multichain/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby-multichain-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=soluble_caliby",
+      "out_dir=/workspace/caliby/soluble_caliby/multichain/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby/multichain/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby_distill-monomer-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/monomer/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby_distill/monomer/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby_distill-monomer-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/monomer/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby_distill/monomer/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby_distill-monomer-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/monomer/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby_distill/monomer/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby_distill-monomer-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/monomer/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby_distill/monomer/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby_distill-multichain-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/multichain/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby_distill/multichain/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby_distill-multichain-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/multichain/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/caliby_distill/multichain/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "caliby_distill-multichain-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/multichain/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby_distill/multichain/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "caliby_distill-multichain-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=caliby_distill",
+      "out_dir=/workspace/caliby/caliby_distill/multichain/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/caliby_distill/multichain/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-monomer-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/monomer/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby_distill/monomer/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-monomer-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/monomer/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby_distill/monomer/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-monomer-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/monomer/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-monomer",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby_distill/monomer/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-monomer-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/monomer/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-monomer/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby_distill/monomer/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-monomer/1crn.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-multichain-design",
+    "argv": [
+      "caliby",
+      "design",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/multichain/design",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby_distill/multichain/design/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-multichain-design-ensemble",
+    "argv": [
+      "caliby",
+      "design-ensemble",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/multichain/design-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "pos_constraint_csv=/inputs/caliby/constraints.csv",
+      "sampling_cfg_overrides.num_seqs_per_pdb=2"
+    ],
+    "check": [
+      "caliby-check",
+      "design",
+      "/workspace/caliby/soluble_caliby_distill/multichain/design-ensemble/seq_des_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "2"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-multichain-score",
+    "argv": [
+      "caliby",
+      "score",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/multichain/score",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.pdb_dir=/workspace/caliby/clean-multichain",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby_distill/multichain/score/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  },
+  {
+    "case": "soluble_caliby_distill-multichain-score-ensemble",
+    "argv": [
+      "caliby",
+      "score-ensemble",
+      "ckpt_name_or_path=soluble_caliby_distill",
+      "out_dir=/workspace/caliby/soluble_caliby_distill/multichain/score-ensemble",
+      "num_workers=1",
+      "sampling_cfg_overrides.batch_size=1",
+      "input_cfg.conformer_dir=/workspace/caliby/ensembles-multichain/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150",
+      "max_num_conformers=3",
+      "save_local_conditionals=true"
+    ],
+    "check": [
+      "caliby-check",
+      "score",
+      "/workspace/caliby/soluble_caliby_distill/multichain/score-ensemble/score_outputs.csv",
+      "--input",
+      "/workspace/caliby/clean-multichain/pair.cif",
+      "--rows",
+      "1"
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+# B33 small functional proposal: two serial structure samples; inactive pending activation.
+version: 1
+sequences:
+- protein:
+    id: A
+    sequence: MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+    msa: empty

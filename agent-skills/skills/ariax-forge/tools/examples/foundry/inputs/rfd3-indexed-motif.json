@@ -1,0 +1,7 @@
+{
+  "rfd3-indexed-motif": {
+    "input": "/inputs/foundry/inputs/protein.pdb",
+    "contig": "8,E6-13,24",
+    "length": "40"
+  }
+}

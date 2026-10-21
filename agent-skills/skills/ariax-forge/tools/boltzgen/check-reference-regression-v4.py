@@ -1,0 +1,18 @@
+"""Compare complete native reference metrics across the target-mask correction."""
+from pathlib import Path
+import json,sys
+import numpy as np
+import pandas as pd
+partial,original,patched=map(Path,sys.argv[1:])
+def metrics(root):return pd.read_csv(next((root/'intermediate_designs').glob('aggregate_metrics_*.csv'))).sort_values('id').reset_index(drop=True)
+a,b=metrics(original),metrics(patched)
+assert set(a.columns)==set(b.columns),'Native metric set differs'
+column_order_equal=list(a.columns)==list(b.columns)
+b=b[a.columns]
+pd.testing.assert_frame_equal(a,b,check_exact=True)
+p=metrics(partial)
+assert np.isfinite(p['seq_recovery']).all() and np.isfinite(p['native_rmsd']).all()
+assert (p['native_rmsd']<=0.0006).all() and (p['native_rmsd_bb']<=0.0006).all()
+columns=[c for c in p if 'lddt' in c];assert columns and any(np.isfinite(p[c]).all() for c in columns if 'designability' not in c)
+unavailable={c:int(p[c].isna().sum()) for c in columns if p[c].isna().any()}
+print(json.dumps({'ordinary_pipeline_rows':len(a),'all_native_metric_columns':len(a.columns),'ordinary_pipeline_before_after_exact':True,'partial_reference_rows':len(p),'partial_target_native_rmsd':p['native_rmsd'].tolist(),'partial_target_native_backbone_rmsd':p['native_rmsd_bb'].tolist(),'partial_reference_lddt_columns':columns,'native_unavailable_lddt_counts':unavailable,'native_column_order_equal':column_order_equal,'no_inference_replay':True},indent=2))

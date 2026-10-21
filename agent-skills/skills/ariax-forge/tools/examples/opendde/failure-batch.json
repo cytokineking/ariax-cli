@@ -1,0 +1,42 @@
+[
+  {
+    "name": "unsupported-entity",
+    "modelSeeds": [
+      105
+    ],
+    "sequences": [
+      {
+        "unsupportedEntity": {
+          "sequence": "ACDEFGHIK",
+          "count": 1
+        }
+      }
+    ]
+  },
+  {
+    "name": "protein-smiles",
+    "modelSeeds": [
+      106
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "ACDEFGHIK",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "ligand": {
+          "ligand": "CCO",
+          "count": 1,
+          "id": [
+            "L"
+          ]
+        }
+      }
+    ]
+  }
+]

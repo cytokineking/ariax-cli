@@ -1,0 +1,11 @@
+{
+  "rfd3-fixed-backbone": {
+    "input": "/inputs/foundry/inputs/protein.pdb",
+    "contig": "E6-45",
+    "length": "40",
+    "select_fixed_atoms": {
+      "E6-45": "BKBN"
+    },
+    "select_unfixed_sequence": "E6-45"
+  }
+}

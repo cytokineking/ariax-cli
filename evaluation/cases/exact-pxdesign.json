@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "exact-pxdesign",
+  "prompt": "Use the bundled Ariax skills to prepare a PXDesign miniprotein configuration for agent-skills/examples/fixtures/synthetic-target.cif. Select only chain A, exactly hotspot A10, crop A5-15, binder length 60-80, and one design. Prepare and validate locally; no Ariax or compute calls. Save config and CLI build evidence.",
+  "expected_completion": "completed",
+  "checks": [
+    {"pointer":"/protocol","op":"equals","value":"pxdesign"},
+    {"pointer":"/chains","op":"equals","value":"A"},
+    {"pointer":"/hotspots_by_chain","op":"equals","value":{"A":[10]}},
+    {"pointer":"/crop_by_chain","op":"equals","value":{"A":["5-15"]}},
+    {"pointer":"/binder_length","op":"equals","value":"60-80"},
+    {"pointer":"/num_designs","op":"equals","value":1}
+  ]
+}

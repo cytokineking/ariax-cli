@@ -1,0 +1,14 @@
+{
+  "protocol": "Bindcraft v1.5",
+  "project_type": "peptide",
+  "chains": "A",
+  "hotspots": "A10",
+  "lengths": [
+    12,
+    20
+  ],
+  "num_designs": 1,
+  "filters": "peptide_filters",
+  "advanced": "peptide_3stage_multimer",
+  "use_pyrosetta": false
+}

@@ -1,0 +1,29 @@
+{
+  "samples": 1,
+  "chains": {
+    "A": {
+      "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+    },
+    "B": {
+      "residues": 1,
+      "min_atoms": 13
+    }
+  },
+  "confidence_arrays": true,
+  "bonds": [
+    {
+      "a": [
+        "A",
+        25,
+        "ND2"
+      ],
+      "b": [
+        "B",
+        1,
+        "C1"
+      ],
+      "min_angstrom": 0.8,
+      "max_angstrom": 2.1
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "repository": "aqlaboratory/genie3",
+  "commit": "d77ae5ac04212ff1e8b29b585859a3244c614804",
+  "files": {
+    "motif/motifs/22_1BCF.pdb": "data/design/motif_scaffolding/motifbench/motifs/22_1BCF.pdb",
+    "target/targets/01_bhrf1.fasta": "data/design/binder_design/binderbench/targets/fasta/01_bhrf1.fasta",
+    "target/targets/01_bhrf1.a3m": "data/design/binder_design/binderbench/targets/msa/01_bhrf1.a3m"
+  },
+  "target_msa": "supplied upstream BHRF1 alignment, not a synthetic query-only fixture",
+  "chain_pdb_repair": "upstream per-chain BHRF1 PDB is zero bytes; use the same complete single-chain target PDB without changing its residues",
+  "limits": "matrix.md; pending qualification"
+}

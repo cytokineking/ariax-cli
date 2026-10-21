@@ -1,0 +1,11 @@
+# B33 native qualification input. Not yet executed.
+version: 1
+sequences:
+- protein:
+    id: A
+    sequence: AGSTAGST
+    msa: /inputs/boltz2/pair_a.csv
+- protein:
+    id: B
+    sequence: GSTAGSTA
+    msa: /inputs/boltz2/pair_b.csv

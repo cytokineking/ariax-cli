@@ -1,0 +1,7 @@
+entities:
+  - protein:
+      id: B
+      sequence: 40
+  - ligand:
+      id: L
+      smiles: 'CC(=O)Oc1ccccc1C(=O)O'

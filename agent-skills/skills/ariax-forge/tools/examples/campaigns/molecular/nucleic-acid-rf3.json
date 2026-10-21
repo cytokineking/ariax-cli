@@ -1,0 +1,12 @@
+[
+  {
+    "name": "nucleic-acid",
+    "components": [
+      {
+        "seq": "UGUGUGUUCGUGCGACCCGCAGAAGAGUCCCUAGGACUCUACUGCGGGUCGCGCGAACACACAC",
+        "chain_id": "A",
+        "chain_type": "POLYRIBONUCLEOTIDE"
+      }
+    ]
+  }
+]

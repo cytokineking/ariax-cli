@@ -1,0 +1,70 @@
+{
+  "pinned_version": "0.2.0",
+  "cases": [
+    {
+      "id": "R27",
+      "protocol": "protein-anything",
+      "seed": 27,
+      "fixture": "secondary-structure.yaml",
+      "designs": 2,
+      "budget": 1,
+      "expected_stages": [
+        "design",
+        "inverse_folding",
+        "folding",
+        "design_folding",
+        "analysis",
+        "filtering"
+      ],
+      "refold_samples": 5,
+      "target_residues": 76,
+      "binder_range": [
+        40,
+        40
+      ],
+      "argv": [
+        "taskset",
+        "-c",
+        "0-7",
+        "forge-boltzgen",
+        "--seed",
+        "27",
+        "run",
+        "/inputs/boltzgen/secondary-structure.yaml",
+        "--output",
+        "/workspace/b43/R27",
+        "--protocol",
+        "protein-anything",
+        "--num_designs",
+        "2",
+        "--budget",
+        "1",
+        "--design_checkpoints",
+        "/models/boltzgen/boltzgen1_diverse.ckpt",
+        "--devices",
+        "1",
+        "--num_workers",
+        "0",
+        "--cache",
+        "/scratch/cache",
+        "--moldir",
+        "/models/boltzgen/mols",
+        "--inverse_fold_checkpoint",
+        "/models/boltzgen/boltzgen1_ifold.ckpt",
+        "--folding_checkpoint",
+        "/models/boltzgen/boltz2_conf_final.ckpt",
+        "--config",
+        "analysis",
+        "num_processes=2",
+        "--config",
+        "filtering",
+        "top_budget=2",
+        "--config",
+        "analysis",
+        "ss_conditioning_metrics=true"
+      ],
+      "timeout_seconds": 3600,
+      "description": "40 designed residues conditioned as20 helix,10 loop,10 sheet; original native SS scoring"
+    }
+  ]
+}

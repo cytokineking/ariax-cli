@@ -1,0 +1,19 @@
+[
+  {
+    "name": "rf3-template",
+    "components": [
+      {
+        "path": "/inputs/foundry/inputs/protein.pdb"
+      },
+      {
+        "path": "/inputs/foundry/inputs/AMP.pdb"
+      }
+    ],
+    "template_selection": [
+      "E"
+    ],
+    "ground_truth_conformer_selection": [
+      "A"
+    ]
+  }
+]

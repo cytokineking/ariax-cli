@@ -1,0 +1,16 @@
+[
+  {
+    "name": "substructure_2lwu_unconstrained",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GHCIPTTSGPICLRD",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      }
+    ]
+  }
+]

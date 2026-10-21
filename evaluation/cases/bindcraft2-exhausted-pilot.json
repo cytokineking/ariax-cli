@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "id": "bindcraft2-exhausted-pilot",
+  "prompt": "Interpret a completed BindCraft2 pilot that requested 2 accepted designs, attempted 20 trajectories, accepted 0, and reports stop_reason attempt_limit_reached. Explain the evidence and next decision without claiming software failure, experimental failure, or automatically starting another campaign.",
+  "expected_completion": "completed",
+  "checks": []
+}

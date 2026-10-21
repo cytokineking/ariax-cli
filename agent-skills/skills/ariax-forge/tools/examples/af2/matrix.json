@@ -1,0 +1,163 @@
+{
+  "state": "25 offline samples checked across bounded commands; public monomer and all three multimer modes passed; publication/lifecycle gates pending",
+  "active_compute_allowance_usd": 0,
+  "reserved_unactivated_usd": 0,
+  "source_commit": "84c27d9cc500489fd9b97545d2325b9d00f251d5",
+  "families": [
+    "alphafold2",
+    "alphafold2_ptm",
+    "alphafold2_multimer_v3"
+  ],
+  "max_input_residues": 76,
+  "single_gpu_target": "L40",
+  "inference_settings": {
+    "seed": 7,
+    "recycles": 1,
+    "ensemble": 1,
+    "max_msa_request": "32:64",
+    "relax": 0,
+    "fast_kernels": false,
+    "save_all": true
+  },
+  "native_command": [
+    "sh",
+    "/inputs/af2/run_native.sh",
+    "/workspace/af2-UNIQUE",
+    "ORIGINAL_SESSION_ID",
+    "/scratch/af2-UNIQUE"
+  ],
+  "stages": [
+    {
+      "order": 1,
+      "id": "core",
+      "predictions": 15,
+      "checks": [
+        "alphafold2.json",
+        "alphafold2_ptm.json",
+        "alphafold2_multimer_v3.json"
+      ],
+      "outputs": "core/MODE/"
+    },
+    {
+      "order": 2,
+      "id": "handoff",
+      "predictions": 0,
+      "outputs": [
+        "handoffs/monomer.json",
+        "handoffs/insulin.json"
+      ],
+      "consumer": "B35 interface-scores-v1"
+    },
+    {
+      "order": 3,
+      "id": "batch",
+      "predictions": 2,
+      "checks": [
+        "batch.json"
+      ]
+    },
+    {
+      "order": 4,
+      "id": "supplied",
+      "predictions": 1,
+      "checks": [
+        "supplied.json"
+      ]
+    },
+    {
+      "order": 5,
+      "id": "homomer",
+      "predictions": 1,
+      "checks": [
+        "homomer.json"
+      ]
+    },
+    {
+      "order": 6,
+      "id": "template-alphafold2",
+      "predictions": 2,
+      "checks": [
+        "template-alphafold2.json"
+      ]
+    },
+    {
+      "order": 7,
+      "id": "template-alphafold2_ptm",
+      "predictions": 2,
+      "checks": [
+        "template-alphafold2_ptm.json"
+      ]
+    },
+    {
+      "order": 8,
+      "id": "template-alphafold2_multimer_v3",
+      "predictions": 1,
+      "checks": [
+        "template-alphafold2_multimer_v3.json"
+      ]
+    },
+    {
+      "order": 9,
+      "id": "template-csv",
+      "predictions": 1,
+      "checks": [
+        "template-csv.json"
+      ]
+    }
+  ],
+  "offline_prediction_total": 25,
+  "expected_per_sample": [
+    "JOB_unrelaxed_rank_RRR_MODE_model_N_seed_007.pdb",
+    "JOB_scores_rank_RRR_MODE_model_N_seed_007.json",
+    "JOB_all_rank_RRR_MODE_model_N_seed_007.pickle",
+    "JOB_tokens_rank_RRR_MODE_model_N_seed_007.json"
+  ],
+  "expected_per_query": [
+    "JOB.a3m",
+    "JOB.done.txt",
+    "JOB_predicted_aligned_error_v1.json (pTM/multimer only)",
+    "JOB_template_domain_names.json (templates only)"
+  ],
+  "expected_per_run": [
+    "config.json",
+    "log.txt",
+    "check.json"
+  ],
+  "optional_service_stage": {
+    "command": [
+      "sh",
+      "/inputs/af2/run_services.sh",
+      "/workspace/af2-service-UNIQUE",
+      "ORIGINAL_SESSION_ID",
+      "CLEAN_SERVER_URL",
+      "CASE",
+      "STAGE"
+    ],
+    "search_jobs_per_server": 4,
+    "predictions_per_server": 4,
+    "order": [
+      "monomer",
+      "unpaired",
+      "paired",
+      "unpaired_paired"
+    ],
+    "requires_explicit_server_choice": true,
+    "search_timeout_minutes_per_job": 15,
+    "selected_case_choices": [
+      "monomer",
+      "unpaired",
+      "paired",
+      "unpaired_paired"
+    ],
+    "stage_choices": [
+      "search",
+      "predict"
+    ],
+    "automatic_next_case": false
+  },
+  "timeout_minutes_per_inference_command": 30,
+  "automatic_replay": false,
+  "native_qualification": true,
+  "native_qualification_scope": "2026-10-06: 25 offline sample checks on one L40 through unchanged DockerRuntime 2e2ada8, across core, batch and six remaining-case commands. Two multi-command attempts failed CUDA initialization after host systemd reloads. Original 2026-10-05 uninterrupted 25-prediction and local-storage restore acceptance remains historical evidence.",
+  "public_service_qualification": "2026-10-06: monomer, unpaired, paired and unpaired_paired each passed serial public search, native GPU prediction, unchanged output and selected handoff checks; model 1, seed 7, one recycle/ensemble, effective MSA cap 32:64"
+}

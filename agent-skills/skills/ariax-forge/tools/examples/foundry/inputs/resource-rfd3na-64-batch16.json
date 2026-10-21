@@ -1,0 +1,7 @@
+{
+  "resource-rfd3na-64-batch16": {
+    "length": "64",
+    "contig": "64-64R",
+    "input": "/inputs/foundry/inputs/rna.pdb"
+  }
+}

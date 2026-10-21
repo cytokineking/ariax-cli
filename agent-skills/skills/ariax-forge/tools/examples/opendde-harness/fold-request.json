@@ -1,0 +1,57 @@
+{
+  "task_id": "native-file-example",
+  "backend": "opendde",
+  "placement": {
+    "fold": [
+      0
+    ],
+    "cp_degree": 1
+  },
+  "options": {
+    "design_type": "minibinder",
+    "execution_mode": "local",
+    "use_msa": false,
+    "enable_msa_search": false,
+    "use_templates": false,
+    "need_atom_confidence": true,
+    "deterministic": true,
+    "seeds": [
+      101
+    ],
+    "recycling_cycles": 1,
+    "diffusion_steps": 20,
+    "diffusion_samples": 1,
+    "checkpoint_path": "/models/opendde-v1/checkpoint/opendde.pt",
+    "target_chains": {
+      "A": {
+        "sequence": "GIVEQCCTSICSLYQLENYCN"
+      }
+    },
+    "binder_chain_ids": [
+      "B"
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "parent-original",
+      "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+      "metadata": {
+        "chains": {
+          "B": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT"
+        },
+        "parent_id": null
+      }
+    },
+    {
+      "candidate_id": "child-original",
+      "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKS",
+      "metadata": {
+        "chains": {
+          "B": "FVNQHLCGSHLVEALYLVCGERGFFYTPKS"
+        },
+        "parent_id": "parent-original",
+        "status": "proposal"
+      }
+    }
+  ]
+}

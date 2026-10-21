@@ -1,0 +1,2 @@
+chainA,res_idxA,chainB,res_idxB,connection_type,confidence,min_distance_angstrom,max_distance_angstrom,comment,restraint_id
+B,,A,K6,pocket,1.0,0.0,12.0,bounded input conditioning check,pocket1

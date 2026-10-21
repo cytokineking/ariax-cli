@@ -1,0 +1,10 @@
+entities:
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+  - protein:
+      id: B
+      sequence: "40"
+      secondary_structure: hhhhhhhhhhhhhhhhhhhhllllllllllssssssssss

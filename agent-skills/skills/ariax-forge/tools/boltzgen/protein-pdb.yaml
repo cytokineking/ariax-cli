@@ -1,0 +1,9 @@
+entities:
+  - protein:
+      id: B
+      sequence: 40
+  - file:
+      path: 1ubq.pdb
+      include:
+        - chain:
+            id: A

@@ -1,0 +1,24 @@
+entities:
+  - protein:
+      id: B
+      sequence: 140
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A

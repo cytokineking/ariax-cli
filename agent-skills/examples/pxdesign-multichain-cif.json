@@ -1,0 +1,21 @@
+{
+  "protocol": "pxdesign",
+  "project_type": "miniprotein",
+  "chains": "A,B",
+  "binder_length": "60-80",
+  "num_designs": 1,
+  "hotspots_by_chain": {
+    "A": [
+      10
+    ]
+  },
+  "crop_by_chain": {
+    "A": [
+      "5-15"
+    ]
+  },
+  "sequence_by_chain": {
+    "A": "ACDEFGHIKLMNPQRSTVWY",
+    "B": "ACDEFGHIKLMNPQRSTVWY"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "protocol": "boltzgen",
+  "project_type": "peptide",
+  "num_designs": 1,
+  "budget": 1,
+  "chains": "A",
+  "binding_rules": [
+    {
+      "id": "A",
+      "binding": "10"
+    }
+  ],
+  "lengths": [
+    12,
+    20
+  ]
+}

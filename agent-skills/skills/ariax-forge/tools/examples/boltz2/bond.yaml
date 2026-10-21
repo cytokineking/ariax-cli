@@ -1,0 +1,17 @@
+# B33 native qualification input. Not yet executed.
+version: 1
+sequences:
+- protein:
+    id: A
+    sequence: ACGSTAGC
+    msa: empty
+constraints:
+- bond:
+    atom1:
+    - A
+    - 2
+    - SG
+    atom2:
+    - A
+    - 8
+    - SG

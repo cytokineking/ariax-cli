@@ -1,0 +1,29 @@
+{
+  "predictor": "rf3",
+  "run_id": "B35-native-20261007",
+  "input_id": "rf3-dimer",
+  "model": "rf3",
+  "seed": 7,
+  "sample": {
+    "record_id": "rf3-dimer",
+    "index": 0
+  },
+  "input_sequences": {
+    "A": "RMKQLEDKVEELLSKNYHLENEVARLKKLVGER",
+    "B": "RMKQLEDKVEELLSKNYHLENEVARLKKLVGER"
+  },
+  "files": {
+    "structure": "rf3-dimer_seed-7_sample-0_model.cif",
+    "confidence": "rf3-dimer_seed-7_sample-0_confidences.json",
+    "summary": "rf3-dimer_seed-7_sample-0_summary_confidences.json"
+  },
+  "lineage": {
+    "foundry_commit": "94c78ab125c6ef2cc7d1226de86d1bd578bf8bee",
+    "settings": {
+      "n_recycles": 1,
+      "num_steps": 50,
+      "diffusion_batch_size": 1,
+      "early_stopping_plddt_threshold": 0
+    }
+  }
+}

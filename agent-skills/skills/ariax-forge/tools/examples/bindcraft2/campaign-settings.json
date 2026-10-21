@@ -1,0 +1,51 @@
+{
+  "targets": [
+    {
+      "name": "hPDL1",
+      "target_path": "/inputs/bindcraft2/PDL1.pdb",
+      "chains": "A",
+      "hotspots": "56"
+    }
+  ],
+  "modality": "binder",
+  "campaign_name": "forge_b44",
+  "project_folder": "/workspace/b44/bindcraft2",
+  "campaign_seed": 7,
+  "binder_lengths": [
+    31
+  ],
+  "number_of_final_designs": 1,
+  "max_trajectories": 2,
+  "resume": false,
+  "hash_design_names": false,
+  "autotune": false,
+  "desperation": false,
+  "auto_multi_gpu": false,
+  "design_workers": 1,
+  "workers_per_gpu": 1,
+  "max_workers_per_gpu": 1,
+  "compile_next_length": false,
+  "screen_steps": 10,
+  "refine_steps": 10,
+  "anneal_steps": 3,
+  "harden_steps": 1,
+  "mutate_steps": 0,
+  "design_models": 1,
+  "validation_models": 1,
+  "design_recycles": 1,
+  "validation_recycles": 1,
+  "validation_crop_flank": 115,
+  "sequence_candidates": 2,
+  "kept_sequences": 1,
+  "enough_passing_sequences": 1,
+  "attention_backend": "xla",
+  "use_cueq": false,
+  "save_design_trajectory": true,
+  "save_failed_refolds": true,
+  "save_failed_trajectories": true,
+  "save_binder_monomers": true,
+  "save_design_animations": false,
+  "save_loss_plots": false,
+  "mpnn_model": "v_48_020",
+  "mpnn_variant": "negative"
+}

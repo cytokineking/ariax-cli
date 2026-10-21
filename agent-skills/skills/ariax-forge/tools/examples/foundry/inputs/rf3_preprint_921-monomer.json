@@ -1,0 +1,11 @@
+[
+  {
+    "name": "rf3_preprint_921-monomer",
+    "components": [
+      {
+        "seq": "AGSTAGSTAGSTAGSTAGSTAGST",
+        "chain_id": "A"
+      }
+    ]
+  }
+]

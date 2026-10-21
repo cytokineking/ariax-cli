@@ -1,0 +1,39 @@
+# B33 native qualification input. Not yet executed.
+version: 1
+sequences:
+- protein:
+    id: A
+    sequence: AGSTAGST
+    msa: empty
+- dna:
+    id: D
+    sequence: ACGT
+- rna:
+    id: R
+    sequence: ACGU
+- ligand:
+    id: T
+    ccd: ATP
+- ligand:
+    id: I
+    ccd: MG
+- ligand:
+    id: L
+    smiles: C[C@@H](O)C(=O)O
+constraints:
+- pocket:
+    binder: T
+    contacts:
+    - - A
+      - 3
+    max_distance: 6.0
+    force: false
+- contact:
+    token1:
+    - A
+    - 4
+    token2:
+    - T
+    - PA
+    max_distance: 8.0
+    force: false

@@ -1,0 +1,30 @@
+{
+  "polymers": [
+    {
+      "kind": "dna",
+      "length": [
+        10,
+        10
+      ],
+      "sequence": "CGCGAATTCG"
+    },
+    {
+      "kind": "dna",
+      "length": [
+        10,
+        10
+      ],
+      "sequence": "CGAATTCGCG"
+    },
+    {
+      "kind": "protein",
+      "length": [
+        40,
+        40
+      ]
+    }
+  ],
+  "chemicals": [],
+  "exact_polymer_chains": true,
+  "exact_chemical_components": true
+}

@@ -1,0 +1,53 @@
+{
+  "predictor": "boltz2",
+  "run_id": "synthetic-run-101",
+  "seed": "101",
+  "pae_units": "angstrom",
+  "plddt_scale": "0-1",
+  "files": {
+    "structure": "toy_model_0.cif",
+    "pae": "pae_toy_model_0.npz",
+    "plddt": "plddt_toy_model_0.npz",
+    "summary": "confidence_toy_model_0.json"
+  },
+  "chain_order": [
+    "A",
+    "B"
+  ],
+  "sequences": {
+    "A": "AG",
+    "B": "GA"
+  },
+  "residues": [
+    [
+      "A",
+      1,
+      "ALA"
+    ],
+    [
+      "A",
+      2,
+      "GLY"
+    ],
+    [
+      "B",
+      1,
+      "GLY"
+    ],
+    [
+      "B",
+      2,
+      "ALA"
+    ]
+  ],
+  "synthetic": true,
+  "chain_indices": {
+    "A": 0,
+    "B": 1
+  },
+  "input_id": "synthetic-AG-GA",
+  "sample": {
+    "record_id": "toy",
+    "rank": 0
+  }
+}

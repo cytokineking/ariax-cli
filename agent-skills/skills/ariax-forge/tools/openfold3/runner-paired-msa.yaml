@@ -1,0 +1,28 @@
+experiment_settings:
+  seeds: [42]
+  use_msa_server: false
+  use_templates: false
+  skip_existing: false
+data_module_args:
+  num_workers: 0
+  num_workers_validation: 0
+  multiprocessing_context: null
+output_writer_settings:
+  structure_format: cif
+  full_confidence_output_format: json
+  write_features: true
+model_update:
+  presets: [predict]
+  custom:
+    settings:
+      memory:
+        eval:
+          use_deepspeed_evo_attention: false
+          use_triton_triangle_kernels: false
+
+dataset_config_kwargs:
+  msa:
+    max_seq_counts: {custom: 4}
+    aln_order: [custom]
+    msas_to_pair: [custom]
+    paired_msa_order: [custom]

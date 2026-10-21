@@ -1,0 +1,13 @@
+entities:
+  - protein:
+      id: B
+      sequence: 3C6C5
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+constraints:
+  - bond:
+      atom1: [B, 4, SG]
+      atom2: [B, 11, SG]

@@ -1,0 +1,60 @@
+{
+  "mode": "alphafold2_multimer_v3",
+  "models": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "seeds": [
+    7
+  ],
+  "raw": true,
+  "settings": {
+    "num_models": 5,
+    "num_seeds": 1,
+    "random_seed": 7,
+    "num_recycles": 1,
+    "num_ensemble": 1,
+    "use_templates": false,
+    "pair_mode": "unpaired_paired",
+    "pairing_strategy": "greedy",
+    "msa_mode": "mmseqs2_uniref_env",
+    "host_url": "https://api.colabfold.com",
+    "max_seq": 32,
+    "max_extra_seq": 64,
+    "num_relax": 0,
+    "stop_at_score": 100,
+    "model_order": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "cases": [
+    {
+      "job": "insulin",
+      "chains": {
+        "A": "GIVEQCCTSICSLYQLENYCN",
+        "B": "FVNQHLCGSHLVEALYLVCGERGFFYTPKA"
+      },
+      "source": {
+        "pdb": "4INS",
+        "selected_input_chains": [
+          "A",
+          "B"
+        ],
+        "sequence_lengths": [
+          21,
+          30
+        ],
+        "assembly": "protein-only A1B1 sequence fixture; no zinc or explicit disulfide restraint",
+        "url": "https://www.rcsb.org/structure/4INS"
+      }
+    }
+  ],
+  "tokens": true
+}

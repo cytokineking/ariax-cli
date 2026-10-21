@@ -1,0 +1,7 @@
+# B72 bounded comparison inputs
+
+complex.yaml is the accepted synthetic pair, protein A AGSTAGST and B GSTAGSTA. affinity_smiles.yaml and affinity_ccd.yaml use the same accepted397-token affinity envelope with L-tyrosine represented as SMILES or CCD TYR. Every protein uses msa: empty. No public MSA request is needed for these examples. The primary guide supplies the literal native prediction and check command. For an affinity example replace the input filename, choose a new output root and use its stem in boltz_results_<stem>; preserve all native affinity fields.
+
+check_modes.py is the accepted native identity/chemistry checker. compare.py compares prediction file paths, CIF/JSON bytes and uncompressed NPY serialization within NPZ files between two saved roots. measure.py is qualification instrumentation for generation spans and in-process timing. It accepts off/resid before native predict argv. Whole process elapsed and memory require the host's measurement. General speed and scientific accuracy remain unmeasured outside the recorded fixtures.
+
+The original nine pairs agreed exactly. An additional CCD memory profile changed the ordering of two TYR chemical-component rows in CIF while coordinates, JSON and NPY members agreed. compare.py deliberately reports this byte difference as failure. Preserve that report; CCD artifact exactness remains held. See the mode reference for the finite timings and resource observations.

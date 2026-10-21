@@ -1,0 +1,265 @@
+data_b30_full
+loop_
+_entity_poly_seq.entity_id
+_entity_poly_seq.num
+_entity_poly_seq.mon_id
+_entity_poly_seq.hetero
+1 1 GLY n
+1 2 HIS n
+1 3 CYS n
+1 4 ILE n
+1 5 PRO n
+1 6 THR n
+1 7 THR n
+1 8 SER n
+1 9 GLY n
+1 10 PRO n
+1 11 ILE n
+1 12 CYS n
+1 13 LEU n
+1 14 ARG n
+1 15 ASP n
+#
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+X 1
+Y 1
+#
+loop_
+_chem_comp.id
+_chem_comp.type
+ARG 'L-peptide linking'
+ASP 'L-peptide linking'
+CYS 'L-peptide linking'
+GLY 'L-peptide linking'
+HIS 'L-peptide linking'
+ILE 'L-peptide linking'
+LEU 'L-peptide linking'
+PRO 'L-peptide linking'
+SER 'L-peptide linking'
+THR 'L-peptide linking'
+#
+#
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_atom_id
+_atom_site.pdbx_PDB_model_num
+ATOM 1 N N . GLY X 1 1 ? -7.910 3.106 1.402 1.00 13.00 101 GLY Author_alpha_long N 1
+ATOM 2 C CA . GLY X 1 1 ? -7.014 4.113 0.867 1.00 45.03 101 GLY Author_alpha_long CA 1
+ATOM 3 C C . GLY X 1 1 ? -6.639 3.846 -0.578 1.00 54.04 101 GLY Author_alpha_long C 1
+ATOM 4 O O . GLY X 1 1 ? -7.426 4.103 -1.489 1.00 53.31 101 GLY Author_alpha_long O 1
+ATOM 5 N N . HIS X 1 2 ? -5.432 3.331 -0.789 1.00 11.10 102 HIS Author_alpha_long N 1
+ATOM 6 C CA . HIS X 1 2 ? -4.953 3.031 -2.133 1.00 41.41 102 HIS Author_alpha_long CA 1
+ATOM 7 C C . HIS X 1 2 ? -3.652 2.234 -2.081 1.00 64.30 102 HIS Author_alpha_long C 1
+ATOM 8 O O . HIS X 1 2 ? -3.256 1.741 -1.025 1.00 33.34 102 HIS Author_alpha_long O 1
+ATOM 9 C CB . HIS X 1 2 ? -4.743 4.323 -2.924 1.00 53.31 102 HIS Author_alpha_long CB 1
+ATOM 10 C CG . HIS X 1 2 ? -5.408 4.320 -4.265 1.00 23.24 102 HIS Author_alpha_long CG 1
+ATOM 11 N ND1 . HIS X 1 2 ? -5.932 5.454 -4.848 1.00 4.41 102 HIS Author_alpha_long ND1 1
+ATOM 12 C CD2 . HIS X 1 2 ? -5.632 3.311 -5.139 1.00 3.11 102 HIS Author_alpha_long CD2 1
+ATOM 13 C CE1 . HIS X 1 2 ? -6.450 5.143 -6.023 1.00 15.44 102 HIS Author_alpha_long CE1 1
+ATOM 14 N NE2 . HIS X 1 2 ? -6.281 3.849 -6.223 1.00 23.02 102 HIS Author_alpha_long NE2 1
+ATOM 15 N N . CYS X 1 3 A -2.993 2.113 -3.228 1.00 5.13 102 CYS Author_alpha_long N 1
+ATOM 16 C CA . CYS X 1 3 A -1.738 1.376 -3.315 1.00 63.12 102 CYS Author_alpha_long CA 1
+ATOM 17 C C . CYS X 1 3 A -0.548 2.330 -3.355 1.00 23.41 102 CYS Author_alpha_long C 1
+ATOM 18 O O . CYS X 1 3 A -0.329 3.024 -4.349 1.00 33.53 102 CYS Author_alpha_long O 1
+ATOM 19 C CB . CYS X 1 3 A -1.732 0.482 -4.557 1.00 61.21 102 CYS Author_alpha_long CB 1
+ATOM 20 S SG . CYS X 1 3 A -3.251 -0.498 -4.776 1.00 35.22 102 CYS Author_alpha_long SG 1
+ATOM 21 N N . ILE X 1 4 ? 0.218 2.359 -2.270 1.00 73.00 104 ILE Author_alpha_long N 1
+ATOM 22 C CA . ILE X 1 4 ? 1.385 3.227 -2.182 1.00 63.14 104 ILE Author_alpha_long CA 1
+ATOM 23 C C . ILE X 1 4 ? 2.630 2.436 -1.794 1.00 52.33 104 ILE Author_alpha_long C 1
+ATOM 24 O O . ILE X 1 4 ? 2.551 1.337 -1.246 1.00 51.03 104 ILE Author_alpha_long O 1
+ATOM 25 C CB . ILE X 1 4 ? 1.170 4.359 -1.161 1.00 54.43 104 ILE Author_alpha_long CB 1
+ATOM 26 C CG1 . ILE X 1 4 ? 0.308 3.868 0.004 1.00 3.15 104 ILE Author_alpha_long CG1 1
+ATOM 27 C CG2 . ILE X 1 4 ? 0.526 5.564 -1.832 1.00 4.11 104 ILE Author_alpha_long CG2 1
+ATOM 28 C CD1 . ILE X 1 4 ? 0.633 4.537 1.321 1.00 33.31 104 ILE Author_alpha_long CD1 1
+ATOM 29 N N . PRO X 1 5 ? 3.808 3.009 -2.081 1.00 2.12 105 PRO Author_alpha_long N 1
+ATOM 30 C CA . PRO X 1 5 ? 5.093 2.377 -1.768 1.00 10.45 105 PRO Author_alpha_long CA 1
+ATOM 31 C C . PRO X 1 5 ? 5.369 2.334 -0.269 1.00 35.54 105 PRO Author_alpha_long C 1
+ATOM 32 O O . PRO X 1 5 ? 4.890 3.182 0.486 1.00 20.51 105 PRO Author_alpha_long O 1
+ATOM 33 C CB . PRO X 1 5 ? 6.112 3.274 -2.473 1.00 2.01 105 PRO Author_alpha_long CB 1
+ATOM 34 C CG . PRO X 1 5 ? 5.444 4.602 -2.568 1.00 44.24 105 PRO Author_alpha_long CG 1
+ATOM 35 C CD . PRO X 1 5 ? 3.977 4.318 -2.734 1.00 62.12 105 PRO Author_alpha_long CD 1
+ATOM 36 N N . THR X 1 7 ? 8.337 0.542 2.990 1.00 21.11 107 THR Author_alpha_long N 1
+ATOM 37 C CA . THR X 1 7 ? 9.681 0.063 3.288 1.00 35.20 107 THR Author_alpha_long CA 1
+ATOM 38 C C . THR X 1 7 ? 9.946 -1.283 2.623 1.00 75.12 107 THR Author_alpha_long C 1
+ATOM 39 O O . THR X 1 7 ? 11.069 -1.573 2.214 1.00 62.22 107 THR Author_alpha_long O 1
+ATOM 40 C CB . THR X 1 7 ? 9.903 -0.075 4.806 1.00 73.41 107 THR Author_alpha_long CB 1
+ATOM 41 O OG1 . THR X 1 7 ? 8.703 -0.536 5.437 1.00 10.41 107 THR Author_alpha_long OG1 1
+ATOM 42 C CG2 . THR X 1 7 ? 10.324 1.254 5.415 1.00 62.01 107 THR Author_alpha_long CG2 1
+ATOM 43 N N . SER X 1 8 ? 8.903 -2.100 2.518 1.00 3.12 108 SER Author_alpha_long N 1
+ATOM 44 C CA . SER X 1 8 ? 9.024 -3.418 1.904 1.00 55.40 108 SER Author_alpha_long CA 1
+ATOM 45 C C . SER X 1 8 ? 8.712 -3.354 0.413 1.00 63.14 108 SER Author_alpha_long C 1
+ATOM 46 O O . SER X 1 8 ? 9.143 -4.207 -0.361 1.00 64.04 108 SER Author_alpha_long O 1
+ATOM 47 C CB . SER X 1 8 ? 8.086 -4.412 2.591 1.00 41.01 108 SER Author_alpha_long CB 1
+ATOM 48 O OG . SER X 1 8 ? 6.776 -3.882 2.705 1.00 51.54 108 SER Author_alpha_long OG 1
+ATOM 49 N N . GLY X 1 9 ? 7.958 -2.332 0.016 1.00 31.41 109 GLY Author_alpha_long N 1
+ATOM 50 C CA . GLY X 1 9 ? 7.599 -2.174 -1.382 1.00 52.41 109 GLY Author_alpha_long CA 1
+ATOM 51 C C . GLY X 1 9 ? 6.186 -1.658 -1.562 1.00 60.10 109 GLY Author_alpha_long C 1
+ATOM 52 O O . GLY X 1 9 ? 5.538 -1.214 -0.614 1.00 42.04 109 GLY Author_alpha_long O 1
+ATOM 53 N N . PRO X 1 10 ? 5.686 -1.712 -2.807 1.00 15.41 110 PRO Author_alpha_long N 1
+ATOM 54 C CA . PRO X 1 10 ? 4.335 -1.250 -3.138 1.00 15.23 110 PRO Author_alpha_long CA 1
+ATOM 55 C C . PRO X 1 10 ? 3.255 -2.157 -2.559 1.00 31.14 110 PRO Author_alpha_long C 1
+ATOM 56 O O . PRO X 1 10 ? 3.142 -3.324 -2.936 1.00 40.54 110 PRO Author_alpha_long O 1
+ATOM 57 C CB . PRO X 1 10 ? 4.310 -1.298 -4.667 1.00 61.30 110 PRO Author_alpha_long CB 1
+ATOM 58 C CG . PRO X 1 10 ? 5.327 -2.323 -5.032 1.00 44.22 110 PRO Author_alpha_long CG 1
+ATOM 59 C CD . PRO X 1 10 ? 6.402 -2.230 -3.985 1.00 52.40 110 PRO Author_alpha_long CD 1
+ATOM 60 N N . ILE X 1 11 ? 2.461 -1.613 -1.643 1.00 72.22 111 ILE Author_alpha_long N 1
+ATOM 61 C CA . ILE X 1 11 ? 1.388 -2.373 -1.014 1.00 31.14 111 ILE Author_alpha_long CA 1
+ATOM 62 C C . ILE X 1 11 ? 0.026 -1.758 -1.320 1.00 0.22 111 ILE Author_alpha_long C 1
+ATOM 63 O O . ILE X 1 11 ? -0.133 -0.538 -1.308 1.00 72.33 111 ILE Author_alpha_long O 1
+ATOM 64 C CB . ILE X 1 11 ? 1.572 -2.450 0.513 1.00 33.01 111 ILE Author_alpha_long CB 1
+ATOM 65 C CG1 . ILE X 1 11 ? 2.934 -3.057 0.854 1.00 41.31 111 ILE Author_alpha_long CG1 1
+ATOM 66 C CG2 . ILE X 1 11 ? 0.451 -3.264 1.141 1.00 55.11 111 ILE Author_alpha_long CG2 1
+ATOM 67 C CD1 . ILE X 1 11 ? 3.249 -3.043 2.334 1.00 44.12 111 ILE Author_alpha_long CD1 1
+ATOM 68 N N . CYS X 1 12 ? -0.954 -2.613 -1.593 1.00 31.41 112 CYS Author_alpha_long N 1
+ATOM 69 C CA . CYS X 1 12 ? -2.305 -2.155 -1.901 1.00 43.14 112 CYS Author_alpha_long CA 1
+ATOM 70 C C . CYS X 1 12 ? -3.186 -2.186 -0.656 1.00 13.34 112 CYS Author_alpha_long C 1
+ATOM 71 O O . CYS X 1 12 ? -3.644 -3.248 -0.233 1.00 34.15 112 CYS Author_alpha_long O 1
+ATOM 72 C CB . CYS X 1 12 ? -2.922 -3.024 -2.998 1.00 64.32 112 CYS Author_alpha_long CB 1
+ATOM 73 S SG . CYS X 1 12 ? -2.531 -2.473 -4.690 1.00 44.52 112 CYS Author_alpha_long SG 1
+ATOM 74 N N . LEU X 1 13 ? -3.421 -1.015 -0.075 1.00 50.33 113 LEU Author_alpha_long N 1
+ATOM 75 C CA . LEU X 1 13 ? -4.249 -0.907 1.122 1.00 41.34 113 LEU Author_alpha_long CA 1
+ATOM 76 C C . LEU X 1 13 ? -5.731 -0.927 0.763 1.00 3.12 113 LEU Author_alpha_long C 1
+ATOM 77 O O . LEU X 1 13 ? -6.145 -0.340 -0.238 1.00 14.21 113 LEU Author_alpha_long O 1
+ATOM 78 C CB . LEU X 1 13 ? -3.914 0.378 1.882 1.00 10.12 113 LEU Author_alpha_long CB 1
+ATOM 79 C CG . LEU X 1 13 ? -2.807 0.268 2.932 1.00 35.45 113 LEU Author_alpha_long CG 1
+ATOM 80 C CD1 . LEU X 1 13 ? -2.542 1.621 3.572 1.00 62.24 113 LEU Author_alpha_long CD1 1
+ATOM 81 C CD2 . LEU X 1 13 ? -3.177 -0.761 3.990 1.00 54.15 113 LEU Author_alpha_long CD2 1
+ATOM 82 N N . ARG X 1 14 ? -6.525 -1.606 1.585 1.00 42.05 114 ARG Author_alpha_long N 1
+ATOM 83 C CA . ARG X 1 14 ? -7.960 -1.702 1.354 1.00 64.43 114 ARG Author_alpha_long CA 1
+ATOM 84 C C . ARG X 1 14 ? -8.712 -0.638 2.149 1.00 50.33 114 ARG Author_alpha_long C 1
+ATOM 85 O O . ARG X 1 14 ? -9.891 -0.800 2.464 1.00 44.00 114 ARG Author_alpha_long O 1
+ATOM 86 C CB . ARG X 1 14 ? -8.469 -3.093 1.738 1.00 41.32 114 ARG Author_alpha_long CB 1
+ATOM 87 C CG . ARG X 1 14 ? -7.844 -4.215 0.925 1.00 23.10 114 ARG Author_alpha_long CG 1
+ATOM 88 C CD . ARG X 1 14 ? -8.023 -3.988 -0.568 1.00 60.34 114 ARG Author_alpha_long CD 1
+ATOM 89 N NE . ARG X 1 14 ? -7.529 -5.113 -1.357 1.00 51.44 114 ARG Author_alpha_long NE 1
+ATOM 90 C CZ . ARG X 1 14 ? -8.151 -6.284 -1.438 1.00 61.11 114 ARG Author_alpha_long CZ 1
+ATOM 91 N NH1 . ARG X 1 14 ? -9.286 -6.482 -0.782 1.00 60.42 114 ARG Author_alpha_long NH1 1
+ATOM 92 N NH2 . ARG X 1 14 ? -7.638 -7.259 -2.176 1.00 44.52 114 ARG Author_alpha_long NH2 1
+ATOM 93 N N . ASP X 1 15 ? -8.021 0.451 2.470 1.00 45.44 115 ASP Author_alpha_long N 1
+ATOM 94 C CA . ASP X 1 15 ? -8.622 1.542 3.228 1.00 43.33 115 ASP Author_alpha_long CA 1
+ATOM 95 C C . ASP X 1 15 ? -8.095 2.891 2.748 1.00 21.02 115 ASP Author_alpha_long C 1
+ATOM 96 O O . ASP X 1 15 ? -8.104 3.873 3.492 1.00 1.45 115 ASP Author_alpha_long O 1
+ATOM 97 C CB . ASP X 1 15 ? -8.337 1.372 4.721 1.00 13.52 115 ASP Author_alpha_long CB 1
+ATOM 98 C CG . ASP X 1 15 ? -9.046 0.169 5.312 1.00 44.41 115 ASP Author_alpha_long CG 1
+ATOM 99 O OD1 . ASP X 1 15 ? -8.561 -0.964 5.109 1.00 1.03 115 ASP Author_alpha_long OD1 1
+ATOM 100 O OD2 . ASP X 1 15 ? -10.084 0.360 5.977 1.00 53.31 115 ASP Author_alpha_long OD2 1
+ATOM 101 N N . GLY Y 1 1 ? 4.090 3.106 1.402 1.00 13.00 101 GLY Author_beta_long N 1
+ATOM 102 C CA . GLY Y 1 1 ? 4.986 4.113 0.867 1.00 45.03 101 GLY Author_beta_long CA 1
+ATOM 103 C C . GLY Y 1 1 ? 5.361 3.846 -0.578 1.00 54.04 101 GLY Author_beta_long C 1
+ATOM 104 O O . GLY Y 1 1 ? 4.574 4.103 -1.489 1.00 53.31 101 GLY Author_beta_long O 1
+ATOM 105 N N . HIS Y 1 2 ? 6.568 3.331 -0.789 1.00 11.10 102 HIS Author_beta_long N 1
+ATOM 106 C CA . HIS Y 1 2 ? 7.047 3.031 -2.133 1.00 41.41 102 HIS Author_beta_long CA 1
+ATOM 107 C C . HIS Y 1 2 ? 8.348 2.234 -2.081 1.00 64.30 102 HIS Author_beta_long C 1
+ATOM 108 O O . HIS Y 1 2 ? 8.744 1.741 -1.025 1.00 33.34 102 HIS Author_beta_long O 1
+ATOM 109 C CB . HIS Y 1 2 ? 7.257 4.323 -2.924 1.00 53.31 102 HIS Author_beta_long CB 1
+ATOM 110 C CG . HIS Y 1 2 ? 6.592 4.320 -4.265 1.00 23.24 102 HIS Author_beta_long CG 1
+ATOM 111 N ND1 . HIS Y 1 2 ? 6.068 5.454 -4.848 1.00 4.41 102 HIS Author_beta_long ND1 1
+ATOM 112 C CD2 . HIS Y 1 2 ? 6.368 3.311 -5.139 1.00 3.11 102 HIS Author_beta_long CD2 1
+ATOM 113 C CE1 . HIS Y 1 2 ? 5.550 5.143 -6.023 1.00 15.44 102 HIS Author_beta_long CE1 1
+ATOM 114 N NE2 . HIS Y 1 2 ? 5.719 3.849 -6.223 1.00 23.02 102 HIS Author_beta_long NE2 1
+ATOM 115 N N . CYS Y 1 3 A 9.007 2.113 -3.228 1.00 5.13 102 CYS Author_beta_long N 1
+ATOM 116 C CA . CYS Y 1 3 A 10.262 1.376 -3.315 1.00 63.12 102 CYS Author_beta_long CA 1
+ATOM 117 C C . CYS Y 1 3 A 11.452 2.330 -3.355 1.00 23.41 102 CYS Author_beta_long C 1
+ATOM 118 O O . CYS Y 1 3 A 11.671 3.024 -4.349 1.00 33.53 102 CYS Author_beta_long O 1
+ATOM 119 C CB . CYS Y 1 3 A 10.268 0.482 -4.557 1.00 61.21 102 CYS Author_beta_long CB 1
+ATOM 120 S SG . CYS Y 1 3 A 8.749 -0.498 -4.776 1.00 35.22 102 CYS Author_beta_long SG 1
+ATOM 121 N N . ILE Y 1 4 ? 12.218 2.359 -2.270 1.00 73.00 104 ILE Author_beta_long N 1
+ATOM 122 C CA . ILE Y 1 4 ? 13.385 3.227 -2.182 1.00 63.14 104 ILE Author_beta_long CA 1
+ATOM 123 C C . ILE Y 1 4 ? 14.630 2.436 -1.794 1.00 52.33 104 ILE Author_beta_long C 1
+ATOM 124 O O . ILE Y 1 4 ? 14.551 1.337 -1.246 1.00 51.03 104 ILE Author_beta_long O 1
+ATOM 125 C CB . ILE Y 1 4 ? 13.170 4.359 -1.161 1.00 54.43 104 ILE Author_beta_long CB 1
+ATOM 126 C CG1 . ILE Y 1 4 ? 12.308 3.868 0.004 1.00 3.15 104 ILE Author_beta_long CG1 1
+ATOM 127 C CG2 . ILE Y 1 4 ? 12.526 5.564 -1.832 1.00 4.11 104 ILE Author_beta_long CG2 1
+ATOM 128 C CD1 . ILE Y 1 4 ? 12.633 4.537 1.321 1.00 33.31 104 ILE Author_beta_long CD1 1
+ATOM 129 N N . PRO Y 1 5 ? 15.808 3.009 -2.081 1.00 2.12 105 PRO Author_beta_long N 1
+ATOM 130 C CA . PRO Y 1 5 ? 17.093 2.377 -1.768 1.00 10.45 105 PRO Author_beta_long CA 1
+ATOM 131 C C . PRO Y 1 5 ? 17.369 2.334 -0.269 1.00 35.54 105 PRO Author_beta_long C 1
+ATOM 132 O O . PRO Y 1 5 ? 16.890 3.182 0.486 1.00 20.51 105 PRO Author_beta_long O 1
+ATOM 133 C CB . PRO Y 1 5 ? 18.112 3.274 -2.473 1.00 2.01 105 PRO Author_beta_long CB 1
+ATOM 134 C CG . PRO Y 1 5 ? 17.444 4.602 -2.568 1.00 44.24 105 PRO Author_beta_long CG 1
+ATOM 135 C CD . PRO Y 1 5 ? 15.977 4.318 -2.734 1.00 62.12 105 PRO Author_beta_long CD 1
+ATOM 136 N N . THR Y 1 7 ? 20.337 0.542 2.990 1.00 21.11 107 THR Author_beta_long N 1
+ATOM 137 C CA . THR Y 1 7 ? 21.681 0.063 3.288 1.00 35.20 107 THR Author_beta_long CA 1
+ATOM 138 C C . THR Y 1 7 ? 21.946 -1.283 2.623 1.00 75.12 107 THR Author_beta_long C 1
+ATOM 139 O O . THR Y 1 7 ? 23.069 -1.573 2.214 1.00 62.22 107 THR Author_beta_long O 1
+ATOM 140 C CB . THR Y 1 7 ? 21.903 -0.075 4.806 1.00 73.41 107 THR Author_beta_long CB 1
+ATOM 141 O OG1 . THR Y 1 7 ? 20.703 -0.536 5.437 1.00 10.41 107 THR Author_beta_long OG1 1
+ATOM 142 C CG2 . THR Y 1 7 ? 22.324 1.254 5.415 1.00 62.01 107 THR Author_beta_long CG2 1
+ATOM 143 N N . SER Y 1 8 ? 20.903 -2.100 2.518 1.00 3.12 108 SER Author_beta_long N 1
+ATOM 144 C CA . SER Y 1 8 ? 21.024 -3.418 1.904 1.00 55.40 108 SER Author_beta_long CA 1
+ATOM 145 C C . SER Y 1 8 ? 20.712 -3.354 0.413 1.00 63.14 108 SER Author_beta_long C 1
+ATOM 146 O O . SER Y 1 8 ? 21.143 -4.207 -0.361 1.00 64.04 108 SER Author_beta_long O 1
+ATOM 147 C CB . SER Y 1 8 ? 20.086 -4.412 2.591 1.00 41.01 108 SER Author_beta_long CB 1
+ATOM 148 O OG . SER Y 1 8 ? 18.776 -3.882 2.705 1.00 51.54 108 SER Author_beta_long OG 1
+ATOM 149 N N . GLY Y 1 9 ? 19.958 -2.332 0.016 1.00 31.41 109 GLY Author_beta_long N 1
+ATOM 150 C CA . GLY Y 1 9 ? 19.599 -2.174 -1.382 1.00 52.41 109 GLY Author_beta_long CA 1
+ATOM 151 C C . GLY Y 1 9 ? 18.186 -1.658 -1.562 1.00 60.10 109 GLY Author_beta_long C 1
+ATOM 152 O O . GLY Y 1 9 ? 17.538 -1.214 -0.614 1.00 42.04 109 GLY Author_beta_long O 1
+ATOM 153 N N . PRO Y 1 10 ? 17.686 -1.712 -2.807 1.00 15.41 110 PRO Author_beta_long N 1
+ATOM 154 C CA . PRO Y 1 10 ? 16.335 -1.250 -3.138 1.00 15.23 110 PRO Author_beta_long CA 1
+ATOM 155 C C . PRO Y 1 10 ? 15.255 -2.157 -2.559 1.00 31.14 110 PRO Author_beta_long C 1
+ATOM 156 O O . PRO Y 1 10 ? 15.142 -3.324 -2.936 1.00 40.54 110 PRO Author_beta_long O 1
+ATOM 157 C CB . PRO Y 1 10 ? 16.310 -1.298 -4.667 1.00 61.30 110 PRO Author_beta_long CB 1
+ATOM 158 C CG . PRO Y 1 10 ? 17.327 -2.323 -5.032 1.00 44.22 110 PRO Author_beta_long CG 1
+ATOM 159 C CD . PRO Y 1 10 ? 18.402 -2.230 -3.985 1.00 52.40 110 PRO Author_beta_long CD 1
+ATOM 160 N N . ILE Y 1 11 ? 14.461 -1.613 -1.643 1.00 72.22 111 ILE Author_beta_long N 1
+ATOM 161 C CA . ILE Y 1 11 ? 13.388 -2.373 -1.014 1.00 31.14 111 ILE Author_beta_long CA 1
+ATOM 162 C C . ILE Y 1 11 ? 12.026 -1.758 -1.320 1.00 0.22 111 ILE Author_beta_long C 1
+ATOM 163 O O . ILE Y 1 11 ? 11.867 -0.538 -1.308 1.00 72.33 111 ILE Author_beta_long O 1
+ATOM 164 C CB . ILE Y 1 11 ? 13.572 -2.450 0.513 1.00 33.01 111 ILE Author_beta_long CB 1
+ATOM 165 C CG1 . ILE Y 1 11 ? 14.934 -3.057 0.854 1.00 41.31 111 ILE Author_beta_long CG1 1
+ATOM 166 C CG2 . ILE Y 1 11 ? 12.451 -3.264 1.141 1.00 55.11 111 ILE Author_beta_long CG2 1
+ATOM 167 C CD1 . ILE Y 1 11 ? 15.249 -3.043 2.334 1.00 44.12 111 ILE Author_beta_long CD1 1
+ATOM 168 N N . CYS Y 1 12 ? 11.046 -2.613 -1.593 1.00 31.41 112 CYS Author_beta_long N 1
+ATOM 169 C CA . CYS Y 1 12 ? 9.695 -2.155 -1.901 1.00 43.14 112 CYS Author_beta_long CA 1
+ATOM 170 C C . CYS Y 1 12 ? 8.814 -2.186 -0.656 1.00 13.34 112 CYS Author_beta_long C 1
+ATOM 171 O O . CYS Y 1 12 ? 8.356 -3.248 -0.233 1.00 34.15 112 CYS Author_beta_long O 1
+ATOM 172 C CB . CYS Y 1 12 ? 9.078 -3.024 -2.998 1.00 64.32 112 CYS Author_beta_long CB 1
+ATOM 173 S SG . CYS Y 1 12 ? 9.469 -2.473 -4.690 1.00 44.52 112 CYS Author_beta_long SG 1
+ATOM 174 N N . LEU Y 1 13 ? 8.579 -1.015 -0.075 1.00 50.33 113 LEU Author_beta_long N 1
+ATOM 175 C CA . LEU Y 1 13 ? 7.751 -0.907 1.122 1.00 41.34 113 LEU Author_beta_long CA 1
+ATOM 176 C C . LEU Y 1 13 ? 6.269 -0.927 0.763 1.00 3.12 113 LEU Author_beta_long C 1
+ATOM 177 O O . LEU Y 1 13 ? 5.855 -0.340 -0.238 1.00 14.21 113 LEU Author_beta_long O 1
+ATOM 178 C CB . LEU Y 1 13 ? 8.086 0.378 1.882 1.00 10.12 113 LEU Author_beta_long CB 1
+ATOM 179 C CG . LEU Y 1 13 ? 9.193 0.268 2.932 1.00 35.45 113 LEU Author_beta_long CG 1
+ATOM 180 C CD1 . LEU Y 1 13 ? 9.458 1.621 3.572 1.00 62.24 113 LEU Author_beta_long CD1 1
+ATOM 181 C CD2 . LEU Y 1 13 ? 8.823 -0.761 3.990 1.00 54.15 113 LEU Author_beta_long CD2 1
+ATOM 182 N N . ARG Y 1 14 ? 5.475 -1.606 1.585 1.00 42.05 114 ARG Author_beta_long N 1
+ATOM 183 C CA . ARG Y 1 14 ? 4.040 -1.702 1.354 1.00 64.43 114 ARG Author_beta_long CA 1
+ATOM 184 C C . ARG Y 1 14 ? 3.288 -0.638 2.149 1.00 50.33 114 ARG Author_beta_long C 1
+ATOM 185 O O . ARG Y 1 14 ? 2.109 -0.800 2.464 1.00 44.00 114 ARG Author_beta_long O 1
+ATOM 186 C CB . ARG Y 1 14 ? 3.531 -3.093 1.738 1.00 41.32 114 ARG Author_beta_long CB 1
+ATOM 187 C CG . ARG Y 1 14 ? 4.156 -4.215 0.925 1.00 23.10 114 ARG Author_beta_long CG 1
+ATOM 188 C CD . ARG Y 1 14 ? 3.977 -3.988 -0.568 1.00 60.34 114 ARG Author_beta_long CD 1
+ATOM 189 N NE . ARG Y 1 14 ? 4.471 -5.113 -1.357 1.00 51.44 114 ARG Author_beta_long NE 1
+ATOM 190 C CZ . ARG Y 1 14 ? 3.849 -6.284 -1.438 1.00 61.11 114 ARG Author_beta_long CZ 1
+ATOM 191 N NH1 . ARG Y 1 14 ? 2.714 -6.482 -0.782 1.00 60.42 114 ARG Author_beta_long NH1 1
+ATOM 192 N NH2 . ARG Y 1 14 ? 4.362 -7.259 -2.176 1.00 44.52 114 ARG Author_beta_long NH2 1
+ATOM 193 N N . ASP Y 1 15 ? 3.979 0.451 2.470 1.00 45.44 115 ASP Author_beta_long N 1
+ATOM 194 C CA . ASP Y 1 15 ? 3.378 1.542 3.228 1.00 43.33 115 ASP Author_beta_long CA 1
+ATOM 195 C C . ASP Y 1 15 ? 3.905 2.891 2.748 1.00 21.02 115 ASP Author_beta_long C 1
+ATOM 196 O O . ASP Y 1 15 ? 3.896 3.873 3.492 1.00 1.45 115 ASP Author_beta_long O 1
+ATOM 197 C CB . ASP Y 1 15 ? 3.663 1.372 4.721 1.00 13.52 115 ASP Author_beta_long CB 1
+ATOM 198 C CG . ASP Y 1 15 ? 2.954 0.169 5.312 1.00 44.41 115 ASP Author_beta_long CG 1
+ATOM 199 O OD1 . ASP Y 1 15 ? 3.439 -0.964 5.109 1.00 1.03 115 ASP Author_beta_long OD1 1
+ATOM 200 O OD2 . ASP Y 1 15 ? 1.916 0.360 5.977 1.00 53.31 115 ASP Author_beta_long OD2 1
+#

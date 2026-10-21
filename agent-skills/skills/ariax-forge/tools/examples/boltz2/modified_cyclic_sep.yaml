@@ -1,0 +1,15 @@
+# B33 explicit follow-up after native MSE-to-MET normalization.
+version: 1
+sequences:
+- protein:
+    id: M
+    sequence: AGSTAGST
+    msa: empty
+    modifications:
+    - position: 3
+      ccd: SEP
+- protein:
+    id: C
+    sequence: QLEDSEVEAVAKG
+    msa: empty
+    cyclic: true

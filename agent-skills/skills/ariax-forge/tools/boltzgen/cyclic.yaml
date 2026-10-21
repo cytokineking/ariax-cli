@@ -1,0 +1,10 @@
+entities:
+  - protein:
+      id: B
+      sequence: 16
+      cyclic: true
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A

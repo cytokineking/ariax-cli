@@ -1,0 +1,10 @@
+{
+  "rfd3-unindexed-motif": {
+    "input": "/inputs/foundry/inputs/protein.pdb",
+    "length": "40",
+    "unindex": "E12-13",
+    "select_fixed_atoms": {
+      "E12-13": "BKBN"
+    }
+  }
+}

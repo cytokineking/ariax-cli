@@ -1,0 +1,60 @@
+{
+  "native_commit": "e4c961b55e74fc80ec2f1906972db1e4e4371262",
+  "cases": [
+    {
+      "id": "W25",
+      "protocol": "protein-anything",
+      "seed": 37,
+      "fixture": "variable.yaml",
+      "designs": 25,
+      "budget": 30,
+      "expected_stages": [
+        "design",
+        "inverse_folding",
+        "folding",
+        "design_folding",
+        "analysis",
+        "filtering"
+      ],
+      "refold_samples": 5,
+      "target_residues": 76,
+      "binder_range": [
+        40,
+        80
+      ],
+      "argv": [
+        "forge-boltzgen",
+        "--seed",
+        "37",
+        "run",
+        "/inputs/boltzgen/variable.yaml",
+        "--output",
+        "/workspace/b43/W25",
+        "--protocol",
+        "protein-anything",
+        "--num_designs",
+        "25",
+        "--budget",
+        "30",
+        "--design_checkpoints",
+        "/models/boltzgen/boltzgen1_diverse.ckpt",
+        "/models/boltzgen-extra/boltzgen1_adherence.ckpt",
+        "--devices",
+        "1",
+        "--cache",
+        "/scratch/cache",
+        "--moldir",
+        "/models/boltzgen/mols",
+        "--inverse_fold_checkpoint",
+        "/models/boltzgen/boltzgen1_ifold.ckpt",
+        "--folding_checkpoint",
+        "/models/boltzgen/boltz2_conf_final.ckpt",
+        "--diffusion_batch_size",
+        "10",
+        "--num_workers",
+        "4"
+      ],
+      "timeout_seconds": 14400
+    }
+  ]
+}

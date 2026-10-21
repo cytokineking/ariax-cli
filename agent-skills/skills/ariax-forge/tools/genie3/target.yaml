@@ -1,0 +1,34 @@
+{
+  "experiment": {
+    "name": "b51-target",
+    "seed": 51
+  },
+  "paths": {
+    "rootdir": "/workspace/b51/target",
+    "dataset": "/inputs/genie3/target"
+  },
+  "generation": {
+    "base": {
+      "checkpoint": "/models/genie3/pretrained/v1/checkpoints/step=600000.ckpt",
+      "config": "/models/genie3/pretrained/v1/config.yaml"
+    },
+    "compile": false,
+    "dataset": {
+      "source": "target",
+      "selections": "01_bhrf1",
+      "n_sample": 1,
+      "cond_strategy": "extended"
+    },
+    "sampler": {
+      "name": "ddim",
+      "sampler": {
+        "direction_scale": 0.0,
+        "n_sample_step": 100,
+        "noise_scale": 1.0,
+        "eta": 1.0,
+        "predict_sequence": false,
+        "predict_sidechain": false
+      }
+    }
+  }
+}

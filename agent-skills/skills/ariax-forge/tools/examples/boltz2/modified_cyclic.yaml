@@ -1,0 +1,15 @@
+# B33 native qualification input. Not yet executed.
+version: 1
+sequences:
+- protein:
+    id: M
+    sequence: AGMTAGST
+    msa: empty
+    modifications:
+    - position: 3
+      ccd: MSE
+- protein:
+    id: C
+    sequence: QLEDSEVEAVAKG
+    msa: empty
+    cyclic: true

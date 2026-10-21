@@ -1,0 +1,15 @@
+[
+  {
+    "name": "rf3_preprint_921-dimer",
+    "components": [
+      {
+        "seq": "RMKQLEDKVEELLSKNYHLENEVARLKKLVGER",
+        "chain_id": "A"
+      },
+      {
+        "seq": "RMKQLEDKVEELLSKNYHLENEVARLKKLVGER",
+        "chain_id": "B"
+      }
+    ]
+  }
+]

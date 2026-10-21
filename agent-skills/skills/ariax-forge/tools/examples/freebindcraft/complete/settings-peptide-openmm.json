@@ -1,0 +1,12 @@
+{
+  "design_path": "/workspace/complete/peptide-openmm",
+  "binder_name": "b45_peptide_openmm",
+  "starting_pdb": "/inputs/freebindcraft/PDL1.pdb",
+  "chains": "A",
+  "target_hotspot_residues": "A56",
+  "lengths": [
+    20,
+    20
+  ],
+  "number_of_final_designs": 1
+}

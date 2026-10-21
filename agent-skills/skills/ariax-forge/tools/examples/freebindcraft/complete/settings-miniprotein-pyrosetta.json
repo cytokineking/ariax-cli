@@ -1,0 +1,12 @@
+{
+  "design_path": "/workspace/complete/miniprotein-pyrosetta",
+  "binder_name": "b45_miniprotein_pyrosetta",
+  "starting_pdb": "/inputs/freebindcraft/PDL1.pdb",
+  "chains": "A",
+  "target_hotspot_residues": "A56",
+  "lengths": [
+    80,
+    80
+  ],
+  "number_of_final_designs": 1
+}

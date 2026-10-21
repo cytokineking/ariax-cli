@@ -1,0 +1,11 @@
+entities:
+  - protein:
+      id: B
+      sequence: 40
+  - file:
+      path: native-dna.cif
+      include:
+        - chain:
+            id: B1
+        - chain:
+            id: C1

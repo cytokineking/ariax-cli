@@ -1,0 +1,12 @@
+[
+  {
+    "name": "rf3-supplied-msa",
+    "components": [
+      {
+        "seq": "AGSTAGSTAGSTAGSTAGSTAGST",
+        "chain_id": "A",
+        "msa_path": "/inputs/foundry/inputs/query.a3m"
+      }
+    ]
+  }
+]

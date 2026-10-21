@@ -1,0 +1,14 @@
+{
+  "polymers": [
+    {
+      "kind": "rna",
+      "length": [
+        256,
+        256
+      ]
+    }
+  ],
+  "chemicals": [],
+  "exact_polymer_chains": true,
+  "exact_chemical_components": true
+}

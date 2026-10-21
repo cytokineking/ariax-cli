@@ -1,0 +1,212 @@
+---
+name: ariax-bindcraft2
+description: Configure, validate, submit, monitor, and interpret hosted Ariax BindCraft2 campaigns for de novo proteins, peptides, VHH, scFv, Fab, ankyrin-repeat, homo-oligomer, and multidomain binders, including compatible multi-target and detargeting experiments.
+---
+
+# Ariax BindCraft2
+
+Read the shared [Ariax workflow](../../SKILL.md) before using this protocol. Fetch the live contract with `ariax schema bindcraft2 --raw`; this guide explains scientific choices and BC2-specific evidence. BindCraft2 is distinct from `bindcraft-v1.5`; the `bindcraft` CLI alias still means v1.5.
+
+BindCraft2 optimizes a binder with AlphaFold2, redesigns sequences with ProteinMPNN, then validates and filters candidates. An accepted design passed computational filters. It does not establish affinity, specificity, immunogenicity, stability, or experimental success.
+
+## Engine version and continuation
+
+This guide covers the hosted contract for upstream v1.0.4, pinned to
+`d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. Deployment and default-generation
+promotion are separate. Run `ariax schema bindcraft2 --json` for schema metadata
+and `ariax schema bindcraft2 --raw` for the actual job schema. When supplied,
+`native_capabilities.engine_version`, `source_commit`, and `source_tree_sha256`
+describe the active default generation; `properties` lists supported property
+choices and `advanced_controls` lists supported advanced field names. Use the
+two new controls only when their names appear in `advanced_controls` and the
+live schema accepts them. Absent metadata means unknown, not v1.0.4 support.
+
+A saved campaign continues with its compatible recorded engine and scientific
+settings. A current default version does not identify a historical run. Keep
+optional engine metadata supplied with recorded settings or config exports;
+the immutable source-tree hash identifies the generation, while version and
+commit describe it. Do not put runtime identity fields into `advanced` or
+rewrite saved aliases to migrate a checkpoint. `ariax restart` continues the
+existing campaign subject to server compatibility checks; exporting settings
+and using `ariax submit` creates a new campaign under the server-selected
+generation. An export cannot guarantee historical execution equivalence.
+
+## Choose the format
+
+Use the exact case-sensitive modality token in `protocol_config.modality`. `induced_fit` and `fold_switch` are optional modifiers after the base format and require one prepared target state.
+
+| Modality | Project type | Setup |
+| --- | --- | --- |
+| `binder` | `miniprotein` | De novo, inclusive two-value length range |
+| `large_binder` | `protein` | Longer de novo chain; review memory and target context |
+| `peptide` | `peptide` | Linear peptide; inspect the bound pose |
+| `cyclic_peptide` | `cyclic-peptide` | Head-to-tail intent; inspect closure geometry |
+| `VHH` | `vhh` | Bundled or custom single-chain scaffold |
+| `scFv` | `scfv` | Two designed variable-domain chains; BC2 does not design a linker |
+| `Fab` | `fab` | Heavy/light scaffold with constant domains |
+| `ARP` | `arp` | Ankyrin-repeat scaffold; `DARPin`/`darpin` are legacy aliases |
+| `homo_oligomer` | `protein` | Per-copy length, `copies`, and optional tying policy |
+| `multidomain` | `protein` | One multi-domain chain; set compatible domain controls |
+
+Do not substitute Helicon for cyclic peptide: Helicon chemistry is a BoltzGen workflow. Use BC1 for explicitly requested v1.5 campaigns, PXDesign for its diffusion plus AF2-IG/Protenix workflow, and ESMFold2-pipeline for inversion plus independent Protenix validation. Do not compare unrelated engine scores as a common quality scale.
+
+## Prepare the input bundle
+
+The first target must be a structure named `input.pdb` or `input.cif`. Primary FASTA is deferred. Up to eight targets and nine unique files are accepted, including an optional custom scaffold. Additional targets may be PDB, mmCIF, or FASTA. Filenames in the config are exact local bundle basenames, not URLs or server paths.
+
+Use `ariax inputs inspect` to review filenames and roles, selected chains or FASTA records, lengths, selector validation, scaffold edits, warnings, and the proposed epitope. The compact response omits hashes and preparation bookkeeping. Add `--full` for complete sequences and residue maps; add `--details` for the prior diagnostic manifest fields. The flags are orthogonal and can be combined. This local evidence comes from the supplied coordinate and polymer metadata. It does not determine biological assembly or target accessibility, which require separate biological review. Preserve explicit hotspots and coldspots. BC2 uses its native author-numbered residue selections; do not reuse BoltzGen canonical positions or another engine's coordinate transformation.
+
+For a secondary FASTA target, select the intended record. FASTA targets cannot carry structure-numbered hotspots or coldspots. Cropping can produce states such as `idr_epitope_1`; state-scoped filters must name the expanded state. Detargeting requires an explicit `objective: "detarget"` and a final ceiling. A computational negative-selection score is not experimental specificity.
+
+Bundled scaffold formats use hosted defaults. Do not download or redistribute bundled scaffold assets. A custom scaffold requires a PDB/mmCIF `scaffold_file` and native `mutate_positions`, such as `A50-55(5-8)` for a variable-length edit; omit de novo `lengths`. Validate positions against that exact scaffold rather than copying an edit range from another construct.
+
+`!` holds a scaffold span unredesigned, retaining its existing residues and
+coordinates; `-DESIGN` has the same DESIGN effect. A held span cannot change
+length: `A50-55(6)!` is valid, while `A50-55(5-8)!` is rejected locally because
+some choices resize it. Flag deltas apply in order, so a later `+DESIGN` makes
+the span editable again. Local checks cover edit syntax and held lengths for
+bundled scaffolds too; their coordinate bounds remain a server check.
+
+For the bundled VHH scaffold, leave `binder` empty to inherit its qualified mutation selection. Supplying `mutate_positions` replaces that selection. A plain span declares editable paratope residues; `*` keeps DESIGN and drops CONTACT for editable framework residues. The VHH preset's `binder_intra_coldspot` loss requires both kinds of position. If the experiment intentionally edits only paratope/CDR residues, set `advanced.weights_binder_intra_coldspot` to `0` and confirm that the live schema accepts it. The custom-scaffold example demonstrates this choice; replace its illustrative residue ranges with positions from your own scaffold. Adding `*` positions changes which framework residues can mutate and needs a scientific reason.
+
+## Configure properties and controls
+
+The nine canonical optional properties are `hard_target`, `large_complex`, `disulfide_staple`, `forced_targeting`, `humanize`, `mixed_topology`, `protease_stable`, `termini_accessible`, and `termini_together`. Use the live capability `properties` list for availability. Compatibility depends on format and targets. `forced_targeting` reshapes every target state around its hotspots, off-targets included, so it needs structure targets that each carry hotspots and cannot be combined with `objective: "detarget"` or FASTA targets. Validation and submission reject these combinations. Ask the user whether to drop forced targeting or the off-target; do not add off-target hotspots as a workaround, because the runtime would then reshape the off-target structure. Humanization, protease, and disulfide objectives optimize proxies.
+
+`large_complex` seeds gradient stages and re-prediction from coordinates on hand;
+de novo binders start at the origin. `hard_target` seeds re-prediction from the
+trajectory pose while ordinary gradient initialization remains unchanged.
+`bigbang` and `initial_guess` are deprecated aliases for `large_complex` and
+`hard_target`, respectively, on new submissions. The server canonicalizes and
+deduplicates alias/canonical pairs for new jobs. Local preparation and config
+export preserve saved property spellings; they do not migrate historical jobs.
+
+Use only fields accepted by the live schema. Preserve omitted fields, explicit zeroes, and `false`: they are different requests. `sequence_candidates` controls ProteinMPNN proposals; `kept_sequences` controls retained proposals. Detarget rotation thresholds and `max_detarget_iptm_final` serve different stages. Filters have exact native names, directions, units, and optional state scope. Shell commands, model paths, arbitrary native settings, provider knobs, upstream sweeps, and custom reranking are outside the hosted contract.
+
+Two optional v1.0.4 controls belong in `protocol_config.advanced`, with no new
+CLI flags:
+
+- `confidence_floor`: a finite fraction from `0` through `1`; native default
+  `0.7` when omitted. Conformational objectives and the three `Induced_Fit_*`
+  checks use the same floor. Residues at or below it contribute no weight;
+  higher-confidence residues receive increasing weight using the lower pLDDT
+  of the free and bound predictions. This is distinct from a final pLDDT gate.
+- `mutate_gate_draws`: an integer from `1` through `8`; omission preserves the
+  native default of `1`. At the mutate-stage gate, the engine takes that many
+  fresh predictions and selects the draw with the lowest weighted design loss.
+  It does not average scores or choose the highest i_pTM. More draws increase
+  prediction work per trajectory; retain the user's explicit choice.
+
+Keep acceptance thresholds in the existing named `filters`. In v1.0.4 the
+`induced_fit` preset asks for at least 2 Å of confident interface movement;
+`fold_switch` asks for `Induced_Fit_TM` at most `0.85` and
+`Induced_Fit_RMSD` at least 1 Å. Their optimization targets differ from these
+acceptance gates. Read [the metric details](outputs.md#conformational-metrics-in-v104)
+before interpreting these values or comparing historical campaigns. Rematerialization,
+attention selection, and worker packing remain runtime-managed.
+
+Omit `advanced.desperation_trajectories` to keep the native 750-trajectory
+threshold, including for VHH. An explicit `0` starts the first recovery rung
+on the first trajectory when `desperation` is enabled. This adjusts search
+behavior; `campaign.max_trajectories` still limits total attempts.
+
+If desperation is enabled but its threshold is unreachable within the campaign
+cap (for example, 750 with `max_trajectories: 20`), explain that this pilot will
+not exercise that recovery behavior. Do not automatically enable desperation,
+lower the threshold, or raise the cap. Preserve the distinction between omitted
+defaults, an explicit `0`, and disabled desperation.
+
+### Amino-acid preferences
+
+Use the optional `protocol_config.advanced.aa_bias` map in job JSON; no extra CLI
+flag is needed. For example, `"aa_bias": {"C": 0, "W": 0.4}` excludes cysteine
+and discourages tryptophan at mutable binder positions. `0` excludes, `1` is an
+explicit neutral override, values between `0` and `1` discourage, and values
+above `1` favor. These are relative propensities, not logit biases, percentages,
+exact counts, or composition guarantees. Leave native log conversion to the engine.
+
+Submit only explicit overrides. Unset residues inherit native presets: for VHH,
+`{"W": 0.4}` retains native `C=0`, `F=0.9`, and `Y=0.9`. Explicit `{"C": 1}`
+re-enables cysteine for the binder preset; removing C instead restores its
+preset preference. Explicit `C=0` overrides the disulfide-staple preference but
+does not remove cysteines in fixed scaffold residues. Preferences do not affect
+target residues. Do not fill all 20 entries with `1` or normalize weights.
+
+Use only the 20 standard uppercase one-letter codes and finite nonnegative
+JSON numbers. The server rejects strings, booleans, negative weights, and
+exclusion of all 20 residues. If 19 residues are explicitly excluded, give the
+remaining residue an explicit positive value so it cannot inherit exclusion.
+Omitted, `null`, and empty `{}` maps normalize to omission; retain explicit
+`0` and `1`. Fetch `ariax schema bindcraft2 --raw` and use
+`ariax validate -f job.json --input-dir ./bc2-inputs --details --json` to review
+`.data.normalized_job_spec.protocol_config.advanced.aa_bias`; the compact
+validation summary omits advanced settings. `ariax projects export PROJECT
+--output job.json` preserves the public saved map for reuse with the original
+inputs. Scientific changes, including these preferences, require a new campaign;
+restart keeps the existing settings.
+
+## Plan a bounded pilot
+
+Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,
+and evidence before scaling. `max_trajectories` caps attempts, not spending;
+accepted designs and attempted trajectories are separate counts. An exhausted
+pilot can complete with zero accepted designs. Trajectory cost varies with the
+stages reached, and zero accepted designs cannot establish cost per accepted design.
+
+Follow the [shared pricing guidance](../../SKILL.md#check-prices-and-choose-gpus).
+Turbo permits 2, 4, or 8 GPUs when authorized and available; the server assigns
+workers. More GPUs increase combined hourly cost and do not pool memory for one
+worker. Preserve the user's compute and spending authorization, and do not
+relaunch an exhausted pilot automatically.
+
+Include at least one compatible primary/core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
+or `RTX6000PRO`. Select as many compatible options as memory
+and the authorized hourly budget allow; one core choice is valid but reduces availability.
+Supplemental classes alone are insufficient. `RTX6000PRO` differs from
+`RTX6000ADA` and `A6000`. `allowed_gpus` lists alternatives, not a GPU count or
+Turbo request. Keep saved or explicitly supplied selections unless replacement
+is authorized; correct an invalid saved policy before restart.
+
+## Inspect, validate, and submit
+
+Start from [`bindcraft2-pilot.json`](../../examples/bindcraft2-pilot.json) or an example in [`bindcraft2-formats/`](../../examples/bindcraft2-formats/). Put every configured input file in one directory.
+
+The cyclic example deliberately uses lengths `[8, 14]`. Keep that explicit
+choice even though upstream v1.0.4's cyclic preset defaults to `[7, 20]`.
+
+```sh
+ariax inputs inspect --input-dir ./bc2-inputs -f bc2-job.json --json
+ariax inputs prepare --input-dir ./bc2-inputs -f bc2-job.json --output ./bc2-prepared --json
+ariax validate -f ./bc2-prepared/job.json --input-dir ./bc2-prepared --json
+ariax submit -f ./bc2-prepared/job.json --input-dir ./bc2-prepared --name bc2-pilot --wait --json
+```
+
+`--input-dir` is mutually exclusive with `--input`. Single-file `--input` is valid only when the config requires exactly one file named `input.pdb` or `input.cif`. The prepared directory contains `job.json`, `input-manifest.json`, and the exact configured files. The output path may be absent or an existing empty real directory; an identical rerun is accepted, while any different content is refused. Keep the prepared bundle intact. Local preparation checks bytes and selectors; server validation is authoritative for the API schema; native runtime preflight is the final execution check. Validation alone does not prove execution or binder quality.
+
+Submission starts billable compute; carry forward the user's authorization as described in the shared workflow.
+
+## Review the campaign
+
+```sh
+ariax status PROJECT_UUID --json
+```
+
+Follow `data.action.command` from this response; do not fetch every candidate view. It chooses `final` for accepted designs, `all` for refolded candidates, or `diagnostics` for earlier native exits. Add `--json` for structured rows. Use `meta.next_cursor` or `--all` only when more pages are needed; unfinished publication alone does not mean another page exists.
+
+Use `ariax results PROJECT_UUID --json` to locate artifacts, then `ariax results PROJECT_UUID --download ./bc2-results --json` when files are needed. Read logs only when the reported failure or missing evidence calls for them. Default output keeps scientific evidence; `--details` restores the prior diagnostic fields.
+
+Project lifecycle and campaign phase answer different questions. Always read attempted, accepted/requested, saved trajectory, refolded, and ranked counts together. A completed campaign with zero accepted designs is a scientific outcome, not an execution failure and not evidence that more compute will help. If attempts exceed saved trajectory records, report the discrepancy and preserve the stated uncertainty.
+
+Native stage termination precedes final filtering. When no candidates were scored, an empty final-filter list means those filters were not evaluated. Do not infer pass/fail from rounded metrics or treat missing eligibility as false. BindCraft2 can publish more refold rows than trajectories because multiple sequence candidates can be evaluated from one trajectory.
+
+Read [BindCraft2 outputs](outputs.md) for candidate fields, missing tables, native score units, and recovery. Follow each download failure's `action`; rerunning a transiently interrupted download resumes saved files.
+
+### Saved structures
+
+Use the live server schema and validation with the existing job JSON `protocol_config.advanced`. New campaigns default `save_design_trajectory`, `save_failed_trajectories`, `save_failed_refolds`, and `save_binder_monomers` to true; explicit false values are preserved. Packaged BindCraft2 examples show these choices. No additional flags or settings DSL are needed. Retain these values when exporting or reusing a job.
+
+`save_design_trajectory` saves the terminal prediction per predicted state, including rejected/early-terminated trajectories when predictions exist. Accepted/ranked structures are always saved. `save_binder_monomers` controls refolded monomers; terminal trajectory output may also write monomers. Intermediate frames, animations, and relaxation remain separate and are not enabled by these choices.
+
+A missing saved structure is distinct from scientific rejection or acceptance. No finite prediction can mean no structure; an early exit can have a structure but no scored metrics. Never invent scores or claim to recover historical unsaved structures. The website defaults to trajectories with structures while keeping full CSV downloads and attempt counts. The candidates API supports `view=diagnostics&structures_only=true` for BindCraft2; it filters before pagination, reports `total` and `overall_total`, and invalidates cursors when publication/filter changes. Omitted/false keeps all rows. Older publications use bounded discovery and may require retrieving the CSV and artifacts directly.
+
+Whole-chain hotspot/coldspot selectors are supported: `A` means all protein residues in selected chain A; mix with numbered selections such as `A,B12-16`. The accepted job retains the shorthand. The server validates author numbering against uploaded bytes and expands whole chains before native execution. Missing/unselected chains and negative numbering are rejected; insertion-code restrictions remain. This applies to structured targets only, not FASTA or scaffold edits. Preserve chain IDs and do not renumber inputs implicitly.

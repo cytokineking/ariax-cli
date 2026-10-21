@@ -1,0 +1,16 @@
+{
+  "polymers": [
+    {
+      "kind": "protein",
+      "length": [
+        24,
+        24
+      ],
+      "sequence": "AGSTAGSTAGSTAGSTAGSTAGST",
+      "chain": "A"
+    }
+  ],
+  "chemicals": [],
+  "exact_polymer_chains": true,
+  "exact_chemical_components": true
+}

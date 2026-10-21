@@ -1,0 +1,32 @@
+[
+  {
+    "name": "supplied-paired-msa",
+    "modelSeeds": [
+      201
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ],
+          "pairedMsaPath": "/inputs/completion/features/insulin-A-paired.a3m",
+          "unpairedMsaPath": "/inputs/completion/features/insulin-A-unpaired.a3m"
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ],
+          "pairedMsaPath": "/inputs/completion/features/insulin-B-paired.a3m",
+          "unpairedMsaPath": "/inputs/completion/features/insulin-B-unpaired.a3m"
+        }
+      }
+    ]
+  }
+]

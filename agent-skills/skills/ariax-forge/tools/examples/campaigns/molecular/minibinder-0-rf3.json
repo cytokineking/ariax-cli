@@ -1,0 +1,15 @@
+[
+  {
+    "name": "minibinder-0",
+    "components": [
+      {
+        "seq": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+        "chain_id": "A"
+      },
+      {
+        "seq": "AEEELKRLLENAEKVCEELNLSEEEKEEVIEEARALAASL",
+        "chain_id": "B"
+      }
+    ]
+  }
+]

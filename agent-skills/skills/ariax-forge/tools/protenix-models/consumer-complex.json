@@ -1,0 +1,25 @@
+[
+  {
+    "name": "insulin",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  }
+]

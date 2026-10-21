@@ -1,0 +1,44 @@
+{
+  "polymers": [
+    {
+      "kind": "protein",
+      "length": [
+        40,
+        40
+      ],
+      "sequence": "EVCPGMDIRNNLTRLHELENCSVIEGHLQILLMFKTRPED"
+    }
+  ],
+  "chemicals": [
+    {
+      "res_name": "AMP",
+      "heavy_atoms": {
+        "P": "P",
+        "O1P": "O",
+        "O2P": "O",
+        "O3P": "O",
+        "C5'": "C",
+        "O5'": "O",
+        "C4'": "C",
+        "O4'": "O",
+        "C3'": "C",
+        "O3'": "O",
+        "C2'": "C",
+        "O2'": "O",
+        "C1'": "C",
+        "N1": "N",
+        "C2": "C",
+        "N3": "N",
+        "C4": "C",
+        "C5": "C",
+        "C6": "C",
+        "N6": "N",
+        "N7": "N",
+        "C8": "C",
+        "N9": "N"
+      }
+    }
+  ],
+  "exact_polymer_chains": true,
+  "exact_chemical_components": true
+}

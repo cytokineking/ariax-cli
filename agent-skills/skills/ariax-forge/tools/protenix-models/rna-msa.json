@@ -1,0 +1,26 @@
+[
+  {
+    "name": "nucleic_supplied_rna_msa",
+    "sequences": [
+      {
+        "rnaSequence": {
+          "sequence": "ACGUACGU",
+          "count": 1,
+          "id": [
+            "A"
+          ],
+          "unpairedMsaPath": "/opt/forge-protenix-fixtures/msa/RNA.a3m"
+        }
+      },
+      {
+        "dnaSequence": {
+          "sequence": "ACGTACGT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "experiment": {
+    "name": "b51-complete-C1",
+    "seed": 51
+  },
+  "paths": {
+    "rootdir": "/workspace/complete/C1"
+  },
+  "generation": {
+    "base": {
+      "checkpoint": "/models/genie3/pretrained/v1/checkpoints/step=600000.ckpt",
+      "config": "/models/genie3/pretrained/v1/config.yaml"
+    },
+    "compile": false,
+    "dataset": {
+      "source": "unconditional",
+      "n_sample": 2,
+      "batch_size": 1,
+      "min_length": 350,
+      "max_length": 350,
+      "length_step": 50
+    },
+    "sampler": {
+      "sampler": {
+        "direction_scale": 0.0
+      }
+    }
+  },
+  "evaluation": {
+    "version": "unconditional",
+    "folding": {
+      "model_name": "esmfold"
+    },
+    "inverse_folding": {
+      "num_seq": 1
+    }
+  }
+}

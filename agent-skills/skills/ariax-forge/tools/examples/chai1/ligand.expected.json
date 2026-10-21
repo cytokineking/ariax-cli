@@ -1,0 +1,13 @@
+{
+  "samples": 1,
+  "chains": {
+    "A": {
+      "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+    },
+    "B": {
+      "residues": 1,
+      "min_atoms": 14
+    }
+  },
+  "confidence_arrays": true
+}

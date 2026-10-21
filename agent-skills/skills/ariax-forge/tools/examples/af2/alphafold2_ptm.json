@@ -1,0 +1,56 @@
+{
+  "mode": "alphafold2_ptm",
+  "models": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "seeds": [
+    7
+  ],
+  "raw": true,
+  "settings": {
+    "num_models": 5,
+    "num_seeds": 1,
+    "random_seed": 7,
+    "num_recycles": 1,
+    "num_ensemble": 1,
+    "use_templates": false,
+    "pair_mode": "unpaired_paired",
+    "pairing_strategy": "greedy",
+    "msa_mode": "mmseqs2_uniref_env",
+    "host_url": "https://api.colabfold.com",
+    "max_seq": 32,
+    "max_extra_seq": 64,
+    "num_relax": 0,
+    "stop_at_score": 100,
+    "model_order": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "cases": [
+    {
+      "job": "monomer",
+      "chains": {
+        "A": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+      },
+      "source": {
+        "pdb": "1UBQ",
+        "selected_input_chains": [
+          "A"
+        ],
+        "url": "https://www.rcsb.org/structure/1UBQ",
+        "sequence_lengths": [
+          76
+        ]
+      }
+    }
+  ],
+  "tokens": true
+}

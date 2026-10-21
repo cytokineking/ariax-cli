@@ -1,0 +1,17 @@
+{
+  "rfd3na-aptamer": {
+    "input": "/inputs/foundry/inputs/AMP-generation.pdb",
+    "ligand": "AMP",
+    "contig": "24-24R",
+    "length": "24",
+    "select_buried": {
+      "AMP": "ALL"
+    },
+    "select_hbond_acceptor": {
+      "AMP": "N7,O1P,O2P,O3P"
+    },
+    "select_hbond_donor": {
+      "AMP": "N6"
+    }
+  }
+}

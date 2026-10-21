@@ -1,0 +1,5 @@
+# B48 bounded native inputs
+
+All PDBs are exact public upstream files at 6c6bd71a72741a4d8c139ab54e2fd0012eb0bdd9. PD-L1: target A1-115 and native hotspots A37/A39/A49/A98; one 100-residue binder. 7V11: ligand OQO, explicit upstream SMILES, one 100-residue binder. M0024_1nzy_v3: generic ligand L:1 on A (the upstream task incorrectly selects L:0; explicitly override conditional feature 1 ligand=L:1) and six native residue atom selections on B; one 180-residue scaffold. Preserve atom names, input bonds and motif atom-spec. AME uses the native v2 architecture and rank-32 LoRA. Native conditioning recenters coordinates, so compare relative geometry and the centered native arrays. Sampling uses the original 400 steps, seed 5, single-pass, no reward/refinement, batch 1 and eight CPUs. A separate native reward-guided attempt must retain its actual selected reward and settings. Wider modes remain qualification gates.
+
+The original AME fixture is an observed 53-atom BCA subgraph. O7A, O8A, O9A and P3D have no supplied coordinates. Preserve this input and its accepted motif evidence. Complete DHZ/ZN AME chemistry and broader search remain under qualification.

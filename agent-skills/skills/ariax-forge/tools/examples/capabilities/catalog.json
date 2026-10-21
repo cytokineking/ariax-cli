@@ -1,0 +1,37 @@
+{
+  "data": {
+    "tools": [
+      {
+        "tool": "example-antibody",
+        "capabilities": {
+          "tasks": [
+            "antibodies"
+          ],
+          "guide": "capabilities",
+          "qualification": [
+            {
+              "model": "example-checkpoint",
+              "mode": "sequence-design",
+              "upstream_maturity": "experimental",
+              "native": "passed",
+              "installation": "held",
+              "restoration": "untested",
+              "scope": "Synthetic metadata example; no scientific execution.",
+              "workload": "One chain, two sequences; synthetic example only."
+            }
+          ]
+        }
+      },
+      {
+        "tool": "example-predictor",
+        "capabilities": {
+          "tasks": [
+            "molecular-prediction"
+          ],
+          "guide": "capabilities",
+          "qualification": []
+        }
+      }
+    ]
+  }
+}

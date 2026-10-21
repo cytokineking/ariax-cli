@@ -1,0 +1,41 @@
+[
+  {
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "YMLDLQPETTDLYCGGGGSGGGGSGGGGSIQRTPKIQVYSRHPAENGKSNFLNCYVSGFHPSDIEVDLLKNGERIEKVEHSDLSFSKDWSFYLLYYTEFTPTEKDEYACRVNHVTLSQPKIVKWDRDMGGGGSGGGGSGGGGSGGGGSGSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGCYNQSEAGSHTVQRMYGCDVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMCAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQRTDAPKTHMTHHAVSDHEATLRCWALSFYPAEITLTWQRDGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGQEQRYTCHVQHEGLPKPLTLRWEHHHHHH",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "EVKLVESGGGLVQPGGSLRLSCAASGSIFSINTMGWYRQTPGKQRDLVADISSGGSTKYGDSVKGRFTISRDNTKNTVYLQMNSLKPEDTAVYYCYGLSYSNDDYWGQGTQVTVSS",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ],
+    "name": "pmhc_vhh_pocket",
+    "constraint": {
+      "pocket": {
+        "binder_chain": {
+          "entity": 2,
+          "copy": 1
+        },
+        "contact_residues": [
+          {
+            "entity": 1,
+            "copy": 1,
+            "position": 72
+          }
+        ],
+        "max_distance": 15
+      }
+    }
+  }
+]

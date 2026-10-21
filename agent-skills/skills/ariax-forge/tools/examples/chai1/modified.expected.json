@@ -1,0 +1,12 @@
+{
+  "samples": 1,
+  "chains": {
+    "A": {
+      "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+      "required_elements": [
+        "Se"
+      ]
+    }
+  },
+  "confidence_arrays": true
+}

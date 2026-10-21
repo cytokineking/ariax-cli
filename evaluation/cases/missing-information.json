@@ -1,0 +1,5 @@
+{
+  "schema_version":1,"id":"missing-target-sequence",
+  "prompt":"Use ESMFold2-pipeline to prepare a miniprotein job against chain A of my structure. The structure file and full target sequence have not been provided. Do not invent either, fetch a substitute target, or start compute. Save the status of your attempt and the specific missing information.",
+  "expected_completion":"needs_input","checks":[{"pointer":"/protocol_config/target/sequences","op":"absent"}]
+}

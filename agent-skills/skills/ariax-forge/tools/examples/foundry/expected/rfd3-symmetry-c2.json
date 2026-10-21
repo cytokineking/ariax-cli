@@ -1,0 +1,21 @@
+{
+  "polymers": [
+    {
+      "kind": "protein",
+      "length": [
+        32,
+        32
+      ]
+    },
+    {
+      "kind": "protein",
+      "length": [
+        32,
+        32
+      ]
+    }
+  ],
+  "chemicals": [],
+  "exact_polymer_chains": true,
+  "exact_chemical_components": true
+}

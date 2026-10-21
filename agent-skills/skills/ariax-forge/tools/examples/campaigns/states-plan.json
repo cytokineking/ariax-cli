@@ -1,0 +1,9 @@
+{
+  "path": "states",
+  "candidate_limit": 2,
+  "consumer": "consensus.py",
+  "manifest": "/workspace/campaign-delivery/campaign.json",
+  "output": "/workspace/campaign-shortlists/states.json",
+  "recovery": "Restore complete saved intermediates and invoke consumer explicitly.",
+  "experimental_function": "unmeasured"
+}

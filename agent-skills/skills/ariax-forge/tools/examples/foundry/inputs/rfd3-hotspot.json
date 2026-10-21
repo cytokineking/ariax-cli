@@ -1,0 +1,10 @@
+{
+  "rfd3-hotspot": {
+    "input": "/inputs/foundry/inputs/protein.pdb",
+    "contig": "E6-25,/0,40",
+    "length": "60",
+    "select_hotspots": {
+      "E12": "CA"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "rfd3-dna-binder": {
+    "input": "/inputs/foundry/inputs/dna.pdb",
+    "contig": "A1-10,/0,B15-24,/0,40",
+    "length": "60"
+  }
+}

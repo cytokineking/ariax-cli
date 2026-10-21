@@ -1,0 +1,15 @@
+[
+  {
+    "name": "positive",
+    "components": [
+      {
+        "seq": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+        "chain_id": "A"
+      },
+      {
+        "seq": "SLEEELERLEKELVAAAEAGDEERALEIVRRIEELEEELG",
+        "chain_id": "B"
+      }
+    ]
+  }
+]

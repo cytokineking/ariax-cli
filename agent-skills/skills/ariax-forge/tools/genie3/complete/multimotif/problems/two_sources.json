@@ -1,0 +1,9 @@
+{
+  "motif_filepaths": [
+    "/inputs/genie3/motif/motifs/04_5WN9.pdb",
+    "/inputs/genie3/complete/motif/motifs/22_1BCF.pdb"
+  ],
+  "segment_config_str": "10-30,A1,10-35,B1,10-35",
+  "minimum_total_length": 100,
+  "maximum_total_length": 125
+}

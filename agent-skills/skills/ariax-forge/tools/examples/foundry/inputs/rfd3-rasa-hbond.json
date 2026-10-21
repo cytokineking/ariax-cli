@@ -1,0 +1,16 @@
+{
+  "rfd3-rasa-hbond": {
+    "input": "/inputs/foundry/inputs/AMP-generation.pdb",
+    "length": "40",
+    "ligand": "AMP",
+    "select_buried": {
+      "AMP": "ALL"
+    },
+    "select_hbond_acceptor": {
+      "AMP": "N7,O1P,O2P,O3P"
+    },
+    "select_hbond_donor": {
+      "AMP": "N6"
+    }
+  }
+}

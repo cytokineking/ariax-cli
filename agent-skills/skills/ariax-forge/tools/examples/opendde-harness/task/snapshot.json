@@ -1,0 +1,7 @@
+{
+  "task_id": "native-file-example",
+  "status": "queued",
+  "target": "insulin-file-boundary",
+  "cycle": 0,
+  "total_cycles": 1
+}

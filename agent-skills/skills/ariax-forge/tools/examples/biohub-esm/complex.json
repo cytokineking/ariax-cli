@@ -1,0 +1,1 @@
+{"items": [{"id": "synthetic_complex", "chains": [{"id": "binder", "sequence": "ACDEFGHIKLMNPQRS", "role": "binder"}, {"id": "target", "sequence": "MKTAYIAKQRQISFVK", "role": "target"}]}]}

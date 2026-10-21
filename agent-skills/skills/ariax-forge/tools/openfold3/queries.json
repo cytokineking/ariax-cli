@@ -1,0 +1,65 @@
+{
+  "queries": {
+    "ubiquitin": {
+      "chains": [
+        {
+          "molecule_type": "protein",
+          "chain_ids": [
+            "A"
+          ],
+          "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+        }
+      ]
+    },
+    "insulin": {
+      "chains": [
+        {
+          "molecule_type": "protein",
+          "chain_ids": [
+            "A"
+          ],
+          "sequence": "GIVEQCCTSICSLYQLENYCN"
+        },
+        {
+          "molecule_type": "protein",
+          "chain_ids": [
+            "B"
+          ],
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT"
+        }
+      ]
+    },
+    "molecular": {
+      "chains": [
+        {
+          "molecule_type": "protein",
+          "chain_ids": [
+            "A"
+          ],
+          "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+        },
+        {
+          "molecule_type": "rna",
+          "chain_ids": [
+            "R"
+          ],
+          "sequence": "ACGUACGU"
+        },
+        {
+          "molecule_type": "dna",
+          "chain_ids": [
+            "D"
+          ],
+          "sequence": "ACGTACGT"
+        },
+        {
+          "molecule_type": "ligand",
+          "chain_ids": [
+            "L"
+          ],
+          "ccd_codes": "AMP"
+        }
+      ]
+    }
+  }
+}

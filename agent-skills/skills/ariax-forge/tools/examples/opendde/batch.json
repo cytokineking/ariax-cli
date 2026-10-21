@@ -1,0 +1,107 @@
+[
+  {
+    "name": "insulin",
+    "modelSeeds": [
+      102
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "invalid-ccd",
+    "modelSeeds": [
+      104
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "ACDEFGHIK",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "ligand": {
+          "ligand": "CCD_NOT_A_CCD",
+          "count": 1,
+          "id": [
+            "L"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "mixed",
+    "modelSeeds": [
+      103
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "ACDEFGHIKLMNPQRSTVWY",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "rnaSequence": {
+          "sequence": "GUAC",
+          "count": 1,
+          "id": [
+            "R"
+          ]
+        }
+      },
+      {
+        "dnaSequence": {
+          "sequence": "GATC",
+          "count": 1,
+          "id": [
+            "D"
+          ]
+        }
+      },
+      {
+        "ligand": {
+          "ligand": "CCD_ATP",
+          "count": 1,
+          "id": [
+            "L"
+          ]
+        }
+      },
+      {
+        "ion": {
+          "ion": "MG",
+          "count": 1,
+          "id": [
+            "M"
+          ]
+        }
+      }
+    ]
+  }
+]

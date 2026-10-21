@@ -1,0 +1,8 @@
+{
+  "rfd3na-multipolymer": {
+    "input": "/inputs/foundry/inputs/AMP-generation.pdb",
+    "ligand": "AMP",
+    "contig": "24-24R,/0,12-12D,/0,24",
+    "length": "60"
+  }
+}

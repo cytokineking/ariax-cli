@@ -1,0 +1,7 @@
+entities:
+  - protein:
+      id: B
+      sequence: 40
+  - protein:
+      id: T
+      sequence: MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG

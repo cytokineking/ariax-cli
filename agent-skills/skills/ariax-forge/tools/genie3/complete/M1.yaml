@@ -1,0 +1,34 @@
+{
+  "experiment": {
+    "name": "b51-complete-M1",
+    "seed": 51
+  },
+  "paths": {
+    "rootdir": "/workspace/complete/M1",
+    "dataset": "/inputs/genie3/complete/motif"
+  },
+  "generation": {
+    "base": {
+      "checkpoint": "/models/genie3/pretrained/v1/checkpoints/step=600000.ckpt",
+      "config": "/models/genie3/pretrained/v1/config.yaml"
+    },
+    "compile": false,
+    "dataset": {
+      "source": "motif",
+      "n_sample": 5,
+      "batch_size": 1,
+      "selections": "22_1BCF"
+    },
+    "sampler": {
+      "sampler": {
+        "direction_scale": 0.1
+      }
+    }
+  },
+  "evaluation": {
+    "version": "scaffold",
+    "folding": {
+      "model_name": "esmfold"
+    }
+  }
+}

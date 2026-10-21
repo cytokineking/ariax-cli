@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "purpose": "configuration and parser smoke tests; synthetic targets are not scientific campaigns",
+  "cases": [
+    {
+      "name": "bindcraft-v1.5",
+      "job": "bindcraft-v1.5.json",
+      "input": "fixtures/synthetic-target.pdb"
+    },
+    {
+      "name": "bindcraft-peptide",
+      "job": "bindcraft-peptide.json",
+      "input": "fixtures/synthetic-target.pdb"
+    },
+    {
+      "name": "bindcraft-override",
+      "job": "bindcraft-override.json",
+      "input": "fixtures/synthetic-target.pdb"
+    },
+    {
+      "name": "boltzgen",
+      "job": "boltzgen.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "boltzgen-peptide",
+      "job": "boltzgen-peptide.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "boltzgen-cyclic-peptide",
+      "job": "boltzgen-cyclic-peptide.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "boltzgen-helicon",
+      "job": "boltzgen-helicon.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "boltzgen-vhh",
+      "job": "boltzgen-vhh.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "boltzgen-miniprotein-small-molecule",
+      "job": "boltzgen-miniprotein-small-molecule.json",
+      "input": null
+    },
+    {
+      "name": "boltzgen-small-molecule-smiles",
+      "job": "boltzgen-small-molecule-smiles.json",
+      "input": null
+    },
+    {
+      "name": "pxdesign",
+      "job": "pxdesign.json",
+      "input": "fixtures/synthetic-target.pdb"
+    },
+    {
+      "name": "pxdesign-multichain-cif",
+      "job": "pxdesign-multichain-cif.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "esmfold2-pipeline",
+      "job": "esmfold2-pipeline.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "esmfold2-rcsb",
+      "job": "esmfold2-rcsb.json",
+      "input": null
+    },
+    {
+      "name": "esmfold2-vhh",
+      "job": "esmfold2-vhh.json",
+      "input": "fixtures/synthetic-target.cif"
+    },
+    {
+      "name": "esmfold2-scfv",
+      "job": "esmfold2-scfv.json",
+      "input": "fixtures/synthetic-target.cif"
+    }
+  ]
+}

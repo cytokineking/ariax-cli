@@ -1,0 +1,25 @@
+[
+  {
+    "name": "nucleic",
+    "sequences": [
+      {
+        "rnaSequence": {
+          "sequence": "ACGUACGU",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "dnaSequence": {
+          "sequence": "ACGTACGT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  }
+]

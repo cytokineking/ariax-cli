@@ -1,0 +1,33 @@
+{
+  "experiment": {
+    "name": "b51-motif",
+    "seed": 51
+  },
+  "paths": {
+    "rootdir": "/workspace/b51/motif",
+    "dataset": "/inputs/genie3/motif"
+  },
+  "generation": {
+    "base": {
+      "checkpoint": "/models/genie3/pretrained/v1/checkpoints/step=600000.ckpt",
+      "config": "/models/genie3/pretrained/v1/config.yaml"
+    },
+    "compile": false,
+    "dataset": {
+      "source": "motif",
+      "selections": "04_5WN9",
+      "n_sample": 1
+    },
+    "sampler": {
+      "name": "ddim",
+      "sampler": {
+        "direction_scale": 0.1,
+        "n_sample_step": 100,
+        "noise_scale": 1.0,
+        "eta": 1.0,
+        "predict_sequence": false,
+        "predict_sidechain": false
+      }
+    }
+  }
+}

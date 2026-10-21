@@ -1,0 +1,15 @@
+{
+  "samples": 1,
+  "chains": {
+    "A": {
+      "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+    },
+    "B": {
+      "sequence": "ACGTACGT"
+    },
+    "C": {
+      "sequence": "ACGUACGU"
+    }
+  },
+  "confidence_arrays": true
+}

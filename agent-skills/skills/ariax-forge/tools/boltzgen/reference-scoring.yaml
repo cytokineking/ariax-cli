@@ -1,0 +1,15 @@
+entities:
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+      design:
+        - chain:
+            id: A
+            res_index: 1..76
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A

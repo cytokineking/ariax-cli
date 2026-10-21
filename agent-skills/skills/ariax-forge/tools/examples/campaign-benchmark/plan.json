@@ -1,0 +1,131 @@
+{
+  "schema": "campaign-benchmark-v1",
+  "status": "source-prepared-awaiting-accepted-B70-heads",
+  "accepted_b70_heads": {
+    "runtime": "c70262e6f33a2e27a5790a610d906bd3e0e01149",
+    "backend": "8a3800ec975f4a5f987689f4d9a9384945b928c5",
+    "cli": "28294b15caae0df7963c372b35c4af7879feaa70"
+  },
+  "cohort": [
+    {
+      "path": "minibinder",
+      "id": "B43/ubiquitin_1",
+      "state": "full-1UBQ",
+      "query_roles": [
+        "binder"
+      ],
+      "qc_model_family": "boltzgen",
+      "expected_sequences": {
+        "binder": "SLEEELERLEKELVAAAEAGDEERALEIVRRIEELEEELG"
+      },
+      "target_context": "Full 1UBQ A76; exact B43 generated B40 binder"
+    },
+    {
+      "path": "minibinder",
+      "id": "B43/ubiquitin_0",
+      "state": "full-1UBQ",
+      "query_roles": [
+        "binder"
+      ],
+      "qc_model_family": "boltzgen",
+      "expected_sequences": {
+        "binder": "AEEELKRLLENAEKVCEELNLSEEEKEEVIEEARALAASL"
+      },
+      "target_context": "Full 1UBQ A76; exact B43 generated B40 binder"
+    },
+    {
+      "path": "antibody",
+      "id": "B66/igdesign-1/all-six-CDRs",
+      "state": "paired-variable-domains",
+      "query_roles": [
+        "heavy",
+        "light"
+      ],
+      "qc_model_family": "abodybuilder2",
+      "expected_sequences": {
+        "heavy": "EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTDGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCATEYGSSFYAMDYWGQGTLVT",
+        "light": "DIQMTQSPSSLSASVGDRVTITCRASQSVISAVAWYQQKPGKAPKLLIYSASFLYSGVPSRFSGSRSGTDFTLTISSLQPEDFATYYCQQYYTVPPTFGQGTKVEIK"
+      },
+      "target_context": "B66 1N8Z parsed antigen context; H/L-only fold validation"
+    }
+  ],
+  "search": {
+    "tool": "mmseqs2-uniref90",
+    "version": "18-8cc5c",
+    "commit": "8cc5ce367b5638c4306c2d7cfc652dd099a4643f",
+    "snapshot": "UniRef90 2026_03",
+    "asset": "mmseqs2-uniref90-2026-03",
+    "min_identity": 0.3,
+    "coverage": 0.8,
+    "cov_mode": 0,
+    "evalue": 0.001,
+    "max_seqs": 300,
+    "seq_id_mode": 0,
+    "threads": 8,
+    "gpu_ids": [
+      0,
+      1
+    ],
+    "columns": [
+      "query",
+      "target",
+      "fident",
+      "alnlen",
+      "qstart",
+      "qend",
+      "qlen",
+      "tstart",
+      "tend",
+      "tlen",
+      "evalue",
+      "bits",
+      "qcov",
+      "tcov",
+      "qaln",
+      "taln"
+    ]
+  },
+  "qc": {
+    "backbone_atoms": [
+      "N",
+      "CA",
+      "C",
+      "O"
+    ],
+    "minimum_backbone_fraction": 1.0,
+    "minibinder_max_glu_fraction": 0.2,
+    "pose_review_angstrom": 2.0
+  },
+  "assays": {
+    "status": "unmeasured",
+    "reason": "No existing permitted export has established exact sequence, target construct and assay-context matches for this cohort.",
+    "selection_split": "All three identities fixed before B74 search/QC; diagnostic cohort selected after native generation and rejection.",
+    "evaluation_split": "No held-out experimental evaluation set established.",
+    "training_overlap": "Unknown for every predictor and generator; database hits do not establish training membership."
+  },
+  "exclusions": [
+    "B70 states, ligand-motif and nucleic-acid rows remain in the retained original files outside the selected benchmark denominator.",
+    "B55g is a separate cohort.",
+    "Broad generation and predictor reruns are outside scope.",
+    "B34 and B39 remain held; AF3 is excluded.",
+    "Acceleration variants remain related families; baseline recommendations remain unchanged."
+  ],
+  "hardware_profile": {
+    "selected_gpu_count": 2,
+    "minimum_gpu_memory_mib_each": 32768,
+    "selected_gpu_model": "L40",
+    "observed_gpu_memory_mib_each": [
+      46068,
+      46068
+    ],
+    "minimum_usable_ram_gib": 110,
+    "minimum_usable_staging_gib": 512,
+    "minimum_cpu_count": 8,
+    "basis": "B63 full-snapshot two-GPU native peaks 23831/23787 MiB; 32768 MiB per device reserves over 8 GiB above each observed peak. Actual B74 L40 devices expose 46068 MiB each. Native and fresh-recovery validation remain required.",
+    "candidate_single_gpu_profile": {
+      "minimum_gpu_memory_mib": 73728,
+      "nominal_class": "80-GB A100/H100 or larger",
+      "status": "Candidate only; no single-GPU result or global catalog change."
+    }
+  }
+}

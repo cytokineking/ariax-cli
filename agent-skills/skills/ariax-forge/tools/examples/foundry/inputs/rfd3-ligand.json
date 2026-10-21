@@ -1,0 +1,7 @@
+{
+  "rfd3-ligand": {
+    "input": "/inputs/foundry/inputs/AMP-generation.pdb",
+    "length": "40",
+    "ligand": "AMP"
+  }
+}

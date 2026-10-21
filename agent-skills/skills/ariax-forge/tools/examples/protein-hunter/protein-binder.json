@@ -1,0 +1,17 @@
+{
+  "target_sequences": [
+    "AFTVTVPKDLYVVEYGSNMTIECKFPVEKQLDLAALIVYWEMEDKNIIQFVHGEEDLKVQHSSYRQRARLLKDQLSLGNAALQITDVKLQDAGVYRCMISYGGADYKRITVKVNAPYAAALE"
+  ],
+  "num_cycles": 2,
+  "min_protein_length": 90,
+  "max_protein_length": 90,
+  "percent_x": 90,
+  "temperature": 0.1,
+  "high_iptm_threshold": 0.8,
+  "high_plddt_threshold": 0.8,
+  "alanine_bias": true,
+  "alanine_bias_start": -0.5,
+  "alanine_bias_end": -0.1,
+  "omit_aa": "C",
+  "exclude_p": false
+}

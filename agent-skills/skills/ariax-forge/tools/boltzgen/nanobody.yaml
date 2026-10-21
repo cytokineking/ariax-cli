@@ -1,0 +1,8 @@
+entities:
+  - file:
+      path: 1ubq.cif
+      include:
+        - chain:
+            id: A
+  - file:
+      path: native-scaffolds/7eow.yaml

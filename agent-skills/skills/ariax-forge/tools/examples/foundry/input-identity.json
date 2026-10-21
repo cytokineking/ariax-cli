@@ -1,0 +1,61 @@
+{
+  "protein": {
+    "source": "models/rfd3/docs/input_pdbs/4zxb_cropped.pdb",
+    "author_chain": "E",
+    "author_residues": [
+      6,
+      45
+    ],
+    "sequence": "EVCPGMDIRNNLTRLHELENCSVIEGHLQILLMFKTRPED"
+  },
+  "dna": {
+    "source": "models/rfd3/docs/input_pdbs/1bna.pdb",
+    "author_chains": [
+      "A",
+      "B"
+    ],
+    "sequences": [
+      "CGCGAATTCGCG",
+      "CGCGAATTCGCG"
+    ]
+  },
+  "rna": {
+    "source": "models/rfd3/docs/input_pdbs/1q75.pdb",
+    "sequence": "GGCUCUCAGUGAGCC"
+  },
+  "AMP": {
+    "res_name": "AMP",
+    "heavy_atoms": {
+      "P": "P",
+      "O1P": "O",
+      "O2P": "O",
+      "O3P": "O",
+      "C5'": "C",
+      "O5'": "O",
+      "C4'": "C",
+      "O4'": "O",
+      "C3'": "C",
+      "O3'": "O",
+      "C2'": "C",
+      "O2'": "O",
+      "C1'": "C",
+      "N1": "N",
+      "C2": "C",
+      "N3": "N",
+      "C4": "C",
+      "C5": "C",
+      "C6": "C",
+      "N6": "N",
+      "N7": "N",
+      "C8": "C",
+      "N9": "N"
+    }
+  },
+  "source_commit": "94c78ab125c6ef2cc7d1226de86d1bd578bf8bee",
+  "generation_AMP": {
+    "file": "inputs/AMP-generation.pdb",
+    "source": "inputs/AMP.pdb",
+    "author_chain": "L",
+    "change": "Chain field only, for separation from generated polymers; atom names and coordinates unchanged."
+  }
+}

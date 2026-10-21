@@ -1,0 +1,34 @@
+{
+  "experiment": {
+    "name": "b51-unconditional",
+    "seed": 51
+  },
+  "paths": {
+    "rootdir": "/workspace/b51/unconditional"
+  },
+  "generation": {
+    "base": {
+      "checkpoint": "/models/genie3/pretrained/v1/checkpoints/step=600000.ckpt",
+      "config": "/models/genie3/pretrained/v1/config.yaml"
+    },
+    "compile": false,
+    "dataset": {
+      "source": "unconditional",
+      "min_length": 50,
+      "max_length": 50,
+      "length_step": 50,
+      "n_sample": 1
+    },
+    "sampler": {
+      "name": "ddim",
+      "sampler": {
+        "direction_scale": 0.8,
+        "n_sample_step": 100,
+        "noise_scale": 1.0,
+        "eta": 1.0,
+        "predict_sequence": false,
+        "predict_sidechain": false
+      }
+    }
+  }
+}

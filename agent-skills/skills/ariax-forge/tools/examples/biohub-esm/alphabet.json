@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "alphabet",
+      "chains": [
+        {
+          "id": "A",
+          "sequence": "ACDEFGHIKLMNPQRSTVWYXBZUO"
+        }
+      ]
+    }
+  ]
+}

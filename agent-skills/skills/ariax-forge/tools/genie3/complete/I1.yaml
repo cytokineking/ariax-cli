@@ -1,0 +1,52 @@
+{
+  "experiment": {
+    "name": "b51-complete-I1",
+    "seed": 51
+  },
+  "paths": {
+    "rootdir": "/workspace/complete/I1",
+    "dataset": "/inputs/genie3/complete/target"
+  },
+  "generation": {
+    "base": {
+      "checkpoint": "/models/genie3/pretrained/v1/checkpoints/step=600000.ckpt",
+      "config": "/models/genie3/pretrained/v1/config.yaml"
+    },
+    "compile": false,
+    "dataset": {
+      "source": "target",
+      "n_sample": 8,
+      "batch_size": 1,
+      "selections": "01_bhrf1"
+    },
+    "sampler": {
+      "sampler": {
+        "direction_scale": 0.0
+      }
+    }
+  },
+  "evaluation": {
+    "version": "binder",
+    "folding": {
+      "model_name": "colabfold",
+      "mode": "template"
+    },
+    "inverse_folding": {
+      "num_seq": 1
+    }
+  },
+  "rounds": [
+    {
+      "id": "round_0",
+      "cond_strategy": "extended"
+    },
+    {
+      "id": "round_1",
+      "cond_strategy": "iter_common"
+    },
+    {
+      "id": "round_2",
+      "cond_strategy": "iter_common"
+    }
+  ]
+}

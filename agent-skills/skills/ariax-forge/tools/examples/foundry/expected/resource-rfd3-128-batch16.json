@@ -1,0 +1,14 @@
+{
+  "polymers": [
+    {
+      "kind": "protein",
+      "length": [
+        128,
+        128
+      ]
+    }
+  ],
+  "chemicals": [],
+  "exact_polymer_chains": true,
+  "exact_chemical_components": true
+}

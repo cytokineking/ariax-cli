@@ -1,0 +1,186 @@
+[
+  {
+    "name": "insulin_01",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_02",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_03",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_04",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_05",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_06",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_07",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "insulin_08",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "proteinChain": {
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      }
+    ]
+  }
+]

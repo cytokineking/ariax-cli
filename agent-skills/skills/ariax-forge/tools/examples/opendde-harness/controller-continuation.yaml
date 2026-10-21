@@ -1,0 +1,64 @@
+# Authored source fixture, not a completed campaign or approved model selection.
+# CRLF2/VHH chains and CDR ranges are from pinned upstream crlf2_quickstart.yaml.
+seed: 42
+llm:
+  model_name: openai-codex/gpt-6.1-sol
+  max_tokens: 2048
+compute:
+  placement:
+    fold: [0]
+    esm: 0
+    mpnn: 0
+    cp_degree: 1
+design:
+  type: antibody
+  n_cycles: 2
+  num_sequences: 1
+  num_mutations: 1-10
+  reflection_interval: 1
+  cycle_retry_limit: 0
+  skip_failed_cycles: false
+  population_size: 20
+  optimization_metric: loss
+  enable_quality_check: true
+  quality_check_threshold: 0.7
+  parent_selection_strategy: fitness
+  router_selection_strategy: agent
+  router_skill_probabilities:
+    cdr-point-mutation: 1.0
+    cdr-full-redesign: 0.0
+    antibody-inverse-folding: 0.0
+    esm2-guided-mutation: 0.0
+  esm_device: cuda:0
+  post_refold_filter:
+    enabled: true
+    top_k: 1
+fold:
+  model: opendde
+  execution_mode: local
+  gpus: '0'
+  persistent_worker: false
+  deterministic: true
+  checkpoint_path: /models/opendde-v1/checkpoint/opendde_abag.pt
+  seeds: [973520]
+  recycling_cycles: 1
+  diffusion_steps: 20
+  diffusion_samples: 1
+  use_msa: false
+  enable_msa_search: false
+  use_templates: false
+  need_atom_confidence: true
+  enable_batch_inference: true
+  subprocess_timeout_seconds: 7200
+target:
+  name: CRLF2
+  chains:
+    A:
+      sequence: QGGAAEGVQIQIIYFNLETVQVTWNASKYSRTNLTFHYRFNGDEAYDQCTNYLLQEGHTSGCLLDAEQRDDILYFSIRNGTHPVFTASRWMVYYLKPSSPKHVRFSWHQDAVTVTCSDLSYGDLLYEVQYRSPFDTEWQSKQENTCNVTIEGLDAEKCYSFWVRVKAMEDVYGPDTYPSDWSEVTCWQRGEIRDACAETPTPPKPKLSK
+initial_binders:
+  - name: init_CRLF2_validated_VHH
+    chains:
+      D:
+        sequence: EVQLVESGGGLVQPGGSLRLSCAASPAPSGPLYLHWFRQAPGQEREFVASINSSSTSTYYADSVRGRFTNSRDNSKNTLYLQMNSLRAEDTAVYYCAAYPYPPPPPEGPPPPGPFGQGTLVTVSS
+        cdr_regions: '26:35,50:59,99:115'
+        chain_type: VHH

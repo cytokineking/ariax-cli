@@ -1,0 +1,7 @@
+# B33 wave 3: pending native qualification; resource inputs are constructed.
+version: 1
+sequences:
+- protein:
+    id: D
+    sequence: MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+    msa: empty

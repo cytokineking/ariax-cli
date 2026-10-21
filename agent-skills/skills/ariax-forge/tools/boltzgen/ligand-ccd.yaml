@@ -1,0 +1,7 @@
+entities:
+  - protein:
+      id: B
+      sequence: 40
+  - ligand:
+      id: L
+      ccd: NAG

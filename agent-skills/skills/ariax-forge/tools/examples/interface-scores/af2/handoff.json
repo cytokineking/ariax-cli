@@ -1,0 +1,54 @@
+{
+  "schema": "interface-scores-v1",
+  "predictor": "af2",
+  "run_id": "synthetic-indexing-case",
+  "input_id": "synthetic-Z-X-AG",
+  "model": "synthetic-format-fixture",
+  "seed": 7,
+  "sample": {
+    "record_id": "case",
+    "index": 2
+  },
+  "pae_units": "angstrom",
+  "plddt_scale": "0-100",
+  "selected_chains": [
+    "Z",
+    "X"
+  ],
+  "sequences": {
+    "Z": "AG",
+    "X": "AG"
+  },
+  "files": {
+    "structure": "model.pdb",
+    "confidence": "confidence.json"
+  },
+  "mapping": {
+    "tokens": [
+      {
+        "chain": "X",
+        "residue": 8,
+        "name": "GLY",
+        "insertion": ""
+      },
+      {
+        "chain": "Z",
+        "residue": 1,
+        "name": "ALA",
+        "insertion": ""
+      },
+      {
+        "chain": "X",
+        "residue": 7,
+        "name": "ALA",
+        "insertion": ""
+      },
+      {
+        "chain": "Z",
+        "residue": 2,
+        "name": "GLY",
+        "insertion": ""
+      }
+    ]
+  }
+}

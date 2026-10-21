@@ -1,0 +1,147 @@
+{
+  "schema": "interface-scores-v1",
+  "predictor": "rf3",
+  "run_id": "synthetic-indexing-case",
+  "input_id": "synthetic-Z-X-AG",
+  "model": "synthetic-format-fixture",
+  "seed": 7,
+  "sample": {
+    "record_id": "case",
+    "index": 2
+  },
+  "pae_units": "angstrom",
+  "plddt_scale": "0-1",
+  "selected_chains": [
+    "Z",
+    "X"
+  ],
+  "sequences": {
+    "Z": "AG",
+    "X": "AG"
+  },
+  "files": {
+    "structure": "model.cif",
+    "summary": "summary.json",
+    "confidence": "confidence.json"
+  },
+  "mapping": {
+    "tokens": [
+      {
+        "chain": "X",
+        "residue": 8,
+        "name": "GLY",
+        "insertion": ""
+      },
+      {
+        "chain": "Z",
+        "residue": 1,
+        "name": "ALA",
+        "insertion": ""
+      },
+      {
+        "chain": "X",
+        "residue": 7,
+        "name": "ALA",
+        "insertion": ""
+      },
+      {
+        "chain": "Z",
+        "residue": 2,
+        "name": "GLY",
+        "insertion": ""
+      }
+    ],
+    "atoms": [
+      {
+        "chain": "Z",
+        "residue": 1,
+        "name": "ALA",
+        "insertion": "",
+        "atom": "N"
+      },
+      {
+        "chain": "Z",
+        "residue": 1,
+        "name": "ALA",
+        "insertion": "",
+        "atom": "CA"
+      },
+      {
+        "chain": "Z",
+        "residue": 1,
+        "name": "ALA",
+        "insertion": "",
+        "atom": "CB"
+      },
+      {
+        "chain": "Z",
+        "residue": 2,
+        "name": "GLY",
+        "insertion": "",
+        "atom": "N"
+      },
+      {
+        "chain": "Z",
+        "residue": 2,
+        "name": "GLY",
+        "insertion": "",
+        "atom": "CA"
+      },
+      {
+        "chain": "X",
+        "residue": 7,
+        "name": "ALA",
+        "insertion": "",
+        "atom": "N"
+      },
+      {
+        "chain": "X",
+        "residue": 7,
+        "name": "ALA",
+        "insertion": "",
+        "atom": "CA"
+      },
+      {
+        "chain": "X",
+        "residue": 7,
+        "name": "ALA",
+        "insertion": "",
+        "atom": "CB"
+      },
+      {
+        "chain": "X",
+        "residue": 8,
+        "name": "GLY",
+        "insertion": "",
+        "atom": "N"
+      },
+      {
+        "chain": "X",
+        "residue": 8,
+        "name": "GLY",
+        "insertion": "",
+        "atom": "CA"
+      }
+    ],
+    "token_chain_ids": [
+      "X_1",
+      "Z_1",
+      "X_1",
+      "Z_1"
+    ],
+    "token_res_ids": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "summary_chain_order": [
+      "X",
+      "Z"
+    ],
+    "chain_iids": {
+      "Z": "Z_1",
+      "X": "X_1"
+    }
+  }
+}

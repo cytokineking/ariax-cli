@@ -1,0 +1,56 @@
+[
+  {
+    "name": "input_0000",
+    "modelSeeds": [
+      101
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "id": [
+            "A"
+          ],
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1
+        }
+      },
+      {
+        "proteinChain": {
+          "id": [
+            "B"
+          ],
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKT",
+          "count": 1
+        }
+      }
+    ],
+    "covalent_bonds": []
+  },
+  {
+    "name": "input_0001",
+    "modelSeeds": [
+      101
+    ],
+    "sequences": [
+      {
+        "proteinChain": {
+          "id": [
+            "A"
+          ],
+          "sequence": "GIVEQCCTSICSLYQLENYCN",
+          "count": 1
+        }
+      },
+      {
+        "proteinChain": {
+          "id": [
+            "B"
+          ],
+          "sequence": "FVNQHLCGSHLVEALYLVCGERGFFYTPKS",
+          "count": 1
+        }
+      }
+    ],
+    "covalent_bonds": []
+  }
+]

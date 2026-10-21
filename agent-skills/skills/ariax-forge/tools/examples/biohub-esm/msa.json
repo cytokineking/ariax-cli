@@ -1,0 +1,1 @@
+{"items": [{"id": "synthetic_supplied_msa", "chains": [{"id": "binder", "sequence": "ACDEFGHIKLMNPQRS", "msa": "binder.a3m"}, {"id": "target", "sequence": "MKTAYIAKQRQISFVK", "msa": "target.a3m"}]}]}

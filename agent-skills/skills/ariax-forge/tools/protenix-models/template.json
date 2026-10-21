@@ -1,0 +1,23 @@
+[
+  {
+    "name": "direct_template",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "GHCIPTTSGPICLRD",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      }
+    ],
+    "templates": [
+      {
+        "cif": "/opt/forge-protenix-fixtures/templates/2lwu.cif",
+        "chain_id": "A",
+        "template_id": "A"
+      }
+    ]
+  }
+]

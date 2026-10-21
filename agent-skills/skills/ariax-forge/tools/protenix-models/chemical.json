@@ -1,0 +1,34 @@
+[
+  {
+    "name": "chemical",
+    "sequences": [
+      {
+        "proteinChain": {
+          "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+          "count": 1,
+          "id": [
+            "A"
+          ]
+        }
+      },
+      {
+        "ligand": {
+          "ligand": "CCD_ATP",
+          "count": 1,
+          "id": [
+            "B"
+          ]
+        }
+      },
+      {
+        "ion": {
+          "ion": "MG",
+          "count": 1,
+          "id": [
+            "C"
+          ]
+        }
+      }
+    ]
+  }
+]

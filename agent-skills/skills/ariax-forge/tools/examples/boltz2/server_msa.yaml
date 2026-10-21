@@ -1,0 +1,6 @@
+# B33 native qualification input. Not yet executed.
+version: 1
+sequences:
+- protein:
+    id: A
+    sequence: MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
