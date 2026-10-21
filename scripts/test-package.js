@@ -27,8 +27,6 @@ const execute = (command, args, options = {}) => execFileSync(command, args, {
 try {
   const source = buildInfo();
   let githubBuild;
-  let installedSkillsRoot;
-  let forgeDiscovery;
   for (const [index, channel] of ['github', 'npm', 'github', 'source'].entries()) {
     let expectedRevision = source.source_revision;
     if (channel === 'source') {
@@ -94,8 +92,6 @@ globalThis.fetch = async (url) => {
     for (const platform of ['forge', 'ariax-forge']) {
       const forge = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--json'])).data;
       assert.equal(forge.platform, 'forge');
-      forgeDiscovery = forge;
-      installedSkillsRoot = path.join(root, 'ariax-cli', 'agent-skills');
       await exerciseAcceptedForgeDiscovery(forge);
       for (const reference of Object.keys(skills.data.platform_references.forge)) {
         const guide = JSON.parse(execute(process.execPath, [script, 'skills', platform,
@@ -156,48 +152,6 @@ globalThis.fetch = async (url) => {
     }
     console.log(`Packed ${channel} installation verified: ${installed.build.version} ${installed.build.source_revision}`);
   }
-  // The standalone skills package has an independent allowlist. Install it and
-  // follow the same guides/fixtures to catch a file omitted from that route.
-  const skillsSource = path.join(PACKAGE_ROOT, 'agent-skills');
-  const skillsPackage = JSON.parse(await fs.readFile(path.join(skillsSource, 'package.json'), 'utf8'));
-  const packedSkills = JSON.parse(execute(npm, ['pack', '--ignore-scripts', '--json',
-    '--pack-destination', temporary], { cwd: skillsSource }))[0];
-  const skillsPrefix = path.join(temporary, 'skills-prefix');
-  execute(npm, ['install', '--global', '--prefix', skillsPrefix, '--offline', '--omit=optional',
-    '--ignore-scripts', '--no-audit', '--no-fund', path.join(temporary, packedSkills.filename)]);
-  const skillsRoot = path.join(execute(npm, ['root', '--global', '--prefix', skillsPrefix]).trim(),
-    ...skillsPackage.name.split('/'));
-  assert.equal((await fs.lstat(skillsRoot)).isSymbolicLink(), false);
-  const installedSkillsPackage = JSON.parse(await fs.readFile(path.join(skillsRoot, 'package.json'), 'utf8'));
-  assert.equal(installedSkillsPackage.name, skillsPackage.name);
-  assert.equal(installedSkillsPackage.version, skillsPackage.version);
-  assert.equal(installedSkillsPackage.bin, undefined);
-  const installedFiles = [];
-  async function collectFiles(directory, relative = '') {
-    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-      const name = path.join(relative, entry.name);
-      if (entry.isDirectory()) await collectFiles(path.join(directory, entry.name), name);
-      else {
-        assert.ok(entry.isFile(), `Standalone skills member must be a regular file: ${name}`);
-        installedFiles.push(name);
-      }
-    }
-  }
-  await collectFiles(skillsRoot);
-  assert.deepEqual(installedFiles.sort(), [...new Set(['package.json', ...skillsPackage.files])].sort());
-  for (const relative of skillsPackage.files) {
-    assert.deepEqual(await fs.readFile(path.join(skillsRoot, relative)),
-      await fs.readFile(path.join(skillsSource, relative)), `Standalone skills content differs: ${relative}`);
-  }
-  const rebase = (filename) => {
-    const relative = path.relative(installedSkillsRoot, filename);
-    assert.ok(relative && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-    return path.join(skillsRoot, relative);
-  };
-  const rebasePaths = (paths) => Object.fromEntries(Object.entries(paths).map(([key, filename]) => [key, rebase(filename)]));
-  await exerciseAcceptedForgeDiscovery({ ...forgeDiscovery,
-    references: rebasePaths(forgeDiscovery.references), examples: rebasePaths(forgeDiscovery.examples) });
-  console.log(`Standalone ${skillsPackage.name}@${skillsPackage.version} installation, exact contents and Forge links verified.`);
   // A different executable earlier on PATH must not be reported as a successful upgrade.
   const shadow = path.join(temporary, 'shadow');
   await fs.mkdir(shadow);

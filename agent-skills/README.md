@@ -1,5 +1,9 @@
 # Ariax agent skills
 
+These guides ship with `ariax-cli`. Install `npm install --global ariax-cli`,
+then read them with `ariax skills --read --json` or `ariax skills forge --read --json`.
+The standalone `@ariaxbio/agent-skills` npm distribution is retired.
+
 Agent instructions for using the versioned Ariax REST API through the thin
 `ariax-cli` package or raw `curl`. Shared authentication, lifecycle, recovery,
 and result-retrieval behavior lives in [`SKILL.md`](SKILL.md), with

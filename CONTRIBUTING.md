@@ -19,5 +19,9 @@ The stable GitHub release workflow attaches the exact package and checksum;
 npm publication remains a separate, explicitly authorized release step. Publish
 that reviewed `.tgz`, not a new package made from an uncommitted working directory.
 
+Publish agent guides and examples only as part of `ariax-cli`. Maintain their
+file entries in the CLI package and customer-source manifests. The `agent-skills/`
+directory is bundled content; it has no independent npm release.
+
 Never commit API keys, signed transfer URLs, user inputs, downloaded results,
 or resume-state files.
