@@ -242,6 +242,11 @@ export function report(ctx, res, kind) {
   if (res.data?.state === 'unknown') printProgress(`Command outcome is uncertain. Inspect the same command ID ${res.data.command_id}; keep that ID and its saved request until the outcome is known. A fresh command could duplicate execution.`);
   if (ctx.json) { printJson({ data: res.data, meta: res.meta, request_id: res.requestId }); return; }
   const data = res.data;
+  if (Number.isSafeInteger(data?.limit_revision) && data.limit_revision >= 0
+      && data.applied_limit_revision !== data.limit_revision
+      && ['provisioning', 'starting', 'available'].includes(data.state)) {
+    printProgress(`Limit revision ${data.limit_revision} is saved; host application is pending. The host retains its previous deadline until delivery. Inspect ariax forge status ${data.session_id} for applied_limit_revision.`);
+  }
   if (kind === 'sessions') printTable(['session_id', 'name', 'state', 'gpu', 'gpu_count'], data.sessions.map(s => [s.session_id, s.name, s.state, s.gpu_type, s.gpu_count]));
   else if (kind === 'commands') printTable(['command_id', 'tool', 'gpu_ids', 'state', 'exit_code'], data.commands.map(c => [c.command_id, c.tool, c.gpu_ids?.join(','), c.state, c.exit_code]));
   else if (kind === 'tools' || kind === 'catalog') {
@@ -406,7 +411,7 @@ async function runAction(ctx) {
     const body = { max_gpu_hours: flags.clear ? null : number(flags['gpu-hours'], 'gpu-hours'),
       expected_limit_revision: number(flags['limit-revision'], 'limit-revision', { integer: true, zero: true }) };
     const res = await submit(ctx, randomUUID(), { method: 'POST', path: `${sessionPath}/limit`, body }, 'request_id',
-      `Inspect ariax forge status ${sessionId} for max_gpu_hours, limit_revision, and expires_at before another edit. An accepted edit replaces the total allowance from allocation.`);
+      `Inspect ariax forge status ${sessionId} for max_gpu_hours, limit_revision, applied_limit_revision, and expires_at before another edit. An accepted edit replaces the total allowance from allocation; the host retains its previous deadline until applied_limit_revision matches limit_revision.`);
     remember(ctx, sessionId, sessionPath, res.data);
     return report(ctx, res);
   }
@@ -506,7 +511,7 @@ export async function run(ctx) {
         ? `Inspect ariax forge checkpoints ${ctx.flags['restore-session']} and select a completed checkpoint with --checkpoint UUID. A terminal source cannot create a new checkpoint.`
         : `Run ariax forge sync ${ctx.positionals[1]} --wait to save files, or select an existing completed checkpoint with --checkpoint UUID.`;
     } else if (['limit_revision_conflict', 'session_closing'].includes(error.code)) {
-      error.action = `Inspect ariax forge status ${ctx.positionals[1]} for the current state, max_gpu_hours, limit_revision and expires_at before another edit. Closing compute must finish cleanup.`;
+      error.action = `Inspect ariax forge status ${ctx.positionals[1]} for the current state, max_gpu_hours, limit_revision, applied_limit_revision and expires_at before another edit. Closing compute must finish cleanup.`;
     } else if (['session_cleanup_pending', 'project_session_active', 'restore_source_active'].includes(error.code)) {
       error.action = `Inspect the project history and source session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
     } else if (['request_conflict', 'idempotency_conflict', 'command_conflict'].includes(error.code)) {

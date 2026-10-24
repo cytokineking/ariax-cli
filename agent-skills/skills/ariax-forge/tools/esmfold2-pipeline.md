@@ -70,10 +70,10 @@ The completed small-case coverage includes these native configurations:
 | `fast` | Two VHH frameworks of 129/122 residues with CDR contact loss, framework penalty and server MSAs; two custom 242-residue scFv frameworks using template or explicit sequence/CDRs |
 
 The supported profile requires one GPU with at least 79 GiB usable VRAM,
-eight CPUs and 96 GiB RAM. Qualification used one A100 80GB with about
+eight CPUs and 80 GiB RAM. Qualification used one A100 80GB with about
 79.25 GiB reported usable VRAM, eight assigned CPUs and a 96-GiB container
-limit. These conservative admission limits preserve the tested profile; the
-true minimum remains unknown. A package disk minimum has not been established,
+limit. The catalog RAM admission floor is 80 GiB; the recorded
+qualification memory limit remains 96 GiB. The true minimum remains unknown. A package disk minimum has not been established,
 so the catalog leaves it unknown and storage must still cover preparation,
 outputs and restoration. These cases contain at most 318 polymer residues per complex, eight
 design steps and unchanged final critic and v2 settings. Larger workloads,

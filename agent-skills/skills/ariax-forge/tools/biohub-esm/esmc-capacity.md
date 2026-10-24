@@ -15,15 +15,15 @@ inference remains sequential, so item count increases time and saved output
 space rather than parallel inference capacity. The adapter leaves larger
 requests available, but they are outside this qualified profile.
 
-| Model | Required usable CPUs | Host RAM, GiB | Free payload disk, GiB | GPU |
+| Model | Required usable CPUs | Catalog RAM minimum | Free payload disk, GiB | GPU |
 | --- | ---: | ---: | ---: | --- |
-| 300M | 8 | 32 | 250 | One L40, at least 44 GiB usable VRAM |
-| 600M | 8 | 32 | 250 | One L40, at least 44 GiB usable VRAM |
-| 6B | 8 | 48 | 250 | One L40, at least 44 GiB usable VRAM |
+| 300M | 8 | Unset | 250 | One L40, at least 44 GiB usable VRAM |
+| 600M | 8 | Unset | 250 | One L40, at least 44 GiB usable VRAM |
+| 6B | 8 | Unset | 250 | One L40, at least 44 GiB usable VRAM |
 
-These conservative admission floors cover this profile, cold named-asset
-preparation and complete array retention. They are not a search for the smallest
-possible GPU or RAM. Scientific commands passed with eight assigned CPUs and a
+The GPU, CPU and disk floors cover this profile, cold named-asset
+preparation and complete array retention. The catalog imposes no fixed RAM
+floor. Scientific commands passed with eight assigned CPUs and a
 32 GiB container memory limit with no swap; leave host memory for preparation,
 Docker, Files and transfer buffers. Reserve additional disk for longer projects
 and repeated checkpoints. All N+1 hidden layers are exported as float32,

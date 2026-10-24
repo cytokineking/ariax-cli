@@ -18,7 +18,7 @@ Eight public checkpoints passed 57 native cases covering protein monomers/comple
 | `protenix_mini_esm_v0.5.0` | 4 / 5 | ESM2-3B; no MSA by default; supplied MSA is explicit |
 | `protenix_mini_ism_v0.5.0` | 4 / 5 | Distinct ISM ESM2-3B; no MSA by default; supplied MSA is explicit |
 
-Native output supports execution and molecular identity for the recorded cases. It does not establish binding, specificity, accuracy across new inputs or a design hit rate. The larger base-model matrix uses disclosed 3-cycle/20-step settings; the small 51-residue insulin consumer uses native defaults. Mini/tiny keep native 4/5 defaults. Broader/default-setting large workloads need their own capacity qualification. The bounded admission profile is one GPU with 48 GiB VRAM, 100 GiB RAM, eight CPUs and 250 GiB disk; actual qualification used an H100 PCIe. Native commands and the image default use eight CPU threads. Six same-seed reruns varied by up to 22.983 Å in a coordinate component, so deterministic predictions are not established. Same-forward raw-confidence preservation is verified separately.
+Native output supports execution and molecular identity for the recorded cases. It does not establish binding, specificity, accuracy across new inputs or a design hit rate. The larger base-model matrix uses disclosed 3-cycle/20-step settings; the small 51-residue insulin consumer uses native defaults. Mini/tiny keep native 4/5 defaults. Broader/default-setting large workloads need their own capacity qualification. The admission profile is one GPU with 48 GiB VRAM, eight CPUs and 250 GiB disk, with no fixed RAM floor; actual qualification used an H100 PCIe. Native commands and the image default use eight CPU threads. Six same-seed reruns varied by up to 22.983 Å in a coordinate component, so deterministic predictions are not established. Same-forward raw-confidence preservation is verified separately.
 
 ## Prepare and run
 
@@ -173,7 +173,7 @@ redistribution and production delivery remain separately scoped.
 Actual qualification used one H100 PCIe. The three calls peaked at 3.557 GiB
 allocated GPU memory, 3.651 GiB reserved and 4.538 GiB process RAM. These are
 observations for the small inputs, not minimum-capacity or throughput claims.
-The conservative admission floor remains GPU48 GiB/RAM100 GiB/CPU8/disk250 GiB.
+The admission floor remains GPU48 GiB/CPU8/disk250 GiB, with no fixed RAM floor.
 
 Use the separate v2 tool and model asset when admitted by the live catalog.
 The image's two-item input contains the existing 76-residue monomer and

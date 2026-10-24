@@ -33,8 +33,8 @@ zero. The controller disables memory/speculation and limits each call to 2048
 output tokens. A desktop login alone does not authenticate this controller.
 
 Select a ready `opendde-harness` session with one GPU, at least 47 GiB VRAM,
-56 GiB RAM, eight CPUs and 256 GiB disk, with adequate free space for the saved
-work. The qualified GPU had 49140 MiB VRAM; these floors are required resources,
+eight CPUs and 256 GiB disk, with adequate free space for the saved
+work. The catalog imposes no fixed RAM floor. The qualified GPU had 49140 MiB VRAM; these floors are required resources,
 not measured peaks or a capacity claim for larger campaigns. Keep the controller
 outside `/inputs`, `/workspace` and `/models`. Use the original CLI account/API
 origin and the approved session and model-use limits through continuation.

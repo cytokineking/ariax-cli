@@ -58,7 +58,7 @@ async function boundary(root) {
       session_id: body.session_id, project_id: project.id, name: project.name,
       state: 'starting', gpu_type: body.gpu_type, gpu_count: body.gpu_count,
       tools: [toolState('base', 'queued'), ...body.tools.map(tool => toolState(tool, 'queued'))],
-      max_gpu_hours: body.max_gpu_hours ?? null, limit_revision: 0, allocated_at: allocatedAt,
+      max_gpu_hours: body.max_gpu_hours ?? null, limit_revision: 0, applied_limit_revision: 0, allocated_at: allocatedAt,
       expires_at: body.max_gpu_hours === undefined ? null : new Date(Date.parse(allocatedAt) + body.max_gpu_hours / body.gpu_count * 3600000).toISOString(),
       hardware: { gpu_count: body.gpu_count, vram_gib_per_gpu: 48, ram_gib: 128, cpu_count: 16, disk_gib: 500 },
       persistence: { state: 'pending', checkpoint: null, error: null }, error: null,
@@ -190,6 +190,7 @@ async function boundary(root) {
         if (['closing', 'closed', 'failed'].includes(session.data.state)) return error(res, 409, 'session_closing', 'Session closing');
         if (body.expected_limit_revision !== session.data.limit_revision) return error(res, 409, 'limit_revision_conflict', 'Limit changed');
         session.data.limit_revision++;
+        if (state.applyLimit !== false) session.data.applied_limit_revision = session.data.limit_revision;
         session.data.max_gpu_hours = body.max_gpu_hours;
         session.data.expires_at = body.max_gpu_hours === null ? null : new Date(Date.parse(session.data.allocated_at) + body.max_gpu_hours / session.data.gpu_count * 3600000).toISOString();
         if (state.drop === 'limit') { state.drop = null; req.socket.destroy(); return; }
@@ -488,6 +489,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const secondId = second.payload.data.session_id;
     assert.equal(Object.hasOwn(second.payload.data, 'provider'), false);
     assert.equal(Object.hasOwn((await record(secondId)).request.body, 'provider'), false);
+    assert.equal(Object.hasOwn((await record(secondId)).request.body, 'max_gpu_hours'), false);
     assert.equal(state.allocations, 2);
     await invoke(['forge', 'close', secondId]);
     assert.equal(state.releases, 2);
@@ -586,7 +588,16 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal((await invoke(edit, 7)).payload.error.code, 'limit_revision_conflict');
     await invoke(['forge', 'limit', sid, '--gpu-hours', '4', '--limit-revision', '1']);
     assert.equal(Date.parse(session.data.expires_at) - Date.parse(session.data.allocated_at), 2 * 3600000);
-    await invoke(['forge', 'limit', sid, '--clear', '--limit-revision', '2']);
+    state.applyLimit = false;
+    const pending = await invoke(['forge', 'limit', sid, '--clear', '--limit-revision', '2'], 0, true);
+    assert.match(pending.stderr, /saved; host application is pending/);
+    assert.match(pending.stderr, /previous deadline/);
+    const pendingJson = (await invoke(['forge', 'status', sid])).payload.data;
+    assert.equal(pendingJson.limit_revision, 3);
+    assert.equal(pendingJson.applied_limit_revision, 2);
+    session.data.applied_limit_revision = 3;
+    const delivered = await invoke(['forge', 'status', sid], 0, true);
+    assert.doesNotMatch(delivered.stderr, /host application is pending/);
     assert.equal(session.data.max_gpu_hours, null);
     assert.equal(session.data.expires_at, null);
     assert.equal(session.data.limit_revision, 3);

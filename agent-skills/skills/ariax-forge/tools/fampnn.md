@@ -114,8 +114,9 @@ replayed. Public unmodified weights can be prepared again from the recorded sour
 revision, layout and upstream model card.
 
 The current complete qualification uses one L40 with 49,140 MiB VRAM. The
-proposed catalog floor is 47.9 GiB per GPU, eight GiB RAM, two CPUs and 25 GiB
-payload storage. CPU and RAM limits were enforced on each panel container.
+catalog floor is 47.9 GiB per GPU, two CPUs and 25 GiB
+payload storage, with no fixed RAM floor. CPU and RAM limits were enforced
+on each qualification panel container.
 The wider GPU claim is bounded to the measured L40 profile; the earlier eight-GiB
 GPU recommendation covered the original small fixtures. Observed memory alone
 does not qualify a smaller device for the wider panel.

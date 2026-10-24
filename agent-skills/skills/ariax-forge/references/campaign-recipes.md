@@ -80,7 +80,8 @@ EXAMPLES="$FORGE_SKILL/tools/examples"
 ```
 
 For the joined protein/Protenix recipe, use an authorized one-GPU H100-class VM
-meeting Protenix's 48-GiB VRAM, 100-GiB RAM, eight-CPU and 250-GiB disk floors.
+meeting Protenix's 48-GiB VRAM, eight-CPU and 250-GiB disk floors.
+Protenix has no fixed catalog RAM floor.
 Its recorded prediction host was H100 PCIe. Generation-only B43 ran on L40;
 its wider floors remain unknown. The joined case passed its finite qualification; these fields describe the retained admission profile.
 `GPU_HOURS` is the user's approved total allowance, including preparation/idle.

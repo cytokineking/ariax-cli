@@ -1,6 +1,6 @@
 /** Cached direct authority must remain usable during a bounded backend partition.
  * Network services are the substituted boundary; transport, protected files and
- * fresh-context cache reuse are real. Joined remote tests own actual JWT/leases.
+ * fresh-context cache reuse are real. Joined remote tests own actual JWT/local limits.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,7 +41,7 @@ function boundary(t) {
   const keys = new Map([[WRITE_KEY, { actor: ACTOR, write: true }],
     [READ_KEY, { actor: ACTOR, write: false }], [OTHER_KEY, { actor: OTHER, write: true }]]);
   const state = { online: true, backend: [], direct: [], tokens: new Map(), commands: new Map(),
-    loseReply: false, leaseDeadline: Date.now() + 120_000 };
+    loseReply: false, localDeadline: null };
   const reply = (status, value) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
   const error = (status, code) => reply(status, { error: { code, message: code } });
   const fetchImpl = async (address, options = {}) => {
@@ -75,7 +75,7 @@ function boundary(t) {
     if (options.method === 'GET' && url.pathname === '/v1/session') return reply(200, { data: { session_id: SESSION } });
     if (options.method === 'POST' && url.pathname === '/v1/commands') {
       if (!principal.write) return error(403, 'forbidden');
-      if (Date.now() >= state.leaseDeadline) return error(409, 'execution_stopped');
+      if (state.localDeadline !== null && Date.now() >= state.localDeadline) return error(409, 'execution_stopped');
       const body = JSON.parse(options.body);
       const previousCommand = state.commands.get(body.command_id);
       if (previousCommand) assert.deepEqual(previousCommand.request, body);

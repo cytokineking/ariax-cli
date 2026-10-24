@@ -186,9 +186,18 @@ on four GPUs allow two wall-clock hours. An edit replaces the total allowance
 from the original `allocated_at`. Read the current `limit_revision` before
 editing, especially after a lost reply; stale revisions reject the edit.
 `--clear` removes the cap and deadline. A reduced allowance can make cleanup
-immediately eligible. Closing sessions reject edits. The backend controller
-owns expiry; its outage delays enforcement until recovery. Command timeouts
-and credit enforcement retain their own paths.
+immediately eligible. Closing sessions reject edits. New runtimes enforce the
+optional limit locally during backend outages. Omitting the cap creates an
+open-ended session subject to explicit project controls and ordinary credit
+exhaustion stops. Command timeouts retain their own path.
+
+A successful edit saves `limit_revision`. Inspect `applied_limit_revision` to
+confirm host delivery: it must equal the saved revision. While delivery is
+pending (or the field is absent on an older service), the host retains its
+previous local deadline. An extension or `--clear` can therefore be saved while
+the prior timer still stops work. Human output reports this pending state;
+JSON preserves both revisions. A locally stopped session cannot be revived by
+an edit. Inspect status and cleanup before an explicit same-project resume.
 
 ## Pause, terminal controls and close
 

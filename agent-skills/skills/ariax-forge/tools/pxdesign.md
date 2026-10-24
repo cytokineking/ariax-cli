@@ -93,8 +93,8 @@ remote GPU VM. Require host `available` and each selected tool `ready`; record
 actual devices, allowed CPU IDs and free disk. The measured finite profiles are recorded in completion evidence; small-case
 observations do not establish general resource minima. Set `QUALIFIED_CPUS` to eight actual allowed CPU IDs
 from that host inventory and use the explicit in-container `taskset` prefix;
-OMP threads do not limit JAX startup threads. The B30 handoff still requires
-48 GiB/device, RAM100 GiB, CPU8 and disk250 GiB. The observed ECC A6000 at
+OMP threads do not limit JAX startup threads. The catalog requires
+48 GiB/device, CPU8 and disk250 GiB, with no fixed RAM floor. The observed ECC A6000 at
 46,068 MiB/device fails that memory floor. The later quote selects one nominal
 80GB H100/850-GiB root and requires >=600 GiB initially usable free for build and
 full restoration. Do not lower catalog floors or add device memory together.
