@@ -3,16 +3,17 @@
 Start with the live catalog and choose the scientific task:
 
 ```sh
-ariax forge catalog --task binder-design --details --json
-ariax forge catalog --task antibodies --details --json
-ariax forge catalog --task molecular-prediction --details --json
-ariax forge catalog --task sequence-optimization --details --json
-ariax forge catalog --task validation-search --details --json
-ariax skills forge --reference capabilities-matrix --read --json
+ariax forge catalog --task binder-design --compact --json
+# Substitute antibodies, molecular-prediction, sequence-optimization or validation-search.
+ariax forge catalog --tool TOOL --json
+ariax skills forge --tool GUIDE --json
 ```
 
-Each returned tool has a `capabilities.guide` alias. Read that installed reference
-with `ariax skills forge --reference ALIAS --read --json` before preparing inputs.
+Select a tool from the compact summary, then read its full catalog entry before
+choosing a mode or spending. Use its `capabilities.guide` value for `GUIDE` and read
+that installed reference with `ariax skills forge --reference GUIDE --read --json`
+before preparing inputs. Load the [full guide index](capabilities/matrix.md) only
+when comparing additional methods.
 A missing `capabilities` object means its routing and qualification are unknown.
 The catalog describes available metadata; session tool state establishes readiness.
 Base is included automatically when a session is created.
@@ -29,6 +30,11 @@ The [RFd4 guide](rfd4.md) describes native joint sequence and all-atom design.
 Its presence in the CLI does not establish a live catalog
 entry, qualified scientific mode or measured resource minimum. Consult the live
 catalog before considering it alongside existing design methods.
+
+[Tmol](tmol.md) provides protein energy scoring, interface interaction scoring
+and Cartesian minimization through an uploaded Python adapter. It needs no model
+download. These weighted energies are not measured binding affinities; use the
+live catalog's separate mode qualifications and the guide's preparation rules.
 
 `qualification` identifies each declared model and native mode. `native`,
 `installation` and `restoration` report separate observations. `passed` applies
@@ -47,7 +53,7 @@ of weights or databases. Scientific references remain alongside source versions.
 
 ## Runnable installed example
 
-Discover `data.examples.capabilities` from `ariax skills forge --json`. Set
+Discover `data.examples.capabilities` from `ariax skills forge --tool capabilities --json`. Set
 `EXAMPLE` to that returned directory. This local read-only metadata example runs
 with Node and uses a synthetic mixed-status catalog; it makes no scientific call.
 

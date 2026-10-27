@@ -5,39 +5,77 @@ description: Create and operate Ariax Forge compute sessions, select tools, run 
 
 # Ariax Forge
 
-Create a workspace by choosing its GPU model, count and resource limits.
-Ariax manages compute placement. Use `ariax forge catalog --details --json`
-for available tools, scientific source versions, model choices and resource
-requirements. Unknown resource minima are reported as null.
+Forge is a workspace for explicit native commands and composed workflows. The
+agent plans tools, inputs, commands, output checks, saves and closure; Ariax
+enforces access, isolation, billing and resource lifecycle. If a managed
+project fits the goal, compare it first using
+[engine choice](../../core/engine-choice.md). An engine's managed and native
+contracts, versions and qualification may differ.
 
-Read this guide with `ariax skills forge --read --json`. Discover native guides
-and installed example directories with `ariax skills forge --json`, then read
-one with `ariax skills forge --reference NAME --read --json`. The `ariax-forge`
-alias uses the same guides. Upload each example's inputs and companion files
-before running its commands. Scientific provenance and applicable license
-conditions remain in the native tool guides.
+## Discover, plan, run and close
 
-Use the [campaign benchmark](tools/campaign-benchmark.md) for bounded tables from retained candidate results, declared QC and database searches.
+1. Discover by scientific task, then inspect the exact live tool, model, mode,
+   resources and qualification. Compact summaries show all reported states,
+   including held or unknown states, but do not establish qualification for a
+   selected mode. Fetch the full selected tool and read its guide before spending.
+2. Check `ariax pricing --json` for the chosen GPU and count, and plan the
+   allocation and limit within the existing user authorization. Compare one
+   compatible GPU with multiple GPUs using representative throughput, useful
+   yield, cost and deadline. Extra devices require a qualified native multi-GPU
+   or concurrent-command plan; they do not parallelize arbitrary commands.
+3. Plan inputs, command order and required outputs. Create the session, wait
+   for each tool, run and inspect commands and native results. A smoke test
+   checks execution; a representative pilot preserves intended scientific
+   settings and downstream stages; production follows the agreed objective and
+   evidence. Examples are not automatic campaign-size recommendations.
+4. Save useful files under `/workspace`, complete and inspect a Files checkpoint,
+   explicitly close the session when the authorized work is done, and verify
+   resource release and persistence separately.
 
-The CLI opens a temporary HTTPS connection for active commands, tools and file transfers. Lifecycle controls and retained project history use the authenticated Ariax API. JSON responses put results in `data`;
-progress and diagnostic references go to stderr. Use `ariax forge --help` for
-commands. Files checkpoints preserve registered inputs and workspace outputs
-between sessions. Complete a save before closing compute, and inspect existing
-command IDs after an interrupted response so scientific work runs once.
-
-## Start and select tools
+Creating or resuming a session starts paid resource allocation. Preparation and
+idle time consume the GPU-hour allowance; an omitted limit leaves the session
+open-ended. A successful command does not close the session. A local wait or
+interruption leaves remote work running. After an uncertain response, inspect
+the same session or command ID and reconcile its saved request before retrying;
+a fresh ID can duplicate work or allocate another session.
 
 ```sh
-ariax forge create --name "Base workspace" --gpu L40 --gpu-count 1 --max-gpu-hours 2 --json
-ariax forge catalog --details --json
+ariax forge catalog --task binder-design --compact --json
+ariax forge catalog --tool TOOL --json
+ariax skills forge --tool GUIDE_ID --json
+ariax skills forge --reference GUIDE_ID --read --json
+ariax pricing --json
+ariax forge create --name "My workspace" --gpu GPU --gpu-count COUNT --tools TOOL --max-gpu-hours LIMIT --json
 ariax forge list --json
 ariax forge status SESSION --json
 ariax forge tools SESSION --json
-ariax forge tools wait SESSION base --timeout 600 --json
-# When ipsae is in the deployed catalog:
-ariax forge tools add SESSION --tools ipsae --priority ipsae --json
-ariax forge tools wait SESSION ipsae --timeout 1800 --json
+ariax forge tools wait SESSION TOOL --timeout 1800 --json
+# Run and inspect the selected native commands; then save and close:
+ariax forge sync SESSION --wait --json
+ariax forge checkpoint SESSION CHECKPOINT_ID --json
+ariax forge files SESSION --checkpoint CHECKPOINT_ID --json
+ariax forge close SESSION --json
+ariax forge status SESSION --json
 ```
+
+Use the exact `tool` key and its `capabilities.guide` as `TOOL` and `GUIDE_ID`.
+`ariax forge catalog --json` retains the full catalog; `--tool` selects a tool
+without dropping its model/mode evidence, and `--compact` is an opt-in summary.
+Task filters are `binder-design`, `antibodies`, `molecular-prediction`,
+`sequence-optimization`, and `validation-search`. Unknown resource minima are
+null. Use `ariax skills forge --tool GUIDE_ID --json` for scoped reference and
+example paths; `ariax skills forge --json` retains the complete index. Read a
+reference with `--reference NAME --read --json`. The `ariax-forge` alias uses
+the same guides. Upload example inputs and companions before executing them;
+the native guides retain scientific provenance and license conditions.
+
+The CLI opens a temporary HTTPS connection for active commands, tools and file
+transfers. Lifecycle controls and retained history use the authenticated Ariax
+API. JSON results are in `data`; progress goes to stderr. Run `ariax help forge`
+for complete command syntax. [Campaign benchmark](tools/campaign-benchmark.md)
+describes bounded tables from retained candidate results, declared QC and searches.
+
+## Select and prepare tools
 
 Omit `--tools` for a base workspace. Base is always included; leave it out of
 selection lists. Tool keys come from the configured public catalog at
@@ -178,7 +216,7 @@ requires the original ID and fields. Local saved requests remain immutable.
 
 Resume creates a new allocation/job within the existing project and restores
 the selected saved files before command admission. It leaves the next scientific
-command to the agent. Choose provider, hardware, tools, priority and an optional
+command to the agent. Choose hardware, tools, priority and an optional
 new cap explicitly; the old session's allowance is separate.
 
 Limits use total GPU-hours including preparation and idle time. Eight GPU-hours

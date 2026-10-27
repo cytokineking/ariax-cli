@@ -31,7 +31,7 @@ describe('bundled skills read-through', () => {
     assert.match(data.skill, /ariax-bindcraft\/SKILL\.md$/);
     assert.deepEqual(Object.keys(data.references), [
       'shared', 'campaigns', 'candidates', 'engine-choice', 'examples', 'feedback', 'interpretation',
-      'raw-curl', 'recorded-settings', 'outputs',
+      'managed-projects', 'raw-curl', 'recorded-settings', 'outputs',
     ]);
     assert.match(data.references.outputs, /ariax-bindcraft\/outputs\.md$/);
     assert.equal(out.stderr, '');
@@ -81,6 +81,13 @@ describe('bundled skills read-through', () => {
   });
 
   it('reads named core and protocol output references', async () => {
+    const managed = await captureOutput(() => main([
+      'skills', '--reference', 'managed-projects', '--read', '--json',
+    ], {}));
+    assert.equal(managed.value, 0);
+    assert.equal(JSON.parse(managed.stdout).data.content,
+      readFileSync(new URL('../agent-skills/core/managed-projects.md', import.meta.url), 'utf8'));
+
     const feedback = await captureOutput(() => main([
       'skills', '--reference', 'feedback', '--read', '--json',
     ], {}));
@@ -182,6 +189,36 @@ describe('bundled skills read-through', () => {
     assert.ok(human.stdout.includes(discovery.platform_examples.forge.root));
   });
 
+  it('discovers one Forge tool family without leaking unrelated reference families', async () => {
+    const result = await captureOutput(() => main(['skills', 'forge', '--tool', 'boltz2', '--json'], {}));
+    assert.equal(result.value, 0);
+    const scoped = JSON.parse(result.stdout).data;
+    assert.equal(scoped.tool, 'boltz2');
+    assert.ok(scoped.references.boltz2);
+    assert.ok(scoped.references['boltz2-modes']);
+    assert.ok(scoped.references['boltz2-affinity']);
+    assert.ok(scoped.examples.boltz2);
+    assert.equal(scoped.references['boltz2-acceleration'], undefined);
+    assert.equal(scoped.references['boltz2-acceleration-modes'], undefined);
+    assert.equal(scoped.references.bindcraft2, undefined);
+    assert.equal(scoped.examples.root, undefined);
+    const alias = await captureOutput(() => main(['skills', 'ariax-forge', '--tool', 'rfdiffusion4', '--json'], {}));
+    assert.equal(alias.value, 0);
+    const family = JSON.parse(alias.stdout).data;
+    assert.equal(family.references.rfd4, family.references.rfdiffusion4);
+    assert.ok(family.references['rfd4-inputs']);
+    assert.ok(family.examples.rfd4);
+    const ligand = await captureOutput(() => main(['skills', 'forge', '--tool', 'ligandmpnn', '--json'], {}));
+    assert.equal(ligand.value, 0);
+    const ligandFamily = JSON.parse(ligand.stdout).data;
+    assert.equal(ligandFamily.references.ligandmpnn, ligandFamily.references.mpnn);
+    assert.ok(ligandFamily.references['mpnn-fixtures']);
+    assert.ok(ligandFamily.examples.ligandmpnn);
+    const capabilities = await captureOutput(() => main(['skills', 'forge', '--tool', 'capabilities', '--json'], {}));
+    assert.equal(capabilities.value, 0);
+    assert.ok(JSON.parse(capabilities.stdout).data.references['capabilities-matrix']);
+  });
+
   it('documents the compact BindCraft2 candidate contract without losing target or completion semantics', () => {
     const candidates = readFileSync(new URL('../agent-skills/core/candidates.md', import.meta.url), 'utf8');
     const outputs = readFileSync(new URL('../agent-skills/skills/ariax-bindcraft2/outputs.md', import.meta.url), 'utf8');
@@ -213,6 +250,10 @@ describe('bundled skills read-through', () => {
       [['skills', 'ariax-forge', '--reference', 'constructor', '--read', '--json'], /Unknown skills reference/],
       [['skills', 'forge', '--reference', 'base', '--json'], /requires --read/],
       [['skills', 'boltzgen', '--reference', 'base', '--read', '--json'], /Unknown skills reference/],
+      [['skills', '--tool', 'rfd4', '--json'], /requires the forge platform/],
+      [['skills', 'forge', '--tool', '../rfd4', '--json'], /unknown tool guide/],
+      [['skills', 'forge', '--tool', 'constructor', '--json'], /unknown tool guide/],
+      [['skills', 'forge', '--tool', 'rfd4', '--read', '--json'], /use --tool for discovery/],
     ]) {
       const out = await captureOutput(() => main(argv, {}));
       assert.equal(out.value, 1);

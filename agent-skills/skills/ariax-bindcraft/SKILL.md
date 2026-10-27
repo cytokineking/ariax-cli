@@ -16,23 +16,27 @@ versioned REST API; MCP is not part of this workflow.
 Use the [shared workflow](../../SKILL.md) for account access, existing user
 authorization, durable recovery, and downloads.
 
+The [Forge FreeBindCraft guide](../ariax-forge/tools/freebindcraft.md) covers
+native commands under a separate contract. Check its exact live tool, model and
+mode qualification before choosing it.
+
 ## Decide whether BindCraft fits
 
 Choose BindCraft when the goal is an automated campaign of miniprotein binders
 or short, linear alpha-helical peptide binders against one or more chains of a
 protein structure and filter-based down-selection is appropriate.
 
-BindCraft does not cyclize or chemically staple these peptides. Do not use it
+This managed BindCraft protocol does not cyclize or chemically staple these peptides. Do not use it
 for cyclic peptides, chemically modified helicons, VHH antibodies,
 small-molecule targeting, or detailed all-atom constraint languages. Route
-those requests to a protocol that exposes the required modality.
+those requests to a workflow that supports the required modality.
 
 ## Plan the campaign and GPU
 
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus).
+guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
 For BindCraft and FreeBindCraft, include at least one compatible core class from
 `H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO`. Add as many compatible choices as
 memory and the authorized hourly budget allow. `H200` and `B200` can supplement
@@ -232,7 +236,7 @@ ariax status "$PROJECT_ID" --wait
 ```
 
 For an uncertain submission or interrupted wait, follow the shared
-[operation recovery workflow](../../SKILL.md#submit-and-recover). Reuse the
+[operation recovery workflow](../../core/managed-projects.md#submit-and-recover). Reuse the
 original operation with `ariax recover OPERATION_ID --wait`.
 
 ## Monitor and retrieve results

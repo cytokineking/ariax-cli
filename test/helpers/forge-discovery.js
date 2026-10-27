@@ -93,16 +93,16 @@ export async function exerciseAcceptedForgeDiscovery(discovery) {
   assert.equal(discovery.references.rfdiffusion4, discovery.references.rfd4);
   assert.equal(discovery.examples.rfd4, join(discovery.examples.root, 'rfd4'));
   assert.equal(discovery.examples.rfdiffusion4, discovery.examples.rfd4);
-  const rfd4Baseline = join(discovery.examples.rfd4, 'baseline');
-  for (const name of ['monomer.yaml', 'binder.yaml']) {
-    const spec = await readFile(join(rfd4Baseline, name), 'utf8');
+  for (const name of ['baseline/monomer.yaml', 'baseline/binder.yaml', 'partial/resolved_seed.yaml']) {
+    const directory = dirname(join(discovery.examples.rfd4, name));
+    const spec = await readFile(join(discovery.examples.rfd4, name), 'utf8');
     const inputs = [...spec.matchAll(/^[ \t]*input:[ \t]*(\S+)[ \t]*$/gm)];
     assert.equal(inputs.length, 1, `${name} must identify its companion structure`);
-    const companion = resolve(rfd4Baseline, inputs[0][1]);
-    assert.equal(dirname(companion), rfd4Baseline, `${name} must keep its adjacent input`);
+    const companion = resolve(directory, inputs[0][1]);
+    assert.equal(dirname(companion), directory, `${name} must keep its adjacent input`);
     assert.ok((await readFile(companion)).length > 0, `${name} companion must be packaged`);
   }
-  assert.ok((await readFile(join(rfd4Baseline, 'LICENSE'))).length > 0);
+  assert.ok((await readFile(join(discovery.examples.rfd4, 'baseline', 'LICENSE'))).length > 0);
 
   const example = discovery.examples.capabilities;
   const observed = JSON.parse(execFileSync(process.execPath,

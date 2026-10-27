@@ -1,5 +1,9 @@
 # Forge FreeBindCraft binder design
 
+The [managed BindCraft protocol](../../ariax-bindcraft/SKILL.md) runs a defined
+project lifecycle with its own schema and results. This native FreeBindCraft
+guide has separate settings and qualification; inspect the exact live mode.
+
 For real inputs and result review, read
 [target preparation and budgets](../references/freebindcraft-inputs.md) (`freebindcraft-inputs`) and [filters, placeholders and ranking](../references/freebindcraft-results.md) (`freebindcraft-results`).
 Use those IDs with
@@ -8,8 +12,8 @@ guide](../../../core/interpretation.md) covers structure stages and fair compari
 
 
 Read this guide with `ariax skills forge --reference freebindcraft --read --json`
-(alias `ariax-forge`). Set `EXAMPLES` to the absolute `data.examples.root`
-path from `ariax skills forge --json`, and `SESSION` to an authorized session's
+(alias `ariax-forge`). Set `EXAMPLES` to `data.examples.freebindcraft` from
+`ariax skills forge --tool freebindcraft --json`, and `SESSION` to an authorized session's
 UUID. The agent chooses native argv inside the selected image, including an
 explicit shell when needed. Forge passes that argv unchanged. The commands
 below illustrate one bounded native case.
@@ -58,11 +62,11 @@ chain, hotspots, binder scope and evaluation criteria. The target is a
 retained example structure, and no generated binder is supplied in advance.
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/freebindcraft/PDL1.pdb" --path freebindcraft/PDL1.pdb --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/freebindcraft/settings.json" --path freebindcraft/settings.json --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/freebindcraft/advanced.json" --path freebindcraft/advanced.json --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/freebindcraft/filters.json" --path freebindcraft/filters.json --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/freebindcraft/check.py" --path freebindcraft/check.py --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/PDL1.pdb" --path freebindcraft/PDL1.pdb --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/settings.json" --path freebindcraft/settings.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/advanced.json" --path freebindcraft/advanced.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/filters.json" --path freebindcraft/filters.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/check.py" --path freebindcraft/check.py --json
 ariax forge inputs list "$SESSION" --json
 ```
 
@@ -202,7 +206,7 @@ stage `PDL1.pdb` as above and the B45 settings/helper under these paths:
 
 ```sh
 for FILE in advanced.json filters.json settings-openmm.json settings-pyrosetta.json check.py; do
-  ariax forge inputs add "$SESSION" --file "$EXAMPLES/freebindcraft/b45/$FILE" --path "freebindcraft/b45/$FILE" --json
+  ariax forge inputs add "$SESSION" --file "$EXAMPLES/b45/$FILE" --path "freebindcraft/b45/$FILE" --json
 done
 ariax forge inputs list "$SESSION" --json
 ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 3600 --json -- freebindcraft --settings /inputs/freebindcraft/b45/settings-openmm.json --advanced /inputs/freebindcraft/b45/advanced.json --filters /inputs/freebindcraft/b45/filters.json --no-pyrosetta --no-plots --no-animations --verbose

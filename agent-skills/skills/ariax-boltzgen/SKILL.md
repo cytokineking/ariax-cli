@@ -5,10 +5,14 @@ description: Design VHH nanobodies, miniproteins, linear or cyclic peptides, hel
 
 # BoltzGen on Ariax
 
-Use the Ariax CLI and public `/api/v1` API. Do not invoke BoltzGen directly or
-construct its internal YAML: Ariax translates the public job specification into
-the installed BoltzGen workflow and manages compute, recovery, logs, and object
-storage.
+For this managed protocol, use the Ariax CLI and public `/api/v1` API rather
+than native BoltzGen argv or internal YAML. Ariax translates the public job
+specification into the installed workflow and manages compute, recovery, logs,
+and object storage.
+
+The [Forge BoltzGen guide](../ariax-forge/tools/boltzgen.md) covers native
+commands and separate bounded modes. Check the exact live tool, model and mode
+qualification; a native option is not automatically available or qualified.
 
 Use the [shared workflow](../../SKILL.md) for account access, existing user
 authorization, durable recovery, and downloads.
@@ -20,7 +24,7 @@ the requested modality is VHH, cyclic peptide, helicon, or a miniprotein that
 binds a small molecule. It is also available for ordinary miniprotein and
 linear-peptide design when the user wants an alternative to BindCraft.
 
-Ariax exposes exactly these BoltzGen project types:
+This managed protocol exposes these BoltzGen project types:
 
 | `project_type` | Ariax behavior | Length input | Target input |
 | --- | --- | --- | --- |
@@ -31,7 +35,7 @@ Ariax exposes exactly these BoltzGen project types:
 | `vhh` | Installed VHH scaffold set | Omit | PDB or mmCIF plus selected protein chains |
 | `miniprotein-small-molecule` | Miniprotein against one ligand | Required; minimum at least 31 | Exactly one CCD code or SMILES; no structure file or `chains` |
 
-Do not promise upstream-only modes through Ariax. The public contract does not
+Do not promise upstream-only modes through this managed protocol. Its public contract does not
 accept arbitrary BoltzGen YAML, Fab/whole-antibody design, protein redesign,
 nucleic-acid targets, or arbitrary bond, insertion, secondary-structure, or
 residue constraints.
@@ -41,7 +45,7 @@ residue constraints.
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus).
+guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
 Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
 `RTX6000PRO`. Add every compatible class within the memory and authorized hourly
 budget limits; one core choice is allowed but reduces availability. Supplemental
@@ -158,7 +162,7 @@ ariax submit -f job.json --name my-boltzgen-run \
 ```
 
 For an uncertain submission or interrupted wait, follow the shared
-[operation recovery workflow](../../SKILL.md#submit-and-recover). Reuse the
+[operation recovery workflow](../../core/managed-projects.md#submit-and-recover). Reuse the
 original operation with `ariax recover OPERATION_ID --wait`.
 
 The CLI parses protein structures and validates canonical selectors locally,

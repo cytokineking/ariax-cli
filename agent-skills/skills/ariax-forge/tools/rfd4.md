@@ -22,14 +22,16 @@ is a separate, explicit experiment that needs its own validation.
 ## Discover and prepare
 
 ```sh
-ariax forge catalog --details --json
-ariax skills forge --json
+ariax forge catalog --compact --task binder-design --json
+ariax forge catalog --tool rfd4 --json
+ariax skills forge --tool rfd4 --json
 ariax skills forge --reference rfd4 --read --json
 ```
 
 Use the live catalog to check availability, allowed modes, and measured resource
 scope. A missing resource minimum is unknown, not zero. Read [inputs](rfd4/inputs.md),
-[modes](rfd4/modes.md), [outputs](rfd4/outputs.md) and the
+[modes and controls](rfd4/modes.md), [generation and evaluation recipes](rfd4/recipes.md),
+[search and continuation](rfd4/search.md), [outputs](rfd4/outputs.md) and the
 [example inventory](examples/rfd4/README.md). The [Forge platform guide](../SKILL.md)
 explains session creation, authorization, command recovery, cancellation and close.
 
@@ -52,7 +54,7 @@ bundle lineage is a separate provenance field and must be retained.
 ## Stage inputs
 
 Set `EXAMPLES` to the `data.examples.rfd4` path returned by
-`ariax skills forge --json`. The small [baseline inputs](examples/rfd4/README.md)
+`ariax skills forge --tool rfd4 --json`. The small [baseline inputs](examples/rfd4/README.md)
 are bounded cases; check the live catalog's scientific scope. Stage the monomer
 specification and its annotated CIF; inspect both returned input IDs:
 
@@ -86,26 +88,26 @@ Forge's `--` separator:
 
 ```sh
 ariax forge run "$SESSION" --tool rfd4 --gpus 0 --timeout-seconds 1800 -- \
+  env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
   rfd4-generate \
   inference_experiment=quickstart \
   hf_ckpt_path=/models/rfd4-proteina hf_ckpt_revision=null \
   inputs=/inputs/rfd4/baseline/monomer.yaml \
   out_dir=/workspace/rfd4/monomer-001 \
   hydra.run.dir=/workspace/rfd4/monomer-001/hydra \
-  num_replicates=1 batch_size=1 seed=7 prevalidate_inputs=true \
+  num_replicates=1 batch_size=1 num_workers=0 seed=7 \
   delete_failing_pre_oracle=false
 ```
 
-For the binder, use `inputs=/inputs/rfd4/baseline/binder.yaml` and a distinct
-`out_dir` and `hydra.run.dir` for that run. Retain its hotspot and target
-conditions; the fixture is not a general target template.
+For the binder, use the reviewed non-oracle [recipe](rfd4/recipes.md). Retain
+its hotspot and target conditions; the fixture is not a general target template.
 
 The native quickstart is an eager, no-metrics smoke profile: it disables compile
 warm-up and does not produce refolding scores. It does not by itself reduce the
-native sampling schedule. Normal compiled execution, task-specific schedules,
-non-oracle metrics and larger workloads require their own qualification; see
-[modes](rfd4/modes.md). A longer input or larger batch has an unmeasured resource
-cost. Check the remote command's exit state and logs. A local watch timeout does
+native sampling schedule. For the qualified bounded compiled and non-oracle
+cases, consult the live catalog and [recipes](rfd4/recipes.md); other schedules
+and larger workloads need their own evidence. A longer input or larger batch has
+an unmeasured resource cost. Check the remote command's exit state and logs. A local watch timeout does
 not stop the command.
 
 Observe the same command ID after a lost reply. Starting another command may run
@@ -121,35 +123,9 @@ from failed metrics or acceptance. Use an independently qualified predictor as
 a separate downstream command when appropriate; its outputs are not coupled
 RFd4 search results or experimental evidence of binding.
 
-After the native writer has stopped, prepare the run's provenance and intended
-input information inside the ready tool:
-
-```sh
-ariax forge run "$SESSION" --tool rfd4 --timeout-seconds 600 -- \
-  python /opt/ariax/rfd4/prepare_outputs.py \
-  --run-dir /workspace/rfd4/monomer-001 \
-  --input-spec /inputs/rfd4/baseline/monomer.yaml \
-  --model-dir /models/rfd4-proteina
-```
-
-The helper retains the exact spec and its explicitly referenced CIF/BCIF files,
-model metadata and bundle lineage under `ariax_provenance/`. Simple relative
-paths retain their layout. Absolute or parent-relative references need explicit
-remapping after restore. The helper does not reconstruct the residue mapping:
-preserve original-to-assembled IDs and generated annotations as described in
-[outputs](rfd4/outputs.md). Keep the original `hydra/.hydra/config.yaml` and
-`overrides.yaml`, native logs and metrics: the helper's separate resolved config
-reflects its environment at capture time, not necessarily runtime.
-
-Standalone evaluation can create input-sidecar symlinks. After evaluation stops,
-the helper's explicit `--materialize-sidecars` can replace intended structure
-sidecars under `evaluation_samples/<example>/` only when their targets are the
-specified input, its referenced structure files, or regular structures in the
-same run's `inference_samples/`, or under the absolute evaluation input directory
-recorded in that run's Hydra config under `/inputs` or `/workspace`. Other
-evaluation links are rejected. Inspect the result before sync; Forge rejects any
-remaining symlinks and special files,
-so do not relax that path rule.
+After the writer stops, follow [outputs](rfd4/outputs.md) to capture the
+input, model, Hydra settings and mapping, and to materialize any evaluation
+sidecars before checkpointing.
 
 Once all writers have stopped, save and inspect a checkpoint:
 

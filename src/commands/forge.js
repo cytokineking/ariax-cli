@@ -25,7 +25,7 @@ const OPTIONS = {
   project: [['limit', 'cursor'], 2],
   activity: [['limit', 'cursor'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision'], 2],
-  catalog: [['details', 'task'], 1],
+  catalog: [['details', 'task', 'tool', 'compact'], 1],
   list: [[], 1], status: [[], 2], tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
   'tools wait': [['timeout'], 4],
@@ -44,7 +44,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--gpu-count 1] [-
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge limit SESSION (--gpu-hours H | --clear) --limit-revision N
-  ariax forge catalog [--details] [--task FAMILY]
+  ariax forge catalog [--details | --compact] [--task FAMILY] [--tool TOOL]
   ariax forge list
   ariax forge status SESSION
   ariax forge tools SESSION [--details]
@@ -69,7 +69,8 @@ export const help = `ariax forge create --name NAME --gpu GPU [--gpu-count 1] [-
   ariax forge download SESSION PATH --dest LOCAL [--checkpoint UUID]
   ariax forge link SESSION PATH [--checkpoint UUID]
   ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint UUID [usual create options]
-  Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N`;
+  Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
+  Catalog --compact summarizes qualification; omit it for full selected-mode evidence.`;
 
 function actionOf(positionals) {
   if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
@@ -250,7 +251,9 @@ export function report(ctx, res, kind) {
   if (kind === 'sessions') printTable(['session_id', 'name', 'state', 'gpu', 'gpu_count'], data.sessions.map(s => [s.session_id, s.name, s.state, s.gpu_type, s.gpu_count]));
   else if (kind === 'commands') printTable(['command_id', 'tool', 'gpu_ids', 'state', 'exit_code'], data.commands.map(c => [c.command_id, c.tool, c.gpu_ids?.join(','), c.state, c.exit_code]));
   else if (kind === 'tools' || kind === 'catalog') {
-    if (ctx.flags.details) for (const tool of data.tools) printKv(tool);
+    if (ctx.flags.details || (kind === 'catalog' && (ctx.flags.compact || ctx.flags.tool !== undefined))) {
+      for (const tool of data.tools) printKv(tool);
+    }
     else if (kind === 'catalog') printTable(['tool', 'name', 'gpu', 'tasks', 'guide'], data.tools.map(t => [t.tool, t.name, t.gpu, t.capabilities?.tasks?.join(',') || 'unknown', t.capabilities?.guide || 'unknown']));
     else printTable(['tool', 'state', 'error'], data.tools.map(t => [t.tool, t.state, t.error?.message]));
   }
@@ -272,6 +275,25 @@ export function report(ctx, res, kind) {
     if (data.output_complete === true) printProgress('The terminal tail was captured. Earlier output may still be truncated.');
   }
   else printKv(data);
+}
+
+// Summary is for routing only. Keep all observed qualification states visible,
+// including unknown/missing values, and require the full catalog for a mode.
+function compactCatalogTool(tool) {
+  const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
+  const states = field => [...new Set(rows.length ? rows.map(row => row?.[field] ?? 'unknown') : ['unknown'])];
+  return {
+    tool: tool.tool,
+    name: tool.name,
+    gpu: tool.gpu,
+    resources: tool.resources ?? null,
+    models: Array.isArray(tool.models) ? tool.models.map(model => ({ id: model.id, resources: model.resources ?? null })) : null,
+    capabilities: {
+      tasks: tool.capabilities?.tasks ?? null,
+      guide: tool.capabilities?.guide ?? null,
+      qualification: { rows: rows.length, native: states('native'), installation: states('installation'), restoration: states('restoration') },
+    },
+  };
 }
 
 export async function poll(ctx, resourcePath, id, inspect, resume, sessionId) {
@@ -381,13 +403,21 @@ async function runAction(ctx) {
   }
   if (action === 'catalog') {
     const task = ctx.flags.task;
+    if (flags.compact && flags.details) throw usageError('forge catalog: --compact and --details cannot be combined.');
+    const selectedTool = flags.tool === undefined ? undefined : required(flags.tool, 'tool');
     if (task !== undefined && !['binder-design', 'antibodies', 'molecular-prediction',
       'sequence-optimization', 'validation-search'].includes(task)) {
       throw usageError('Use --task binder-design, antibodies, molecular-prediction, sequence-optimization, or validation-search.');
     }
     const response = await ctx.client.get(`${API}/catalog`);
-    if (task !== undefined) response.data = { ...response.data,
-      tools: response.data.tools.filter(tool => tool.capabilities?.tasks?.includes(task)) };
+    let tools = response.data.tools;
+    if (selectedTool !== undefined) {
+      tools = tools.filter(tool => tool.tool === selectedTool);
+      if (!tools.length) throw usageError(`forge catalog: tool "${selectedTool}" is not in the current catalog.`);
+    }
+    if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
+    if (flags.compact) tools = tools.map(compactCatalogTool);
+    if (selectedTool !== undefined || task !== undefined || flags.compact) response.data = { ...response.data, tools };
     return report(ctx, response, 'catalog');
   }
   if (action === 'project' || action === 'activity') {

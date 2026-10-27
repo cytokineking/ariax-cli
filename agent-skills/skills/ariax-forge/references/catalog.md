@@ -2,7 +2,8 @@
 
 Read with `ariax skills forge --reference catalog --read --json`.
 
-Use `ariax forge catalog --details --json` to see the tool keys, model choices
+Use `ariax forge catalog --compact --json` to find relevant tool keys, then
+`ariax forge catalog --tool TOOL --json` for full model choices, mode qualifications
 and resource requirements available to your account. Select the tools you need
 and wait for preparation to finish before submitting a command. A null resource
 minimum means it is unknown. The linked guides describe the qualified scientific
@@ -21,6 +22,7 @@ establish that a tool is available to an account.
 | --- | --- | --- |
 | Foundry | [Foundry](../tools/foundry.md); `rf3 fold --help`, `rfd3 design --help`, `rfd3na design --help` | RF3 covers all three checkpoint choices. Generation has native evidence for the documented profiles; check live availability before selecting a generation tool. |
 | MPNN | [MPNN](../tools/mpnn.md); `proteinmpnn --help`, `solublempnn --help`, `ligandmpnn --help`, `abmpnn --help` | Four distinct native tools have qualified installation and saved-output recovery. Older JMS/ColabDesign variants have separate availability and semantics. RFantibody uses its own checkpoint. |
+| Tmol | [Tmol](../tools/tmol.md); uploaded `run.py` with `score`, `interface-score` and `minimize` | Protein energy scoring and Cartesian minimization without model downloads. Preserve prepared coordinates and atom identities; read live mode evidence before use. Interaction scores are not experimental affinities. |
 | Protenix | [Protenix](../tools/protenix-models.md); `protenix pred --help`, `forge-protenix --help` | Eight public choices cover the documented molecular, template, constraint and batch cases. V2 has bounded internal-development coverage for nine integrated samples and three standalone samples, with installation and saved-output recovery. Its guide defines the supported settings and separate delivery scope. Preserve soft-prior misses and unavailable split-token metrics. |
 | AlphaFold2 | [AF2](../tools/af2.md); `colabfold_batch --help` | All fifteen monomer, pTM and multimer-v3 checkpoints have bounded native coverage, including supplied/public MSA and template/pairing paths. Use the guide's eight-CPU startup prefix and model-specific limits. |
 | Standalone ESMFold2 | [Biohub ESM](../tools/biohub-esm.md); `biohub-esm fold --help` | Full and Fast models cover the documented 1–1,040-residue envelope, explicit continuation and complete saved-output recovery. The native Fast MSA refusal is expected. Design optimization uses the separate pipeline below. |

@@ -12,6 +12,10 @@ integration; it is not part of the current interface.
 Use the [shared workflow](../../SKILL.md) for account access, existing user
 authorization, durable recovery, and downloads.
 
+The [Forge PXDesign guide](../ariax-forge/tools/pxdesign.md) covers native
+commands under a separate contract. Check the exact live tool, model and mode
+qualification before choosing that path.
+
 ## Choose PXDesign for the right campaign
 
 PXDesign is Ariax's diffusion-based option for de novo **miniprotein binder**
@@ -25,7 +29,7 @@ Protenix. Ariax runs the full Extended pipeline:
 4. final combined ranking.
 
 Do not route VHH, peptide, cyclic-peptide, helicon, scFv, or small-molecule
-design requests to PXDesign. Ariax exposes only its miniprotein project type and
+design requests to this managed PXDesign protocol. It exposes only its miniprotein project type and
 does not expose PXDesign's preview-only or generation-only modes. API v1 also
 does not expose evaluation thresholds, MSA mode, seeds, diffusion steps,
 numeric precision, or analysis-worker controls.
@@ -35,7 +39,7 @@ numeric precision, or analysis-worker controls.
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus).
+guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
 Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40`, `L40S`.
 Select every compatible choice within memory and authorized hourly budget limits;
 one core choice is valid but reduces availability. `RTX6000PRO` and Blackwell
@@ -160,7 +164,7 @@ ariax submit -f pxdesign-job.json --input ./target.pdb \
 ```
 
 For an uncertain submission or interrupted wait, follow the shared
-[operation recovery workflow](../../SKILL.md#submit-and-recover). Reuse the
+[operation recovery workflow](../../core/managed-projects.md#submit-and-recover). Reuse the
 original operation with `ariax recover OPERATION_ID --wait`.
 
 PXDesign supports Ariax Turbo through the job-file `turbo_mode` and

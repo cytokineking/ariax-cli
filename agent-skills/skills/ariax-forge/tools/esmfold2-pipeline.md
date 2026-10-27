@@ -1,5 +1,10 @@
 # Native ESMFold2 design pipeline
 
+The [managed ESMFold2-pipeline protocol](../../ariax-esmfold2-pipeline/SKILL.md)
+runs a defined project lifecycle with its own schema and results. Its 150-step
+requirement does not qualify that setting or multi-GPU execution in Forge;
+inspect this native guide and the exact live mode.
+
 Use this pipeline in a ready, authorized Forge session. Design and critic stages
 use the experimental ESMFold2 model selected in the campaign and the shared ESMC
 asset. Integrated validation uses the separate Protenix v2 checkpoint. Preparation

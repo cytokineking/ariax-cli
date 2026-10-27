@@ -1,12 +1,19 @@
-# Choosing a hosted engine
+# Choose an execution model and engine
 
-Preserve the user's chosen engine when it supports the requested experiment.
-For native command execution in a compute session, read the
-[Forge platform guide](../skills/ariax-forge/SKILL.md).
-If several engines fit, use the scientific workflow and input requirements to
-choose; there is no universal best engine or comparable cross-engine score.
+Start with the scientific goal, inputs, modality and required stages. Preserve
+the user's chosen engine when the selected execution path supports the intended
+experiment. If several engines fit, compare their workflows and input needs;
+there is no universal best engine or comparable cross-engine score.
 
-| Scientific need | Hosted choice and tradeoff |
+Use a **managed project** when its live protocol schema supports the experiment.
+Ariax provisions compute, runs the defined stages, reports engine-specific
+progress and results, persists artifacts, and cleans up. Use **Forge** for a
+qualified native command or a composed workflow: the agent plans commands,
+inputs, workspace checks, saves and session closure, while Ariax enforces
+access, isolation, billing and the resource lifecycle. A shared engine name does
+not make their settings, versions or qualification interchangeable.
+
+| Scientific need | Managed choice and tradeoff |
 | --- | --- |
 | AF2-guided miniprotein hallucination with an accepted-design target | BindCraft; explicit filter/preset selection and PyRosetta or FreeBindCraft scoring |
 | Native AF2-guided design across miniprotein, protein, peptide, VHH, scFv, Fab, ARP, oligomer, or multidomain formats | BindCraft2; accepted-design target, optional multi-state/detarget objectives, and modality-specific scaffolds |
@@ -28,14 +35,27 @@ the [Forge RFd4 guide](../skills/ariax-forge/tools/rfd4.md). It is not a
 hosted protocol. Its selected-profile checks are bounded; use the live catalog
 to assess availability, qualified modes and resources before selecting it.
 
-Use [campaign planning](campaigns.md) for pilot sizing, evidence-based scaling,
-cost forecasts, and review points. Recommend Turbo for long campaigns within the
-agreed compute scope. Read the chosen engine's GPU guidance: target and binder
-size affect VRAM needs. Check `ariax pricing --json` and select a range of
-compatible GPUs within the user's hourly price preferences to maximize
-availability.
+Consider the [Forge platform guide](../skills/ariax-forge/SKILL.md) when the
+goal calls for native settings, a tool outside the managed workflows, or a
+custom sequence of stages. Discover the exact live tool, model and mode and
+read its qualification before choosing it; a managed limitation does not prove
+that a corresponding native mode is available or qualified. The Forge guides
+for [BindCraft2](../skills/ariax-forge/tools/bindcraft2.md),
+[BoltzGen](../skills/ariax-forge/tools/boltzgen.md),
+[PXDesign](../skills/ariax-forge/tools/pxdesign.md), and
+[ESMFold2-pipeline](../skills/ariax-forge/tools/esmfold2-pipeline.md) describe
+their own bounded native scope.
 
-Hosted workflows are narrower than their source repositories. Arbitrary YAML,
-custom frameworks, preview-only modes, rerank-only execution, and unadvertised
-expert flags require separate support; do not work around the public contract
-with internal routes. Use live schemas for supported fields and examples.
+Use [campaign planning](campaigns.md) for pilot sizing, evidence-based scaling,
+cost forecasts, and review points. Compare one compatible GPU with supported
+parallel execution using representative throughput, useful yield, current
+allocation-hour prices, the deadline and authorized budget. Campaign length
+alone does not decide the comparison. Without comparable evidence, report the
+rate and runtime uncertainty and propose a bounded review point. Read the
+chosen engine's GPU guidance and check `ariax pricing --json`; target and binder
+size affect VRAM needs. Preserve existing GPU preferences and explicit requests.
+
+Each managed workflow can be narrower than its source repository. Do not work
+around its public contract with internal routes; use its live schema for
+supported fields. Check Forge separately for the exact native mode and its
+qualification instead of assuming upstream options are available.

@@ -1,9 +1,10 @@
 # Capability inventory and evidence scopes
 
-Checked October 15, 2026 against the 42-tool/44-asset candidate. Baseline
-acceptance remains 23/25 packages. Package acceptance and attribution of a
-particular model/mode pair are separate facts. The candidate's source/model
-inventory is preserved. A missing measurement stays null in the resource fields.
+Use `ariax forge catalog --compact --json` for the current account-visible
+inventory, then `ariax forge catalog --tool TOOL --json` for a selected tool's
+full evidence. This guide index preserves bounded recorded scopes; package
+acceptance and evidence for a particular model/mode pair are separate facts.
+A missing measurement stays null in the resource fields.
 
 The table reports native/installation/restoration for the metadata attribution.
 `unknown` preserves the accepted package evidence while declining to infer an
@@ -65,6 +66,11 @@ unavailable historical JMS backbone reproduction retain untested scope.
 [RFd4](../rfd4.md) has bounded native scientific cases and held modes. Consult
 the live catalog for its current availability, installation and restoration
 evidence, and resource requirements.
+
+[Tmol](../tmol.md) supplies protein scoring, interface interaction scoring and
+Cartesian minimization without model assets. Check its live mode qualifications;
+upstream packing, design and FastRelax capabilities are separate from the
+adapter's documented scope.
 
 The MPNN native matrix preserves all checkpoint choices and their distinct
 operations. Its original JMS JAX checkpoint route remains distinct from modern

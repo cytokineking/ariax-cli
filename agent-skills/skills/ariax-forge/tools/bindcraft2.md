@@ -1,5 +1,9 @@
 # Forge BindCraft2 binder design
 
+The [managed BindCraft2 protocol](../../ariax-bindcraft2/SKILL.md) runs a
+defined project lifecycle with its own schema and results. This native guide
+has separate settings and qualification; inspect the exact live mode.
+
 Forge selects BindCraft2 v1.0.4 at source
 `d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. The CUDA 12 image uses JAX 0.11.1
 and the shared fifteen-file AlphaFold2 asset. Native scientific outcomes and
@@ -13,8 +17,8 @@ guide](../../../core/interpretation.md) covers structure stages and fair compari
 
 
 Read this guide with `ariax skills forge --reference bindcraft2 --read --json`
-(alias `ariax-forge`). Set `EXAMPLES` to the absolute `data.examples.root`
-path from `ariax skills forge --json`, and `SESSION` to an authorized session's
+(alias `ariax-forge`). Set `EXAMPLES` to the absolute `data.examples.bindcraft2`
+path from `ariax skills forge --tool bindcraft2 --json`, and `SESSION` to an authorized session's
 UUID. The agent chooses native argv inside the selected image, including an
 explicit shell when needed. Forge passes that argv unchanged. The commands
 below illustrate one bounded native case.
@@ -55,9 +59,9 @@ chain, hotspots, binder scope and evaluation criteria. The target is a
 retained example structure, and no generated binder is supplied in advance.
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/bindcraft2/PDL1.pdb" --path bindcraft2/PDL1.pdb --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/bindcraft2/settings.json" --path bindcraft2/settings.json --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/bindcraft2/check.py" --path bindcraft2/check.py --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/PDL1.pdb" --path bindcraft2/PDL1.pdb --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/settings.json" --path bindcraft2/settings.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/check.py" --path bindcraft2/check.py --json
 ariax forge inputs list "$SESSION" --json
 ```
 

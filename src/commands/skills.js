@@ -1,7 +1,7 @@
 /** `ariax skills [protocol]` — locate or read agent guides bundled with this CLI. */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { printData, printJson } from '../output.js';
 import { usageError } from '../args.js';
 
@@ -91,7 +91,11 @@ const FORGE_REFERENCES = Object.freeze({
   'rfd4-inputs': join(FORGE_ROOT, 'tools', 'rfd4', 'inputs.md'),
   'rfd4-modes': join(FORGE_ROOT, 'tools', 'rfd4', 'modes.md'),
   'rfd4-outputs': join(FORGE_ROOT, 'tools', 'rfd4', 'outputs.md'),
+  'rfd4-recipes': join(FORGE_ROOT, 'tools', 'rfd4', 'recipes.md'),
+  'rfd4-search': join(FORGE_ROOT, 'tools', 'rfd4', 'search.md'),
   'rfd4-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'rfd4', 'README.md'),
+  tmol: join(FORGE_ROOT, 'tools', 'tmol.md'),
+  'tmol-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'tmol', 'README.md'),
   'jms-legacy': join(FORGE_ROOT, 'tools', 'jms-legacy.md'),
   'jms-legacy-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'jms-legacy', 'README.md'),
   'jms-components': join(FORGE_ROOT, 'tools', 'jms-components.md'),
@@ -206,6 +210,7 @@ const FORGE_EXAMPLES = Object.freeze({
   'rf3': join(FORGE_ROOT, 'tools', 'examples', 'foundry'),
   rfd4: join(FORGE_ROOT, 'tools', 'examples', 'rfd4'),
   rfdiffusion4: join(FORGE_ROOT, 'tools', 'examples', 'rfd4'),
+  tmol: join(FORGE_ROOT, 'tools', 'examples', 'tmol'),
   'jms-legacy': join(FORGE_ROOT, 'tools', 'examples', 'jms-legacy'),
   'jms-components': join(FORGE_ROOT, 'tools', 'examples', 'jms-components'),
   'jms-esm2': join(FORGE_ROOT, 'tools', 'examples', 'jms-components'),
@@ -238,6 +243,7 @@ const CORE_REFERENCES = Object.freeze({
   examples: join(ROOT, 'core', 'examples.md'),
   feedback: join(ROOT, 'core', 'feedback.md'),
   interpretation: join(ROOT, 'core', 'interpretation.md'),
+  'managed-projects': join(ROOT, 'core', 'managed-projects.md'),
   'raw-curl': join(ROOT, 'core', 'raw-curl.md'),
   'recorded-settings': join(ROOT, 'core', 'recorded-settings.md'),
 });
@@ -270,6 +276,28 @@ function paths() {
     platform_references: { forge: FORGE_REFERENCES },
     platform_examples: { forge: FORGE_EXAMPLES },
   };
+}
+
+function forgeToolPaths(requestedTool) {
+  if (typeof requestedTool !== 'string' || !requestedTool.trim()) {
+    throw usageError('skills forge: --tool requires a guide ID.');
+  }
+  const tool = requestedTool.trim();
+  // Guide aliases map to a top-level tool guide, or a documented example
+  // family with its guide elsewhere. Subreferences are not tool selectors.
+  const guides = Object.entries(FORGE_REFERENCES).filter(([id, path]) => (
+    dirname(path) === join(FORGE_ROOT, 'tools') || Object.hasOwn(FORGE_EXAMPLES, id)
+  ));
+  const guide = guides.find(([id]) => id === tool)?.[1];
+  if (!guide) throw usageError(`skills forge: unknown tool guide "${tool}". Use the catalog guide ID or the full index.`);
+  const matchingGuide = id => guides
+    .filter(([alias]) => id === alias || id.startsWith(`${alias}-`))
+    .sort(([a], [b]) => b.length - a.length)[0]?.[1];
+  const references = Object.fromEntries(Object.entries(FORGE_REFERENCES)
+    .filter(([id, path]) => path === guide || matchingGuide(id) === guide));
+  const examples = Object.fromEntries(Object.entries(FORGE_EXAMPLES)
+    .filter(([id]) => matchingGuide(id) === guide));
+  return { platform: 'forge', tool, skill: join(FORGE_ROOT, 'SKILL.md'), references, examples };
 }
 
 function protocolSkill(requested) {
@@ -329,6 +357,20 @@ export async function run(ctx) {
   }
   if (ctx.flags.reference !== undefined && !ctx.flags.read) {
     throw usageError('skills: --reference requires --read.');
+  }
+  if (ctx.flags.tool !== undefined) {
+    if (!Object.hasOwn(PLATFORMS, requested)) throw usageError('skills: --tool requires the forge platform.');
+    if (ctx.flags.read || ctx.flags.reference !== undefined) {
+      throw usageError('skills forge: use --tool for discovery; use --reference ID --read to read a guide.');
+    }
+    const data = forgeToolPaths(ctx.flags.tool);
+    if (ctx.json) printJson({ data });
+    else {
+      printData(`Forge guide: ${data.tool}`);
+      for (const [id, path] of Object.entries(data.references)) printData(`Reference ${id}: ${path}`);
+      for (const [id, path] of Object.entries(data.examples)) printData(`Examples ${id}: ${path}`);
+    }
+    return;
   }
   if (ctx.flags.read) {
     const data = readGuide(readTarget(requested, ctx.flags.reference, all));

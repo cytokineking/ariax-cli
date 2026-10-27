@@ -53,6 +53,7 @@ const BOOLEAN_FLAGS = new Set([
   'allow-custom-origin',
   'read',
   'details',
+  'compact',
 ]);
 
 /**

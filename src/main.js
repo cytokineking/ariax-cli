@@ -63,7 +63,7 @@ const COMMAND_OPTIONS = {
   protocols: [[], 0],
   pricing: [[], 0],
   schema: [['raw', 'kind', 'output', 'o'], 1],
-  skills: [['read', 'reference'], 1],
+  skills: [['read', 'reference', 'tool'], 1],
   validate: [['file', 'f', 'input', 'input-dir', 'details'], 0],
   submit: [['file', 'f', 'name', 'input', 'input-dir', 'input-upload-intent-id', 'wait', 'resume', 'poll-interval', 'wait-timeout', 'details'], 0],
   projects: [['status', 'protocol', 'name', 'limit', 'cursor', 'all'], 0],
@@ -180,7 +180,7 @@ const HELP_TOPICS = {
   protocols: 'ariax protocols',
   pricing: 'ariax pricing',
   schema: 'ariax schema <protocol> [--raw] [--kind job|submission] [-o, --output FILE]',
-  skills: 'ariax skills [protocol|forge] [--read] [--reference NAME]\nForge native guides: base, ipsae, boltz2, bindcraft2, freebindcraft. Use ariax skills forge --json for all references, helper scripts and example paths.',
+  skills: 'ariax skills [protocol|forge] [--read] [--reference NAME] [--tool GUIDE_ID]\nUse --tool with forge to discover one guide and its references/examples; omit it for the full index.',
   inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
   validate: 'ariax validate -f job.json [--input FILE | --input-dir DIR] [--details]',
   submit: 'ariax submit -f job.json --name <name> [--input FILE | --input-dir DIR] [--wait] [--details]',
@@ -214,7 +214,9 @@ function printHelp(topic) {
   printData('usage: ariax <command> [options]');
   printData('');
   printData('Commands:');
-  for (const line of Object.values(HELP_TOPICS)) printData(`  ${line}`);
+  for (const [topic, line] of Object.entries(HELP_TOPICS)) {
+    printData(`  ${topic === 'forge' ? 'ariax forge <action> [options] (run ariax help forge for commands)' : line}`);
+  }
   printData('');
   printData('Global flags:');
   printData('  --json / --no-json      Force JSON or human output (default: JSON when piped)');

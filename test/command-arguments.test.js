@@ -28,6 +28,17 @@ async function capture(fn) {
   finally { process.stdout.write = out; process.stderr.write = err; }
 }
 
+it('keeps top-level help concise and offers the complete Forge topic', async () => {
+  const top = await capture(() => main(['help'], {}));
+  assert.equal(top.code, 0);
+  assert.match(top.text, /ariax help forge/);
+  assert.doesNotMatch(top.text, /ariax forge checkpoint SESSION CHECKPOINT_ID/);
+  const forge = await capture(() => main(['help', 'forge'], {}));
+  assert.equal(forge.code, 0);
+  assert.match(forge.text, /ariax forge catalog \[--details \| --compact\] \[--task FAMILY\] \[--tool TOOL\]/);
+  assert.match(forge.text, /ariax forge checkpoint SESSION CHECKPOINT_ID/);
+});
+
 it('rejects mutation options and surplus operands before credentials, prompts, HTTP, uploads, or journal writes', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-args-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

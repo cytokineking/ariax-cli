@@ -7,6 +7,10 @@ description: Configure, validate, submit, monitor, and interpret hosted Ariax Bi
 
 Read the shared [Ariax workflow](../../SKILL.md) before using this protocol. Fetch the live contract with `ariax schema bindcraft2 --raw`; this guide explains scientific choices and BC2-specific evidence. BindCraft2 is distinct from `bindcraft-v1.5`; the `bindcraft` CLI alias still means v1.5.
 
+The [Forge BindCraft2 guide](../ariax-forge/tools/bindcraft2.md) covers native
+commands in a separate session. Check its live tool, model and mode
+qualification; managed settings and results do not automatically transfer.
+
 BindCraft2 optimizes a binder with AlphaFold2, redesigns sequences with ProteinMPNN, then validates and filters candidates. An accepted design passed computational filters. It does not establish affinity, specificity, immunogenicity, stability, or experimental success.
 
 ## Engine version and continuation
@@ -153,7 +157,7 @@ accepted designs and attempted trajectories are separate counts. An exhausted
 pilot can complete with zero accepted designs. Trajectory cost varies with the
 stages reached, and zero accepted designs cannot establish cost per accepted design.
 
-Follow the [shared pricing guidance](../../SKILL.md#check-prices-and-choose-gpus).
+Follow the [shared pricing guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
 Turbo permits 2, 4, or 8 GPUs when authorized and available; the server assigns
 workers. More GPUs increase combined hourly cost and do not pool memory for one
 worker. Preserve the user's compute and spending authorization, and do not

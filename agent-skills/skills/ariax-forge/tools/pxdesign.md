@@ -1,5 +1,9 @@
 # Native PXDesign
 
+The [managed PXDesign protocol](../../ariax-pxdesign/SKILL.md) runs a defined
+project lifecycle with its own schema and results. This native guide has
+separate settings and qualification; inspect the exact live mode.
+
 
 ## Inputs and stage assets
 

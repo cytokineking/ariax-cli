@@ -1,5 +1,9 @@
 # Native BoltzGen 0.2.0
 
+The [managed BoltzGen protocol](../../ariax-boltzgen/SKILL.md) runs a defined
+project lifecycle with its own schema and results. This native guide has
+separate modes and qualification; inspect the exact live mode.
+
 
 The image pins [upstream 0.2.0](https://github.com/HannesStark/boltzgen/tree/e4c961b55e74fc80ec2f1906972db1e4e4371262),
 Torch 2.9.0/CUDA 12.8 and cuequivariance 0.5.1. Its output patch saves native
@@ -55,8 +59,8 @@ one loader worker even though the stage templates specify four. Set
 inspect the saved settings in every GPU-stage YAML. The Forge launcher supplies 1 GiB of shared memory for these loaders. Batch 5 produces exactly 25 designs; native checkpoint fractions retain their batch rounding. The original bounded
 profiles above retain their explicit zero-worker/two-analysis-process settings.
 
-Set `BOLTZGEN_EXAMPLES` to the absolute installed `ariax-forge/tools/boltzgen`
-directory, returned by `ariax skills forge --json`. `SESSION` is an authorized
+Set `BOLTZGEN_EXAMPLES` to `data.examples.boltzgen` from
+`ariax skills forge --tool boltzgen --json`. `SESSION` is an authorized
 Forge session UUID. Stage every regular example file, preserving relative paths.
 This includes both scaffold YAML/CIF pairs and the manifest/checker/helper:
 
@@ -72,7 +76,9 @@ ariax forge inputs list "$SESSION" --json
 
 Input import is asynchronous. Inspect every returned input ID with
 `ariax forge inputs status SESSION INPUT_ID` and require `ready` before running.
-Use the 25-design full-settings test. Print its exact native command, then issue it explicitly through Forge:
+The following retained 25-design full-settings case documents a historical
+qualification workload, not a prescribed pilot size. If reproducing that
+specific case is authorized, print its native command and run it explicitly:
 
 ```sh
 python3 "$BOLTZGEN_EXAMPLES/run-testing-25.py" W25B --print

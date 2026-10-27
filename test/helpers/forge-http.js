@@ -32,13 +32,18 @@ async function boundary(root) {
   const sessions = new Map(), projects = new Map(), children = new Set(), heldResponses = new Set();
   const catalog = ['base', 'ipsae', 'boltz2', 'bindcraft2'].map(tool => ({ tool, name: tool,
     gpu: ['boltz2', 'bindcraft2'].includes(tool),
+    resources: { min_gpu_count: ['boltz2', 'bindcraft2'].includes(tool) ? 1 : 0, min_vram_gib_per_gpu: null,
+      min_ram_gib: 64, min_cpu_count: null, min_disk_gib: 100 },
     sources: [{ name: tool, repository: `https://example.org/${tool}`, commit: 'source-revision', version: null }],
-    patches: [], models: [{ id: 'default', assets: tool === 'boltz2' ? ['boltz2'] : [], modes: ['native'], resources: null }],
+    patches: [], models: [{ id: 'default', assets: tool === 'boltz2' ? ['boltz2'] : [], modes: ['native'],
+      resources: tool === 'bindcraft2' ? { min_gpu_count: 1, min_vram_gib_per_gpu: 80 } : null }],
     resource_evidence: [],
     capabilities: { tasks: tool === 'bindcraft2' ? ['binder-design', 'antibodies'] : ['molecular-prediction'],
       guide: tool, terms: [], citations: [], qualification: [{ model: 'default', mode: 'native',
         upstream_maturity: 'experimental', native: 'passed', installation: 'held', restoration: 'untested',
-        scope: 'HTTP fixture: bounded native case only', workload: 'One chain' }] },
+        scope: 'HTTP fixture: bounded native case only', workload: 'One chain' },
+      ...(tool === 'bindcraft2' ? [{ model: 'default', mode: 'other', upstream_maturity: 'unknown',
+        native: 'unknown', installation: 'passed', restoration: 'held', scope: 'Not qualified', workload: null }] : [])] },
   }));
   const toolState = (tool, state) => ({ ...catalog.find(item => item.tool === tool), tool, state, error: null });
   const state = { sessions, projects, allocations: 0, executions: 0, releases: 0, posts: 0, preparations: 0,
@@ -537,6 +542,28 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(qualification.native, 'passed');
     assert.equal(qualification.installation, 'held');
     assert.equal(qualification.restoration, 'untested');
+    const full = await invoke(['forge', 'catalog']);
+    assert.equal(full.payload.data.tools.length, 4);
+    const selected = await invoke(['forge', 'catalog', '--tool', 'bindcraft2']);
+    assert.deepEqual(selected.payload.data.tools, full.payload.data.tools.filter(tool => tool.tool === 'bindcraft2'));
+    assert.equal(selected.payload.data.tools[0].capabilities.qualification[1].scope, 'Not qualified');
+    const selectedHuman = await invoke(['forge', 'catalog', '--tool', 'bindcraft2'], 0, true);
+    assert.match(selectedHuman.stdout, /Not qualified/);
+    assert.match(selectedHuman.stdout, /min_vram_gib_per_gpu/);
+    const compact = await invoke(['forge', 'catalog', '--task', 'antibodies', '--tool', 'bindcraft2', '--compact']);
+    assert.deepEqual(compact.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
+    const compactTool = compact.payload.data.tools[0];
+    assert.deepEqual(compactTool.resources, selected.payload.data.tools[0].resources);
+    assert.deepEqual(compactTool.models[0].resources, selected.payload.data.tools[0].models[0].resources);
+    assert.equal(compactTool.capabilities.guide, 'bindcraft2');
+    assert.deepEqual(compactTool.capabilities.qualification, {
+      rows: 2, native: ['passed', 'unknown'], installation: ['held', 'passed'], restoration: ['untested', 'held'],
+    });
+    assert.equal(Object.hasOwn(compactTool.capabilities.qualification, 'scope'), false);
+    const noMatch = await invoke(['forge', 'catalog', '--task', 'molecular-prediction', '--tool', 'bindcraft2']);
+    assert.deepEqual(noMatch.payload.data.tools, []);
+    await invoke(['forge', 'catalog', '--tool', 'not-in-catalog'], 1);
+    await invoke(['forge', 'catalog', '--compact', '--details'], 1);
     await invoke(['forge', 'catalog', '--task', 'unrecognized-task'], 1);
     const inspected = await invoke(['forge', 'tools', sid, '--details'], 0, true);
     assert.match(inspected.stdout, /source-revision/);

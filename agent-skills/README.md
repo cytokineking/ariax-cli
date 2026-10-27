@@ -4,9 +4,19 @@ These guides ship with `ariax-cli`. Install `npm install --global ariax-cli`,
 then read them with `ariax skills --read --json` or `ariax skills forge --read --json`.
 The standalone `@ariaxbio/agent-skills` npm distribution is retired.
 
+Start from the scientific goal and choose a managed project or a qualified
+native Forge workflow with [engine choice](core/engine-choice.md):
+`ariax skills --reference engine-choice --read --json`. Managed projects run
+defined stages with engine-specific status and results. Forge gives the agent
+native command planning, workspace, save and close choices while Ariax enforces
+access and the resource lifecycle. Read the selected guide and live contract;
+the same engine name does not imply the same settings or qualification.
+
 Agent instructions for using the versioned Ariax REST API through the thin
-`ariax-cli` package or raw `curl`. Shared authentication, lifecycle, recovery,
-and result-retrieval behavior lives in [`SKILL.md`](SKILL.md), with
+`ariax-cli` package or raw `curl`. Shared routing, account access and lifecycle
+essentials live in [`SKILL.md`](SKILL.md). The
+[managed lifecycle](core/managed-projects.md) covers preparation, pricing,
+recovery and results in detail, with
 [`core/raw-curl.md`](core/raw-curl.md) as its transport fallback.
 
 Protocol-specific scientific guidance is independently discoverable:
@@ -20,8 +30,11 @@ Protocol-specific scientific guidance is independently discoverable:
 The [Forge platform skill](skills/ariax-forge/SKILL.md) covers sessions, tool
 readiness, native commands, recovery, cancellation, inputs, checkpoints,
 restore, and close. Read it with `ariax skills forge --read --json` (alias
-`ariax-forge`). `ariax skills forge --json` returns its reference paths and
-`data.examples`, including the example root and each tool's directory.
+`ariax-forge`). Use `ariax forge catalog --compact --json` for routing,
+then `ariax forge catalog --tool TOOL --json` for full selected-tool evidence.
+Use the catalog's guide ID in `ariax skills forge --tool GUIDE_ID --json` to
+find that guide's references and examples. `ariax skills forge --json` retains
+the full reference and example index.
 
 | Forge reference | Guide |
 | --- | --- |
@@ -42,6 +55,8 @@ restore, and close. Read it with `ariax skills forge --read --json` (alias
 | `science-checks` | [Offline scientific checks and limits](skills/ariax-forge/references/science-checks.md) |
 | `rfd4`, `rfdiffusion4` | [RFd4 native co-design](skills/ariax-forge/tools/rfd4.md); check the live catalog for availability |
 | `rfd4-inputs`, `rfd4-modes`, `rfd4-outputs`, `rfd4-fixtures` | [Conditioning](skills/ariax-forge/tools/rfd4/inputs.md), [modes](skills/ariax-forge/tools/rfd4/modes.md), [outputs](skills/ariax-forge/tools/rfd4/outputs.md), [examples](skills/ariax-forge/tools/examples/rfd4/README.md) |
+| `rfd4-recipes`, `rfd4-search` | [Generation and evaluation](skills/ariax-forge/tools/rfd4/recipes.md), [structure-only search and continuation](skills/ariax-forge/tools/rfd4/search.md) |
+| `tmol`, `tmol-fixtures` | [Protein energy scoring and Cartesian minimization](skills/ariax-forge/tools/tmol.md), [uploadable adapter](skills/ariax-forge/tools/examples/tmol/README.md); check live mode evidence |
 
 
 The Forge catalog includes Chai-1, BindCraft2 v1.0.4 and Foldseek with the
@@ -50,10 +65,9 @@ guide and its example directory, including `data.examples.chai1`, `.bindcraft2`
 and `.foldseek`. Read `catalog` and the tool guide for the qualified settings,
 required resources and saved-output checks before selecting a recipe.
 
-Use the matching protocol skill to choose and configure a design engine, then
-use the shared workflow for credentials and lifecycle operations. These skills
-drive the CLI or REST API; they are not separate implementations of protocol
-validation or orchestration.
+Use the selected protocol or Forge skill for configuration and lifecycle
+operations. These skills drive the CLI or REST API; they are not separate
+implementations of validation or orchestration.
 
 For CLI authentication, direct the user to run `ariax login` in their own
 terminal. Never ask them to paste an API key into an agent conversation or pass

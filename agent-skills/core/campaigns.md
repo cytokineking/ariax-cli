@@ -19,9 +19,17 @@ Trim targets to the smallest region that preserves the binding site's fold and
 relevant physical context. A crop can expose an artificial surface; check
 shortlisted poses against the larger biological assembly when available. Record
 the chosen chains, numbering, and crop so structural comparisons remain clear.
-Use only inputs and controls supported by the live Ariax schema.
+Use only inputs and controls supported by the selected managed schema or the
+qualified native mode.
 
 ## Choose a size and review point
+
+A smoke test checks that inputs and execution work; it does not establish
+production throughput or useful candidate yield. A representative pilot uses
+the intended construct, scientific settings and downstream stages to inform a
+decision. Production pursues the agreed scientific objective using available
+evidence. These purposes apply to managed projects and Forge alike; none is
+defined by a fixed design count. An explicit one-design request remains exact.
 
 | Engine | Suggested pilot when the user has not specified a size |
 | --- | --- |
@@ -64,22 +72,30 @@ Run `ariax pricing --json` to check current hourly prices. Select a range of
 compatible GPU models within the user's hourly price preferences to maximize
 availability, retaining the necessary VRAM. Verify identifiers and eligibility
 with `ariax schema PROTOCOL --json` before setting GPU preferences. Follow the
-[shared pricing guidance](../SKILL.md#check-prices-and-choose-gpus) for allocation
+[shared pricing guidance](managed-projects.md#check-prices-and-choose-gpus) for allocation
 rates and use the evidence rules below for campaign forecasts.
-The [shared GPU policy table](../SKILL.md#check-prices-and-choose-gpus) requires
+The [shared GPU policy table](managed-projects.md#check-prices-and-choose-gpus) requires
 at least one protocol-compatible core GPU; supplemental classes alone are
-insufficient. A single core GPU is valid but has fewer availability options.
+insufficient. A single core GPU class is valid but has fewer availability options.
 Select every compatible class within the authorized memory and hourly budget
 limits. If none fits, explain the conflict instead of broadening the policy or
 adding a GPU that cannot fit the workload. `priority_mode` ranks eligible
 alternatives; it does not set a GPU count.
 
-Recommend **Turbo mode for long campaigns** within the user's authorized compute
-policy. Turbo distributes campaign work across GPUs; it does not combine their
-VRAM to make an oversized individual design fit. It can reduce campaign wall
-time while increasing concurrent spend; it does not improve individual design
-quality or guarantee a lower total cost. Read the shared workflow for supported
-GPU-policy changes and recovery.
+When no parallel policy or comparative evidence exists, use one compatible
+GPU as the ordinary starting comparison, respecting explicit requirements and
+saved preferences. Compare it with supported managed Turbo using representative
+throughput, useful candidate yield, allocation-hour prices, deadline and
+authorized spending. Choose multiple GPUs when that comparison supports them;
+campaign length alone is insufficient. Turbo distributes work but does not pool
+VRAM, improve an individual design, or guarantee lower total cost. Read the
+shared workflow for supported GPU-policy changes and recovery.
+
+Forge instead allocates an exact device count and assigns devices per command.
+Request extra devices only with a concrete concurrent-command or native
+multi-GPU plan and a qualified mode; extra devices do not automatically
+parallelize a command. Apply the same throughput, yield, price and deadline
+comparison and retain the uncertainty when evidence is absent.
 
 ## Forecast from observed work
 
@@ -123,7 +139,7 @@ changes instead of silently relaxing filters to obtain a desired count.
 Report generated/attempted, evaluated, native filter-passing, objective-respecting,
 and distinct shortlisted counts **where supported by evidence**. Label the unit:
 BindCraft and BindCraft2 trajectories and accepted sequence variants are different populations.
-Use the [shared count-source guidance](../SKILL.md#results-and-errors) and complete
+Use the [shared count-source guidance](managed-projects.md#results-and-errors) and complete
 [candidate retrieval](candidates.md); state unavailable counts rather than
 inventing them. Retain result paths and the settings used for the comparison.
 

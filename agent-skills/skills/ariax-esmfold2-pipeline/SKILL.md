@@ -8,11 +8,17 @@ description: Configure, validate, submit, monitor, and retrieve ESMFold2-pipelin
 Use the Ariax CLI and public `/api/v1` API. Ariax translates the public job
 specification into its installed ESMFold2-pipeline workflow and manages GPU
 provisioning, checkpoints, Protenix v2 validation, final ranking, and retained
-artifacts. Do not invoke the upstream pipeline directly or construct its YAML.
-MCP is not part of the current Ariax workflow.
+artifacts. For this managed protocol, do not invoke the upstream pipeline
+directly or construct its YAML.
+This managed CLI workflow does not use MCP.
 
 Use the [shared workflow](../../SKILL.md) for account access, existing user
 authorization, durable recovery, and downloads.
+
+The [Forge ESMFold2-pipeline guide](../ariax-forge/tools/esmfold2-pipeline.md)
+covers native commands under a separate contract and qualification. The
+managed 150-step requirement does not qualify 150-step or multi-GPU execution
+in Forge; inspect the exact live mode before choosing it.
 
 ## Choose the modality deliberately
 
@@ -51,14 +57,14 @@ live schema before selecting a subset because the inventory can change.
 Do not use this Ariax protocol for ordinary ESMFold2 structure prediction,
 direct-sequence targets, peptide or small-molecule design, custom framework
 sequences/templates, or arbitrary upstream YAML. The local upstream repository
-supports some of those controls, but Ariax does not expose them.
+supports some of those controls, but this managed protocol does not expose them.
 
 ## Plan the campaign and GPU
 
 Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../SKILL.md#check-prices-and-choose-gpus).
+guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
 Include at least one compatible core GPU from `H100`, `A100_80GB`, `RTX6000PRO`.
 Add every compatible 80 GB-or-larger class within the authorized hourly budget;
 `H200` and `B200` may supplement but cannot be the only choices. One core choice
