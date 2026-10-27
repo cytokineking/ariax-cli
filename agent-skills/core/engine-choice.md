@@ -23,6 +23,11 @@ the experiment: design mechanism, modality, scoring/filter policy, target
 context, campaign size, and compute authorization. Do not infer a large screen
 or Turbo merely from “find a good binder.”
 
+For a requested native joint sequence and all-atom design workflow, also see
+the [Forge RFd4 guide](../skills/ariax-forge/tools/rfd4.md). It is not a
+hosted protocol. Its selected-profile checks are bounded; use the live catalog
+to assess availability, qualified modes and resources before selecting it.
+
 Use [campaign planning](campaigns.md) for pilot sizing, evidence-based scaling,
 cost forecasts, and review points. Recommend Turbo for long campaigns within the
 agreed compute scope. Read the chosen engine's GPU guidance: target and binder

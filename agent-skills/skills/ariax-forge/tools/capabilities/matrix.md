@@ -62,6 +62,10 @@ original RFdiffusion is retired. Experimental and Preview designations stay with
 their methods. Nondeterministic Harness, larger ESMFold2 design runs and the
 unavailable historical JMS backbone reproduction retain untested scope.
 
+[RFd4](../rfd4.md) has bounded native scientific cases and held modes. Consult
+the live catalog for its current availability, installation and restoration
+evidence, and resource requirements.
+
 The MPNN native matrix preserves all checkpoint choices and their distinct
 operations. Its original JMS JAX checkpoint route remains distinct from modern
 ProteinMPNN. LigandMPNN soluble checkpoints and ProteinMPNN SolubleMPNN have

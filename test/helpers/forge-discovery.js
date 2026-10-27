@@ -28,6 +28,7 @@ export async function exerciseAcceptedForgeDiscovery(discovery) {
     'rfantibody-fixtures',
     'custom-code', 'foundry', 'rfd3', 'rfd3na',
     'rf3', 'foundry-outputs', 'foundry-fixtures',
+    'rfd4', 'rfdiffusion4', 'rfd4-inputs', 'rfd4-modes', 'rfd4-outputs', 'rfd4-fixtures',
     'jms-legacy', 'jms-legacy-fixtures', 'jms-components', 'jms-esm2',
     'jms-mpnn', 'jms-esmfold', 'jms-aggregate', 'jms-components-semantics',
     'jms-components-fixtures', 'openfold3', 'openbind-0', 'openfold3-preview2',
@@ -86,6 +87,23 @@ export async function exerciseAcceptedForgeDiscovery(discovery) {
     directories.add(directory);
   }
   for (const directory of directories) await readTree(directory);
+
+  // The specs refer to adjacent compressed structures, so merely walking the
+  // installed tree cannot detect a companion omitted from the release package.
+  assert.equal(discovery.references.rfdiffusion4, discovery.references.rfd4);
+  assert.equal(discovery.examples.rfd4, join(discovery.examples.root, 'rfd4'));
+  assert.equal(discovery.examples.rfdiffusion4, discovery.examples.rfd4);
+  const rfd4Baseline = join(discovery.examples.rfd4, 'baseline');
+  for (const name of ['monomer.yaml', 'binder.yaml']) {
+    const spec = await readFile(join(rfd4Baseline, name), 'utf8');
+    const inputs = [...spec.matchAll(/^[ \t]*input:[ \t]*(\S+)[ \t]*$/gm)];
+    assert.equal(inputs.length, 1, `${name} must identify its companion structure`);
+    const companion = resolve(rfd4Baseline, inputs[0][1]);
+    assert.equal(dirname(companion), rfd4Baseline, `${name} must keep its adjacent input`);
+    assert.ok((await readFile(companion)).length > 0, `${name} companion must be packaged`);
+  }
+  assert.ok((await readFile(join(rfd4Baseline, 'LICENSE'))).length > 0);
+
   const example = discovery.examples.capabilities;
   const observed = JSON.parse(execFileSync(process.execPath,
     [join(example, 'inspect.mjs'), join(example, 'catalog.json'), 'antibodies'], { encoding: 'utf8' }));

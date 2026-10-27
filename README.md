@@ -272,6 +272,10 @@ capabilities and input rules.
 | Record project feedback | `ariax feedback <PROJECT_ID> --category technical-support --message "Expected behavior, observed behavior, and actions tried" [--job JOB_ID]` |
 | Check or install updates | `ariax upgrade --check`, `ariax upgrade` |
 
+The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents a
+native joint sequence and structure design workflow. Its checks are bounded;
+consult the live catalog for availability, qualified modes and resources.
+
 For structure-backed BoltzGen jobs, `--input` is required on both `validate`
 and `submit`. The `miniprotein-small-molecule` mode has no structure input.
 

@@ -40,6 +40,8 @@ restore, and close. Read it with `ariax skills forge --read --json` (alias
 | `structure-tools`, `foldseek` | [Native structure preparation, analysis and Foldseek](skills/ariax-forge/tools/structure-tools.md) |
 | `structure-tools-definitions`, `structure-tools-fixtures` | [Metric definitions](skills/ariax-forge/tools/structure-tools/definitions.md), [fixture provenance](skills/ariax-forge/tools/examples/structure-tools/README.md) |
 | `science-checks` | [Offline scientific checks and limits](skills/ariax-forge/references/science-checks.md) |
+| `rfd4`, `rfdiffusion4` | [RFd4 native co-design](skills/ariax-forge/tools/rfd4.md); check the live catalog for availability |
+| `rfd4-inputs`, `rfd4-modes`, `rfd4-outputs`, `rfd4-fixtures` | [Conditioning](skills/ariax-forge/tools/rfd4/inputs.md), [modes](skills/ariax-forge/tools/rfd4/modes.md), [outputs](skills/ariax-forge/tools/rfd4/outputs.md), [examples](skills/ariax-forge/tools/examples/rfd4/README.md) |
 
 
 The Forge catalog includes Chai-1, BindCraft2 v1.0.4 and Foldseek with the

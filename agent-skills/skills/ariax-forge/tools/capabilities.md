@@ -25,6 +25,11 @@ ESMFold2, OpenDDE and OpenFold3/OpenBind. Sequence optimization includes native
 MPNNs, FAMPNN, stability models and the distinct JMS components. Validation and
 search uses ipSAE/interface adapters and structural tools at their actual state.
 
+The [RFd4 guide](rfd4.md) describes native joint sequence and all-atom design.
+Its presence in the CLI does not establish a live catalog
+entry, qualified scientific mode or measured resource minimum. Consult the live
+catalog before considering it alongside existing design methods.
+
 `qualification` identifies each declared model and native mode. `native`,
 `installation` and `restoration` report separate observations. `passed` applies
 to the stated `scope` and `workload`; `held` records a current restriction.

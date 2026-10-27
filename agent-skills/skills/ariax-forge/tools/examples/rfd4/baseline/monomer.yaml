@@ -1,0 +1,5 @@
+# Unconditional, 100-residue monomer from the upstream annotated benchmark.
+# The source CIF carries the expandable segment; retain its annotations.
+monomer:
+  input: ./monomer-short.cif.zst
+  input_as_annotated_cif: true

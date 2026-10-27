@@ -12,6 +12,11 @@ Catalog RAM minima are unset except for `esmfold2-pipeline`, which requires
 80 GiB. Explicit user-requested RAM minima still apply. RAM allocations and
 measurements in qualification notes describe the recorded runs.
 
+The [RFd4 guide](../tools/rfd4.md) describes bounded native cases and their
+scientific limits. Consult the live catalog for availability, mode-level native,
+installation and restoration evidence, and resources. A packaged guide does not
+establish that a tool is available to an account.
+
 | Package | Guide and native interface | Scientific scope |
 | --- | --- | --- |
 | Foundry | [Foundry](../tools/foundry.md); `rf3 fold --help`, `rfd3 design --help`, `rfd3na design --help` | RF3 covers all three checkpoint choices. Generation has native evidence for the documented profiles; check live availability before selecting a generation tool. |
