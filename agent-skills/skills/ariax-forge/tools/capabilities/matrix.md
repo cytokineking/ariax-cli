@@ -67,6 +67,10 @@ unavailable historical JMS backbone reproduction retain untested scope.
 the live catalog for its current availability, installation and restoration
 evidence, and resource requirements.
 
+[Mol-1](../mol1.md) records the `mol-1-base` prediction interface and finite
+scientific, installation and recovery scope. Consult that guide and the live
+catalog for mode evidence, resource limits and availability.
+
 [Tmol](../tmol.md) supplies protein scoring, interface interaction scoring and
 Cartesian minimization without model assets. Check its live mode qualifications;
 upstream packing, design and FastRelax capabilities are separate from the

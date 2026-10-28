@@ -94,6 +94,12 @@ const FORGE_REFERENCES = Object.freeze({
   'rfd4-recipes': join(FORGE_ROOT, 'tools', 'rfd4', 'recipes.md'),
   'rfd4-search': join(FORGE_ROOT, 'tools', 'rfd4', 'search.md'),
   'rfd4-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'rfd4', 'README.md'),
+  mol1: join(FORGE_ROOT, 'tools', 'mol1.md'),
+  'mol-1': join(FORGE_ROOT, 'tools', 'mol1.md'),
+  'mol1-inputs': join(FORGE_ROOT, 'tools', 'mol1', 'inputs.md'),
+  'mol1-outputs': join(FORGE_ROOT, 'tools', 'mol1', 'outputs.md'),
+  'mol1-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'mol1', 'README.md'),
+  'mol1-notice': join(FORGE_ROOT, 'tools', 'examples', 'mol1', 'NOTICE.md'),
   tmol: join(FORGE_ROOT, 'tools', 'tmol.md'),
   'tmol-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'tmol', 'README.md'),
   'jms-legacy': join(FORGE_ROOT, 'tools', 'jms-legacy.md'),
@@ -166,6 +172,8 @@ const FORGE_REFERENCES = Object.freeze({
   'campaign-benchmark-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'campaign-benchmark', 'README.md'),
 });
 const FORGE_EXAMPLES = Object.freeze({
+  mol1: join(FORGE_ROOT, 'tools', 'examples', 'mol1'),
+  'mol-1': join(FORGE_ROOT, 'tools', 'examples', 'mol1'),
   'campaign-benchmark': join(FORGE_ROOT, 'tools', 'examples', 'campaign-benchmark'),
   'campaign-recipes': join(FORGE_ROOT, 'tools', 'examples', 'campaigns'),
   'boltz2-acceleration': join(FORGE_ROOT, 'tools', 'examples', 'boltz2-acceleration'),
