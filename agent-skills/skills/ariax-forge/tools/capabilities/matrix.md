@@ -67,6 +67,11 @@ unavailable historical JMS backbone reproduction retain untested scope.
 the live catalog for its current availability, installation and restoration
 evidence, and resource requirements.
 
+[Mol-1](../mol1.md) has two initial candidate modes, `protein-monomer` and
+`ligand-ccd`, with `mol-1-base`. Both remain untested for native execution,
+installation and restoration. The initial public-catalog check found no Mol-1
+entry; no resource floor or broader molecular qualification is inferred.
+
 [Tmol](../tmol.md) supplies protein scoring, interface interaction scoring and
 Cartesian minimization without model assets. Check its live mode qualifications;
 upstream packing, design and FastRelax capabilities are separate from the

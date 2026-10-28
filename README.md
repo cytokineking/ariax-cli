@@ -292,6 +292,10 @@ The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents 
 native joint sequence and structure design workflow. Its checks are bounded;
 consult the live catalog for availability, qualified modes and resources.
 
+The [Mol-1 candidate guide](agent-skills/skills/ariax-forge/tools/mol1.md) describes
+prepared-JSON molecular prediction through Forge. Its two initial modes remain
+untested; check the live catalog for availability and qualification before use.
+
 For structure-backed BoltzGen jobs, `--input` is required on both `validate`
 and `submit`. The `miniprotein-small-molecule` mode has no structure input.
 

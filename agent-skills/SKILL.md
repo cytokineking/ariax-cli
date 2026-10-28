@@ -32,6 +32,11 @@ and inspect the exact live tool, model and mode before choosing native commands.
 Only read input or output references when they affect the current decision; read
 output guidance before running when it changes required stages or saved files.
 
+For Mol-1 specifically, the [candidate guide](skills/ariax-forge/tools/mol1.md)
+records prepared-JSON prediction and separate model/data terms. Its initial
+protein-monomer and CCD-ligand modes are untested; discover live availability
+and qualification before choosing that tool.
+
 ## Authorization and account
 
 If authentication is missing, ask the user to run `ariax login` in their own
