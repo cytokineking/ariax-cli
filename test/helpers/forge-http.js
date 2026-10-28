@@ -347,7 +347,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const alias = await invoke(['skills', 'ariax-forge', '--read']);
     assert.equal(alias.payload.data.content, guide.payload.data.content);
 
-    const createArgs = ['forge', 'create', '--name', 'Recovery experiment', '--gpu', 'L40', '--tools', 'boltz2,bindcraft2', '--priority', 'bindcraft2', '--max-gpu-hours', '2'];
+    const createArgs = ['forge', 'create', '--name', 'Recovery experiment', '--gpu', 'RTX5090', '--allowed-gpus', 'RTX5090,L40S', '--tools', 'boltz2,bindcraft2', '--priority', 'bindcraft2', '--max-gpu-hours', '2'];
     const lostCreate = await invoke(createArgs, { code: 9 });
     const sessionId = lostCreate.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
     assert.equal(state.allocations, 1);
@@ -358,6 +358,9 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(accepted.payload.data.session_id, sessionId);
     assert.equal(Object.hasOwn(accepted.payload.data, 'provider'), false);
     assert.equal(Object.hasOwn(state.sessions.get(sessionId).request, 'provider'), false);
+    assert.equal(state.sessions.get(sessionId).request.gpu_type, 'RTX5090');
+    assert.deepEqual(state.sessions.get(sessionId).request.allowed_gpus, ['RTX5090', 'L40S']);
+    assert.deepEqual((await record(sessionId)).request.body.allowed_gpus, ['RTX5090', 'L40S']);
     assert.equal(state.sessions.get(sessionId).request.gpu_count, 1);
     assert.equal(state.sessions.get(sessionId).request.max_gpu_hours, 2);
     assert.equal(state.allocations, 1, 'retry allocated another VM');
@@ -498,6 +501,23 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(state.allocations, 2);
     await invoke(['forge', 'close', secondId]);
     assert.equal(state.releases, 2);
+
+    // Simulate an accepted pre-upgrade request whose creation reply was lost.
+    // Its authenticated journal and server intent agree, but contain no core
+    // fallback. Recovery must preserve that request without renting again.
+    const legacy = await record(secondId);
+    legacy.request.body.gpu_type = 'RTX5090';
+    legacy.result = null;
+    state.sessions.get(secondId).request.gpu_type = 'RTX5090';
+    await fs.writeFile(path.join(root, '.ariax/forge', `${secondId}.json`), JSON.stringify(legacy), { mode: 0o600 });
+    const recovered = await invoke(['forge', 'create', '--name', 'Second workspace', '--gpu', 'RTX5090', '--session-id', secondId]);
+    assert.equal(recovered.payload.data.session_id, secondId);
+    assert.equal(state.allocations, 2, 'legacy recovery rented another VM');
+    await invoke(['forge', 'create', '--name', 'Second workspace', '--gpu', 'RTX5090', '--session-id', secondId], { code: 1, actorKey: 'arx_forge_othercredential' });
+    const beforeCoreRejection = state.posts;
+    const noncore = await invoke(['forge', 'create', '--name', 'Missing fallback', '--gpu', 'RTX5090'], { code: 5 });
+    assert.match(noncore.payload.error.message, /no compatible core GPU/);
+    assert.equal(state.posts, beforeCoreRejection, 'missing fallback sent an admission mutation');
     for (const name of await fs.readdir(path.join(root, '.ariax/forge'))) {
       const bytes = await fs.readFile(path.join(root, '.ariax/forge', name), 'utf8');
       assert.doesNotMatch(bytes, new RegExp(key));

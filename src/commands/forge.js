@@ -9,6 +9,7 @@ import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
 import { ApiError } from '../http.js';
 import { EXIT } from '../exit-codes.js';
+import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
@@ -17,7 +18,7 @@ import { runFiles } from './forge-files.js';
 
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
-const SESSION_OPTIONS = ['gpu', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
+const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
   'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id', 'restore-session', 'checkpoint'];
 const OPTIONS = {
   create: [['name', ...SESSION_OPTIONS], 1],
@@ -39,7 +40,7 @@ const OPTIONS = {
   logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [[], 2],
 };
 
-export const help = `ariax forge create --name NAME --gpu GPU [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
+export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
   ariax forge resume PROJECT --restore-session SOURCE --checkpoint UUID --control-revision N --gpu GPU [usual hardware/tool options] [--session-id UUID]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
@@ -70,6 +71,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--gpu-count 1] [-
   ariax forge link SESSION PATH [--checkpoint UUID]
   ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint UUID [usual create options]
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
+  --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40, L40S, or RTX6000PRO.
   Catalog --compact summarizes qualification; omit it for full selected-mode evidence.`;
 
 function actionOf(positionals) {
@@ -112,6 +114,15 @@ function number(value, flag, { integer = false, zero = false } = {}) {
   return result;
 }
 
+function csv(value, flag) {
+  if (typeof value !== 'string') throw usageError(`forge: --${flag} must be a comma-separated list.`);
+  const parts = value.split(',').map(part => part.trim());
+  if (parts.some(part => !part) || new Set(parts).size !== parts.length) {
+    throw usageError(`forge: --${flag} must contain distinct nonempty values.`);
+  }
+  return parts;
+}
+
 function sessionOptions(flags, resuming) {
   if ((flags['restore-session'] === undefined) !== (flags.checkpoint === undefined)
       || (resuming && flags['restore-session'] === undefined)) {
@@ -122,6 +133,7 @@ function sessionOptions(flags, resuming) {
     if (flags[flag] !== undefined) hardware[field] = number(flags[flag], flag, { integer: field === 'min_cpu_count' });
   }
   return { gpu_type: required(flags.gpu, 'gpu'),
+    ...(flags['allowed-gpus'] === undefined ? {} : { allowed_gpus: csv(flags['allowed-gpus'], 'allowed-gpus') }),
     gpu_count: flags['gpu-count'] === undefined ? 1 : number(flags['gpu-count'], 'gpu-count', { integer: true }),
     ...selection(flags),
     ...(Object.keys(hardware).length ? { hardware } : {}),
@@ -204,6 +216,12 @@ export async function submit(ctx, id, request, label, recovery) {
   const candidate = { id, ...account, request, result: null };
   let record = readRecord(file);
   if (!record) {
+    // New-admission policy must not block authenticated, identical recovery of
+    // a request saved before this policy existed. The checks below still bind
+    // every replay to its original account, origin and request body.
+    if (label === 'session_id') {
+      await checkGpuPolicy(ctx, { protocol: 'forge', allowed_gpus: request.body.allowed_gpus ?? [request.body.gpu_type] }, { source: 'Forge session' });
+    }
     try { atomicWrite(file, JSON.stringify(candidate, null, 2) + '\n', true); record = candidate; }
     catch (error) { if (error.code !== 'EEXIST') throw error; record = readRecord(file); }
   }

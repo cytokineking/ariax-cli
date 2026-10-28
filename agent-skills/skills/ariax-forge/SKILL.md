@@ -90,8 +90,14 @@ Wait for the requested tool to be ready. A tool failure does not revoke host
 availability. Ready tools remain usable while preparation runs in the background.
 
 `--min-ram-gib`, `--min-cpu-count` and `--min-disk-gib` request hardware minima.
-Ariax admits the selected GPU model and exact device count using its current
-catalog. Inspect the returned `hardware`; unavailable fields remain unknown.
+Ariax tries `--gpu` first. Use `--allowed-gpus RTX5090,L40S` to permit
+fallbacks; the list must include the preferred GPU and at least one core GPU
+(H100, A100_80GB, L40, L40S, or RTX6000PRO). An omitted
+list permits only `--gpu`, which must then be a core GPU. This availability rule
+applies to every compute job. No fallback changes the requested device count
+or resource minima. `preferred_gpu_type` records intent; `gpu_type` reports the
+selected model. Accepted sessions keep their selected hardware across retries.
+Ariax admits eligible on-demand full VMs using its current catalog. Inspect the returned `hardware`; unavailable fields remain unknown.
 
 The CLI saves a `selection_id` and the request before dispatch. If a response is uncertain, repeat the request with `--selection-id` set to that saved ID, identical tool and priority fields, and the same CLI root directory, account and API origin. An accepted selection keeps its outcome across repeat delivery and daemon restart. To retry a confirmed preparation failure, submit a new selection ID; omitting `--selection-id` generates one. Status and wait commands observe progress. Model downloads obtain a fresh grant when preparation reaches an absent asset.
 
