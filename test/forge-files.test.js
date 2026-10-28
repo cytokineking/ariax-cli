@@ -15,7 +15,7 @@ it('recovers file IDs across lost replies and keeps grants out of records and pa
   const sid=randomUUID(),pid=randomUUID(),inputId=randomUUID(),checkpointId=randomUUID();
   const unusualPath='/workspace/result ?+#&%ü.cif';
   const inputs=new Map(),checkpoints=new Map();
-  let uploaded,posts=0,puts=0,drop=true,partial=true,origin,sessionState='available';
+  let uploaded,posts=0,puts=0,drop=true,partial=true,origin,sessionState='provisioning';
   const signing=generateKeyPairSync('rsa',{modulusLength:2048});
   const issued=new Set();
   const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -37,7 +37,10 @@ it('recovers file IDs across lost replies and keeps grants out of records and pa
       url.pathname='/api/v1/forge/sessions/'+sid+(direct[2]==='/v1/session'?'':direct[2].slice(3));
     }
     const parts=url.pathname.split('/').filter(Boolean);
-    if(parts[5]==='connect')return reply(res,200,{session_id:sid,project_id:pid,endpoint:'https://'+sid.replaceAll('-','')+'.forge.test',access_token:token(),expires_at:new Date(Date.now()+300000).toISOString(),api_version:1});
+    if(parts[5]==='connect'){
+      if(!['starting','available'].includes(sessionState))return error(res,409,'session_unready');
+      return reply(res,200,{session_id:sid,project_id:pid,endpoint:'https://'+sid.replaceAll('-','')+'.forge.test',access_token:token(),expires_at:new Date(Date.now()+300000).toISOString(),api_version:1});
+    }
     if(parts[0]==='storage'){
       assert.equal(url.searchParams.get('signature'),'temporary-secret');
       assert.equal(req.headers.authorization,undefined);
@@ -97,6 +100,16 @@ it('recovers file IDs across lost replies and keeps grants out of records and pa
   try{
     const local=path.join(root,'arbitrary.yaml');await fs.writeFile(local,'local input');
     const add=['forge','inputs','add',sid,'--file',local,'--path','targets/input.yaml','--input-id',inputId];
+    for(const args of [add,['forge','inputs','list',sid]]){
+      const denied=JSON.parse((await cli(args,7)).stdout);
+      assert.equal(denied.error.code,'session_unready');
+      assert.match(denied.error.action,new RegExp(`ariax forge tools wait ${sid} base --timeout 1800`));
+      assert.match(denied.error.action,/same IDs/);
+    }
+    const timed=JSON.parse((await cli(['forge','tools','wait',sid,'base','--timeout','1'],9)).stdout);
+    assert.match(timed.error.message,/Wait timed out/);
+    assert.equal(posts,0);assert.equal(puts,0);assert.equal(inputs.size,0);
+    sessionState='available';
     await cli(add,9);
     const before=posts;
     await cli(add);

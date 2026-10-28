@@ -269,6 +269,8 @@ Repeated close observes the same closure.
 
 ## Inputs and durable outputs
 
+Before active file operations, wait for the workspace with `ariax forge tools wait SESSION base --timeout 1800`; `session_unready` means inspect that session's lifecycle and retain the original operation IDs.
+
 Stage a local file, an authorized Ariax artifact, or an individual public HTTPS object with `ariax forge inputs add SESSION --file FILE --path targets/input.yaml`. Use `--artifact PROJECT_ID:PATH` or `--url URL` for the other sources. `--path` is relative to `/inputs` (for example `targets/input.yaml`); commands read the absolute `/inputs/targets/input.yaml`. Inspect readiness with `inputs status SESSION INPUT_ID` before a command reads them.
 
 Run `ariax forge sync SESSION --wait` to publish a checkpoint, then use `files` or `download`. Read `ariax skills forge --reference outputs --read --json` for these commands

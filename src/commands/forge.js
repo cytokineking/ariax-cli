@@ -562,6 +562,10 @@ export async function run(ctx) {
       error.action = `Inspect ariax forge status ${ctx.positionals[1]} for the current state, max_gpu_hours, limit_revision, applied_limit_revision and expires_at before another edit. Closing compute must finish cleanup.`;
     } else if (['session_cleanup_pending', 'project_session_active', 'restore_source_active'].includes(error.code)) {
       error.action = `Inspect the project history and source session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
+    } else if (error.code === 'session_unready') {
+      const action = actionOf(ctx.positionals);
+      const sessionId = ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
+      error.action = `Inspect ariax forge status ${sessionId}. If provisioning or starting, run ariax forge tools wait ${sessionId} base --timeout 1800, then retry the original operation with the same IDs. A closing, closed or failed session requires inspection of its project controls and retained history. ${error.action || ''}`.trim();
     } else if (['request_conflict', 'idempotency_conflict', 'command_conflict'].includes(error.code)) {
       error.action = 'Inspect the saved request and existing session or command. Recover its original fields and caller ID; resolve the existing outcome before choosing any new operation.';
     }
