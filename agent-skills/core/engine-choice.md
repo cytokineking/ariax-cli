@@ -61,6 +61,7 @@ supported fields. Check Forge separately for the exact native mode and its
 qualification instead of assuming upstream options are available.
 
 For an explicit Mol-1 prediction request, read the [candidate Forge guide](../skills/ariax-forge/tools/mol1.md).
-Mol-1 is not a managed protocol. Its protein-monomer and CCD-ligand candidate
-modes remain untested; the guide does not establish live availability or
-qualification. Prepared native inputs and separate asset/service terms apply.
+Mol-1 is not a managed protocol. Two bounded protein-monomer/CCD-ligand native
+cases passed; installation and restoration remain pending. The guide does not
+establish live availability. Prepared inputs and separate asset/service terms
+apply.

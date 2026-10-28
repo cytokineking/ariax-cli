@@ -1,6 +1,6 @@
 # Mol-1 candidate fixtures
 
-**Unexecuted draft inputs.** Discover this installed directory as
+**Two bounded native default cases passed; installation and restoration pending.** Discover this installed directory as
 `data.examples.mol1` with `ariax skills forge --tool mol1 --json` (the `mol-1`
 guide alias resolves to the same directory). Use the
 [Mol-1 guide](../../mol1.md) for qualification gates, staging and the complete
@@ -30,8 +30,8 @@ reference structure, weights or chemical database are bundled here.
 The default profile explicitly selects native 20 cycles, 200 diffusion steps,
 five samples and seed 101 with MSA/template/RNA MSA disabled. The smoke profile
 retains 20 cycles and 200 steps but uses one sample; it is only an execution diagnostic.
-Both request full confidence output. Native kernel defaults are retained, so the
-prepared image must establish compatibility before this recipe can be qualified.
+Both request full confidence output. Native kernel defaults are retained; the
+recorded execution covers only the selected L40/CUDA 12.8 environment.
 
 Upload the chosen JSON and `run.py`, wait for both input IDs and the tool to be
 ready, then execute in the selected remote tool. For example, after staging
@@ -48,5 +48,12 @@ features too. For a separately qualified supplied-MSA experiment use the native
 command and [input guidance](../../mol1/inputs.md), preserving every companion.
 Every run needs a fresh output directory. Follow
 [output inspection](../../mol1/outputs.md) for required identities, confidence
-scales, mappings, error handling and retention. No local or remote model run is
-implied by these fixture definitions.
+scales, mappings, error handling and retention. Both default cases completed on
+an L40 with CUDA 12.8 through this launcher: monomer A had 76 tokens/602 atoms;
+protein plus ATP A+B had 107 tokens/633 atoms and retained all 31 ATP heavy-atom
+names/elements. The checks support finite output identity and basic geometry,
+confidence scales, mappings and ranking. They do not establish biological
+binding, affinity, accuracy or ATP bond/chiral/charge/pose validity. See the
+[recorded scope](../../mol1.md#recorded-native-checks) for timings and limits.
+The one-sample recovery smoke and archive/Files restoration are not claimed as
+passed here.

@@ -33,9 +33,9 @@ Only read input or output references when they affect the current decision; read
 output guidance before running when it changes required stages or saved files.
 
 For Mol-1 specifically, the [candidate guide](skills/ariax-forge/tools/mol1.md)
-records prepared-JSON prediction and separate model/data terms. Its initial
-protein-monomer and CCD-ligand modes are untested; discover live availability
-and qualification before choosing that tool.
+records prepared-JSON prediction and separate model/data terms. Two bounded
+protein-monomer/CCD-ligand native cases passed; installation and restoration
+remain pending. Discover live availability and qualification before use.
 
 ## Authorization and account
 

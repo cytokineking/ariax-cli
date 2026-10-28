@@ -1,6 +1,6 @@
 # Mol-1 molecular structure prediction
 
-**Draft offering: native execution, installation and restoration are untested.**
+**Two bounded native cases passed; Forge installation and restoration remain pending.**
 This guide records the proposed Forge interface at upstream source
 [`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/tree/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0).
 The initial candidate modes are `protein-monomer` and `ligand-ccd`, using
@@ -67,12 +67,38 @@ belong under `/scratch`. Forge supplies `HOME=/workspace`; save inputs, commands
 logs, structures and confidence in `/workspace`. The small
 [example runner](examples/mol1/run.py) sets those cache paths and uses the native
 module without changing its scoring.
-The final image, selected assets, kernel/runtime compatibility, measured memory,
-per-mode science checks and fresh restoration remain pending remote evidence.
-The two candidate modes remain untested. Broader multimer, ligand/ion,
-nucleic-acid, modification, covalent, supplied-MSA, template and batch
-capabilities in upstream source are **not qualified Forge modes** by virtue of
-this guide. Training and fine-tuning are outside this recipe.
+Both bundled default cases completed on one L40 with CUDA 12.8 through this
+example runner. The finite native evidence is summarized below. Managed tool
+installation, archive/Files restoration and public availability are separate
+pending gates. Broader multimers, other ligands/ions, nucleic acids,
+modifications, covalent conditioning, supplied MSAs, templates and batches
+remain outside the recorded native scope. Training and fine-tuning are outside
+this recipe.
+
+## Recorded native checks
+
+The 2026-10-28 checks used `mol-1-base`, seed 101, 20 cycles, 200 diffusion steps
+and five samples per input, with protein MSA, template and RNA MSA use disabled
+and full confidence output enabled. Both used the bundled `run.py` and its
+native sampling settings; this is bounded execution and output validation, not
+an accuracy benchmark.
+
+| Mode and fixture | Native result | Finite output scope |
+| --- | --- | --- |
+| `protein-monomer`, `monomer.json` | Passed | Ubiquitin chain A: 76 tokens, 602 atoms, five samples |
+| `ligand-ccd`, `protein-atp.json` | Passed | Ubiquitin A plus CCD ATP B: 107 tokens, 633 atoms, five samples; all 31 ATP heavy-atom names/elements retained |
+
+The validator checked finite coordinates, sequence and backbone identity, basic
+geometry, CIF confidence scales, confidence mappings and ranking. It did not
+establish experimental binding, affinity or predictive accuracy, or validate
+ATP bonds, chirality, charge or binding pose. The constructed ubiquitin–ATP pair
+is an identity/coverage fixture. Larger systems and other GPUs remain untested.
+
+The cold monomer run took approximately 371 seconds including compilation; the
+warm ligand run took 185.381 seconds overall, with 62.23 seconds reported for
+native model forward computation. These are observations for those runs, not
+runtime guarantees or evidence of memory minima. Forge installation,
+archive/Files restoration and any live QA or CLI release remain unconfirmed.
 
 ## Defaults and a bounded smoke
 
@@ -105,8 +131,9 @@ changes precision by token count and forces FP32/Torch on compute capability
 7.x; retain resolved settings and hardware with results. Explicit seeds do not
 guarantee bitwise equality across kernels, devices or environments. Longer
 sequences, atom-tokenized chemistry, more samples and more seeds need capacity
-assessment. No Forge timing or VRAM floor has been measured. A reduced smoke
-checks execution only and cannot support an accuracy or production-size claim.
+assessment. The timings above apply only to the recorded L40 runs; no minimum
+VRAM, RAM, CPU or disk requirement is established here. A reduced smoke checks
+execution only and cannot support an accuracy or production-size claim.
 
 ## Stage and run
 

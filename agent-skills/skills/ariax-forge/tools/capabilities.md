@@ -32,9 +32,9 @@ entry, qualified scientific mode or measured resource minimum. Consult the live
 catalog before considering it alongside existing design methods.
 
 [Mol-1](mol1.md) documents candidate protein-monomer and CCD-ligand prediction
-with prepared JSON and no public MSA search. Native, installation and restoration
-checks are untested; consult the live catalog before selecting it. Broader
-upstream cofolding modalities are separate from the initial candidate scope.
+with prepared JSON and no public MSA search. Two bounded native cases passed
+on an L40; installation and restoration remain pending. Consult the live catalog
+before selecting it. Broader upstream cofolding modalities remain outside scope.
 
 [Tmol](tmol.md) provides protein energy scoring, interface interaction scoring
 and Cartesian minimization through an uploaded Python adapter. It needs no model
