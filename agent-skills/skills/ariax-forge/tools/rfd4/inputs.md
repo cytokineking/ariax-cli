@@ -113,6 +113,11 @@ residues to output residues and checks its six selected hotspot atoms. An
 annotated CIF supplied directly can carry existing source labels, but inference
 rebuilds them too; retain and compare the pre-inference annotations separately.
 
+Fresh loading can add unresolved hydrogens and sidechains with NaN coordinates.
+Do not apply the finite-generated-output check to the entire fresh input array:
+check the supplied backbone and critical epitope atoms, and record unresolved
+heavy atoms separately. Generated output coordinates must still be finite.
+
 Fresh-structure loading can clean the input, add missing atoms and convert MSE
 to MET; loading with `input_as_annotated_cif: true` preserves existing
 conditions. Choose deliberately and record changes. For ligands, metals and
