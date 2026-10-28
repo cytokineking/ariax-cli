@@ -1,22 +1,19 @@
-# Protein-Hunter proposed fixture
+# Protein-Hunter protein-binder example
 
-Source-only B53b readiness input. No native run or passing binder is supplied.
-The PD-L1 sequence follows the original Protein-Hunter Boltz example.
-The fork is `91513a2f78987a84e92e6de5a735fe1e12e0f265`.
+`protein-binder.json` supplies the PD-L1 sequence from the original
+Protein-Hunter Boltz example and requests one 90-residue, two-cycle attempt with
+single-sequence MSAs and native 0.8/0.8 confidence thresholds. No generated binder
+or experimental binding result is supplied. The selected fork is
+`91513a2f78987a84e92e6de5a735fe1e12e0f265`.
 
-`protein-binder.json` declares one length-90, two-cycle attempt with single-sequence
-MSAs and unchanged native 0.8/0.8 confidence thresholds. The wrapper supplies
-fixed model mounts and disables native independent validation. Native MPNN uses
-seed 111; other scientific RNG seeds remain native and can be unavailable.
+Find this directory through `ariax skills forge --tool protein-hunter --json`,
+field `data.examples["protein-hunter"]`. Read [the guide](../../protein-hunter.md)
+for staging and execution, and check the authenticated catalog for availability.
+The adapter supplies model mounts and disables native independent validation.
+Native MPNN uses seed 111; the adapter fixes no Boltz or initial-sequence seed.
 
-Read [the guide](../../protein-hunter.md) before staging. The proposed tool and
-its exact soluble checkpoint are not registered or qualified. Retain all native
-failures, best-cycle records, unavailable metrics and zero accepted designs.
-New versions need new staged configuration paths and explicit new command IDs.
-Restore keeps files and performs no scientific replay.
-
-The current single-checkpoint consumer contract requires native LigandMPNN
-`solublempnn_v_48_020.pt` (6,681,301 bytes; complete legal/source tar <=8 MiB),
-not B27's differently laid out ProteinMPNN soluble checkpoint. A compatible
-B27q canonical packet may share that unchanged basename at the documented mount;
-B55 registration and remote native loading remain open.
+The consumer requires LigandMPNN’s `solublempnn_v_48_020.pt`, which differs from
+the original ProteinMPNN soluble-trained checkpoint. Preserve all native failures,
+best-cycle records, unavailable metrics and acceptance fields. New configurations
+need new staged paths and explicit new command IDs. Use
+[saved results](../../../outputs.md) for checkpointing inputs and outputs.

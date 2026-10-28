@@ -44,11 +44,11 @@ are handled. The exact saved candidate name and submitted amino-acid sequence mu
 match one identity-map row. Assay context has an explicit `method`; retain target
 construct, concentration series, controls and instrument/fit data there. Kinetic
 replicates retain index, binding_strength, kon/koff fit methods and unavailable
-values. KD carries its explicit kd_units; kon and koff units follow the selected
+values. KD carries its explicit `kd_units`; kon and koff units follow the selected
 API model descriptions (M^-1 s^-1 and s^-1). Keep sensorgrams and revised packages
 in separate original files. Quantitative comparisons require matching assay and
 construct context. Missing units remain missing. Other result types stay in their
-original files until a qualified importer exists.
+original files; this importer does not support them.
 
 Current authenticated quotes, private results and raw sensorgrams require account
 access. [Quote metadata](https://docs.adaptyvbio.com/api-reference/experiments/get-experiment-quote)

@@ -1,10 +1,10 @@
 # FreeBindCraft target preparation
 
-Read this before changing the bounded [native example](../tools/freebindcraft.md).
-These scientific rules were adapted from the archived Forge collection at
-`d8c0b040f553bf9e51a532cb4db693529f50cc70` and checked against FreeBindCraft
-`d12747d` plus the current CUDA/attempt-count patch. The miniprotein example
-has live execution evidence. The linear-peptide preset is source-reviewed.
+Use this reference to prepare a target and finite search for the
+[native FreeBindCraft workflow](../tools/freebindcraft.md). It describes
+FreeBindCraft `d12747d` with the Forge CUDA-relaxation and attempt-count
+changes. Presets alone do not establish prediction quality or guarantee an
+accepted design.
 
 Use a protein PDB with the target chains and biological context needed to
 constrain the epitope. Preserve original sequences, author chain/residue
@@ -37,10 +37,10 @@ noninteractive JSON parsing. Preserve the user's intended binder format.
 Neither preset supplies cyclic or chemically modified peptide design.
 
 Hotspots are optional (`""`). Prefer selected-chain author identifiers such as
-`A56,A60-62,B20`; they pass through to ColabDesign. An unqualified `56` appears
-in the single-chain live fixture, but the helper requires explicit chains to
-avoid ambiguity on new inputs. A hotspot guides optimization and does not
-promise a contact in the result.
+`A56,A60-62,B20`; they pass through to ColabDesign. Native single-chain settings
+can use an unqualified `56`, but the helper requires explicit chains to avoid
+ambiguity on new inputs. A hotspot guides optimization and does not promise a
+contact in the result.
 
 Start with the complete presets inside the current image:
 
@@ -54,8 +54,8 @@ Copy the chosen files into a writable task directory before editing. Set
 resources, and save the complete effective configuration. The current image
 uses OpenMM with `--no-pyrosetta`; follow the native command in the main guide.
 Alternative optimizers, trajectory-only mode, beta presets and extras need
-separate workflow checks. An empty filter object is the execution fixture's
-reduced setting, not a general acceptance policy.
+separate workflow checks. An empty filter object disables final criteria;
+choose explicit acceptance criteria for the intended experiment.
 
 `number_of_final_designs` counts accepted designs. `num_seqs` requests MPNN
 proposals, and `max_mpnn_sequences` limits accepted sequences per trajectory.
@@ -74,11 +74,18 @@ installed path, require all inputs ready, and invoke it through base:
 ariax forge run "$SESSION" --tool base -- python3 /inputs/freebindcraft/preflight.py --settings /inputs/freebindcraft/target.json --pdb /inputs/freebindcraft/target.pdb --family miniprotein
 ```
 
-Discover that path as `data.references.freebindcraft-preflight` from
-`ariax skills forge --json`. It checks ordinary PDB coordinates, chain/register
-identity, hotspot existence, counts and family lengths. It does not check
-atomic completeness or run ColabDesign. See [scientific checks](science-checks.md)
-for a runnable synthetic example and limits.
+Discover the helper's installed path as
+`data.references["freebindcraft-preflight"]` from
+`ariax skills forge --tool freebindcraft --json`. It checks finite standard
+PDB coordinates, unique single-character chains and residue/atom registers,
+CA presence, hotspot existence, the accepted-design count and family lengths.
+It rejects alternate conformers, insertion codes, nonstandard residues in
+selected chains and multiple models. It reads `--pdb` independently of
+`starting_pdb`; confirm both identify the same staged construct. It does not
+check atomic completeness, advanced/filter settings or the attempt cap, and
+does not run ColabDesign. See [scientific checks](science-checks.md) for a
+runnable synthetic example and limits, and the [Forge lifecycle](../SKILL.md)
+for input readiness and command monitoring.
 
 Sources: [target/loop](https://github.com/cytokineking/FreeBindCraft/blob/d12747dbc907435622559b81891ad73e0a45c2e4/bindcraft.py),
 [presets](https://github.com/cytokineking/FreeBindCraft/tree/d12747dbc907435622559b81891ad73e0a45c2e4/settings_advanced).

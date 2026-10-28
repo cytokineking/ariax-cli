@@ -17,7 +17,7 @@ For another scientific input, first obtain a validated conventional numbering
 assignment, retain it in a sidecar, and explicitly map the CDRs into native HLT.
 Do not infer CDR boundaries from sequential PDB residue numbers.
 
-The original B50 baseline designs one backbone of each type with original CDR lengths:
+The supplied example designs one backbone of each type with original CDR lengths:
 paired H1:7,H2:6,H3:7,L1:11,L2:7,L3:9; VHH H1:10,H2:6,H3:16.
 It samples two native ProteinMPNN sequences per backbone at temperature 0.1
 and predicts each using the published antibody RF2 checkpoint, ten recycles,
@@ -25,22 +25,21 @@ seed 0 and hotspot visibility 0.1. All CDRs are explicitly selected; the
 framework and target sequences must survive generation and sequence design.
 Generation is native structural conditioning; it does not guarantee exact framework/target coordinates.
 
-The scientific checker applies unchanged B27 sequence constraints, checks
-generation geometry as a strict 0.05 A diagnostic and sequence-stage fixed backbone geometry at 0.05 A and checks RF2 confidence array shapes and
-rounded PDB mean agreement. Fixed-length fixtures retain residue correspondence.
-The completion checker also supports the variable CDR ranges in
-`completion-matrix-20261009.md`, using explicit region correspondence and
-preserving the native design TRB and CDR annotations. Individual source residue
+The scientific checker verifies fixed framework and target sequences, applies a
+strict 0.05 A geometry diagnostic to generation and the sequence-stage fixed
+backbone, and checks RF2 confidence array shapes and rounded PDB mean agreement.
+Fixed-length fixtures retain residue correspondence. It also supports the
+variable CDR ranges in the [tool guide](../rfantibody.md), using explicit region
+correspondence and preserving native design TRB and CDR annotations. Individual source residue
 labels are unavailable inside changed-length CDRs; the checker does not invent
 a residue alignment.
 
-The complete finite qualification covers paired VH/VL and VHH, all annotated
+The supported profiles cover paired VH/VL and VHH, all annotated
 CDRs or H3 alone, variable CDR lengths, 251- and 502-residue targets, ten-design
-native defaults, and one to four ProteinMPNN samples per backbone. The matrix
-states the exact supported lengths, settings and resource floor. Direct RF2
-PDB, Quiver and JSON diagnostics preserve their own identities and the original
-campaign decision. Consult the installed RFantibody guide for commands and
-native fields unavailable in each format.
+native defaults, and one to four ProteinMPNN samples per backbone. The tool guide
+states the supported lengths, settings and resource floor. Direct RF2
+PDB, Quiver and JSON diagnostics preserve their own identities and decisions.
+Consult the tool guide for commands and native fields unavailable in each format.
 
 Screening examples retain candidates passing or failing pred_lddt > 0.9,
 interaction_pae < 10 A and target_aligned_antibody_rmsd < 2 A. These are

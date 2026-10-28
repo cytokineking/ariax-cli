@@ -1,8 +1,8 @@
 # Mol-1 outputs, checks and downstream use
 
 Read with `ariax skills forge --reference mol1-outputs --read --json`. This is
-the pinned native output contract; the [entry guide](../mol1.md) records the
-finite scientific, installation and recovery scope.
+the pinned native output contract. See the [entry guide](../mol1.md) for mode
+limits, run commands and restoration behavior.
 
 ## Files and identities
 
@@ -23,10 +23,11 @@ Missing confidence is unavailable, not a zero or a passed scientific filter.
 
 The example runner places native `OUTPUT` at `RUN/predictions` and retains
 `input.json`, `run.py`, `command.argv.json`, `run-metadata.json`, `run.log` and
-`exit-code.txt` at `RUN`. Metadata records the source/model, profile and expected named assets. Add the
-selected asset/source identity and actual runtime/hardware evidence; path names
-alone do not establish the selected model bytes. A cancellation may prevent `exit-code.txt` from being written;
-use the Forge command record to determine the outcome.
+`exit-code.txt` at `RUN`. Metadata records the source/model, profile and expected
+named assets. Keep the selected asset/source identity and actual runtime/hardware
+with the results; path names alone do not identify the model bytes. A cancellation
+may prevent `exit-code.txt` from being written; use the Forge command record to
+determine the outcome.
 
 CIF chains follow supplied IDs, or A/B/etc. when omitted. Residues start at 1
 along each chain; they are not original experimental author residue numbers.
@@ -69,35 +70,37 @@ Perform these checks remotely with the prepared scientific environment before
 calling a run useful:
 
 1. Confirm every requested job/seed/sample triple is present, nonempty and
-   parseable; inspect any `ERR` files and the full log. Default fixture: five
-   triples for `ubiquitin`, seed 101; smoke: one triple.
-2. Read each CIF. Confirm chain A has the exact 76-residue sequence in
-   [monomer.json](../examples/mol1/monomer.json), unique atom identities, expected
-   polymer atom coverage and finite coordinates. Inspect geometry and terminal oxygen handling. For a
-   real complex, validate all partners, copies, ligands, ions and intended bonds.
-3. Check finite confidence values on their documented scales and dimensions.
-   This fixture expects 76 tokens, 76-by-76 PAE/PDE/contact arrays, one chain,
-   atom mapping length matching the output atom count and token indices in
-   `[0, 75]`. Review scores across all samples rather than accepting rank alone.
+   parseable; inspect any `ERR` files and the full log. Derive the expected jobs,
+   seeds and sample count from the submitted JSON and resolved command, including
+   any `modelSeeds` precedence.
+2. Read each CIF and compare it with the user's actual input: exact sequences,
+   chain IDs, partners, copy counts, ligands and ions. Check unique atom identities,
+   expected atom names/elements and polymer coverage, finite coordinates, geometry
+   and terminal oxygen handling. Inspect intended bond geometry and chemistry,
+   including stereochemistry and charge where relevant; atom coverage alone does
+   not validate them. Retain any crop-to-original sequence mapping.
+3. Check finite confidence values on their documented scales. Derive the token
+   count `T` from the output mappings; PAE, PDE and contact arrays must each be
+   `T` by `T`. Check token/chain mappings and chain-level score dimensions against
+   the actual CIF, the atom mapping length against the output atom count, and
+   atom-to-token indices in `[0, T-1]`.
+   Ligands and modified residues can change `T`; do not assume one token per
+   sequence residue. Review scores across all samples rather than accepting rank
+   alone.
 4. Compare actual recycle count, sample count, MSA/template mode, dtype, kernel,
    hardware and logs with the requested settings. Check the no-search/no-download
-   contract and asset identities. A fixture pass supplies no native-fold accuracy
-   evidence. The ATP companion checks identity/coverage and is not a reference
-   binding pose; compare its atoms with the selected CCD and preserve all mapping
-   dimensions rather than assuming monomer token counts.
+   contract and asset identities.
 
-The central guide records the [native output checks](../mol1.md#recorded-native-checks)
-and [installation/recovery checks](../mol1.md#installation-and-recovery-scope).
-Their finite scope does not establish broader hardware/input capacity, ATP bond
-chemistry, chirality, charge, binding pose, affinity or predictive accuracy.
-Installed CLI packaging checks are separate from installing the scientific tool
-into a Forge session. Do not promote a reduced smoke to full-default or
-larger-input qualification.
+The bundled ubiquitin and constructed protein–ATP examples are execution aids,
+not customer results or reference binding poses. Their dimensions apply only to
+those inputs. A successful command, reduced smoke or high confidence score does
+not establish fold accuracy, valid ligand chemistry, binding or larger-input
+capacity.
 
 ## Downstream choices and recovery
 
 Preserve the CIF, summary and full-data JSON as one prediction with its source
-input and mappings. Compare a separately qualified predictor on the same exact
+input and mappings. Compare another supported predictor on the same exact
 molecules if independent model evidence is useful. Use
 [structure tools](../structure-tools.md) for geometry/alignment or
 [Foldseek](../structure-tools.md) for explicitly selected structural search only
@@ -114,10 +117,12 @@ of cofolding. Experimental validation is necessary for binding/function claims.
 
 Complete a [Files checkpoint](../../outputs.md) after writers stop, inspect its
 manifest and confirm required outputs, then close and verify resource release.
-After a completed restore, inspect saved inputs/outputs before explicitly
-choosing any further work. There is no advertised resumable diffusion state or
-skip-existing recipe; a retry must not overwrite an earlier run. An uncertain
-command retains its original ID until its outcome is reconciled.
+Resume starts a new paid allocation and restores saved files before admitting
+commands; saved commands are never replayed. Inspect tool readiness and restored
+inputs/outputs before explicitly choosing any further work. There is no
+advertised resumable diffusion state or skip-existing recipe; a retry must not
+overwrite an earlier run. An uncertain command retains its original ID until its
+outcome is reconciled.
 
 Source definitions:
 [native writer](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/mol/runner/dumper.py),

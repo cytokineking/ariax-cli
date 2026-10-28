@@ -13,10 +13,8 @@ ariax pricing --json
 ariax schema PROTOCOL --raw -o schema.json
 ```
 
-Affected campaign commands use compact human and JSON defaults. Begin with the
-compact view and follow its `action`; add `--details` for migration, support,
-or fields the compact view omits. Unknown remains unknown rather than becoming
-zero or false.
+Start with compact output and follow its `action`. Add `--details` when you
+need omitted diagnostic or provenance fields.
 
 ## Prepare and validate
 
@@ -31,19 +29,16 @@ ariax inputs prepare --input ./target.pdb -f job.json --output ./prepared --json
 ariax validate -f job.json --input ./target.pdb --json
 ```
 
-`inputs inspect`/`prepare` need no account. Use `--pdb 2B5I` in place of
-`--input` to fetch an exact RCSB entry. Preparation writes `job.json`, an input
-copy, and `input-manifest.json` with hashes and preparation provenance.
-Validate and submit those saved paths; do not mix the original job with a
-remapped input. Default inspection is bounded. For BindCraft2, compact
-`data.files` reports filenames, roles, targets, selector validation,
-authoritative chain counts and preview truncation, chain/record lengths,
-scaffold edits, and scientific warnings. Add `--full` for
-complete sequences and residue maps; add `--details` for manifest hashes, build
-identity, and the prior diagnostic field layout. These flags are orthogonal and
-can be combined. Other protocols retain their bounded chain preview, where
-`residue_count` is the authoritative total and `residues_truncated` marks a
-preview.
+`inputs inspect`/`prepare` need no account. Use `--pdb 2B5I` instead of
+`--input` to fetch an RCSB entry. Preparation writes `job.json`, an input copy
+and a preparation manifest. Validate and submit the saved paths together;
+do not mix the original job with a remapped input.
+
+Inspection previews sequences and residues. Use reported totals rather than
+counting preview rows; add `--full` for complete sequences and residue maps.
+For BindCraft2, `data.files` reports the input bundle, selectors, scaffold
+edits and warnings. Add `--details` for preparation diagnostics; it can be
+combined with `--full`.
 
 BindCraft2 multi-file preparation and authoritative nested settings are covered
 by its protocol guide; use `--input-dir` for its exact bundle.
@@ -53,8 +48,7 @@ and protocol-specific selectors locally, then validates JSON through the API.
 Structure-backed BoltzGen requires `--input` for both `validate` and `submit`.
 For other protocols that allow validation without structure bytes, API validation
 establishes only configuration validity.
-Neither validation mode proves that a remote job completed or that a binder
-works experimentally. Resolve `error.details.issues` using each field path,
+Resolve `error.details.issues` using each field path,
 rule, and constraint; do not weaken an explicit requirement to silence an error.
 
 | Protocol | Residue register |
@@ -123,7 +117,7 @@ change eligibility.
 ## Submit and recover
 
 Use the validated configuration and structure snapshot within the authorized
-campaign scope. Uploads go directly from the CLI to private object storage.
+campaign scope.
 
 ```sh
 ariax submit -f job.json --input ./target.pdb --name my-project --wait
@@ -146,17 +140,14 @@ the intent expires. No operation ID is returned, so `ariax recover` does not
 apply. If the intent expires, resolve the reservation before considering a new
 upload within the existing campaign authorization.
 
-The CLI journals each mutation without credentials or signed URLs. Recovery
-reconciles and, when safe, replays only the retained request and idempotency key;
-it never creates a replacement campaign. Follow `in_progress` with `--wait`.
+Recovery reconciles the original request and safely retries it when needed
+without creating a replacement campaign. Follow `in_progress` with `--wait`.
 A failed operation with `retryable: false` is terminal: diagnose it before any
 separately authorized new attempt. Changed inputs, origin, or account block
-replay. Once a project ID is known, status polling is sufficient. Legacy
-`status --resume --wait` and `submit --resume` remain polling-only.
+replay. Once a project ID is known, status polling is sufficient.
 
-Restart preserves saved scientific settings and the saved GPU policy; send an
-empty body. Only paused projects can be restarted. Failed projects require
-diagnosis and support; `recover` reconciles an uncertain request and does not
+Restart preserves saved scientific settings and the saved GPU policy. Only
+paused projects can be restarted. Failed projects require diagnosis and support; `recover` reconciles an uncertain request and does not
 restart failed compute. Scientific changes require a new project. Use pause, restart,
 or abort when included in the user's authorization. Terminal project states
 are `completed`, `failed`, `paused`, and `aborted`; a local timeout is not one.
@@ -198,17 +189,9 @@ ariax results PROJECT_ID --path output/Trajectory --download ./results
 Results default to protocol-specific output roots. `--path` selects an exact
 artifact or all files beneath a directory, without glob or partial-prefix
 matching. The provenance example saves `./results/output/provenance.json`.
-Compact listings show user-facing file paths, roles, and sizes. Compact
-downloads show one destination, file statuses, and counts. Verification and
-resume bookkeeping remain automatic and quiet on success; `--details` includes
-operational and provenance entries, verification information, hashes,
-manifests, checkpoints, request IDs, and other diagnostic fields.
-
-A missing archive manifest (404) does not block individual file downloads.
-Available checksums are still checked; detailed output reports archive
-verification as unavailable and `checksum_verified` as false when no expected
-checksum is available. Invalid or mismatching metadata and integrity failures
-remain errors.
+Listings show file paths, roles and sizes; downloads report destinations and
+file outcomes. Add `--details` for diagnostic and provenance fields. Downloads
+check available checksums automatically.
 
 Rerun the same download to resume completed files. JSON failures identify every
 affected path with `code`, `reason`, `retryable`, and `action`. Retry transient
@@ -216,13 +199,10 @@ transfers; correct access, destination, or configuration problems first; never
 use bytes after an integrity mismatch. A read failure never authorizes a new
 paid submission.
 
-Use the [candidate guide](candidates.md), including its compact JSON
-migration table, and the engine's output reference
+Use the [candidate guide](candidates.md) and the engine's output reference
 before interpreting a shortlist. Selection, passing filters, and ranking
 eligibility have distinct meanings. Unknown eligibility stays unknown; a generic
-`--eligible` filter is unsuitable for PXDesign/BoltzGen. Candidate files are
-current project outputs, not immutable historical run outputs. Human candidate
-tables for engines without a compact adapter retain their released fields.
+`--eligible` filter is unsuitable for PXDesign/BoltzGen. Candidate files describe current project outputs and can change on continuation.
 BindCraft2 tables show native outcome and binder-chain count; multi-chain
 sequences remain an ordered array in JSON.
 
@@ -230,18 +210,14 @@ Check `project.design_count_source` before treating project counts as evidence.
 For BindCraft, BindCraft2, and ESMFold2, `project_counters` makes the numeric
 `tested_designs`/`accepted_designs` fields meaningful. For BoltzGen/PXDesign,
 `candidate_evidence` means use candidate evidence instead; `unavailable` means
-no supported count source is known. The numeric fields are retained for
-compatibility.
+no supported count source is known.
 
-`ariax runs PROJECT --json` lists jobs with optional recorded settings; use
-`--job JOB_ID` for a detail response. Recorded settings are a best-effort copy
-of the accepted job configuration, captured once after acceptance. They do not
-prove which settings executed or that inference completed. Missing, older, or
-malformed records are reported as unavailable and never block operations.
-See [recorded settings](recorded-settings.md).
+Use `ariax runs PROJECT --json` for accepted job settings, adding `--job JOB_ID`
+for one job. Older jobs can report settings as unavailable. See
+[recorded settings and export](recorded-settings.md).
 
 For recorded runtime, cost, and forecasts, follow
-[campaign evidence guidance](campaigns.md#forecast-from-observed-work).
+[campaign forecasting](campaigns.md#forecast-from-observed-work).
 
 Logs are retained project/campaign compute artifacts; restarts can reuse the
 same object. They are not isolated job transcripts or platform logs. A truncated

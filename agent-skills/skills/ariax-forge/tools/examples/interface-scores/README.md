@@ -15,4 +15,4 @@ pLDDT 61,83,72,54. Z->X PAE block is [[2,3],[5,6]], X->Z is [[4,7],[8,9]].
 All four representative contact pairs are <=8 A. Thus LIS is 2/3 versus
 5/12, and the aggregate mean is 13/24. No-contact, absent-confidence,
 missing-CB, excluded-token and malformed-map cases are exercised by tests
-using copies of these files. Actual predictor cases belong in remote evidence.
+using copies of these files. Use original predictor files for real scoring.

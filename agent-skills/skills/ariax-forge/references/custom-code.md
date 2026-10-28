@@ -6,20 +6,23 @@ tool. Base supplies Git; the scientific image supplies its own compatible
 interpreter and heavy packages. Source edits run with the existing container
 and GPU boundaries. Shipped installations and shared weights stay read-only.
 
-B25 uses the accepted B18 same-project session route. The repository handoff
-records remote qualification for the base recipe and its selected Boltz
-source/environment. B22's installed `forge project` and `forge resume`
-commands are integrated. B25 used two logical sessions on one physical VM;
-B26 qualifies real provider/R2 restoration. The custom-code exercise on
-separate real allocations remains part of B57.
-Root reference/example discovery is owned by B55. Until it is registered,
-read this file directly from the installed skill package.
+Read this reference with
+`ariax skills forge --reference custom-code --read --json`. Follow the
+[shared lifecycle](../SKILL.md) for tool readiness, command recovery, billing,
+human controls and closure. Run setup and execution inside the remote Forge
+session; keep environments and scientific workloads off the workstation.
 
 ## Choose source and dependencies
 
-Get the selected tool's `sources`, `patches`, model assets and image guidance
-from catalog/tool inspection. Save that shipped metadata separately. Clone a
-credential-free repository URL with base Git and check out a chosen commit.
+Inspect the selected tool with
+`ariax forge catalog --tool TOOL --model MODEL --json`, adding `--mode MODE`
+for a listed mode and omitting `--model` for a tool without model IDs. Read its
+guide using the reference paths from `ariax skills forge --tool GUIDE --json`.
+For source modifications, also request `ariax forge catalog --tool TOOL --json`
+without model/mode filters to obtain the full selected-tool metadata, including
+`sources`, `patches`, model assets and image guidance. Keep it with the run
+settings. Clone a credential-free repository URL with base Git and check out
+a chosen commit.
 A plain checkout can live in workspace. Keep trees containing symlinks in
 scratch, and save them as a regular source archive in workspace. Git pulls
 and custom dependency installation are explicit actions within the user's
@@ -57,21 +60,21 @@ recreate Git history after unpack, explicitly `git init`, add the reviewed
 origin, fetch the saved commit and `git reset --mixed FETCH_HEAD`; inspect
 status before pulling. This preserves saved edits and deleted files.
 
-## Stage the small restore exercise
+## Example: save a custom checkout
 
 This example edits a DNA composition tool, installs a tiny local dependency,
-and recreates both from saved source. It needs no shared model or network.
-It exercises source/environment behavior; it does not qualify a predictor.
+and saves both for later use. It needs no shared model or network.
+It demonstrates source/environment handling and makes no predictor claim.
 Set `SESSION` to an available authorized session with base ready. Set
-`EXAMPLES` to `data.examples.root` from `ariax skills forge --json`:
+`EXAMPLE` to `data.examples["custom-code"]` from
+`ariax skills forge --tool custom-code --json`:
 
 ```sh
-FORGE_TOOLS=$(dirname "$EXAMPLES")
+FORGE_TOOLS=$(dirname "$(dirname "$EXAMPLE")")
 for file in prepare.py bootstrap.py run.py sequences.fasta check.py dependency/fixture_stats.py; do
-  ariax forge inputs add "$SESSION" --file "$EXAMPLES/custom-code/$file" --path "custom-code/$file" --json
+  ariax forge inputs add "$SESSION" --file "$EXAMPLE/$file" --path "custom-code/$file" --json
 done
 ariax forge inputs add "$SESSION" --file "$FORGE_TOOLS/custom-code/source_bundle.py" --path custom-code/source_bundle.py --json
-ariax forge inputs add "$SESSION" --file "$FORGE_TOOLS/custom-code/probe_read_only.py" --path custom-code/probe_read_only.py --json
 ariax forge inputs list "$SESSION" --json
 ```
 
@@ -97,7 +100,7 @@ holds the relative symlink as an archive entry; workspace holds regular
 files. The checker requires target length 8/GC fraction 0.5 and control
 length 8/GC fraction 0, both labeled `project-local`.
 
-## Checkpoint, close and resume
+## Save and close
 
 Stop writers, sync and retain the completed checkpoint ID:
 
@@ -108,12 +111,18 @@ ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Set `CHECKPOINT` from the completed sync and `PROJECT` from the source
-session. Require `synced` and source state `closed`, which confirms provider
-release. If the project has a human hold, stop this work and wait for the
-human's web approval. Do not create a replacement project to continue held
-work. Web approval clears the hold without allocating compute. After the
-user directs continuation, read the new revision and explicitly resume:
+Set `CHECKPOINT` from the completed sync. Require `synced` and source state
+`closed`, which confirms resource release. The saved source, bootstrap and
+outputs remain available through the [checkpoint file commands](../outputs.md).
+
+## Continue saved code when needed
+
+Resume only when the user's task calls for more work. Set `PROJECT` from the
+source session and follow [project controls](../SKILL.md#project-controls-and-resume)
+to inspect any human hold and obtain the current `control.revision`. Human web
+approval leaves compute stopped; await the user's direction before resuming
+that project. Resume starts a new paid allocation and does not replay commands
+or reinstall dependencies.
 
 ```sh
 ariax forge project "$PROJECT" --json
@@ -121,57 +130,45 @@ ariax forge resume "$PROJECT" --session-id "$NEW_SESSION_ID" --restore-session "
 ```
 
 Set `REVISION` from `control.revision` and use a fresh UUID for `NEW_SESSION_ID`.
-Omitting tools suffices for the composition fixture; add `--tools boltz2`
-for its separate scientific-source exercise. Choose the new allowance within
-the authorized scope. Retain the saved request and reuse its ID and fields
-if the reply is lost.
-Wait for the returned session and its selected tools through the existing
-status/tools commands before executing restored code.
+Omitting tools suffices for this composition example. Scientific work must
+explicitly select its compatible tools. Choose hardware and the new allowance
+within the authorized scope. After an uncertain reply, use the saved request
+ID and fields as described in [request recovery](../SKILL.md#recover-a-lost-response).
+Wait for the new session and its selected tools to be ready before execution.
 
 Set `RESTORED_SESSION` to the returned new session UUID. Restore completes
 before command admission; it reconstructs saved workspace/input files and
-does not replay commands or reinstall dependencies. Inspect the saved files
-before any execution: the previous output exists and `after.json` is absent.
-Then explicitly unpack, reinstall and run:
+does not replay commands or reinstall dependencies. Inspect the saved source
+record and bootstrap before explicitly unpacking, reinstalling and running
+with a fresh output path:
 
 ```sh
 ariax forge run "$RESTORED_SESSION" --tool base --json -- python3 /inputs/custom-code/source_bundle.py unpack /workspace/custom/source.tar /scratch/custom-source
 ariax forge run "$RESTORED_SESSION" --tool base --timeout-seconds 120 --json -- python3 /workspace/custom/bootstrap.py /scratch/custom-source /scratch/custom-env
 ariax forge run "$RESTORED_SESSION" --tool base --json -- /scratch/custom-env/bin/python /scratch/custom-source/entry.py /scratch/custom-source/sequences.fasta /workspace/custom/after.json
-ariax forge run "$RESTORED_SESSION" --tool base --json -- python3 /inputs/custom-code/check.py /workspace/custom/before.json /workspace/custom/after.json
+ariax forge run "$RESTORED_SESSION" --tool base --json -- python3 /inputs/custom-code/check.py /workspace/custom/after.json
 ```
 
-Watch each command to `succeeded` in sequence. Sync again, close, confirm
-`closed`, then download the archive, source record, bootstrap and both
-outputs from that new completed checkpoint. Save IDs/settings and actual
-command results with the qualification evidence.
+Watch each command to `succeeded` in sequence. Save the new outputs in a
+completed checkpoint, close the session and confirm `closed`. Use links or
+downloads from that checkpoint for result consumption; keep bulk outputs
+on remote storage under the workstation storage policy.
 
-## Scientific container and shared weights gate
+## Use a scientific container
 
-The assigned remote exercise also runs a custom selected predictor revision
-before and after resume. For Boltz2, preserve the compatible named `boltz2`
-asset at `/models/boltz2`, use the bundled native complex input and normal
-structure/confidence/PAE checker, and give each prediction a new workspace
-output directory. A project-local log marker plus executable/module paths
-must show that the custom checkout ran. Preserve the exact commit and local
-edit, native options and explicit dependency recreation. Resume selects the
-same scientific tool and waits for its readiness.
+A saved checkout and recreated environment do not establish that a custom
+predictor revision is scientifically compatible. Use the selected tool's
+documented interpreter, compatible named assets, native inputs and output
+checks. Record the executable/module paths, exact commit, local edits, model,
+native options and requested-versus-produced counts with the outputs. Keep
+shipped installations and shared model assets read-only. Each new prediction
+needs a fresh workspace output directory.
 
-Run the [boundary probe](../tools/custom-code/probe_read_only.py) inside that
-selected scientific container before saving and after restore:
-
-```sh
-ariax forge run "$SESSION" --tool boltz2 --gpus 0 --json -- python /inputs/custom-code/probe_read_only.py --path /opt --path /models/boltz2 --output /workspace/custom/boundary-before.json
-```
-
-Use the restored session and `boundary-after.json` for the second probe.
-Both existing directories must reject a unique new-file write. The probe
-never edits existing source or weight files; it fails if a write succeeds.
-Record ordinary Docker mount/user/device observations, actual native outputs,
-peak RAM/VRAM per device, disk and confirmed cleanup on the assigned VM.
-The native fixture uses the accepted `b07` Boltz image, v2.2.1 source and
-`boltz2` asset. [Its saved bootstrap and preparation scripts](../tools/examples/custom-code/native/)
-keep the project edit and environments explicit. The handoff records both
-actual predictions, completed checkpoints, restoration, measured resources
-and cleanup; broader Boltz workloads and deployed B26 boundaries retain
-their existing gates.
+The [Boltz source preparation](../tools/examples/custom-code/native/prepare_boltz.py)
+and [bootstrap](../tools/examples/custom-code/native/bootstrap_boltz.py) scripts
+illustrate Boltz v2.2.1 source at commit
+`cb04aeccdd480fd4db707f0bbafde538397fa2ac` with the named `boltz2` asset at
+`/models/boltz2`. The bootstrap expects Torch `2.9.0+cu128` and compatible
+image packages. These scripts do not establish compatibility for another
+revision, model or workload. Read the [Boltz2 guide](../tools/boltz2.md) for native
+structure, confidence and PAE interpretation and current supported modes.

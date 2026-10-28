@@ -55,7 +55,7 @@ Resolve every validation error before submitting. The normalized job spec in the
 response shows what the server accepted. Ariax does not expose a compute-quote
 operation; submission uses the account's existing credit and compute-admission
 checks.
-Before raw submission, apply the [shared GPU policy table](../SKILL.md#check-prices-and-choose-gpus)
+Before raw submission, apply the [shared GPU policy table](managed-projects.md#check-prices-and-choose-gpus)
 to the effective `allowed_gpus` selection, using the live schema default when the
 field is omitted. Include at least one compatible core class and as many other
 compatible classes as memory and authorized hourly budget allow. Limited-only
@@ -197,7 +197,7 @@ requesting a specific `log_ref`, use only a discovered or documented compute-log
 artifact; the server constrains it to the project's protocol-specific log
 directory.
 
-Apply the [shared provisioning, failure, and support guidance](../SKILL.md#provisioning-and-job-failures)
+Apply the [shared provisioning, failure, and support guidance](managed-projects.md#provisioning-and-job-failures)
 to public REST responses as well. Retrying a read or reconciling an uncertain
 request does not authorize restarting compute or creating another campaign.
 

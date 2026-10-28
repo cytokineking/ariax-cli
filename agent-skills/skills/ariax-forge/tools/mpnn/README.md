@@ -1,7 +1,8 @@
-# B27 qualification inputs
+# MPNN structure and constraint examples
 
 These are real structure coordinates prepared for bounded native execution.
-No native inference or generated sequence is present in this directory.
+No native inference or generated sequence is present in this directory. Find it
+with `ariax skills forge --tool mpnn --json`, field `data.examples.mpnn`.
 
 | Fixture | Source and preparation | Constraint case |
 | --- | --- | --- |
@@ -13,8 +14,8 @@ No native inference or generated sequence is present in this directory.
 
 The source copies came from ProteinMPNN commit
 `8907e6671bfbfc92303b5f79c4b5e6ce47cdef57`, LigandMPNN commit
-`26ec57ac976ade5379920dbd43c7f97a91cf82de`, and RCSB PDB downloads on
-October 4, 2026. Coordinates are unrelaxed. Alternate atom locations were
+`26ec57ac976ade5379920dbd43c7f97a91cf82de`, and the linked RCSB PDB entries.
+Coordinates are unrelaxed. Alternate atom locations were
 resolved to blank/A during fixture preparation. Retained backbone atoms
 must have positive occupancy. No missing coordinates were invented.
 
@@ -36,6 +37,6 @@ non-protein atom parser. Invalid/incomplete protein backbones are rejected.
 
 The scFv fixture checks chain/domain mapping and constraints in a real
 single-chain fragment. Its crystallographic domain-swapped conformation
-does not establish performance on ordinary flexible-linker scFvs. Qualification
-of a user-provided flexible linker requires a resolved backbone and explicit
-fixed `linker_positions`. Paired, VHH and scFv execution remain separate gates.
+does not establish performance on ordinary flexible-linker scFvs. A user-provided
+flexible linker requires a resolved backbone and explicit
+fixed `linker_positions`. Assess paired, VHH and scFv inputs separately.

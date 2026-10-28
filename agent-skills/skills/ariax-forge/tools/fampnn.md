@@ -1,5 +1,7 @@
 # FAMPNN full-atom design, packing and mutation scoring
 
+Use FAMPNN to design sequences and sidechains on a supplied protein backbone,
+repack a fixed sequence, or compare mutation likelihoods in structural context.
 
 | Model choice | Upstream training data/noise | Recommended native use |
 | --- | --- | --- |
@@ -9,7 +11,8 @@
 
 These choices select their corresponding unmodified `.pt` files. Design defaults
 to 0.3, packing to 0.0 and both scoring operations to CATH. An explicit `--model`
-selects another native checkpoint; qualifications cover the cases in the handbook.
+selects another native checkpoint. Check `ariax forge catalog --tool fampnn --json`
+for available models and resource requirements.
 
 ## Explicit inputs and commands
 
@@ -20,10 +23,11 @@ Original one-character chain IDs and residue numbers survive in `structures/`;
 `native/` preserves the upstream writer's generated chain letters. The residue map
 records both, with a zero-based position in concatenated chain order.
 
-Copy [ubq.pdb](examples/fampnn/ubq.pdb) and [mutations.csv](examples/fampnn/mutations.csv)
-into the project's inputs with `forge inputs add SESSION --file FILE --path NAME`.
+Find examples with `ariax skills forge --tool fampnn --json`, field
+`data.examples.fampnn`. Copy [ubq.pdb](examples/fampnn/ubq.pdb) and
+[mutations.csv](examples/fampnn/mutations.csv) into the project's inputs with `forge inputs add SESSION --file FILE --path NAME`.
 Require each returned input ID ready using `forge inputs status SESSION INPUT_ID`.
-The fixture is accepted B34 ubiquitin coordinates with
+The fixture contains ubiquitin coordinates with
 chain Z and numbering 101–176. Use a fresh output directory for each invocation.
 These are explicit scientific commands; no folding, relaxation or scoring is replayed.
 
@@ -47,7 +51,7 @@ ariax forge run "$SESSION" --tool fampnn --gpus 0 --timeout-seconds 1800 -- \
 
 Design defaults to 100 sequence denoising steps and 50 sidechain steps, native
 repack-last and PSCE threshold 0.3. `--steps 10 --sidechain-steps 20` is an explicit
-small qualification setting, not an accuracy claim. Packing and score-multi use
+reduced execution example that makes no accuracy claim. Packing and score-multi use
 50 native sidechain steps unless explicitly changed. The default batch/sample
 counts are one, chosen to bound memory. `--samples` sets design/pack sample count.
 `--seed`, `--batch-size`, `--temperature` and model selection are retained.
@@ -62,7 +66,7 @@ are not provided as conditioning context. Do not interpret it as a list of
 sidechains to leave frozen. Use `--fixed-sidechains` for retained sidechain coordinates.
 
 The [two-chain fixture](examples/fampnn/two-chain.pdb) and
-[its mutation list](examples/fampnn/two-chain-mutations.csv) qualify author IDs
+[its mutation list](examples/fampnn/two-chain-mutations.csv) illustrate author IDs
 Y101–132/Z201–232 and concatenated indexing across chains. The tested conditional
 selection is `--fixed-sequence Y101-110,Z201-210 --fixed-sidechains Y101-105,Z201-205`,
 with ten sequence steps, twenty sidechain steps and seed 7. Twenty of its 44
@@ -113,36 +117,30 @@ An explicit restore recovers files; scientific execution is not automatically
 replayed. Public unmodified weights can be prepared again from the recorded source
 revision, layout and upstream model card.
 
-The current complete qualification uses one L40 with 49,140 MiB VRAM. The
-catalog floor is 47.9 GiB per GPU, two CPUs and 25 GiB
-payload storage, with no fixed RAM floor. CPU and RAM limits were enforced
-on each qualification panel container.
-The wider GPU claim is bounded to the measured L40 profile; the earlier eight-GiB
-GPU recommendation covered the original small fixtures. Observed memory alone
-does not qualify a smaller device for the wider panel.
+The measured profile uses one L40 with 49,140 MiB VRAM. The catalog floor is
+47.9 GiB per GPU, two CPUs and 25 GiB payload storage, with no fixed RAM floor.
+Observed memory alone does not establish smaller-device support for the wider
+inputs below. An eight-GiB allowance applies only to the original small examples;
+use the selected catalog’s admission requirements for scheduling.
 
-| Qualified input | Checkpoints and operations | Batch / samples |
+| Measured input | Checkpoints and operations | Batch / samples |
 | --- | --- | --- |
 | 76-residue ubiquitin | All three checkpoints in each of the four operations | Batch 4; four design/packing samples; 76x20 single-site scores; eight mutation groups |
 | 247-residue 1TIM monomer | 0.3 design, 0.0 packing, CATH single/multiple scoring | Batch 4; four design/packing samples; 247x20 single-site scores; eight mutation groups |
 | 494-residue 1TIM dimer | Same recommended pairs | Batch 8; eight design/packing samples; 494x20 single-site scores; sixteen mutation groups |
 
-Design uses the native 100/50-step defaults in every new panel row. Packing and
-multiple-mutation scoring use 50 sidechain steps. The earlier batch-one cases,
-including 76-residue default design and the synthetic two-chain conditional case,
-remain accepted. Other checkpoint-operation pairs have wider qualification only
-where listed. Lengths above 494, batches above eight and sample counts above eight
-have no current capacity qualification.
+The listed design runs use native 100/50-step defaults. Packing and
+multiple-mutation scoring use 50 sidechain steps. Batch-one observations also cover 76-residue default design and the synthetic
+two-chain conditional case. Other checkpoint/operation pairs have measured scope
+only where listed. Lengths above 494, batches above eight and sample counts above
+eight have no current capacity evidence.
 
 The [profile recipe](examples/fampnn/prepare_profiles.py) takes the public 1TIM PDB
 and explicitly selects its protein chains, removes heterogens/OXT and records the
 source-to-input residue map. It preserves author numbering gaps while renaming
 A/B to Y/Z and adding 1000/2000 to author numbers. Its `profiles.json` lists exact
 present fixed positions. A range spanning an absent author residue is rejected.
-The package handbook records native tolerances,
-geometry observations and restoration evidence.
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
-pause and same-project resume. Web approval clears a hold without allocating
-compute; restoration leaves the next scientific command explicit.
+Use [saved results](../outputs.md) for checkpoint-pinned exports and
+[project controls](../SKILL.md#project-controls-and-resume) for pause, closure
+and explicit continuation.

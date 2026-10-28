@@ -1,6 +1,7 @@
 # FreeBindCraft filters and results
 
-Read this alongside the [native artifact checks](../tools/freebindcraft.md)
+Use this reference to interpret FreeBindCraft acceptance, ranking and metric
+availability. Read it alongside the [native result checks](../tools/freebindcraft.md)
 and [shared interpretation guide](../../../core/interpretation.md).
 The current `--no-pyrosetta` path performs CUDA OpenMM relaxation and
 alternative scoring. CUDA relaxation/repacking failures stop the command.
@@ -70,13 +71,18 @@ Missing DSSP can also trigger secondary-structure substitutes. SASA,
 hydrophobicity and interface residue counts use separate geometric methods;
 CUDA relaxation does not turn the fixed fields into measured Rosetta scores.
 
+For the unchanged PD-L1 examples, the [packaged checker](../tools/examples/freebindcraft/complete/README.md)
+checks saved native-array/PDB correspondence and available MPNN captures.
+It assumes the bundled target and export layout. For a different target or
+configuration, check its actual sequences, chain/register map, native arrays,
+metric availability and original filter decisions; a fixture check is not a
+general validation of those results.
+
 Preserve effective filters, scoring mode, native logs, raw CSVs, sequence and
 structure stage with a shortlist. Review interface geometry and target context
-before choosing experimental candidates. Follow the platform checkpoint and
-closure workflow; a missing artifact calls for recovery of that saved output,
-not automatic design replay.
+before choosing experimental candidates. Follow the [checkpoint and recovery
+workflow](../outputs.md); recover a missing saved artifact without automatically
+replaying design.
 
 Sources: [alternative scorer](https://github.com/cytokineking/FreeBindCraft/blob/d12747dbc907435622559b81891ad73e0a45c2e4/functions/pr_alternative_utils.py),
 [filter/ranking code](https://github.com/cytokineking/FreeBindCraft/blob/d12747dbc907435622559b81891ad73e0a45c2e4/functions/generic_utils.py).
-Adapted from archive `d8c0b040f553bf9e51a532cb4db693529f50cc70` with the
-current runtime patch checked separately.

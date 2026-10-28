@@ -1,4 +1,4 @@
-"""Print or run one explicit native BoltzGen qualification example.
+"""Print or run one explicit native BoltzGen example.
 
 Stage this helper beside testing-25-batch5-cases.json and every linked YAML/CIF input.
 Existing output directories are refused so invocation never resumes implicitly.

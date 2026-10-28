@@ -1,11 +1,10 @@
 # Boltz2 small-molecule affinity
 
-The [B33 native cases](../tools/boltz2/modes.md) qualified bounded SMILES and CCD affinity on an L40, extending the [protein-pair recipe](../tools/boltz2.md).
+Use the [native modes](../tools/boltz2/modes.md) for SMILES or CCD affinity,
+extending the [structure-prediction recipe](../tools/boltz2.md).
 The complete named `/models/boltz2` asset already includes confidence and
 affinity checkpoints before readiness. A separate affinity asset selection
-or per-command model inspection is unnecessary. Both native cases produced matched top-ranked structures, preserved processed
-chemistry and emitted all six ensemble fields. The actual CLI consumer matched
-both original and restored outputs. Offline checks remain regression coverage.
+or per-command model inspection is unnecessary.
 
 Use one specified small molecule against a protein target. The affinity
 `binder` names one ligand chain, with one copy and one residue. Protein
@@ -22,7 +21,7 @@ charge, stereochemistry, tautomer and atom identity. Affinity preprocessing
 standardizes SMILES; compare the resulting chemical identity to the intended
 molecule. Do not prune atoms to obtain admission.
 
-The retained offline `science/affinity/affinity.yaml` uses ethanol and a toy
+The packaged `science/affinity/affinity.yaml` uses ethanol and a toy
 protein to illustrate syntax only:
 
 ```yaml
@@ -72,33 +71,25 @@ nonfinite, wrong-type and out-of-range probability values and verifies the
 native input-derived filename. Native 2.2.1 emits both ensemble heads; the checker requires all four component fields and preserves them. Its output
 reports predicted pIC50 without claiming that a file establishes chemistry,
 lineage, structural accuracy or binding. Run the structural checks appropriate
-to the actual ligand complex as well. [Offline cases](science-checks.md) use
-synthetic outputs and do not spend compute.
+to the actual ligand complex as well. [Format examples](science-checks.md) use
+synthetic outputs; they are not predictions for the user's molecule.
 
-Before claiming a qualified affinity workflow, retain a remote native run
-with the intended molecule, full model readiness, actual processed chemistry,
-matched top-rank structure, complete affinity output, terminal logs and saved
-checkpoint. Boltz2 ipSAE handoffs have their own evidence limits.
+For the user's results, verify the intended molecule, actual processed chemistry,
+matched top-rank structure and complete affinity output. Retain the original
+inputs, native settings, command IDs, terminal logs and a completed checkpoint.
+Boltz2 ipSAE handoffs have their own [mapping limits](boltz2-results.md).
 
-Sources: [2.2.1 affinity implementation](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/model/models/boltz2.py),
-[writer](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/write/writer.py),
-[prediction guide](https://github.com/jwohlwend/boltz/blob/v2.2.1/docs/prediction.md).
-Adapted from Forge archive `d8c0b040f553bf9e51a532cb4db693529f50cc70`.
-
-B33 also stages `affinity_ccd.yaml` with CCD TYR against the same target. This
+The packaged `affinity_ccd.yaml` specifies CCD TYR against the same target. This
 is a separately specified chemical representation, not a claim of equivalence
 to standardized SMILES. Use the same argv with its own input and fresh output
 root. Run `check_modes.py` with `--mols-dir` for both cases and review processed
 isomeric SMILES, formal charge, atom names and native binder chain index. The
 SMILES head standardizes chemistry, so retain both original and processed
-representations. Both native cases retained neutral chiral L-tyrosine, charge zero and 13 heavy
-atoms, with their separate atom-name mappings. SMILES standardization did not
-change the isomeric representation in the recorded run. SMILES predicted
-log10(IC50 in µM) 2.3559820652, pIC50 3.6440179348 and probability 0.3968900442;
-CCD TYR predicted 2.6803684235, 3.3196315765 and 0.2561361492. The uncorrected
-ensemble value matched the two-head mean. These are consistency observations,
-not measured affinity or scientific equivalence. With 384 protein residues, one
-structure and five affinity samples, the sampled GPU peak was 4,611 MiB and
-the maximum observed cgroup RAM was 8,998,858,752 bytes. Larger workloads and
-hardware minima remain unqualified; managed grants and real R2/public lifecycle
-join the separate platform acceptance.
+representations. Review each representation independently; neither the example
+nor a matching atom count establishes chemical equivalence or measured affinity.
+Resource requirements for larger targets, ligands or sample counts remain
+unknown; these examples establish no hardware minimum.
+
+Sources: [2.2.1 affinity implementation](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/model/models/boltz2.py),
+[writer](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/write/writer.py),
+[prediction guide](https://github.com/jwohlwend/boltz/blob/v2.2.1/docs/prediction.md).

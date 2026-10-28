@@ -5,15 +5,16 @@ against a specified reference and tables made from existing interface reports.
 DSSP assigns structure from coordinates. DockQ reports pose agreement when the
 reference is predicted. These observations do not measure binding.
 
-There are no checkpoints or named model assets. The CPU tool runs within the
-selected Forge worker. The planned bounded examples target one CPU and 1 GiB RAM;
-preparing the image requires a larger host. Read [formats and mapping](design-qc/formats.md)
+There are no model weights or named model assets. The CPU tool runs within the
+selected Forge worker. The examples target one CPU and 1 GiB RAM; measured capacity
+is not established. Read [formats and mapping](design-qc/formats.md)
 for supported inputs and native limits.
 
-Find the installed examples with `ariax skills forge --json`, using
+Check `ariax forge catalog --tool design-qc --json` for current availability and
+resources. Find the installed examples with `ariax skills forge --tool design-qc --json`, using
 `data.examples['design-qc']`. Both `forge` and `ariax-forge` aliases expose
-`design-qc`, `design-qc-formats` and `design-qc-fixtures`. The example helper
-fetches the pinned creator fixture on the remote worker; prepare the folder there
+`design-qc`, `design-qc-formats` and `design-qc-fixtures`. Copy the example helper
+`prepare.py` to the authorized remote host; it fetches the pinned creator fixture. Prepare the folder there
 with `python3 prepare.py --out design-qc-inputs`. Register its files through the
 normal project input upload/import path as `design-qc/`. Local installed paths
 and remote `/inputs/design-qc` are distinct locations.
@@ -30,7 +31,8 @@ Output directories must be new so prior reports survive. Inspect `result.json`
 and every `native_reports` member. Identical relabeled partner groups should give
 DockQ near one. Run the changed pose example from the fixtures guide to see a
 lower score. The fixture has three protein chains; the second partner combines
-two ordered chains. This bounded example establishes adapter behavior.
+two ordered chains. This small control illustrates mapping behavior; it does not
+establish scientific accuracy for other complexes.
 
 `secondary_structure` uses DSSP letters with C for a loop. Each residue retains
 its author chain, residue number and insertion code plus label IDs when supplied.
@@ -48,9 +50,8 @@ The ipSAE text adapter takes the main report, byres report and original structur
 see the format reference. It performs no new interface calculation.
 
 Keep registered structures, partner maps, prediction/reference provenance,
-input interface reports and all output directories in Files. A checkpoint saves
-inputs and workspace. On restore, inspect the saved reports and their identity
-ledgers before explicitly requesting more work. A restore does not rerun science.
+input interface reports and all output directories using the [Files guide](../outputs.md)
+for checkpoints, restoration and session closure.
 
 Sources: DSSP v4.6.1 at
 [d8278f9](https://github.com/PDB-REDO/dssp/tree/d8278f9f4f8c49fc353b580b7d0d7bc8b1b4e384)

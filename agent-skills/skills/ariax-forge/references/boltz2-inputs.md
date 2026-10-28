@@ -14,9 +14,17 @@ FASTA is deprecated and cannot express all YAML features. Do not use generic `>p
 
 ## MSAs
 
-For each protein choose a supplied `.a3m`, paired `.csv`, explicit `msa: empty`, or authorized generation. Paths are resolved in the command's working directory, not automatically relative to the YAML; use staged absolute VM paths. Verify the query sequence, alignment columns, and recorded sequence identity before launch. For multiple proteins use CSV with `key,sequence` columns when pairing information matters; matching keys associate rows across chains. Native `.a3m` parsing is supported, but an a3m alone does not preserve cross-chain pairing keys.
+For each protein choose a supplied `.a3m`, paired `.csv`, explicit `msa: empty`, or authorized generation. Paths are resolved in the command's working directory, not automatically relative to the YAML; use staged absolute VM paths. Verify the query sequence, alignment columns, and recorded sequence identity before launch. For multiple proteins use CSV with `key,sequence` columns when pairing information matters; matching integer keys associate rows across chains through the native `taxonomy` field. Inspect the processed keys rather than inferring pairing from row order. Native `.a3m` parsing is supported, but an a3m alone does not preserve cross-chain pairing keys.
 
 Omitting `msa` requests generation and fails preprocessing without `--use_msa_server`. That flag discloses sequences to the configured service (default `https://api.colabfold.com`); use it only within user scope. Custom and auto-generated MSAs cannot be mixed in one input. `msa: empty` is explicit single-sequence inference and can reduce accuracy; do not select it merely to solve an OOM or missing file. The native flags are switches: `--use_msa_server false` is invalid. Credentials belong in protected supported environment configuration, not recorded argv or evidence.
+
+Select a compatible service with `--use_msa_server --msa_server_url URL` and
+pairing with `--msa_pairing_strategy greedy` or `complete`. Verify the selected
+custom service's behavior; its end-to-end compatibility remains unverified here.
+No Ariax-hosted MSA service is offered. Follow the service's terms, including
+[ColabFold's serial-query policy](https://github.com/sokrypton/ColabFold#faq)
+from a shared IP. Generated pairing requires a shared nonnegative key on
+nongap homolog rows after the query; query key 0 alone does not establish it.
 
 ## Constraints and templates
 
@@ -38,22 +46,20 @@ constraints:
       force: false
 ```
 
-Pocket binders may be protein, DNA, RNA, or ligand. Polymer contacts use residue positions; nonpolymer contacts use atom names, not a ligand residue number. The documented distance range is 4–20 Å, default 6 Å; do not assume parser acceptance validates that range. B33's batch output measured 9.037651 Å for an 8 Å soft contact, so `force: false` does not guarantee that distance. `force: true` applies enforcement potentials. `--use_potentials` additionally enables general physical guidance; neither constitutes independent evidence that the predicted interaction is real.
+Pocket binders may be protein, DNA, RNA, or ligand. Polymer contacts use residue positions; nonpolymer contacts use atom names, not a ligand residue number. The documented distance range is 4–20 Å, default 6 Å; do not assume parser acceptance validates that range. Soft conditioning with `force: false` does not guarantee the requested distance. `force: true` applies enforcement potentials. `--use_potentials` additionally enables general physical guidance; neither constitutes independent evidence that the predicted interaction is real.
 
 For a covalent bond, use `bond: {atom1: [A, 3, SG], atom2: [L, 1, C1]}` only after verifying actual atoms. Supported guidance here is canonical residues and CCD ligands, with ligand residue index 1; do not guess SMILES-generated atom names or chemical connectivity. Multi-residue CCD ligand lists are native structure inputs, but are excluded from this guide's affinity and interface handoff recipes.
 
 Templates support protein chains with a staged `cif` or `pdb` path, optional `chain_id` (input chains) and `template_id` (template chains). Supply both lists with equal length for an explicit correspondence. Otherwise the native parser searches alignments, which must be inspected before interpreting the run. PDB template subchains can become `A1`, `A2`, `B1`, etc.; inspect actual parsed IDs rather than assuming `A`. Template `force: true` requires a `threshold` in Å. Retain the template bytes, sequence alignment, chain assignment, and any forced tolerance. A template is conditioning, not an independent prediction.
 
-The [B33 mode guide](../tools/boltz2/modes.md) supplies concrete modified, cyclic, covalent, template, mixed-polymer, supplied-MSA and server-MSA fixtures. Twelve bounded B33 cases qualified, including neutral SEP chemistry and the public MSA service. The MSE fixture became MET natively and remains chemically unqualified; custom MSA selection remains unrun. Validate the intended chemistry in the admitted version; this guide has no general chemical repair or structure-to-sequence adapter.
+The [mode guide](../tools/boltz2/modes.md) supplies modified, cyclic, covalent,
+template, mixed-polymer and MSA examples. Native MSE-to-MET normalization can
+fail intended MSE identity; the neutral SEP example does not establish
+physiological protonation. Validate the intended chemistry in the selected
+version; this guide has no general chemical repair or structure-to-sequence
+adapter.
 
-Source: [Boltz 2.2.1 parser](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/parse/schema.py). Adapted from Forge archive `d8c0b040f553bf9e51a532cb4db693529f50cc70`. Keep the [current native command and complete model mount](../tools/boltz2.md).
+Directory prediction uses separate input record IDs. Account for each requested
+YAML, including records skipped after preprocessing errors even with exit zero.
 
-For paired CSV, use integer keys supported by the native `taxonomy` field.
-The B33 pair fixture uses shared key 101 and query key -1. Retain and inspect the
-processed pairing keys, rather than assuming pairing from row order. Public
-ColabFold and custom server selection use the same native interface with
-`--use_msa_server --msa_server_url URL`; no Ariax-hosted MSA service is offered.
-Generation transmits the sequence to that service and requires that choice to
-be within the user's scope. Directory prediction uses separate input record
-IDs and must account for each requested YAML, including records skipped after
-preprocessing errors.
+Source: [Boltz 2.2.1 parser](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/parse/schema.py). Keep the [native command and complete model mount](../tools/boltz2.md).

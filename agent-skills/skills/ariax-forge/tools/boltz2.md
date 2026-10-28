@@ -6,14 +6,11 @@ Use those IDs with
 `ariax skills forge --reference ID --read --json`. The [shared interpretation
 guide](../../../core/interpretation.md) covers structure stages and fair comparisons.
 
-Boltz2 is a GPU tool. B07 preserves native package 2.2.1 and the historical
-PyTorch 2.9/CUDA 12.8 family using ordinary image tags. It predicts structure
-from a supplied biomolecular specification. The introductory case here is one small
-synthetic protein pair. B33 also qualified bounded molecular, template/MSA,
-batch and affinity cases described in the expanded guide. These establish
-execution and output consistency, with no biological success threshold.
-
-B08 qualified the private image and complete named model asset through the installed CLI on an L40. Its bounded native prediction and restored output checks passed. Availability depends on the live deployment catalog and tool readiness; the runtime obtains fresh authorized model URLs when preparation needs them.
+Boltz2 is a GPU tool for predicting structures from supplied proteins, nucleic
+acids and ligands, with a separate small-molecule affinity head. This guide uses
+native package 2.2.1. Use it for a defined biomolecular specification; confidence
+and affinity predictions need scientific review before experimental decisions.
+Availability depends on the live deployment catalog and tool readiness.
 
 For an authorized session with Boltz2 in its deployed catalog:
 
@@ -26,19 +23,19 @@ ariax forge status "$SESSION" --json
 Require host `available` and `boltz2` ready. The tool is GPU-class; execution
 uses the assigned GPU and never a CPU substitute. `boltz` is on PATH for
 direct argv. `SESSION` is an actual session UUID. `EXAMPLES` is the absolute
-`data.examples.root` path from `ariax skills forge --json`. Read this guide
+`data.examples.boltz2` path from `ariax skills forge --tool boltz2 --json`. Read this guide
 with `ariax skills forge --reference boltz2 --read --json`.
 
 ## Read-only model mount and inputs
 
-The named asset `boltz2` mounts at `/models/boltz2`. The complete published
+The named asset `boltz2` mounts at `/models/boltz2`. The complete prepared
 directory contains `mols.tar`, extracted `mols/`, `boltz2_conf.ckpt`, and
 `boltz2_aff.ckpt`. Native 2.2.1 checks all four before preprocessing even for
-structure-only requests. B05 prepares this directory before readiness;
+structure-only requests. Forge prepares this directory before readiness;
 commands use the existing mount, without per-command asset inspections.
 A missing asset/read-only-write error is a preparation failure to report.
 
-The [bounded YAML](examples/boltz2/complex.yaml) has protein A `AGSTAGST` and
+The [example YAML](examples/boltz2/complex.yaml) has protein A `AGSTAGST` and
 protein B `GSTAGSTA`, each with `msa: empty`. It does not contact an MSA server
 and requests no affinity property. These short sequences are synthetic, not
 validated binders. For real work establish the user's exact constructs,
@@ -47,20 +44,20 @@ chooses single-sequence inference and can affect prediction quality; it is
 not a general scientific recommendation.
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/boltz2/complex.yaml" --path boltz2/complex.yaml --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/boltz2/check.py" --path boltz2/check.py --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/complex.yaml" --path boltz2/complex.yaml --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/check.py" --path boltz2/check.py --json
 ariax forge inputs list "$SESSION" --json
 ```
 
 Record the input IDs and require both paths `ready`. Observe an importing
 input with `ariax forge inputs status "$SESSION" "$INPUT_ID" --json`.
 
-## One bounded native GPU run
+## Native GPU prediction example
 
 Choose a fresh output root. These explicit settings use three recycles,
 200 diffusion steps, one sample, one parallel sample, one device, seed 7,
 and full PAE. Zero dataloader workers and one preprocessing thread bound the
-small case's process activity. The native settings were checked against
+small case's process activity. Native options are defined in the
 [official 2.2.1 source](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/main.py).
 
 ```sh
@@ -108,9 +105,9 @@ experimental binding, specificity, expression, or affinity. Inspect chain
 placement and interface geometry, and compare results using consistent input
 and sampling/MSA settings. [Official output guidance](https://github.com/jwohlwend/boltz/blob/v2.2.1/docs/prediction.md)
 and the [writer](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/write/writer.py)
-explain these files. The [expanded mode guide](boltz2/modes.md) supplies molecular, MSA/template and
-affinity cases with their measured native scope and remaining gates. Boltz2-to-ipSAE mapping remains
-outside this example's qualification.
+explain these files. The [mode guide](boltz2/modes.md) covers molecular,
+MSA/template, batch and affinity inputs and their limits. Before an ipSAE
+handoff, follow the [identity and token-mapping checks](../references/boltz2-results.md).
 
 Choose a new output directory for changed inputs or settings. In 2.2.1,
 `--override` does not clear already processed inputs, so a reused stem can
@@ -129,7 +126,9 @@ ariax forge status "$SESSION" --json
 ```
 
 Use the returned completed checkpoint UUID and require `synced`, then confirm
-source `closed`. Listing/download reads completed checkpoint bytes. Continue
+source `closed`. Listing/download reads completed checkpoint bytes. Creating or
+resuming a session allocates paid resources; preparation and idle time count
+toward its GPU-hour limit, and a successful command does not close it. Continue
 that same `PROJECT` with `REVISION` from its current `control.revision`. If held,
 wait for authenticated web approval and user direction, then read the new
 revision. Approval itself leaves compute unallocated:
@@ -139,27 +138,22 @@ ariax forge project "$PROJECT" --json
 ariax forge resume "$PROJECT" --gpu L40 --tools boltz2 --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --max-gpu-hours 1 --json
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" boltz2 --timeout 1800 --json
-ariax forge run "$RESTORED_SESSION" --tool boltz2 --timeout-seconds 60 --json -- python3 /inputs/boltz2/check.py /workspace/boltz2-demo/run1
 ```
 
-Use the new session ID, require host/tool readiness, and watch its check
-command before closure. Restore recovers inputs/workspace without replaying
+Use the new session ID and require host/tool readiness. Verify restored
+input/result identities before reuse. Restore recovers inputs/workspace without replaying
 prediction or restoring model caches. The new session prepares named assets
 normally. Read the [outputs reference](../outputs.md) with
 `ariax skills forge --reference outputs --read --json` for storage semantics. Close
-and confirm cleanup for the restored session, too. B08 records native GPU
-results, elapsed time/cost, and persistence/cleanup qualification.
+and confirm cleanup for the restored session, too.
 
-## Full-release modes and qualification
+## Other inputs and limits
 
-Read [B33 prediction and affinity modes](boltz2/modes.md) for supplied A3M/paired
+Read [prediction and affinity modes](boltz2/modes.md) for supplied A3M/paired
 CSV, public/custom MSA servers, PDB/CIF templates, DNA/RNA, SMILES/CCD ligands,
 ions, modified/cyclic polymers, constraints, batch prediction and the eligible
-small-molecule affinity cases. The same native 2.2.1 image and complete named
-asset support these interfaces. B33 qualified twelve bounded cases on an L40,
-including SMILES/CCD affinity and public ColabFold MSAs. Native MSE became MET
-and remains chemically unqualified; no custom MSA service was selected. The
-measured maximum was 4,909 MiB sampled VRAM and 8,998,858,752 bytes cgroup RAM
-for fixtures up to 397 tokens. These measurements supply no general hardware
-minimum. Shared catalog assembly, managed platform acceptance and publication
-remain release operations.
+small-molecule affinity cases. Native MSE-to-MET normalization can fail the
+intended chemical identity. Custom MSA service behavior needs verification with
+the selected service. Resource requirements depend on token count, chemistry,
+batch size and sampling settings; these examples establish no general hardware
+minimum or larger-workload capacity.

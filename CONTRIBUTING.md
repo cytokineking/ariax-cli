@@ -1,16 +1,11 @@
 # Contributing
 
-Issues and focused pull requests are welcome. Before submitting a change, run:
+Issues and focused pull requests are welcome. Do not add unit tests. Use
+syntax and link checks for source and documentation changes.
 
-```sh
-npm test
-```
-
-After committing the candidate, run `npm run test:package`. It builds both
-development and stable packages, installs them offline without optional native
-dependencies in a temporary prefix, and checks version identity, bundled skills,
-same-version channel migration in both directions, and executable shadowing. It never changes the
-user's global installation.
+After committing the candidate, run `npm run test:package` on an authorized
+validation host. It checks development and stable packages, bundled guides,
+and install/upgrade behavior in a temporary prefix.
 
 Use `npm run pack:github -- /path/to/output` for a development artifact or
 `npm run pack:npm -- /path/to/output` for a reviewed stable artifact. These require

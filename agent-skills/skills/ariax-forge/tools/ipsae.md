@@ -7,12 +7,12 @@ Use those IDs with
 guide](../../../core/interpretation.md) covers structure stages and fair comparisons.
 
 ipSAE is a CPU tool. It scores a supplied structure and matched PAE data;
-it does not fold sequences. B07 preserves Ariax's vendored ipSAE v3 source,
-including its archived chain-index/partner-mask corrections. The bounded
-qualified source case here uses AF2 JSON/PDB. Current upstream v4 and
-Boltz2 token mapping are outside this fixture qualification.
+it does not fold sequences. Forge uses ipSAE v3 with Ariax's chain-index and
+partner-mask corrections. Use the AF2 JSON/PDB workflow below. Upstream v4 is
+outside this tool's scope. Live native Boltz2 consumption remains unverified;
+preserve the mapping limits in the [input reference](../references/ipsae-inputs.md).
 
-Use the separately prepared [interface scorer](interface-scores.md) for explicit
+Use the [interface scorer](interface-scores.md) for explicit
 OpenDDE general/ABAG and supported OpenBind-0/Preview2 native handoffs. It checks
 their token, residue and atom correspondence before applying these same v3
 protein equations. Preview1 stays excluded, split protein tokens remain
@@ -28,7 +28,7 @@ ariax forge status "$SESSION" --json
 ```
 
 
-## Matched inputs and the inspectable fixture
+## Matched inputs and synthetic example
 
 Use a PDB and JSON from the same predicted AF2 model, with identical residue
 order across PAE axes and pLDDT. Supply a square nonnegative finite `pae`
@@ -97,7 +97,9 @@ cutoff changes `dist1`/`dist2` counts, while ipSAE uses the PAE filter. Distance
 use CB, or CA for glycine; pDockQ/pDockQ2 use a separate fixed 8 Å contact
 cutoff. LIS uses its own PAE cutoff. These settings follow the inspected
 [DunbrackLab source](https://github.com/DunbrackLab/IPSAE/blob/f892de5ba6f8567912764c990aae59ee8ce781c4/ipsae.py),
-with the archived Ariax corrections preserved.
+with Ariax's corrections preserved. The runtime retains Roland Dunbrack's
+MIT notice and the paper references listed in the
+[metric reference](../references/ipsae-metrics.md).
 
 Check matched inputs, chain/residue identities, score completeness, and
 plausible interface geometry. High predicted confidence is not experimental
@@ -118,8 +120,6 @@ ariax forge download "$SESSION" /workspace/ipsae-demo/toy_10_10.txt --checkpoint
 Read the [outputs reference](../outputs.md) with
 `ariax skills forge --reference outputs --read --json` for durability/restore
 behavior and
-[base](base.md) for the settled restore command. Restore recovers files for
+[base](base.md) for restore commands. Restore recovers files for
 explicit future checks and does not rerun scoring. Finish with `forge close`
-and confirm the session is closed. B08/B12 passed this AF2 fixture through
-the installed CLI, including restored checks. Boltz2 mapping retains the
-separate source-reviewed and offline-tested limits in the scientific reference.
+and confirm the session is closed.

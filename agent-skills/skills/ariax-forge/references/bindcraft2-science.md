@@ -1,9 +1,12 @@
 # BindCraft2 native scientific configuration
 
 Forge selects BindCraft2 v1.0.4 at source
-`d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. The CUDA 12 image uses JAX 0.11.1
-and the shared fifteen-file AlphaFold2 asset. Native scientific outcomes and
-saved-output checks remain tied to each run’s recorded settings.
+`d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. Use this reference when choosing
+native targets, modalities, budgets and result checks. Discover the guide and
+examples with `ariax skills forge --tool bindcraft2 --json`;
+`data.references["bindcraft2-science"]` locates this reference and
+`data.examples.bindcraft2` locates the examples. Record effective settings
+and selected models with each run.
 
 The [managed BindCraft2 skill](../../ariax-bindcraft2/SKILL.md) explains useful
 scientific choices, but its `protocol_config`, upload bundle limits, project
@@ -70,8 +73,8 @@ fixed sequence and check edits against that scaffold. Scaffold length follows
 the edits rather than `binder_lengths`. Read model/scaffold terms before
 redistributing assets.
 
-The retained fixed-framework example uses native `modality: "VHH"`, the original
-scaffold and `mutate_positions: "A27-33,A52-57,A100-114"`, with
+For a deliberately fixed-framework VHH, the native `modality: "VHH"` can use
+a compatible scaffold and `mutate_positions: "A27-33,A52-57,A100-114"`, with
 `losses: {"binder_intra_coldspot": 0}`. This explicit override removes that
 framework/paratope objective when the mask keeps framework positions fixed.
 Record the override with the case and check preserved scaffold residues in saved
@@ -94,8 +97,8 @@ Forge prepares the shared model mount before tool readiness.
 proposals, and `enough_passing_sequences` can stop validation after enough pass.
 Refold rows can therefore outnumber trajectory rows. Stage confidence gates
 screen/refine/anneal/harden/mutate/final precede final candidate filters. The
-cleared filters and short stage budgets of the live fixture qualify execution.
-Select real acceptance criteria before a scientific campaign.
+short example budgets and cleared filters illustrate pipeline execution;
+select scientific acceptance criteria before a design run.
 
 The native desperation threshold defaults to 750 trajectories. Explicit zero
 can start its first recovery rung immediately when enabled. Omission, zero

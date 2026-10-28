@@ -7,14 +7,13 @@ shortlist records the target construct and ordered chains. Requests stay in File
 until the human authorizes the actual laboratory recipient and quote.
 
 Read [formats and limits](lab-feedback/formats.md), [the runnable example](examples/lab-feedback/README.md)
-and [campaign selection guidance](../references/campaign-recipes.md). Actual catalog
-qualification fields govern availability. This package contains no learned model
-or named asset. Its CPU workload runs on a remote Forge GPU host. The bounded
-46,310,408-byte CSV (4,069 proteins; 185,375 evaluations) passed under one CPU
-and 2 GiB RAM in 17.47 seconds with 450,940 KiB maximum RSS. The measured disk
-minimum is unknown. Use 4 GiB as a conservative tool-space recommendation and
-allow 20 GiB for qualification/recovery staging, including environments, package
-artifacts and image/archive readback. Larger exports remain unmeasured.
+and [campaign selection guidance](../references/campaign-recipes.md). This package
+contains no learned model or named asset. Its CPU workload runs on a remote Forge
+GPU host. A 46 MB CSV with 4,069 proteins and 185,375 evaluations ran within one
+CPU and 2 GiB RAM. The measured disk minimum is unknown; allow 4 GiB for tool
+space and additional space for retained inputs and outputs. Larger exports remain
+unmeasured. Check `ariax forge catalog --tool lab-feedback --json` for current
+availability and resources.
 
 ## Choose the path
 
@@ -25,8 +24,8 @@ artifacts and image/archive readback. Larger exports remain unmeasured.
 | Saved Adaptyv affinity ResultInfo, identity map and assay context | `import-adaptyv` | Exact sequence/name join; KD, kon, koff replicate observations with external result/experiment IDs. |
 | Retained exchange JSON | `inspect` | Explicit consumer of saved observations; runs no inference. |
 
-The ResultInfo parser passed its marked artificial controls. Actual private-result
-compatibility and authenticated quote inspection remain conditional stages awaiting
+The ResultInfo parser has been checked with marked artificial controls. Compatibility
+with actual private results and authenticated quotes remains unverified without
 account/data access.
 
 ProteinBase offers an attributed public export at its [download page](https://proteinbase.com/download).
@@ -41,10 +40,10 @@ storage; the installed package ships only helper source.
 Discover local installed source paths before uploading small helpers:
 
 ```sh
-ariax skills forge --json
+ariax skills forge --tool lab-feedback --json
 ariax skills forge --reference lab-feedback --read --json
 ariax skills ariax-forge --reference lab-feedback-formats --read --json
-ariax forge catalog --details --json
+ariax forge catalog --tool lab-feedback --json
 ```
 
 Set `EXAMPLES` to discovery's `data.examples["lab-feedback"]`. Create a session
@@ -104,25 +103,22 @@ source values or sequences carry separate flags. This tool performs no averaging
 or unit conversion. Preserve unsuccessful, nonbinding, unavailable and fit-failed
 outcomes alongside measured values.
 
-Stop writers and checkpoint the original inputs, ledger, draft, identity map and
-raw/result files before closing. Store the checkpoint/session/project IDs with the
-review. Download/export through Files on a remote host:
+Checkpoint the original inputs, ledger, draft, identity map and raw/result files.
+Store the checkpoint/session/project IDs with the review. Inspect saved files:
 
 ```sh
 ariax forge sync "$SESSION" --wait --json
 ariax forge files "$SESSION" --path /workspace/lab-feedback --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/lab-feedback/exchange.json --checkpoint "$CHECKPOINT" --dest "$REMOTE_EXPORT_DIR/exchange.json" --json
-ariax forge create --name "Lab result review" --gpu "$GPU" --tools lab-feedback --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --max-gpu-hours "$GPU_HOURS" --json
 ```
 
-Use the returned new session ID, wait for restore/tool readiness, then run `inspect`
-on the saved ledger. A later result import uses its own persisted import UUID and
-saved identity map. Read original IDs after uncertain commands. This workflow
-resumes from saved results through explicit commands.
+Use the completed checkpoint UUID returned by sync. Follow the [Files guide](../outputs.md)
+for remote export, session closure and restoration, and [project controls](../SKILL.md#project-controls-and-resume)
+to continue the same project. Run `inspect` on a restored ledger when reviewing it.
+A later result import uses its own persisted import UUID and saved identity map.
+Read original IDs after uncertain commands before repeating an import.
 
 Selected source: [adaptyv-sdk 0.1.0 at cdf2078](https://github.com/adaptyvbio/adaptyv-sdk/tree/cdf207819ed5a58e0c127453626d2bce125c8064), MIT;
 [ProteinBase](https://proteinbase.com/download), ODC-BY. The [API alignment change](https://github.com/adaptyvbio/adaptyv-sdk/pull/2)
 fixes quote/submit separation and pagination. Current official API documentation
 adds optional payment/webhook fields absent from that revision; this tool uses the
-common offline subset. Authenticated quote access and actual lab-result import
-remain external gates. See formats for scientific limits and supported constructs.
+common offline subset. See formats for scientific limits and supported constructs.

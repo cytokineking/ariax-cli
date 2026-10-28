@@ -1,52 +1,71 @@
 # Campaign review helpers
 
-Use these small source files with the [campaign recipes](../../../references/campaign-recipes.md).
-The selection helpers read actual native outputs on the authorized remote GPU
-host and preserve their decisions for explicit candidate export. No scientific
-output is bundled here.
+Use these source files with the [campaign recipes](../../../references/campaign-recipes.md)
+and [five-path consensus guide](../../campaign-recipes.md). Locate this directory
+with `ariax skills forge --tool campaign-recipes --json` at
+`data.examples['campaign-recipes']`. Every helper and scientific command runs on
+the authorized remote host. No scientific outputs are bundled here.
 
-The B56 joined completion recipe records the completed
-public-v1 Protenix, managed Genie3 sequence/prediction and Proteina/RF3 joins.
-Fresh installation and full Files/R2 scientific restoration passed October 10. `protenix-input.py` ties
-an explicit retained cohort/candidate to checked full-target FASTAs. The
-separate `protenix-native.py` runs the native predictor with an additive raw
-capture; `protenix-compare.py` compares its complete same-forward exports.
-B56 exercised these helpers through the installed guide on its authorized GPU
-VM and retained their original scientific outcomes.
+| Files | Use and limits |
+| --- | --- |
+| `boltzgen-select.py` | Join native BoltzGen metrics and a matching checker report; review all candidates or export explicitly named IDs. The bundled BoltzGen checker covers the two-design 1UBQ/40-residue-binder fixture only. |
+| `rfantibody-select.py` | Discover native RFantibody checker reports beneath checked profile directories; review or export explicit profile/design/sequence identities. |
+| `consensus.py`, `*-plan.json` | Read a complete five-path manifest and saved native outputs; write review shortlists without prediction. The plans describe paths and output locations, rather than executable model jobs. |
+| `molecular/`, `stage-inputs.py` | Stage the ten supplied molecular JSON/YAML inputs in the remote workspace. These inputs do not include native outputs or a complete campaign manifest. |
+| `protenix-input.py` | Prepare a full-1UBQ Protenix input from checked `B43` or `B55g` exports of `ubiquitin_0` or `ubiquitin_1`. It requires the original 40-residue binder and checked target FASTAs. |
+| `protenix-native.py`, `protenix-compare.py` | Optional same-forward export diagnostic in the Protenix workload. The capture wrapper adds raw arrays; the comparison is limited to `B43_ubiquitin_1_full_target`, seed 101 and one sample. |
+| `genie3-motif-select.py`, `motif-metrics.py`, `motif-native-metrics.py` | Helpers for the retained `04_5WN9_0` motif example, preserving fixed-residue maps, native thresholds, missing atoms and rejection. They are not general motif validators. |
+| `motif-pdb.py` | Convert an explicitly named saved CIF to PDB, or verify its existing conversion, in the selected BoltzGen/Gemmi workload. |
 
-`boltzgen-select.py` reads the native `all_designs_metrics.csv` and the JSON
-printed by the existing B43 checker. It joins explicit candidate IDs to the
-checker's design-mask chain map and the actual complex refold. It saves all
-rows, original filter flags and unavailable-column names. An explicit
-`--candidate` copies that candidate's actual CIF, native confidence NPZ and
-sequence. Rejected candidates require `--review-rejected` and go into a
-separate `rejected-review` directory. With no candidate, it writes only the
-review report. Empty accepted selection stays empty.
+`boltzgen-select.py` reads `final_ranked_designs/all_designs_metrics.csv` and a
+checker JSON containing `samples`, `filter_decisions` and
+`unavailable_metric_columns`. It joins exact candidate IDs to the design-mask
+chain map and actual complex refold, preserving all rows and original flags.
+Explicit export copies the candidate's CIF/NPZ, binder and target FASTAs,
+checker report, native settings and same-candidate context. Without
+`--candidate`, it writes only `review.json`; an empty accepted selection stays
+empty.
 
-`rfantibody-select.py` reads the four existing `rfantibody-check` JSON reports,
-the corresponding actual PDB/NPZ pairs and stage records. Candidate identity
-is the modality plus `design_0_dldesign_N`, not the shared backbone or rank.
-It preserves native scores, unavailable light-chain values, residue maps and
-the original screening decision. Explicit export saves H/L separately for a
-paired Fv, or complete H for a VHH. It never builds a linker, Fab or IgG.
-Rejected candidates require `--review-rejected` and stay rejected.
+`rfantibody-select.py` scans recognized checker JSON reports recursively; there
+is no fixed report count. The current layout is
+`PROFILE/checks/design_N_dldesign_M.json`, with matching generation, sequence,
+prediction and stage files under `PROFILE`. The legacy `PROFILE/check-M.json`
+layout identifies `design_0_dldesign_M`. Candidate IDs are relative profile paths
+plus the full native stem, such as `vhvl/design_2_dldesign_3`; shared backbone
+or rank alone is insufficient. The helper retains native scores, unavailable
+light-chain values, residue maps and screening decisions. Export saves H/L
+separately for a paired Fv or complete H for a VHH, with target T and native
+files. It does not build a linker, Fab or IgG.
 
-Outputs use a fresh directory under `/workspace`. Helpers reject missing or
-ambiguous IDs and incomplete same-candidate files. A failed partial export
-must be inspected and retained; choose a fresh directory after correction.
-Run the existing native checker first. These helpers do not replace its
-structure/array identity checks or establish experimental quality.
+Both selectors take a remote result `root`, fresh `--out` directory and optional
+repeatable `--candidate ID`. BoltzGen also requires `--check FILE`. Rejected
+candidates require `--review-rejected` and remain in `rejected-review/`.
+Outputs stay under `/workspace`. Missing or ambiguous IDs and incomplete
+same-candidate files fail explicitly. Inspect and retain a partial failed
+export; use a fresh directory after correction. Run the appropriate native
+checker first: selectors consume its result and do not replace structure/array
+identity checks or establish experimental quality. The recipe guide supplies
+registration and command examples.
 
-B54b supplied the initial source review. B56 subsequently completed native
-use, installed delivery and full scientific restoration. B57 owns the remaining
-actual human/agent workflow across separate physical allocations.
+For consensus, register `consensus.py` as `campaigns/review/consensus.py` through
+Files and wait for import readiness. Supply `campaign.json`, original native
+outputs and per-command records under one campaign root, using the
+[manifest format](../../campaign-recipes/formats.md). The consumer requires all
+five paths, with one or two candidates per path. Run it in the selected remote
+RF3 workload, where Gemmi and NumPy are available; use a fresh `--out` directory.
+Saved files may come from an existing workspace or an optional
+[checkpoint restore](../../../outputs.md).
 
-The historical exercise proposal records the original
-B56/B57 scopes. B56's completed handoff supersedes its old delivery gates and
-budget. B57 requires its own current activation before allocation.
+The molecular fixtures preserve the exact B43 ubiquitin candidates, the B66
+paired-six-CDR antibody proposal, L1 OQO-conditioned design and RNA64 sample 0.
+They describe bounded inputs; original scientific outputs are saved separately
+through Files. Register every file in `molecular/` and `stage-inputs.py`, then
+run remotely after all imports are ready:
 
-## Five-path consensus example
+```sh
+python3 /inputs/campaigns/stage-inputs.py /inputs/campaigns/molecular --out /workspace/campaign-delivery
+```
 
-Use [the primary guide](../../campaign-recipes.md) and [manifest format](../../campaign-recipes/formats.md). Each *-plan.json names its finite path and saved output. Register consensus.py as campaigns/review/consensus.py through Files and invoke it in the selected remote RF3 workload against a complete restored campaign-delivery root. It writes all five review shortlists from explicit saved native outputs, with chain checks and separate score scales. Fresh outputs require a fresh --out directory. The consumer performs no prediction.
-
-The molecular/ directory contains the exact ten small JSON/YAML inputs used for the bounded new refolds. They derive from the retained B43 ubiquitin cohort, B66 first IgDesign paired-six proposal, B56 L1 OQO-conditioned design and B28 RNA64 sample 0. Original scientific output is retained through Files, separately from these source fixtures. Stage all input files and stage-inputs.py through inputs add; after import readiness, run `python3 /inputs/campaigns/stage-inputs.py /inputs/campaigns/molecular --out /workspace/campaign-delivery`. Existing files must match byte for byte. This stage performs no prediction.
+Staging copies inputs into `inputs/` beneath the output root. Existing files
+must contain the same bytes, preventing a changed molecular input from silently
+replacing a saved one. This step runs no prediction.

@@ -23,4 +23,4 @@ PDBFixer repairs standard protein atoms/hydrogens. Loop reconstruction, explicit
 solvation, arbitrary ligand/cofactor parameterization, exhaustive geometry
 validation and non-protein confidence scoring are outside this adapter's current
 interface. Direct native tools may expose additional options; using one requires
-recorded settings and its own applicable native qualification.
+recorded settings and validation of the actual inputs, correspondence and outputs.

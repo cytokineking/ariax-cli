@@ -1,10 +1,9 @@
 # Native RFantibody antibody and nanobody workflow
 
-
-The [native source](https://github.com/RosettaCommons/RFantibody/tree/3e5a5bb1cb98befde9fc049ae3ff58cabb491f67)
+Use RFantibody to generate antibody or nanobody backbones, design their CDR
+sequences and predict the resulting target complexes. The [native source](https://github.com/RosettaCommons/RFantibody/tree/3e5a5bb1cb98befde9fc049ae3ff58cabb491f67)
 is revision `3e5a5bb1cb98befde9fc049ae3ff58cabb491f67`, using its locked Python
-3.10 and PyTorch 2.3.1/CUDA 11.8 environment. B55e qualified private delivery
-and fresh managed preparation. Named assets remain unchanged.
+3.10 and PyTorch 2.3.1/CUDA 11.8 environment.
 
 | Stage | Checkpoint under /models/rfantibody | Native defaults |
 | --- | --- | --- |
@@ -23,13 +22,12 @@ renumber insertion codes with a retained source map before use. Generation
 accepts arbitrary target chains, retaining their source chain/residue map when
 native output combines them into T. Hotspots identify original target residues.
 
-The finite matrix records the exact
-CDR ranges, input modes and qualification settings. Admission requires one GPU
+The supported resource envelope requires one GPU
 with >=44 GiB reported memory, 48 GiB host RAM, eight usable CPUs and 250 GiB
 free payload space. Sampled usage does not establish a smaller hardware floor.
 Profiles cover target 251–502, VH 112–120, VL 104–110, VHH 123–131 residues,
 total <=740; 1–10 backbones, 1–4 sequences/backbone and at most 40 RF2 inputs.
-Other constructs need qualification.
+Support for other constructs remains unestablished.
 
 `RFANTIBODY_EXAMPLES` is the installed example directory reported as
 `data.examples.rfantibody` by discovery. `SESSION` is the authorized UUID.
@@ -85,7 +83,7 @@ Run `to_rf2_json.py --input HLT.pdb --out /workspace/input.json` inside this ima
 to construct the pinned native sequence/target JSON and its source map. JSON
 contains sequence-only H/L and empty native CDR masks. Its native RF2 export
 contains pLDDT, PAE and interchain PAE and omits the ten geometry/CDR RMSDs.
-Record those omissions, the diagnostic's own provenance and original campaign decision; it does not replace the
+Record those omissions and the diagnostic's provenance alongside the
 structure-based screening report.
 
 Every stage saves `stage.json` with exact native argv, checkpoint, settings and
@@ -100,10 +98,8 @@ includes all interchain pairs, including VH/VL. Arrays use T/H/L order (T/H for
 VHH), while PDBs use H/L/T. Use the zero-based `confidence_residue_map`. Absent
 VHH light-chain CDR RMSDs remain unavailable with raw NaNs preserved.
 
-All four original B50 rejected candidates and B55e's rejected diagnostic retain
-their decisions. B56b supplies corrected complete target T FASTA. The
-historical report records original
-decisions, cleanup delay and cost without implying a binding result.
+Preserve rejected candidates and their original decisions alongside arrays,
+settings and source maps. Screening acceptance does not establish experimental binding.
 
 The installed selector discovers checked fixed-length and variable-length
 profiles beneath its root. It preserves the native candidate ID, confidence
@@ -133,5 +129,5 @@ empty scratch and command history. Sync the restored session explicitly before
 closing it so it has its own complete checkpoint. Keep existing links pinned
 to their original checkpoint. Submit the next scientific command explicitly.
 See [saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume).
-The completion handoff records service paths and fixture substitutions. B57
-retains outside-human and separate-allocation acceptance.
+The [example inputs](rfantibody/README.md) retain their source attribution and
+[MIT license](rfantibody/LICENSE.RFantibody).

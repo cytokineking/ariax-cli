@@ -1,5 +1,6 @@
 # Native MPNN sequence design and scoring
 
+Use this family to design sequences for a supplied backbone or score sequence support under a selected model. Choose ProteinMPNN for protein context, SolubleMPNN for soluble-trained weights, LigandMPNN for atomic chemical context, and AbMPNN for explicitly mapped antibody CDRs.
 
 | Tool | Named mount and checkpoint choices | Native operations |
 | --- | --- | --- |
@@ -13,13 +14,13 @@ ProteinMPNN is pinned to `8907e6671bfbfc92303b5f79c4b5e6ce47cdef57`, LigandMPNN 
 
 The offered LigandMPNN modes exclude membrane checkpoints and sidechain packing. Use each executable’s `--help` for native flags, and retain exact checkpoint choices in comparisons.
 
-The five unchanged canonical archives and exact notices/layouts are in the asset handoff. LigandMPNN's separate soluble checkpoint is the shared fifth asset for Protein-Hunter and Harness; it is distinct from original SolubleMPNN. PXDesign's newer JAX consumer is separately qualified and does not replace the older JMS loader.
+LigandMPNN’s separate soluble checkpoint is used by Protein-Hunter and Harness; it is distinct from original SolubleMPNN. The older JMS JAX loader uses its own versioned checkpoint layout.
 
 
 ## Older JAX cross-entropy scores
 
 For a deployment whose authenticated catalog offers `jms-mpnn`, use the
-[older JMS workflow](jms-components.md#native-workflow-after-catalog-acceptance)
+[older JMS workflow](jms-components.md#run-available-tools)
 and wait for tool readiness. This route retains ColabDesign 1.1.0 at
 `e7c38e5e70cac56f20f99efbf9d98707c1383ff1`, with explicit `v_48_010` or
 `v_48_020` checkpoints under `/models/proteinmpnn/colabdesign/v1.1.0`.
@@ -46,8 +47,8 @@ next to this guide are real structural fixtures with disclosed crops and
 loop annotations; read [their preparation notes](mpnn/README.md).
 
 `MPNN_EXAMPLES` is the absolute installed `ariax-forge/tools/mpnn` directory.
-Use `data.examples.mpnn` from `ariax skills forge --json`. `SESSION` is
-the authorized session UUID. Commands below use B22's frozen `--gpus` form.
+Use `data.examples.mpnn` from `ariax skills forge --tool mpnn --json`. `SESSION` is
+the authorized session UUID. Check the selected tool’s catalog record for available models and resources, for example `ariax forge catalog --tool proteinmpnn --json`.
 
 ```sh
 ariax forge tools add "$SESSION" --tools proteinmpnn --priority proteinmpnn --json
@@ -94,9 +95,10 @@ success. The checker validates `seqs/backbone.fa` against native sampled
 sequence arrays in `probs/backbone.npz`, verifies the requested chain identities
 and checks every fixed residue including entire fixed chains. It reports
 actual sequences by chain, observed substitution counts and native scores.
-The qualified checker reads each saved native batch chain order and supports
-the accepted batch sizes one and four. Validate larger custom batches separately. Qualification adds `--require-change`; a production design
-that retains the input sequence is an honest result to assess.
+The checker reads each saved native batch chain order and supports batch sizes
+one and four. Larger custom batches need separate checking. Optional
+`--require-change` rejects unchanged designs; a design that retains the input
+sequence can still be a valid model outcome.
 
 ProteinMPNN FASTA contains only designed chains in alphabetical order, with
 `/` separators. Keep the residue map, input backbone and full-chain checker
@@ -187,7 +189,7 @@ mode `backbone`. Explicitly select one scoring operation.
 `--ligand_mpnn_use_atom_context 0` is an explicit ablation. Preserve both
 runs and state that conditioning was removed. The native optional
 `--ligand_mpnn_use_side_chain_context 1` includes fixed-residue sidechain
-atoms; it needs complete relevant sidechains and separate qualification for
+atoms; it needs complete relevant sidechains and separate validation for
 that workload. Native raw constraint/bias/symmetry options remain available
 without `--prepared`; record and validate their native residue identifiers.
 
@@ -239,25 +241,15 @@ ariax forge files "$SESSION" --path /workspace/mpnn-demo --checkpoint "$CHECKPOI
 ariax forge download "$SESSION" /workspace/mpnn-demo/protein-design/check.json --checkpoint "$CHECKPOINT" --dest ./mpnn-check.json --json
 ```
 
-Use the returned completed checkpoint UUID. Confirm synced, then use the
-project's normal pause/close and same-project resume workflow. A human hold
-requires the human approval path. Restoration recovers files and never
-replays inference. Re-run the checker explicitly against restored outputs.
-Model assets prepare through ordinary readiness before further science.
+Use the returned completed checkpoint UUID for exports.
 
-All 14 listed native checkpoint choices passed the prepared fixture matrix,
-including paired/VHH/scFv constraints and DNA/zinc conditioning. These are
-bounded inputs: 93–805 protein residues, batch one, two samples and explicit
-selected positions. Peak observed process RAM was 1,082,056 KiB and sampled
-GPU use was 1,169 MiB on the tested L40 stack. Sampling can miss short peaks.
-No general length/batch resource minimum or broad design-quality claim is
-established. Keep the antibody-input restrictions above. Managed backend grants/private-reader
-preparation and installed public CLI
-acceptance remain requirements. B27r/B27s already qualify bounded real runtime
-HTTP/Files restoration on one physical VM; B57 retains separate allocations and
-actual human/agent acceptance.
+Measured examples span 93–805 protein residues, batch one, two samples and
+explicit selected positions, including paired/VHH/scFv constraints and DNA/zinc
+context. Peak observed process RAM was 1,082,056 KiB and sampled GPU use was
+1,169 MiB on the L40 stack; sampling can miss short peaks. These observations do
+not establish a general resource minimum or design-quality claim. Keep the
+antibody-input restrictions above.
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
-pause and same-project resume. Web approval clears a hold without allocating
-compute; restoration leaves the next scientific command explicit.
+Use [saved results](../outputs.md) for checkpoint-pinned exports and
+[project controls](../SKILL.md#project-controls-and-resume) for pause, closure
+and explicit continuation.

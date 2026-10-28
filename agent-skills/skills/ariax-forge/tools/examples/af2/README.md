@@ -1,8 +1,7 @@
 # AF2 inputs
 
-These are supplied fixtures and expected-identity manifests. No file here
-is an AF2 prediction. Native results are retained separately in the runtime contribution
-`science/evidence/af2/native-20261006.md`.
+These are input fixtures and expected-identity manifests for the
+[AF2 guide](../../af2.md). No file here is an AF2 prediction.
 
 `monomer.a3m` contains the 76-residue ubiquitin sequence from
 [RCSB 1UBQ](https://www.rcsb.org/structure/1UBQ) and one identical alignment
@@ -11,7 +10,7 @@ row. This deliberately shallow alignment tests supplied-input handling.
 retrieved October 4, 2026, for selected-template execution. The matching
 `templates/1ubq.cif` is the unmodified RCSB mmCIF download for per-entry CSV
 templates; native ColabFold names that scratch copy `1dmy.cif`. Its experimental
-coordinates are input data. They are never counted as AF2 output evidence.
+coordinates are input data.
 
 `paired.a3m` has unique chain lengths 16,16 and cardinalities 1,1. It contains
 one synthetic paired row and separate padded unpaired rows. The requested
@@ -37,7 +36,7 @@ mode label but does not search when templates are off. Do not pass
 `--msa-mode single_sequence` with these A3Ms: in 1.6.3 that flag intentionally
 removes supplied homologs and pairing before inference.
 
-## Acceptance preparation continuation
+## Insulin and feature-handling examples
 
 The five multimer-v3 checkpoint runs now use `insulin.a3m`: 4INS pig-insulin
 chain A `GIVEQCCTSICSLYQLENYCN` (21) and chain B
@@ -52,17 +51,13 @@ and experimentally fixed assembly geometry are not modeled by this sequence
 fixture. A successful native run alone makes no insulin-quality claim.
 
 
-`public-unpaired-20261005.a3m` is the unchanged returned public insulin MSA
-from the original native failure. The fresh October 6 public unpaired search
-returned identical bytes. `af2_features.py` verifies the original empty-paired
-MSA exception against the accepted original package, then checks native query
-identity and feature construction for absent channels, supplied both-channel,
-homomer and monomer cases against the repaired package. Its paired-only
-diagnostic selects existing rows from the disclosed supplied fixture; it
-does not generate or label service content as paired. These feature checks
-perform no prediction.
+`public-unpaired-20261005.a3m` is a captured public insulin MSA response.
+`af2_features.py` checks query identity and feature construction for absent
+channels, supplied paired/unpaired channels, homomers and monomers. Its
+paired-only diagnostic selects rows from the supplied fixture rather than
+claiming service-generated pairing. These feature checks perform no prediction.
 
-The checker now requires native token sidecars and compares model/seed,
+The checker requires native token sidecars and compares model/seed,
 residue order and PDB/JSON pLDDT for all matrix samples. `af2_handoff.py`
 selects a model and seed, preserving its native rank separately. Stage it
 beside `af2_outputs.py`. The original config, returned A3M, template-domain
@@ -72,10 +67,9 @@ Native config records MSA caps before the single-query adjustment; retain
 1:1 even though the command requests the maximum 32:64.
 
 
-`completion-small.proposed.json` selects the inactive small S05-S08/E01
-completion and the shared B33 handoff. Use `af2_completion_selection.py` with
-an explicit `--manifest` to read one row without dispatch. The old
-`completion-matrix.json` and `af2_profiles.py` retain optional historical capacity
-diagnostics outside mandatory completion. `three-chain.fasta`/`three-chain.json`
-support the remaining pairing cases. Read the completion guide
-before service queries, template-cache reuse or full project restoration.
+`af2_completion_selection.py --manifest MANIFEST` reads a profile row without
+dispatching it. `completion-small.proposed.json` and `completion-matrix.json`
+describe optional diagnostic profiles, not supported capacity or default runs.
+`af2_profiles.py` prepares profile commands; `three-chain.fasta` and
+`three-chain.json` supply additional pairing inputs. Check the
+[MSA and template guide](../../af2/msa.md) before service queries or cache reuse.

@@ -1,14 +1,12 @@
 # Protenix input examples
 
-These examples match runtime B29. The accessible choices were exercised in
-its October 7 native campaign; exact per-model outcomes and settings are in
-`science/evidence/protenix-models/qualification.md`. Every input has explicit
-entity/chain identity. See the model guide for model-specific features.
+Every input has explicit entity/chain identity. See the
+[model guide](../protenix-models.md) for model-specific features and commands.
 
 `monomer.json` contains ubiquitin. `complex.json` uses the pinned fork's
 545-residue pMHC/VHH constructs from `7st3_base`. `consumer-complex.json`
 contains the genuine 21-residue/30-residue human insulin A/B protein pair,
-providing a small native-default consumer for B35. This execution fixture
+providing a small native-default example. This execution fixture
 makes no predictive-accuracy or binding claim. `chemical.json` adds ATP/MG
 to ubiquitin. `nucleic.json` contains short RNA and DNA. These molecular
 execution cases do not assert biological complexes.
@@ -23,16 +21,15 @@ not fix absolute coordinates. Keep actual predicted geometry beside the input.
 MSA/template paths refer to `/opt/forge-protenix-fixtures` in the image.
 Uploaded copies must rewrite those paths to the actual uploaded files.
 Query-only A3Ms test supplied-MSA parsing and contain no searched homologs.
-`templates/2lwu.cif` is unchanged from the pinned fork. B30 retains grouped
-geometry and batch-resumption ownership.
+`templates/2lwu.cif` is unchanged from the pinned fork.
 
 The exact source is `b806d2540ab326d71edcc47128343e627248c099` under Apache-2.0.
-The v2 checkpoint has bounded internal-development coverage for the three
-standalone samples described in the [package guide](../protenix-models.md#v2-standalone-example).
+The v2 checkpoint has bounded internal-development coverage; its small
+standalone examples are described in the [package guide](../protenix-models.md#v2-standalone-example).
 Its customer/public distribution and production delivery retain their separate
 scope. The CLI guide follows the repository license.
 
-B30 adds grouped direct PDB/minimal mmCIF/full mmCIF examples with explicit
+Grouped direct PDB/minimal mmCIF/full mmCIF examples use explicit
 `residueMappings`, author insertion codes and gap masks. `template-batch.json`
 contains two such native tasks. See the package guide for explicit per-item
 continuation after save/restore. `grouped-soft-prior.json` uses the constraint

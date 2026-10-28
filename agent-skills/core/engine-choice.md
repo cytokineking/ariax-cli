@@ -8,10 +8,10 @@ there is no universal best engine or comparable cross-engine score.
 Use a **managed project** when its live protocol schema supports the experiment.
 Ariax provisions compute, runs the defined stages, reports engine-specific
 progress and results, persists artifacts, and cleans up. Use **Forge** for a
-qualified native command or a composed workflow: the agent plans commands,
+native command or a composed workflow: the agent plans commands,
 inputs, workspace checks, saves and session closure, while Ariax enforces
 access, isolation, billing and the resource lifecycle. A shared engine name does
-not make their settings, versions or qualification interchangeable.
+not make their settings or supported modes interchangeable.
 
 | Scientific need | Managed choice and tradeoff |
 | --- | --- |
@@ -30,36 +30,13 @@ the experiment: design mechanism, modality, scoring/filter policy, target
 context, campaign size, and compute authorization. Do not infer a large screen
 or Turbo merely from “find a good binder.”
 
-For a requested native joint sequence and all-atom design workflow, also see
-the [Forge RFd4 guide](../skills/ariax-forge/tools/rfd4.md). It is not a
-hosted protocol. Its selected-profile checks are bounded; use the live catalog
-to assess availability, qualified modes and resources before selecting it.
+Consider the [Forge guide](../skills/ariax-forge/SKILL.md) for native settings,
+additional tools or a custom sequence of stages. Use
+[capability discovery](../skills/ariax-forge/tools/capabilities.md) to select
+the exact live tool/model/mode and read its guide. Upstream options may exceed
+the supported managed or native contract.
 
-Consider the [Forge platform guide](../skills/ariax-forge/SKILL.md) when the
-goal calls for native settings, a tool outside the managed workflows, or a
-custom sequence of stages. Discover the exact live tool, model and mode and
-read its qualification before choosing it; a managed limitation does not prove
-that a corresponding native mode is available or qualified. The Forge guides
-for [BindCraft2](../skills/ariax-forge/tools/bindcraft2.md),
-[BoltzGen](../skills/ariax-forge/tools/boltzgen.md),
-[PXDesign](../skills/ariax-forge/tools/pxdesign.md), and
-[ESMFold2-pipeline](../skills/ariax-forge/tools/esmfold2-pipeline.md) describe
-their own bounded native scope.
-
-Use [campaign planning](campaigns.md) for pilot sizing, evidence-based scaling,
-cost forecasts, and review points. Compare one compatible GPU with supported
-parallel execution using representative throughput, useful yield, current
-allocation-hour prices, the deadline and authorized budget. Campaign length
-alone does not decide the comparison. Without comparable evidence, report the
-rate and runtime uncertainty and propose a bounded review point. Read the
-chosen engine's GPU guidance and check `ariax pricing --json`; target and binder
-size affect VRAM needs. Preserve existing GPU preferences and explicit requests.
-
-Each managed workflow can be narrower than its source repository. Do not work
-around its public contract with internal routes; use its live schema for
-supported fields. Check Forge separately for the exact native mode and its
-qualification instead of assuming upstream options are available.
-
-For an explicit Mol-1 prediction request, read the [Forge guide](../skills/ariax-forge/tools/mol1.md)
-and its recorded scope, then inspect the live catalog. Mol-1 uses prepared native
-inputs and separate asset/service terms; it is not a managed protocol.
+Use [campaign planning](campaigns.md) for pilot sizing, scaling and compute
+tradeoffs. Check `ariax pricing --json`, memory requirements and supported
+parallel execution against the user's budget, deadline and saved preferences.
+When runtime is unknown, plan a bounded pilot and review point.

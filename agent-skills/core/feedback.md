@@ -40,4 +40,4 @@ a deliberate resubmission can create a duplicate. The user can seek support
 with the project ID even without a feedback receipt.
 
 Recording feedback does not stop compute, restart a job, or change campaign
-settings. Continue to follow the [recovery and support guidance](../SKILL.md#provisioning-and-job-failures).
+settings. Continue to follow the [recovery and support guidance](managed-projects.md#provisioning-and-job-failures).

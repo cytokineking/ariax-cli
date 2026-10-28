@@ -24,11 +24,11 @@ For a protein-complex ipSAE request retain the raw, same-rank CIF plus raw `pae_
 
 Read [ipSAE mapping and parser limits](ipsae-inputs.md), available as `ariax skills forge --reference ipsae-inputs --read --json`, before handoff. Do not invent JSON conversion keys, symmetrize PAE, silently discard ligand tokens, or treat pLDDT-only output as PAE. A missing, mismatched, or unverifiable structure/PAE pair blocks scoring until the original matching artifact is recovered; a fresh prediction needs its own authorized run and provenance. Protein–ligand affinity is a separate head, not an ipSAE output.
 
-Source: [2.2.1 writer](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/write/writer.py). Adapted from Forge archive `d8c0b040f553bf9e51a532cb4db693529f50cc70`. Read [shared interpretation](../../../core/interpretation.md) for structure-stage comparisons.
+Source: [2.2.1 writer](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/write/writer.py). Read [shared interpretation](../../../core/interpretation.md) for structure-stage comparisons.
 
 ## Molecular and affinity output check
 
-The [prepared modes](../tools/boltz2/modes.md) ship `examples/boltz2/check_modes.py`.
+The [mode guide](../tools/boltz2/modes.md) uses `examples/boltz2/check_modes.py`.
 Run it in the Boltz environment against the actual `boltz_results_…` directory
 and originating staged YAML. It uses native Boltz-2 tokenization, compares CIF
 atom/residue identity to processed arrays, reports original numeric chain
@@ -41,9 +41,8 @@ reports formal charge and any standardization change, and preserves the CCD
 representation for review. It reads trusted native output from the originating
 run. A missing chemical check remains visible and cannot qualify molecular
 identity. Affinity requires both ensemble heads and the matching top-ranked
-pre-affinity structure. Neither a passing check nor an imported fixture establishes
-scientific accuracy or measured binding. Twelve bounded B33 cases qualified.
-The original MSE case failed identity because native Boltz produced MET; the
-separate neutral SEP case retained its intended atoms and elements. Native
-AtomV2 stores atom names, while modified-polymer element checks use CIF and
-charge reports explicitly use CCD data. Custom MSA remains unrun.
+pre-affinity structure. Neither a passing check nor an imported example establishes
+scientific accuracy or measured binding. Native MSE-to-MET normalization fails
+intended MSE identity; a neutral SEP specification does not establish physiological
+protonation. Native AtomV2 stores atom names, while modified-polymer element
+checks use CIF and charge reports explicitly use CCD data.

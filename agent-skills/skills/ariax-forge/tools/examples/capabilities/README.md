@@ -1,11 +1,14 @@
-# Read a scoped capability record
+# Inspect a synthetic capability record
 
-Set EXAMPLE to discovery's data.examples.capabilities directory and run:
+This fixture demonstrates separate upstream, native, installation and
+restoration statuses. Its values are synthetic and do not describe a usable
+scientific tool. Set `EXAMPLE` to `data.examples.capabilities` from
+`ariax skills forge --tool capabilities --json`:
 
 ```sh
 node "$EXAMPLE/inspect.mjs" "$EXAMPLE/catalog.json" antibodies
 ```
 
-The synthetic antibody row preserves three distinct evidence states. For an
-actual deployed catalog, save `ariax forge catalog --json` and inspect that file.
-The example has no weights, native scientific commands or experimental claims.
+`inspect.mjs` reads a JSON `data.tools` array and selects the task supplied as
+its second argument. For actual tool selection, use the scoped commands in
+the [capability guide](../../capabilities.md).

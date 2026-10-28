@@ -1,7 +1,8 @@
 # Legacy JMS scoring, prediction and design
 
-Check `ariax forge catalog --json` for `jms-legacy` before selecting it.
-Read this guide with `ariax skills forge --reference jms-legacy --read --json`.
+Check `ariax forge catalog --tool jms-legacy --json` for available models and
+resources. Discover this guide and its examples with
+`ariax skills forge --tool jms-legacy --json`.
 The legacy TensorFlow models use pinned Joint_Model_Stability source and the
 original TrMRF/TrROS checkpoints. Historical reproduction of the unavailable
 r9_900 structure and results remains unverified. These objectives have no
@@ -15,7 +16,7 @@ established experimental stability or binding accuracy.
 | trros | Fixed-backbone score/design, single-sequence/MSA geometry prediction, hallucination |
 | joint | TrMRF-5 plus TrROS fixed-backbone score/design and hallucination |
 
-`EXAMPLES` is the absolute `data.examples.root` from `ariax skills forge --json`.
+Set `EXAMPLES` to `data.examples["jms-legacy"]` from scoped skill discovery.
 `SESSION` is your authorized session UUID. The bundled 6MRR chain A has 68
 residues. Use an explicit chain with consecutive canonical residues and finite,
 complete N/CA/C coordinates. Resolve alternate locations and insertion codes
@@ -28,16 +29,16 @@ Lowercase A3M insertions are not removed. The two-row example is synthetic.
 ```sh
 ariax forge tools add "$SESSION" --tools jms-legacy --json
 ariax forge tools wait "$SESSION" jms-legacy --timeout 7200 --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/jms-legacy/6MRR-A.pdb" --path jms-legacy/6MRR-A.pdb --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/jms-legacy/6MRR-A.fasta" --path jms-legacy/6MRR-A.fasta --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/jms-legacy/two-sequence.fasta" --path jms-legacy/two-sequence.fasta --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/6MRR-A.pdb" --path jms-legacy/6MRR-A.pdb --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/6MRR-A.fasta" --path jms-legacy/6MRR-A.fasta --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/two-sequence.fasta" --path jms-legacy/two-sequence.fasta --json
 ```
 
 Require the host available, tool ready and every input ready. Use a fresh output
 directory for each operation, select an assigned GPU and retain command IDs.
-The examples use seed7, feat-drop0, one sequence, 100 design iterations and a
-hard switch at iteration50. Choose hardware from the deployed requirements;
-validation on these small inputs does not establish larger-input capacity.
+The examples use seed 7, feat-drop 0, one sequence, 100 design iterations and a
+hard switch at iteration 50. Choose hardware from the deployed requirements;
+these small inputs do not establish larger-input capacity.
 
 ```sh
 ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --timeout-seconds 1800 --json -- jms-legacy score --model joint --pdb /inputs/jms-legacy/6MRR-A.pdb --chain A --fasta /inputs/jms-legacy/6MRR-A.fasta --seed 7 --output /workspace/jms-legacy/joint-score
@@ -53,8 +54,8 @@ background unless an explicit matching background NPY is supplied. This
 changes the objective and does not infer stability from a known backbone.
 
 `scores.json` records source, checkpoint, input identity, conditioning and
-scores. TrMRF is mean conditional amino-acid NLL in nats, with epsilon1e-8;
-TrMRF-3/5 use seqid1 by default. TrROS fixed-backbone loss is categorical
+scores. TrMRF is mean conditional amino-acid NLL in nats, with epsilon 1e-8;
+TrMRF-3/5 use seqid 1 by default. TrROS fixed-backbone loss is categorical
 geometry cross entropy, averaged over the five member losses. Cross entropy
 of averaged predictions is a different quantity. Joint fixed-backbone loss
 adds TrMRF and geometry CE at unit weights. Hallucination instead uses the
@@ -70,10 +71,9 @@ original command ID before deciding on an explicit new operation.
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
 ariax forge files "$SESSION" --path /workspace/jms-legacy --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/jms-legacy/joint-score/scores.json --checkpoint "$CHECKPOINT" --dest ./jms-joint-score.json --json
 ```
 
-Use the completed checkpoint UUID returned by sync. Download complete output
-directories, including arrays and FASTA, for scientific review. Restoration
-recovers saved files without automatically running scoring or design again.
-Follow the outputs and project controls guides for saved links, pause and resume.
+Use the completed checkpoint UUID returned by sync. Preserve complete output
+directories, including arrays and FASTA. Follow the [Files guide](../outputs.md)
+for saved links, remote export, restoration and session closure, and
+[project controls](../SKILL.md#project-controls-and-resume) for pause and same-project resume.

@@ -1,8 +1,8 @@
 # Common MSA choices
 
 Ariax provides supplied-file, public ColabFold and user-selected compatible
-server paths. An Ariax search service and bundled search databases are
-outside this release. Choose the policy before submitting sequences.
+server paths. Ariax does not bundle a search service or search databases.
+Choose the policy before submitting sequences.
 
 | Choice | Use | Record with results |
 | --- | --- | --- |
@@ -55,8 +55,7 @@ preserve chain labels and pairing semantics during explicit conversion.
 
 ## One bounded server search, then saved-MSA prediction
 
-The public monomer search/prediction passed native qualification on one
-L40. Upload `search.fasta` and choose a fresh workspace output directory:
+Upload `search.fasta` and choose a fresh workspace output directory:
 
 ```sh
 colabfold_batch /inputs/af2/search.fasta /workspace/msa-public-UNIQUE --msa-only --host-url https://api.colabfold.com --msa-mode mmseqs2_uniref_env --pair-mode unpaired_paired --pair-strategy greedy
@@ -84,7 +83,7 @@ Retain the search run's config beside prediction config; prediction's
 default server label does not establish the origin of a supplied MSA.
 Select `mmseqs2_uniref` for UniRef-only search or `mmseqs2_uniref_env` for
 UniRef+environmental search. The newer env-pair extension is not part of
-this package's qualified scope. Preserve actual settings and failures.
+this package's supported scope. Preserve actual settings and failures.
 
 External search can run before renting a Forge GPU. Upload the resulting
 alignments and source settings through the ordinary input API. Never put
@@ -113,11 +112,6 @@ not submit another case. Select each next case explicitly after observing its
 result. A timeout, service error or skipped native prediction remains failed;
 do not replay it automatically or switch endpoints.
 
-
-The remaining qualification guide adds the operator-approved
-selected public endpoint's required template and three-chain routes. Template search
-must retain the trusted native feature cache; A3M alone omits template features.
-The recovered user requirement permits public ColabFold, supplied MSAs and a
-preferred server. Existing public ColabFold is selected for the retained benign
-fixtures. A separately deployed service is not required. An arbitrary preferred
-server or its authentication is qualified only for actual compatible access.
+For template search, retain the trusted native feature cache; A3M alone omits
+template features. A custom server must provide compatible API access and
+authentication; an arbitrary endpoint is not guaranteed to work.

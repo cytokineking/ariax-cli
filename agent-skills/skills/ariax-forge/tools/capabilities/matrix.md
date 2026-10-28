@@ -1,103 +1,74 @@
-# Capability inventory and evidence scopes
+# Forge tool guide index
 
-Use `ariax forge catalog --compact --json` for the current account-visible
-inventory, then `ariax forge catalog --tool TOOL --json` for a selected tool's
-full evidence. This guide index preserves bounded recorded scopes; package
-acceptance and evidence for a particular model/mode pair are separate facts.
-A missing measurement stays null in the resource fields.
+Use this index to compare tools and open the relevant guide. Find available
+choices with `ariax forge catalog --task TASK --compact --json`, then inspect
+the selected tool/model/mode as described in [capability discovery](../capabilities.md).
+The live catalog supplies current workload limits, resources and terms.
 
-The table reports native/installation/restoration for the metadata attribution.
-`unknown` preserves the accepted package evidence while declining to infer an
-untabulated mode cross-product. Open the linked guide for the native settings,
-score units, chain maps, exact checkpoints and selected recovery cases. Public
-labels apply to those bounded observations and carry no experimental efficacy.
+## Design
 
-| Tool | Tasks | Installed guide | Model/mode rows | Evidence state |
-| --- | --- | --- | ---: | --- |
-| `base` | workspace | [base](../base.md) | 3 | passed/passed/passed |
-| `ipsae` | validation-search | [ipsae](../ipsae.md) | 1 | passed/passed/passed |
-| `freebindcraft` | binder-design | [freebindcraft](../freebindcraft.md) | 8 | passed/passed/passed |
-| `boltz2` | molecular-prediction | [boltz2](../boltz2.md) | 19 | passed/passed/passed |
-| `bindcraft2` | binder-design, antibodies | [bindcraft2](../bindcraft2.md) | 21 | passed/passed/passed |
-| `proteinmpnn` | sequence-optimization | [mpnn](../mpnn.md) | 35 | passed/passed/passed |
-| `solublempnn` | sequence-optimization | [mpnn](../mpnn.md) | 10 | passed/passed/passed |
-| `ligandmpnn` | sequence-optimization | [mpnn](../mpnn.md) | 16 | passed/passed/passed |
-| `abmpnn` | antibodies, sequence-optimization | [mpnn](../mpnn.md) | 15 | passed/passed/passed |
-| `af2` | molecular-prediction | [af2](../af2.md) | 54 | passed,unknown/passed/passed,unknown |
-| `structure-tools` | validation-search | [structure-tools](../structure-tools.md) | 6 | held/held/held |
-| `foldseek` | validation-search | [structure-tools](../structure-tools.md) | 3 | held/held/held |
-| `biohub-esmfold2` | molecular-prediction | [biohub-esm](../biohub-esm.md) | 5 | passed/passed/passed |
-| `biohub-esmfold2-fast` | molecular-prediction | [biohub-esm](../biohub-esm.md) | 4 | passed/passed/passed |
-| `esmc-300m` | sequence-optimization | [biohub-esm](../biohub-esm.md) | 6 | passed,unknown/passed/passed,unknown |
-| `esmc-600m` | sequence-optimization | [biohub-esm](../biohub-esm.md) | 6 | passed,unknown/passed/passed,unknown |
-| `esmc-6b` | sequence-optimization | [biohub-esm](../biohub-esm.md) | 6 | passed/passed/passed |
-| `absolute-stability-esm3` | sequence-optimization, validation-search | [absolute-stability](../absolute-stability.md) | 6 | passed/passed/passed |
-| `absolute-stability-saprot` | sequence-optimization, validation-search | [absolute-stability](../absolute-stability.md) | 6 | passed/passed/passed |
-| `protenix-models` | molecular-prediction | [protenix-models](../protenix-models.md) | 66 | passed/passed/passed |
-| `protenix-v2` | molecular-prediction | [protenix-models](../protenix-models.md) | 11 | passed/passed/passed |
-| `opendde` | antibodies, molecular-prediction | [opendde](../opendde.md) | 4 | passed/passed/passed |
-| `fampnn` | sequence-optimization | [fampnn](../fampnn.md) | 12 | passed/passed/passed |
-| `rfantibody` | binder-design, antibodies | [rfantibody](../rfantibody.md) | 4 | passed/passed/passed |
-| `boltzgen` | binder-design, antibodies | [boltzgen](../boltzgen.md) | 7 | passed/passed/passed |
-| `genie3` | binder-design | [genie3](../genie3.md) | 7 | passed/passed/passed |
-| `openbind-0` | molecular-prediction | [openfold3](../openfold3.md) | 4 | passed/passed/passed |
-| `openfold3-preview2` | molecular-prediction | [openfold3](../openfold3.md) | 4 | passed/passed/passed |
-| `pxdesign` | binder-design | [pxdesign-native](../pxdesign.md) | 4 | passed,unknown/passed/passed,unknown |
-| `rf3` | molecular-prediction | [foundry](../foundry.md) | 15 | passed/passed/passed |
-| `rfd3` | binder-design | [foundry](../foundry.md) | 10 | passed/passed/passed |
-| `rfd3na` | binder-design | [foundry](../foundry.md) | 6 | passed/passed/passed |
-| `proteina-complexa` | binder-design | [proteina-complexa](../proteina-complexa.md) | 18 | passed/passed/passed |
-| `esmfold2-pipeline` | binder-design | [esmfold2-pipeline-native](../esmfold2-pipeline.md) | 9 | passed/passed/passed |
-| `opendde-harness` | binder-design, antibodies | [opendde-harness](../opendde-harness.md) | 2 | passed/passed/passed |
-| `interface-scores` | validation-search | [interface-scores](../interface-scores.md) | 1 | passed/passed/passed |
-| `jms-esm2` | sequence-optimization | [jms-components](../jms-components.md) | 1 | passed/passed/passed |
-| `jms-mpnn` | sequence-optimization | [jms-components](../jms-components.md) | 4 | passed/passed/passed |
-| `jms-esmfold` | sequence-optimization | [jms-components](../jms-components.md) | 2 | passed/passed/passed |
-| `jms-aggregate` | sequence-optimization, validation-search | [jms-components](../jms-components.md) | 2 | passed/passed/passed |
-| `jms-legacy` | sequence-optimization | [jms-legacy](../jms-legacy.md) | 12 | passed/passed/passed |
-| `protein-hunter` | binder-design | [protein-hunter](../protein-hunter.md) | 5 | passed/passed/passed |
+| Tool or family | Use for | Guide |
+| --- | --- | --- |
+| `bindcraft2` | AF2-guided design across protein, peptide and antibody formats, including multi-state objectives | [BindCraft2](../bindcraft2.md) |
+| `freebindcraft` | AF2-guided binder design with alternative relaxation/scoring routes | [FreeBindCraft](../freebindcraft.md) |
+| `boltzgen` | Diffusion binder, peptide and scaffold-conditioned antibody design | [BoltzGen](../boltzgen.md) |
+| `rfd3`, `rfd3na` | Conditioned generation with Foundry's protein or nucleic-acid models | [Foundry](../foundry.md) |
+| `rfd4` | Joint sequence and all-atom design | [RFd4](../rfd4.md) |
+| `rfantibody` | Antibody backbone generation, sequencing and prediction | [RFantibody](../rfantibody.md) |
+| `genie3` | Conditioned design with target evaluation, filtering or search/refinement | [Genie3](../genie3.md) |
+| `proteina-complexa` | Protein design with protein, ligand or motif conditioning | [Proteina-Complexa](../proteina-complexa.md) |
+| `pxdesign` | Native diffusion design with preview, extended or custom settings | [PXDesign](../pxdesign.md) |
+| `esmfold2-pipeline` | Experimental ESMFold2 inversion with Protenix v2 validation | [Pipeline](../esmfold2-pipeline.md) |
+| `igdesign` | Structure-conditioned CDR redesign of a paired antibody with antigen | [IgDesign/IgMPNN](../igdesign.md) |
 
-Structure tools and Foldseek retain their current execution hold. Chai-1 remains
-unavailable and has no executable catalog row. AF3 is excluded. Native standalone
-original RFdiffusion is retired. Experimental and Preview designations stay with
-their methods. Nondeterministic Harness, larger ESMFold2 design runs and the
-unavailable historical JMS backbone reproduction retain untested scope.
+## Prediction
 
-[RFd4](../rfd4.md) has bounded native scientific cases and held modes. Consult
-the live catalog for its current availability, installation and restoration
-evidence, and resource requirements.
+| Tool or family | Use for | Guide |
+| --- | --- | --- |
+| `boltz2` | Molecular structure/complex prediction and declared affinity-input modes | [Boltz-2](../boltz2.md), [modes](../boltz2/modes.md) |
+| `af2` | Protein monomer or multimer prediction with ColabFold | [AF2](../af2.md) |
+| `rf3` | Foundry molecular prediction | [Foundry](../foundry.md) |
+| `protenix-models`, `protenix-v2` | Molecular prediction with model-specific MSA, template or constraint features | [Protenix](../protenix-models.md) |
+| `biohub-esmfold2`, `biohub-esmfold2-fast` | Standalone sequence-to-protein structure prediction | [Biohub ESM](../biohub-esm.md) |
+| `opendde` | Preview molecular prediction | [OpenDDE](../opendde.md) |
+| `openbind-0`, `openfold3-preview2` | OpenFold3-family prediction with MSA/template inputs | [OpenFold3/OpenBind](../openfold3.md) |
+| Mol-1 | Prepared-JSON molecular prediction | [Mol-1](../mol1.md) |
+| `chai1` | Molecular prediction with local MSA, templates or restraints | [Chai-1](../chai1.md) |
+| `immunebuilder` | Antibody, VHH or TCR variable-domain structure prediction | [ImmuneBuilder](../immunebuilder.md) |
 
-[Mol-1](../mol1.md) records the `mol-1-base` prediction interface and finite
-scientific, installation and recovery scope. Consult that guide and the live
-catalog for mode evidence, resource limits and availability.
+## Sequence optimization
 
-[Tmol](../tmol.md) supplies protein scoring, interface interaction scoring and
-Cartesian minimization without model assets. Check its live mode qualifications;
-upstream packing, design and FastRelax capabilities are separate from the
-adapter's documented scope.
+| Tool or family | Use for | Guide |
+| --- | --- | --- |
+| `proteinmpnn`, `solublempnn`, `ligandmpnn`, `abmpnn` | Backbone-, ligand- or antibody-conditioned sequence design/scoring | [MPNN](../mpnn.md) |
+| `fampnn` | Sequence design/scoring with fixed masks and checkpoint choices | [FAMPNN](../fampnn.md) |
+| `caliby` | Fixed-backbone or aligned-ensemble sequence design/scoring | [Caliby](../caliby.md) |
+| `esmc-300m`, `esmc-600m`, `esmc-6b` | Sequence embeddings and model likelihood | [Biohub ESM](../biohub-esm.md) |
+| `absolute-stability-esm3`, `absolute-stability-saprot` | Learned absolute stability, mutation scans or complex estimates | [Absolute stability](../absolute-stability.md) |
+| `spurs` | Mutation stability changes relative to a supplied wild type | [SPURS](../spurs.md) |
+| `jms-esm2`, `jms-mpnn`, `jms-esmfold`, `jms-aggregate` | Explicit components of a joint sequence score | [JMS components](../jms-components.md), [semantics](../jms-components/semantics.md) |
+| `jms-legacy` | Original JMS TrMRF, TrROS or joint operations | [Original JMS](../jms-legacy.md) |
+| `mpnn-acceleration` | Explicit comparison of full-backbone optimization modes | [MPNN acceleration](../mpnn-acceleration.md) |
 
-The MPNN native matrix preserves all checkpoint choices and their distinct
-operations. Its original JMS JAX checkpoint route remains distinct from modern
-ProteinMPNN. LigandMPNN soluble checkpoints and ProteinMPNN SolubleMPNN have
-different loaders and equations. `jms-aggregate` reports hybrid1/hybrid3 quantities,
-with original component identities, score directions and missing values.
+## Validation and search
 
-B56's joined campaign is complete for its finite protein, motif, antibody and
-ligand cases. P1/P2/P3, M1/M2, A1 and L1/L2 retain their original acceptance or
-rejection. M2 preserves twelve fixed residues in a 75-residue sequence and its
-failed motif metrics. L1 preserves complete OQO heavy atoms and RF3 maps. Full
-Files and R2 restoration passed on the selected outputs. These observations
-supply no experimental binding claim or broader cohort qualification. The
-[campaign guide](../../references/campaign-recipes.md) provides the joins.
+| Tool or family | Use for | Guide |
+| --- | --- | --- |
+| `ipsae`, `interface-scores` | Predicted-complex interface confidence | [ipSAE](../ipsae.md), [interface scores](../interface-scores.md) |
+| `tmol` | Protein energy, interface interaction scoring or Cartesian minimization | [Tmol](../tmol.md) |
+| `structure-tools`, `foldseek` | Structure preparation, geometry, alignment, clustering or structural database search | [Structure tools](../structure-tools.md) |
+| `mmseqs2`, `mmseqs2-gpu`, `mmseqs2-uniref90` | Protein sequence search, clustering, redundancy filtering or alignments | [MMseqs2](../mmseqs2.md) |
+| `design-qc` | DSSP, DockQ or reports from existing interface scores | [Design QC](../design-qc.md) |
+| `antibody-qc` | Antibody numbering, sequence alerts and repertoire resemblance | [Antibody QC](../antibody-qc.md) |
+| `boltz2-acceleration` | Explicit evaluation of a residual optimization | [Boltz-2 acceleration](../boltz2-acceleration.md) |
 
-Selected terms records preserve the installed [ESM3/SDK decision](../absolute-stability/assets.md),
-including exact public model and SDK revisions. Code, base weights, fine-tuned
-weights and chemical databases keep independent records. `unknown` fields need
-the selected component's notice; accepted private delivery stays accepted at its
-existing scope. A cited repository identifies scientific source, with a selected
-commit/version in `sources`. It does not establish a blanket redistribution grant.
+## Campaigns and workspace
 
-For exact mode rows use `ariax forge catalog --details --json`; choose
-`capabilities.guide` through `ariax skills forge --reference ALIAS --read --json`.
-Installation reports preparation of the image/named assets. Restoration reports
-the guide's selected saved outputs, including negative scientific outcomes.
+| Tool or family | Use for | Guide |
+| --- | --- | --- |
+| `base` | Shell/Python and project-local source/bootstrap work | [Base](../base.md), [custom code](../../references/custom-code.md) |
+| `opendde-harness` | Iterative antibody design with explicit review points | [Harness](../opendde-harness.md) |
+| `protein-hunter` | A native composed binder-design campaign | [Protein-Hunter](../protein-hunter.md) |
+| Campaign recipes | Join generator, sequence, predictor, scoring and search outputs | [Recipes](../../references/campaign-recipes.md), [consensus](../campaign-recipes.md) |
+| `lab-feedback` | Save experimental observations or prepare an offline laboratory review draft | [Lab feedback](../lab-feedback.md) |
+| Campaign benchmark | Compare retained candidates with declared QC/search settings | [Benchmark](../campaign-benchmark.md) |

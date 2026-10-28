@@ -26,7 +26,7 @@ const OPTIONS = {
   project: [['limit', 'cursor'], 2],
   activity: [['limit', 'cursor'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision'], 2],
-  catalog: [['details', 'task', 'tool', 'compact'], 1],
+  catalog: [['details', 'task', 'tool', 'compact', 'model', 'mode'], 1],
   list: [[], 1], status: [[], 2], tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
   'tools wait': [['timeout'], 4],
@@ -46,6 +46,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge limit SESSION (--gpu-hours H | --clear) --limit-revision N
   ariax forge catalog [--details | --compact] [--task FAMILY] [--tool TOOL]
+  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--json]
   ariax forge list
   ariax forge status SESSION
   ariax forge tools SESSION [--details]
@@ -72,7 +73,8 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint UUID [usual create options]
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40, L40S, or RTX6000PRO.
-  Catalog --compact summarizes qualification; omit it for full selected-mode evidence.`;
+  Use catalog --compact to find tools; --model/--mode select exact IDs and their requirements.
+  --model/--mode require --tool and cannot combine with --compact/--details. Omit them for the full tool record.`;
 
 function actionOf(positionals) {
   if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
@@ -296,7 +298,7 @@ export function report(ctx, res, kind) {
 }
 
 // Summary is for routing only. Keep all observed qualification states visible,
-// including unknown/missing values, and require the full catalog for a mode.
+// including unknown/missing values. Inspect the selected model/mode before use.
 function compactCatalogTool(tool) {
   const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
   const states = field => [...new Set(rows.length ? rows.map(row => row?.[field] ?? 'unknown') : ['unknown'])];
@@ -310,6 +312,41 @@ function compactCatalogTool(tool) {
       tasks: tool.capabilities?.tasks ?? null,
       guide: tool.capabilities?.guide ?? null,
       qualification: { rows: rows.length, native: states('native'), installation: states('installation'), restoration: states('restoration') },
+    },
+  };
+}
+
+// Keep selected rows intact: scope/workload can carry scientific limits that
+// cannot safely be inferred from a passed state or shortened as generic prose.
+function selectedCatalogTool(tool, model, mode) {
+  const models = Array.isArray(tool.models) ? tool.models : [];
+  const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
+  const modelRows = rows.filter(row => model === undefined || row?.model === model);
+  const selectedModels = models.filter(item => model === undefined || item.id === model);
+  if (model !== undefined && !selectedModels.length && !modelRows.length) {
+    throw usageError(`forge catalog: model "${model}" is not in tool "${tool.tool}".`);
+  }
+  const qualification = modelRows.filter(row => mode === undefined || row?.mode === mode);
+  if (mode !== undefined && !qualification.length && !selectedModels.some(item => item.modes?.includes(mode))) {
+    throw usageError(`forge catalog: mode "${mode}" is not in tool "${tool.tool}"${model === undefined ? '' : ` model "${model}"`}.`);
+  }
+  return {
+    tool: tool.tool,
+    name: tool.name,
+    gpu: tool.gpu,
+    resources: tool.resources ?? null,
+    models: selectedModels.filter(item => mode === undefined || item.modes?.includes(mode)
+      || qualification.some(row => row?.model === item.id)).map(item => ({
+      id: item.id,
+      modes: mode === undefined ? item.modes ?? null : [mode],
+      resources: item.resources ?? null,
+    })),
+    capabilities: {
+      tasks: tool.capabilities?.tasks ?? null,
+      guide: tool.capabilities?.guide ?? null,
+      terms: tool.capabilities?.terms ?? null,
+      citations: tool.capabilities?.citations ?? null,
+      qualification,
     },
   };
 }
@@ -423,6 +460,11 @@ async function runAction(ctx) {
     const task = ctx.flags.task;
     if (flags.compact && flags.details) throw usageError('forge catalog: --compact and --details cannot be combined.');
     const selectedTool = flags.tool === undefined ? undefined : required(flags.tool, 'tool');
+    const model = flags.model === undefined ? undefined : required(flags.model, 'model');
+    const mode = flags.mode === undefined ? undefined : required(flags.mode, 'mode');
+    const selected = model !== undefined || mode !== undefined;
+    if (selected && selectedTool === undefined) throw usageError('forge catalog: --model/--mode require --tool.');
+    if (selected && (flags.compact || flags.details)) throw usageError('forge catalog: --model/--mode cannot be combined with --compact or --details.');
     if (task !== undefined && !['binder-design', 'antibodies', 'molecular-prediction',
       'sequence-optimization', 'validation-search'].includes(task)) {
       throw usageError('Use --task binder-design, antibodies, molecular-prediction, sequence-optimization, or validation-search.');
@@ -435,6 +477,7 @@ async function runAction(ctx) {
     }
     if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
     if (flags.compact) tools = tools.map(compactCatalogTool);
+    if (selected) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
     if (selectedTool !== undefined || task !== undefined || flags.compact) response.data = { ...response.data, tools };
     return report(ctx, response, 'catalog');
   }

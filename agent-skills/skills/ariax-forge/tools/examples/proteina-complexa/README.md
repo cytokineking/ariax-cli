@@ -1,5 +1,30 @@
-# B48 bounded native inputs
+# Proteina-Complexa input examples
 
-All PDBs are exact public upstream files at 6c6bd71a72741a4d8c139ab54e2fd0012eb0bdd9. PD-L1: target A1-115 and native hotspots A37/A39/A49/A98; one 100-residue binder. 7V11: ligand OQO, explicit upstream SMILES, one 100-residue binder. M0024_1nzy_v3: generic ligand L:1 on A (the upstream task incorrectly selects L:0; explicitly override conditional feature 1 ligand=L:1) and six native residue atom selections on B; one 180-residue scaffold. Preserve atom names, input bonds and motif atom-spec. AME uses the native v2 architecture and rank-32 LoRA. Native conditioning recenters coordinates, so compare relative geometry and the centered native arrays. Sampling uses the original 400 steps, seed 5, single-pass, no reward/refinement, batch 1 and eight CPUs. A separate native reward-guided attempt must retain its actual selected reward and settings. Wider modes remain qualification gates.
+Find this directory through `ariax skills forge --tool proteina-complexa --json`,
+field `data.examples["proteina-complexa"]`. The original PDBs come from upstream
+commit `6c6bd71a72741a4d8c139ab54e2fd0012eb0bdd9`.
 
-The original AME fixture is an observed 53-atom BCA subgraph. O7A, O8A, O9A and P3D have no supplied coordinates. Preserve this input and its accepted motif evidence. Complete DHZ/ZN AME chemistry and broader search remain under qualification.
+| Input | Identity and selections |
+| --- | --- |
+| `PD-L1.pdb` | Target A1–115; hotspots A37/A39/A49/A98; example binder length 100 |
+| `7v11_ligand_centered.pdb` | OQO ligand with its explicit upstream chemical identity; example binder length 100 |
+| `M0024_1nzy_v3.pdb` | Observed 53-atom BCA subgraph and six residue atom selections on B; example scaffold length 180 |
+
+The BCA input lacks O7A/O8A/O9A/P3D coordinates. Do not invent them. Its native
+selector is `L:1`; the upstream task’s `L:0` selection needs an explicit
+`conditional_features.1.ligand=L:1` override if using this fixture directly.
+Preserve atom names, input bonds and the motif atom specification.
+
+Run `prepare-inputs.py` inside the remote tool. It retains the original inputs,
+fetches public CCD records and natural structures, and writes explicit chemistry
+for OQO, the observed BCA subgraph and complete DHZ/Zn from 1CTT chain A. Its
+`preparation.json` records component identities, bonds and omissions.
+`run-native.py --model ame` uses the complete DHZ/Zn case with the native v2
+architecture and rank-32 LoRA; it does not use the incomplete BCA case.
+
+The [guide](../../proteina-complexa.md) gives staging, runner arguments and
+supported profiles. Defaults keep 400 sampling steps, seed 5, one sample,
+batch one and eight CPUs. Keep each reward/refinement selection explicit.
+Native conditioning recenters coordinates; inspect relative geometry and the
+retained transform with the native arrays. These examples establish no binding
+or general design-quality claim.

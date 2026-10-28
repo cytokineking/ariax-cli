@@ -1,6 +1,6 @@
 # Formats and reference roles
 
-The qualified adapter accepts one protein structural model. PDB uses author
+The adapter accepts one protein structural model. PDB uses author
 chain/residue/insertion IDs. Protein mmCIF uses author IDs for DockQ and label
 IDs for DSSP's summary. The ledger preserves both namespaces. Select a single
 model before using a multi-model structure.
@@ -54,10 +54,7 @@ made. Missing or unsupported formats reject with a diagnostic. Native zero score
 remain zero. The adapter adds no scientific scoring.
 
 DSSP's experimental Python module, DockQ nucleic-acid/small-molecule/peptide
-modes, partial/automatic mapping and mismatch controls have no adapter acceptance
-claim. Geometry, independent contacts, buried area and structural alignment await
-their recorded dependency. No fallback or automatic scientific replay occurs.
-
-The image includes the wwPDB chemical-component dictionary for libcifpp. The
-creator source build alone omitted that file in the checked environment; the
-image recipe adds the snapshot so native coordinate parsing can run offline.
+modes, partial/automatic mapping and mismatch controls are outside the adapter's
+supported scope. Geometry, independent contacts, buried area and structural
+alignment are unavailable through this adapter. Missing dependencies remain
+explicit; the tool does not substitute another calculation.

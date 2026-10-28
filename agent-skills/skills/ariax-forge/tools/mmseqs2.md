@@ -7,13 +7,13 @@ Input FASTA uses unique accessions in the first header token and amino-acid sequ
 ## Discover and register the example
 
 ```sh
-ariax skills forge --json
+ariax skills forge --tool mmseqs2 --json
 ariax skills forge --reference mmseqs2 --read --json
 ariax skills ariax-forge --reference mmseqs2-modes --read --json
 ariax skills forge --reference mmseqs2-fixtures --read --json
 ```
 
-Read `data.examples.mmseqs2` from the discovery response and set `EXAMPLES` to that installed directory. `data.examples.root` is the parent containing all tool examples. It contains `query.fasta`, `target.fasta`, `unmatched.fasta`, `run.sh`, `search-managed.sh` and `check.py`. These are local installed files. The registered copies below become `/inputs/mmseqs2/` inside commands.
+Read `data.examples.mmseqs2` from the scoped discovery response and set `EXAMPLES` to that installed directory. It contains `query.fasta`, `target.fasta`, `unmatched.fasta`, `run.sh`, `search-managed.sh` and `check.py`. The registered copies below become `/inputs/mmseqs2/` inside commands. Inspect `ariax forge catalog --tool mmseqs2 --json` for the CPU tool's current resources; use the corresponding tool ID when selecting CUDA or the managed database.
 
 ```sh
 ariax forge tools add "$SESSION" --tools mmseqs2 --priority mmseqs2 --json
@@ -33,7 +33,7 @@ ariax forge run "$SESSION" --tool mmseqs2 --timeout-seconds 600 --json -- sh /in
 ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 900 --json
 ```
 
-Save the returned command ID. The example uses human beta-globin P68871, a duplicate, a three-substitution control, an N-terminal fragment and human ubiquitin. It tests identity 0.90 versus 0.99 and coverage 0.80 for both sequences versus target alone. The two CPU cluster operations should export a three-member beta-globin group and two singleton groups. `check.py` inspects accession membership, coordinates, aligned strings, A3M width and redundancy filtering. Its deliberate unrelated query produces an empty TSV. This small case qualifies native handling; it supplies no performance claim for a large candidate library.
+Save the returned command ID. The example uses human beta-globin P68871, a duplicate, a three-substitution control, an N-terminal fragment and human ubiquitin. It tests identity 0.90 versus 0.99 and coverage 0.80 for both sequences versus target alone. The two CPU cluster operations should export a three-member beta-globin group and two singleton groups. `check.py` inspects accession membership, coordinates, aligned strings, A3M width and redundancy filtering. Its deliberate unrelated query should produce an empty TSV. This small control supplies no performance claim for a large candidate library.
 
 The native commands are visible in `run.sh`. `hits.tsv` contains `query,target,fident,pident,alnlen,qstart,qend,qlen,tstart,tend,tlen,evalue,bits,qcov,tcov,qaln,taln`. Require `checks.json` with `passed: true` and inspect `/workspace/mmseqs2-cpu/a3m/`. Representative FASTA and membership tables have `_rep_seq.fasta` and `_cluster.tsv` suffixes. Filtered A3M files are in `filtered-a3m/`.
 
@@ -68,4 +68,4 @@ ariax forge sync "$SESSION" --wait --timeout 1800 --json
 ariax forge files "$SESSION" --path /workspace --checkpoint "$CHECKPOINT" --json
 ```
 
-Require the returned checkpoint `synced`. Retain original candidate accessions, query FASTA, exact argv and database metadata alongside TSVs, A3M files and cluster representatives. Follow the [Files recovery guide](../outputs.md) to restore into a later session; restore recovers files for explicit commands. Run the saved checker after restoration. Close the session after required outputs have synced and confirm closure.
+Use the completed checkpoint UUID returned by sync. Retain original candidate accessions, query FASTA, exact argv and database metadata alongside TSVs, A3M files and cluster representatives. Follow the [Files guide](../outputs.md) for saved results, restoration and session closure.

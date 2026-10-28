@@ -1,11 +1,5 @@
 # Preserve and restore complete interface-score results
 
-The accepted B35q image supports one-CPU/1-GiB scoring through 115 native tokens
-and 958 atoms. GPU count and VRAM are zero. Reuse accepted native evidence and
-saved results for retained features. Larger profiles and repeated sample series
-are optional benchmarks. Use live catalog requirements and preserve the measured
-scope; ordinary case observations do not establish larger workload capacity.
-
 Stage every original matched native file through ordinary Files inputs. Keep the
 original input sequences and producer identity/settings records, full confidence,
 summary, structure and token-map derivation together. OpenDDE needs native identity
@@ -16,10 +10,10 @@ layout when staging it. A host absolute path must be explicitly rebased in a
 separate workload handoff to its actual `/inputs` location; retain the original
 handoff beside that derivative.
 
-Write all scores, checker reports, resource logs, native positional v3 text,
-by-residue and PyMOL outputs under `/workspace/interface-scores`. Preserve failed
-attempts and unavailable values. Scratch is disposable. Wait for every writer to
-finish, sync and require a completed checkpoint:
+Write scores, checker reports and logs under `/workspace/interface-scores`,
+along with any native positional v3 text, by-residue and PyMOL files used for
+comparison. Preserve failed attempts and unavailable values. Scratch is
+disposable. Wait for every writer to finish, sync and require a completed checkpoint:
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
@@ -35,7 +29,7 @@ required subdirectory. Confirm that the complete registered input set and all
 workspace result/reference/log files are retained, with expected paths and byte
 counts. Saving just the final result JSON cannot restore its native evidence.
 Use stable checkpoint links to inspect/download scientific files. Bulk output
-remains in private remote storage under the campaign's workstation policy.
+remains in private remote storage under the workstation storage policy.
 
 The [shared outputs guide](../../outputs.md) supplies the ordinary authorized
 resume command and the distinction between same-project resume and a new project.

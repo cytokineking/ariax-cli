@@ -1,19 +1,16 @@
 # ESMC capacity and continuation
 
 Use `esmc-300m`, `esmc-600m` or `esmc-6b` with embeddings, logits,
-hidden-states or masked-logits. BF16 is the default; `--precision fp32` is
-explicitly qualified. Each item has one protein sequence. Native SDPA ran on
-one NVIDIA L40 with ECC enabled, 46,068 MiB usable VRAM and driver 580.178.04.
-The image requires driver >=580.95.05. Other GPU types need their own capacity
-evidence before admission.
+hidden-states or masked-logits. BF16 is the default; `--precision fp32` is an
+explicit alternative. Each item has one protein sequence. The supported
+hardware profile uses native SDPA on one NVIDIA L40. The image requires driver
+>=580.95.05. Capacity on other GPU types remains unverified.
 
 The supported profile is 1..1024 residues per item and 1..8 sequential items.
-One command owns the GPU until terminal. The tested eight-item lengths are
-1,16,76,256,512,768,1024,1024 at every size/mode in both precisions. Single-item
-extended-alphabet and first/last simultaneous-mask cases also passed. Batch
-inference remains sequential, so item count increases time and saved output
+One command owns the GPU until terminal. Batch inference remains sequential,
+so item count increases time and saved output
 space rather than parallel inference capacity. The adapter leaves larger
-requests available, but they are outside this qualified profile.
+requests available, but capacity beyond this profile remains unverified.
 
 | Model | Required usable CPUs | Catalog RAM minimum | Free payload disk, GiB | GPU |
 | --- | ---: | ---: | ---: | --- |
@@ -23,8 +20,8 @@ requests available, but they are outside this qualified profile.
 
 The GPU, CPU and disk floors cover this profile, cold named-asset
 preparation and complete array retention. The catalog imposes no fixed RAM
-floor. Scientific commands passed with eight assigned CPUs and a
-32 GiB container memory limit with no swap; leave host memory for preparation,
+floor. A 32 GiB container memory limit with no swap has sufficed for this
+bounded profile; leave host memory for preparation,
 Docker, Files and transfer buffers. Reserve additional disk for longer projects
 and repeated checkpoints. All N+1 hidden layers are exported as float32,
 including BF16 inference: eight 1024-residue 6B items contain 6.328 GiB of raw
@@ -40,7 +37,7 @@ IDs include them. See [array definitions](../biohub-esm.md#read-and-check-output
 Upload the bounded example after the chosen tool is ready:
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/biohub-esm/length-batch.fasta" --path biohub-esm/length-batch.fasta --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/length-batch.fasta" --path biohub-esm/length-batch.fasta --json
 ariax forge inputs list "$SESSION" --json
 ariax forge run "$SESSION" --tool esmc-600m --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-600m --mode embeddings --precision bf16 --input /inputs/biohub-esm/length-batch.fasta --output /workspace/biohub-esm/length-embeddings
 ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
@@ -56,7 +53,7 @@ Upload `interruption.json`, start a 6B hidden-state batch, and retain its return
 command ID. Cancellation is optional and explicit:
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/biohub-esm/interruption.json" --path biohub-esm/interruption.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/interruption.json" --path biohub-esm/interruption.json --json
 ariax forge run "$SESSION" --tool esmc-6b --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-6b --mode hidden-states --precision bf16 --input /inputs/biohub-esm/interruption.json --output /workspace/biohub-esm/interrupted-6b
 ariax forge cancel "$SESSION" "$COMMAND_ID" --json
 ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json

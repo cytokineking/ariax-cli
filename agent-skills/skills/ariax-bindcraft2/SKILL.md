@@ -5,7 +5,7 @@ description: Configure, validate, submit, monitor, and interpret hosted Ariax Bi
 
 # Ariax BindCraft2
 
-Read the shared [Ariax workflow](../../SKILL.md) before using this protocol. Fetch the live contract with `ariax schema bindcraft2 --raw`; this guide explains scientific choices and BC2-specific evidence. BindCraft2 is distinct from `bindcraft-v1.5`; the `bindcraft` CLI alias still means v1.5.
+Read the shared [Ariax workflow](../../SKILL.md) before using this protocol. Fetch the live contract with `ariax schema bindcraft2 --raw`; this guide explains scientific choices and BindCraft2 inputs. BindCraft2 is distinct from `bindcraft-v1.5`; the `bindcraft` CLI alias still means v1.5.
 
 The [Forge BindCraft2 guide](../ariax-forge/tools/bindcraft2.md) covers native
 commands in a separate session. Check its live tool, model and mode
@@ -15,25 +15,15 @@ BindCraft2 optimizes a binder with AlphaFold2, redesigns sequences with ProteinM
 
 ## Engine version and continuation
 
-This guide covers the hosted contract for upstream v1.0.4, pinned to
-`d502f19a187a1bc8c05e833ca9cbab7bc1934fe7`. Deployment and default-generation
-promotion are separate. Run `ariax schema bindcraft2 --json` for schema metadata
-and `ariax schema bindcraft2 --raw` for the actual job schema. When supplied,
-`native_capabilities.engine_version`, `source_commit`, and `source_tree_sha256`
-describe the active default generation; `properties` lists supported property
-choices and `advanced_controls` lists supported advanced field names. Use the
-two new controls only when their names appear in `advanced_controls` and the
-live schema accepts them. Absent metadata means unknown, not v1.0.4 support.
+This guide describes v1.0.4 settings. Fetch `ariax schema bindcraft2 --json`
+for current capabilities and `ariax schema bindcraft2 --raw` for the job schema.
+Use properties and advanced controls listed in `native_capabilities` and
+accepted by the live schema.
 
-A saved campaign continues with its compatible recorded engine and scientific
-settings. A current default version does not identify a historical run. Keep
-optional engine metadata supplied with recorded settings or config exports;
-the immutable source-tree hash identifies the generation, while version and
-commit describe it. Do not put runtime identity fields into `advanced` or
-rewrite saved aliases to migrate a checkpoint. `ariax restart` continues the
-existing campaign subject to server compatibility checks; exporting settings
-and using `ariax submit` creates a new campaign under the server-selected
-generation. An export cannot guarantee historical execution equivalence.
+`ariax restart` continues a paused campaign with its compatible recorded engine
+and scientific settings. Exporting settings and submitting them starts a new
+campaign with the server-selected engine. Do not add runtime identity fields
+to `advanced` or rewrite saved settings to migrate a checkpoint.
 
 ## Choose the format
 

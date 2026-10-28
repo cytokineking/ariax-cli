@@ -1,13 +1,67 @@
 # Campaign saved-output manifest
 
-`campaign.json` contains `candidates`, with one or two rows for each path: minibinder, antibody, states, ligand-motif and nucleic-acid. Every row has an explicit `id`, original `native_decision`, original `generation` record and `states`. The states path requires separate positive and negative entries. Other paths use a descriptive state key.
+`campaign.json` contains `candidates`, with one or two rows for each of the five
+required paths: `minibinder`, `antibody`, `states`, `ligand-motif` and
+`nucleic-acid`. The consumer does not support a partial set of paths or more than
+two candidates per path. Each row has an explicit `id`, original
+`native_decision`, original `generation` record and `states`. The states path
+requires exactly `positive` and `negative` entries. Other paths use descriptive
+state keys.
 
-Each state retains `identity`, `chains` and `observations`. Chains map molecular roles to `{kind,sequence}`; kind is protein, rna or dna. Each observation supplies model_family, same-task label, structure path, native chain map, run_record path, original native_rank and scores. A score has file, units, direction and JSON keys, or format=csv with exact match and column. A native run record contains command_id, sources, model, settings including actual seed, and hardware. Existing Forge run/source records remain the source of these fields. No new verification or identity protocol is added.
+Each state retains an `identity`, `chains` and `observations`. `chains` maps
+molecular roles to `{kind,sequence}`, where `kind` is `protein`, `rna` or `dna`.
+Each observation supplies `model_family`, a same-task `task` label, `structure`
+path, native `chains` map, `run_record` path and `scores`. Supply the original
+`native_rank` and `native_rank_context` when available; missing ranks remain
+null and missing context is labeled unavailable. The native chain map must
+name every declared polymer role. A run record
+contains `command_id`, `sources`, `model`, `settings` including the actual seed,
+and `hardware`; preserve these from the original Forge command rather than
+inventing missing measurements.
 
-References are regular relative files under the restored campaign root. The consumer rejects missing files, ambiguous CSV identity, incomplete provenance, differing molecular sequences, unsupported modalities and missing campaign paths. An unavailable native score stays JSON null with its retained reason. A defined zero stays zero. Do not fill an unavailable measurement from another predictor. Native ranking remains per method and state.
+Supported `model_family` values are `boltzgen`, `boltz2`, `boltz2-accelerated`,
+`rf3`, `rf3_preprint_124`, `rf3_preprint_921`, `protenix`, `abodybuilder2`,
+`igdesign`, `igmpnn`, `proteina-complexa` and `genie3`. The retained run record's
+model must belong to the declared family. Related variants share a family;
+only distinct families with the same `task` are compared.
 
-For the positive/negative comparison, inspect the same field separately in each state within the same family and checkpoint/settings. Keep score direction and units visible. No inter-family score average, global rank or calibrated specificity transformation is supported. Pose RMSD uses a rigid fit of exact role/sequence-position correspondences. Receptor trimming must already be explicit in the retained native residue map.
+A score names `file`, `units`, `direction` and a list of JSON `keys` leading to
+the native value. For CSV, use `format: "csv"`, one identity key/value in
+`match` and an exact `column`; the match must identify exactly one row. CSV
+values remain native strings. Keep unavailable scores null in the original
+source and preserve their explanation in saved records. A defined zero stays
+zero. Do not fill an unavailable measurement from another predictor. Native
+ranking remains per method and state.
 
-The installed consumer writes complete structured tables and five per-path shortlists. A fresh recovery consumer must reproduce every byte. It makes no native science call.
+References must name files relative to the campaign root. The consumer rejects
+missing files, ambiguous candidate/CSV identity, incomplete run records,
+differing molecular sequences, unsupported modalities and missing campaign
+paths. It reads the saved structures and scores without a generation or
+prediction call. It writes `shortlists.json`, `shortlists.tsv` and five per-path
+JSON shortlists to a fresh `--out` directory. Saved inputs can be read in the
+current workspace or after an optional [checkpoint restore](../../outputs.md).
 
-Set alignment_role=target for a protein-binder pose comparison. Per-role RMSD then uses that target fit. Chemical roles declare heavy_element_counts and every observation declares chemical_chains explicitly. The consumer preserves native heavy-atom identity/coordinates and reports centroid displacement after the polymer fit. It infers no bonds or atomwise chemical correspondence. Positive-minus-negative score differences require exact matching source/model/scientific settings and identical native units.
+Pose RMSD fits corresponding molecular roles and sequence positions using
+C-alpha atoms for proteins and phosphate P atoms for nucleic acids. It uses
+atoms present in both structures and reports unmatched counts; fewer than
+three fitting atoms leaves RMSD unavailable. Retain native residue maps and
+make any receptor trimming explicit. Set `alignment_role: "target"` to fit a
+protein-binder complex on its target; per-role RMSDs then use that same fit.
+An optional positive `pose_review_threshold_angstrom` labels the comparison
+without calibrating experimental quality. Discordant poses remain in the
+shortlist.
+
+Chemical roles declare `heavy_element_counts`, and every observation maps them
+through `chemical_chains`. The consumer checks those elemental counts and
+preserves native heavy-atom names, identities and coordinates. It reports
+centroid displacement after the declared polymer fit; it does not infer bonds
+or atomwise correspondence, orientation or chemical equivalence.
+
+For positive/negative comparisons, inspect the same field separately within
+the same model family, checkpoint, source and scientific settings. Numeric
+positive-minus-negative differences require matching native units. Keep score
+direction visible. No inter-family average, global rank or calibrated
+specificity transformation is supported. `review_selection: true` records an
+inspection choice; `accepted_for_experiment: false` preserves the need for
+scientific review and experiment. Computational agreement does not establish
+function, binding or specificity.

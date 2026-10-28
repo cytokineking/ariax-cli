@@ -1,10 +1,10 @@
 # Mol-1 inputs and conditioning
 
-Read with `ariax skills forge --reference mol1-inputs --read --json`. These are
-native source contracts at
+Read with `ariax skills forge --reference mol1-inputs --read --json`. The native
+input schema is defined at
 [`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/infer_json_format.md),
-not evidence that every mode is qualified in Forge. Use the
-[entry guide](../mol1.md) for current limits and the initial direct-runner recipe.
+but not every native mode is supported by this Forge recipe. Use the
+[entry guide](../mol1.md) for mode limits and the direct-runner commands.
 
 Supply a nonempty JSON list even for one job. Each job has a unique `name` and
 `sequences` list. Use simple filename-safe names without slashes, traversal or
@@ -24,8 +24,7 @@ oligomerization, protonation, ligand identity or missing partners from a name.
 All five entities accept `id`. DNA/RNA modifications use `modificationType` and
 one-based `basePosition`. The model constructs molecular features and reference
 conformers from these identities; an input ligand conformer is not a guarantee
-of fixed output coordinates. The simple fixture needs no cropping or atom
-repair. For a real target, record any explicitly selected domain/crop and its
+of fixed output coordinates. Record any explicitly selected domain/crop and its
 mapping to the original sequence; output sequence positions do not recover
 omitted residues or experimental author numbering.
 
@@ -34,12 +33,13 @@ omitted residues or experimental author numbering.
 The Forge recipe calls `python -m mol.runner.inference` on prepared JSON. It
 loads local features directly; it does not call `mol pred`'s protein MSA search
 preprocessor. `--use_msa false` produces empty/dummy MSA features and ignores
-supplied alignments. Use that explicitly for the ubiquitin no-MSA fixture.
+supplied alignments. Set it explicitly for a no-MSA prediction.
 No-MSA prediction can be substantially less accurate; it is a scientific change,
 not a transparent performance optimization.
 
-For a separately qualified supplied-protein-MSA experiment, set `--use_msa true`
-and specify `unpairedMsaPath` and/or `pairedMsaPath` inside **each** appropriate
+Supplied protein MSAs are outside the documented Forge scope. If a separately
+supported recipe is available, set `--use_msa true` and specify
+`unpairedMsaPath` and/or `pairedMsaPath` inside **each** appropriate
 `proteinChain`. Use absolute paths such as `/inputs/mol1/msas/A.unpaired.a3m`.
 Upload every referenced file at that exact path and wait for every input to be
 ready. Relative paths resolve against the remote working directory, not the JSON
@@ -56,13 +56,13 @@ explicit input instead. Avoid the deprecated dictionary-valued `msa` form;
 conversion in the high-level preprocessing path can write a new JSON beside its
 source, which is incompatible with read-only `/inputs`.
 
-Keep `--use_template false --use_rna_msa false` in the initial offering.
+Keep `--use_template false --use_rna_msa false` in this recipe.
 Upstream supports protein `templatesPath` in `.a3m`, `.hhr` or inline-structure
 `.json` format, and RNA `unpairedMsaPath`; those modes need separate assets,
-input checks and qualification. Native template features may fetch a missing
+input checks and a supported recipe. Native template features may fetch a missing
 mmCIF and write into a model-root cache even when hits are supplied. Template
 search is not implied by the no-search direct runner. Do not enable it until a
-qualified recipe provides local structures and separates writable scratch from
+supported recipe provides local structures and separates writable scratch from
 read-only assets. No RNA database search is authorized by these examples.
 
 ## Covalent and modified chemistry
@@ -79,18 +79,20 @@ intercomponent bonds.
 These records condition a prediction; validate the resulting bond geometry and
 chemistry. Upstream cautions that general polymer–polymer covalent bonds are
 unreliable, apart from its described cyclic-peptide/disulfide cases. None are
-qualified here yet. An unavailable CCD component is an input/asset limitation,
-not permission to silently change chemistry or fetch a new dictionary.
+validated in this recipe. An unavailable CCD component is an input/asset
+limitation, not permission to silently change chemistry or fetch a new dictionary.
 
 ## Seeds, batches and provenance
 
 The direct runner reads one JSON file containing one or more jobs. `--seeds 101`
 selects the default seed; a comma-separated value selects several. With
 `--use_seeds_in_json true`, the first job's `modelSeeds` list applies to **all**
-jobs in the file. Leave it `false` for the supplied fixture to avoid hidden
-seed precedence. Give every job a unique output name and preserve all requested
-seed/sample identities. Larger batches and additional seeds are unqualified.
+jobs in the file. Leave it `false` when choosing seeds through the command line
+to avoid hidden seed precedence. Give every job a unique output name and
+preserve all requested seed/sample identities. Larger batches and additional
+seeds remain outside the documented Forge scope.
 
 Save the exact input JSON, every MSA/template/ligand companion, source revision,
-selected named asset identities, command argv and resolved runtime settings. Preserve explicit user chemistry and chain mappings when exporting to
-another tool; similar JSON field names do not guarantee compatible semantics.
+selected named asset identities, command argv and resolved runtime settings.
+Preserve explicit user chemistry and chain mappings when exporting to another
+tool; similar JSON field names do not guarantee compatible semantics.

@@ -16,15 +16,16 @@ Boltz-2 refold when assessing a candidate.
 ## Prepare an attempt
 
 Set `SESSION` and `PROJECT` from your available Forge session. Discover examples
-with `ariax skills forge --json`; `data.examples.root` gives their absolute root.
-The `protein-hunter` reference and `protein-hunter-fixtures` alias provide this
-guide and its small canonical example.
+with `ariax skills forge --tool protein-hunter --json`; set `EXAMPLES` to
+`data.examples["protein-hunter"]`. Check `ariax forge catalog --tool protein-hunter --json`
+for availability and resources before preparing the tool. The `protein-hunter`
+reference and `protein-hunter-fixtures` alias provide this guide and its example.
 
 ```sh
 ariax forge project "$PROJECT" --json
 ariax forge tools add "$SESSION" --tools protein-hunter --json
 ariax forge tools wait "$SESSION" protein-hunter --timeout 1800 --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/protein-hunter/protein-binder.json" --path protein-hunter/protein-binder.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/protein-binder.json" --path protein-hunter/protein-binder.json --json
 ariax forge inputs list "$SESSION" --json
 ```
 
@@ -84,13 +85,6 @@ Molecular targets and live MSA service selection are outside its supported scope
 The template and supplied-MSA path carries the selected target identity and
 native chain mapping through each cycle.
 
-The tested conditioned example uses a 30-residue cyclic binder and 122-residue
-target, one design cycle, a PDB template and a two-sequence supplied A3M. Both
-predictions retain cyclic period 30; measured terminal C-to-N distances were
-1.34 and 1.32 angstrom. Its design-cycle ipTM 0.7293 missed the unchanged 0.8 gate,
-so the native result remained rejected with zero accepted designs. Broader
-sizes and input combinations remain outside this bounded evidence.
-
 For PDB templates, configuration names the author chain. The captured predictor
 input records its native subchain label, such as author B mapped to label B1.
 The target's prediction chain remains B. Missing template chains are rejected
@@ -119,8 +113,8 @@ nonfinite coordinates/pLDDT fail after raw capture, retaining partial outputs.
 
 Native `accepted:null` describes an unvalidated saved candidate, and
 `accepted:false` describes rejection. `accepted_designs` stays 0 on this route.
-The retained canonical comparisons include both scientifically rejected runs
-and a filter-passing best with acceptance unset. Preserve all these outcomes.
+Passing the native best-cycle filters does not set independent acceptance.
+Keep rejected outcomes and unavailable metrics with the candidate record.
 
 After a completed native best-cycle pass, export one explicitly chosen version
 and use the [Boltz-2 guide](boltz2.md) for a separate refold:
@@ -141,16 +135,12 @@ After writers stop, create and retain a completed checkpoint:
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 900 --json
 ariax forge files "$SESSION" --path /workspace/protein-hunter/pdl1 --checkpoint "$CHECKPOINT" --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
-ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --gpu L40 --tools protein-hunter --max-gpu-hours 1 --json
 ```
 
-Require synced persistence and a terminal source. Human holds require verified
-web approval and a fresh revision. Approval starts no work. Read restored
-settings, native outcomes, inputs and raw arrays before another command.
-Scratch and command history are recreated separately; Files never replays science.
+Use the completed sync’s checkpoint UUID for inspection and exports. See
+[saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume)
+for closure and same-project resume. Read saved settings, native outcomes,
+inputs and arrays before continuing; restoration does not replay science.
 
 Continuation uses a fresh UUID and preserves the chosen terminal predecessor:
 

@@ -272,7 +272,7 @@ capabilities and input rules.
 | Local input inspection/preparation | `ariax inputs inspect --input FILE`, `ariax inputs prepare --input FILE -f job.json --output DIR` |
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
-| Forge discovery and sessions | `ariax forge catalog --compact`, `ariax forge catalog --tool TOOL --json`, then `ariax forge create`, `status`, `tools`, `run`, `watch`, `close`; read `ariax skills forge --read` |
+| Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `tools`, `run`, `watch`, `close`; read `ariax skills forge --read` |
 | Forge inputs and durable outputs | `ariax forge inputs add`, `inputs list`, `inputs status`, `sync`, `checkpoints`, `checkpoint`, `files`, `download`; read `ariax skills forge --reference outputs --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
@@ -287,6 +287,15 @@ capabilities and input rules.
 | Change GPU preferences | `ariax gpu-preferences <PROJECT_ID> -f preferences.json` |
 | Record project feedback | `ariax feedback <PROJECT_ID> --category technical-support --message "Expected behavior, observed behavior, and actions tried" [--job JOB_ID]` |
 | Check or install updates | `ariax upgrade --check`, `ariax upgrade` |
+
+Forge catalog `--compact` routes tool selection; combined status values do not
+establish a particular mode. With `--tool`, add `--model MODEL`, `--mode MODE`, or
+both to return exact-ID matches with tool/model resources, matching qualification
+rows, scope and workload limits, guide, license notices and citations. Missing
+rows or status fields and null resources mean unknown. Filters do not establish
+support beyond the returned scope. Omit these filters for the full tool record;
+`--json` and `--compact` keep their existing output formats. Model/mode filters
+cannot be combined with `--compact` or `--details`.
 
 The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents a
 native joint sequence and structure design workflow. Its checks are bounded;
@@ -413,53 +422,21 @@ ariax logs JOB_ID --list
 ariax logs JOB_ID --log-ref logs/design_workers/WORKER.log --tail 200
 ```
 
-The default log is a campaign/run summary. Worker logs contain detailed
-tracebacks; a worker exit code alone does not establish the cause. `--list`
-follows all discovery pages and returns usable project-relative references,
-labels, sizes, and modification times. Default JSON reads identify the selected
-`log_ref`. Logs are read through a sanitized, bounded endpoint rather than raw
-download URLs. A missing retained log does not imply it will appear later.
+The default log is a campaign/run summary. Use the returned worker `log_ref`
+for detailed failures. Logs are bounded; increase `--tail` (up to 5000) or
+retrieve the relevant saved log when a summary is insufficient.
 
-`ariax results` discovers synced scientific intermediates and useful project
-metadata beyond the website's curated listing. ESMFold2 includes target
-preprocessing, pipeline configs, campaign/sync SQLite ledgers, checkpoints and
-restore manifests. Credentials, orchestration code, opaque content-addressed
-copies, and bundles containing unsanitized logs are excluded; scientific files
-inside intermediate trees remain individually downloadable.
-
-Results default to protocol-specific output roots. Use `--path` to select an
-exact artifact or all files beneath a directory; it does not match globs or
-partial path prefixes:
+Use `ariax results` to list available output files. `--path` selects an exact
+file or directory; globs and partial prefixes are unsupported.
 
 ```sh
-ariax results PROJECT_ID --path output/provenance.json --download ./results --details --json
 ariax results PROJECT_ID --path output/Trajectory --download ./results
 ```
 
-The first command saves `./results/output/provenance.json`. `--details` includes
-operational and provenance entries, plus verification information normally
-omitted from compact output. A missing archive manifest (404) does not block
-individual file downloads: available checksums are still checked, and detailed
-output reports archive verification as unavailable. `checksum_verified` is
-false when no expected checksum is available. Invalid or mismatching metadata
-and integrity failures remain errors. Rerun the same download to resume
-completed files.
-
-BindCraft2 results archives use the webapp's project-specific attachment name:
-`./results/output/archives/<project-name>-bindcraft2-results.tar.gz`. The remote
-artifact path remains `output/archives/bindcraft2-results.tar.gz` for `--path`,
-checksums, and checkpoints. Download summaries report each local `dest`, including
-resumed or skipped files. Older servers without an attachment name keep the
-original basename; existing generic archives are left untouched. Other engines
-and loose artifact paths retain their existing filenames.
-
-Structure files are parsed locally and uploaded directly to private object
-storage with a short-lived URL—their bytes do not pass through Ariax
-application servers. `ariax logs` returns only retained project/campaign output
-associated with the job, not platform or infrastructure logs. A truncated
-response is not evidence about the whole run; request a larger bounded `--tail`
-(up to 5000) before drawing a run-wide conclusion. See [SECURITY.md](SECURITY.md)
-for security details and reporting.
+Rerun the same download to resume. Add `--details` for diagnostic and provenance
+fields. Download summaries report the local destination; BindCraft2 archives
+use a project-specific filename. See [results and errors](agent-skills/core/managed-projects.md#results-and-errors)
+for recovery and [SECURITY.md](SECURITY.md) for data handling.
 
 ## Repository structure
 
@@ -468,7 +445,7 @@ ariax-cli/
 ├── bin/                 executable entry point
 ├── src/                 commands, API client, and local input preparation
 │   └── commands/        one module per CLI command
-├── test/                Node.js tests
+├── test/                CLI integration helpers and scientific checks
 ├── agent-skills/
 │   ├── SKILL.md         shared agent workflow
 │   ├── skills/          protocol-specific guides
@@ -479,144 +456,23 @@ ariax-cli/
 ```
 
 The CLI requires Node.js 20+. Its only optional runtime dependency integrates
-with the operating system's credential store. Tests run without a live Ariax
-account:
-
-```sh
-git clone https://github.com/cytokineking/ariax-cli.git
-cd ariax-cli
-npm test
-```
+with the operating system's credential store. See the contribution guide for
+package integration checks.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute. The CLI and agent skills
 are available under the [Elastic License 2.0](LICENSE).
 
+## Settings and result guides
 
-Ordinary submission upload intents expire after 15 minutes. Seven-day operation
-retention does not extend that upload authorization: recovery before backend
-execution can be blocked by an expired unattached input. Reconcile the original
-operation and project before arranging a new authorized upload/attempt; do not
-change the key to bypass the error. Already-created projects can still be
-observed/recovered.
+Use `ariax runs PROJECT --json` for recorded job settings and
+`ariax projects export PROJECT --output job.json` to save a reusable job spec.
+Keep the original inputs separately; export does not download them. See
+[recorded settings and reuse](agent-skills/core/recorded-settings.md).
 
-### Recorded settings and configuration export
+Use `ariax candidates PROJECT --all --output candidates.json --json` to export
+candidate metrics, sequences and structure paths. See
+[candidate views and pagination](agent-skills/core/candidates.md).
 
-`ariax runs PROJECT --json` lists jobs with optional recorded settings; use
-`--job JOB_ID` for a detail response. Recorded settings are a best-effort copy
-of the accepted job configuration, captured once after acceptance. They do not
-prove which settings executed or that inference completed. Missing, older, or
-malformed records are reported as unavailable and never block operations.
-See [recorded settings](agent-skills/core/recorded-settings.md).
-
-For recorded runtime or cost, inspect every allocation on every job and sum its
-recorded values across attempts. The latest `started_at` can describe only the
-newest attempt; check every allocation state before drawing a project-wide
-conclusion.
-
-Use `ariax candidates PROJECT --json` for typed engine-specific metrics, filter
-outcomes, selection and verified structure paths. `--all --output shortlist.json`
-exports all pages atomically. Data is current project output; source changes
-invalidate cursors. BindCraft2 defaults to compact scientific rows and tables
-that show outcome and binder-chain count; add `--details` for its prior API-shaped
-record. Other engines retain their released candidate payloads and human tables.
-Unknown eligibility is distinct from false, and `--eligible` is generally
-unsuitable for PXDesign/BoltzGen. See [candidate semantics and bounds](agent-skills/core/candidates.md).
-
-Use `project.design_count_source` before interpreting project counts.
-`project_counters` makes BindCraft and ESMFold2 `tested_designs` and
-`accepted_designs` meaningful project counters; `candidate_evidence` for
-BoltzGen/PXDesign means consult candidate evidence instead, and `unavailable`
-means no supported count source is known. The numeric fields remain present for
-compatibility.
-
-`ariax projects export PROJECT --output job.json` saves public saved settings.
-Export is read-only and does not inspect or download stored inputs. Private
-storage and runtime MSA paths are omitted. Retain original custom PDB/mmCIF
-targets and any user-supplied MSA or scaffold files; prepare and upload required
-inputs, review the settings, then use normal `ariax submit` for a new authorized
-billable project. PXDesign regenerates its MSA. RCSB identifiers are retained,
-but fetching them again may return changed source data.
-
-The [bundled modality/input examples](agent-skills/core/examples.md) are
-small syntax/preparation cases. The repository's [agent evidence recorder](https://github.com/cytokineking/ariax-cli/tree/main/evaluation)
-records exact inputs, CLI identity, commands, validation responses, and completion
-separately. It is an offline evidence tool, not a claim of completed compute.
-
-### BindCraft2 v1.0.4 settings and continuation
-
-Use `ariax schema bindcraft2 --json` to inspect the live `native_capabilities`,
-then `ariax schema bindcraft2 --raw` for the job schema. Optional
-`engine_version`, `source_commit`, and `source_tree_sha256` identify or describe
-the active default generation. Absent historical metadata stays unknown; the
-current default does not establish which engine ran an existing campaign.
-
-For new v1.0.4 submissions, `hard_target` and `large_complex` replace the
-deprecated `initial_guess` and `bigbang` property names. The server normalizes
-and deduplicates aliases for new jobs; local preparation and export retain
-recorded spellings. Use property choices listed in the live capabilities.
-Two optional settings use the existing nested `protocol_config.advanced` JSON:
-
-- `confidence_floor`: finite `0..1`, native default `0.7` when omitted; shared
-  by conformational objectives and the three `Induced_Fit_*` checks.
-- `mutate_gate_draws`: integer `1..8`, native default `1` when omitted; chooses
-  the prediction with the lowest weighted design loss from fresh mutate-gate
-  draws. More draws add prediction work; scores are not averaged.
-
-Use these controls only when listed in `native_capabilities.advanced_controls`
-and accepted by the live schema. Preparation, validation, and export retain
-explicit values and omission; no new flags are required. Use validation's
-`--details --json` response to inspect the full normalized settings.
-Conformational acceptance uses existing named filters; see the
-[versioned metric meanings](agent-skills/skills/ariax-bindcraft2/outputs.md#conformational-metrics-in-v104).
-
-Scaffold `!` or `-DESIGN` holds existing residues and coordinates. A held span
-cannot resize: `A50-55(6)!` is valid but `A50-55(5-8)!` fails local validation.
-Flag deltas apply in order; a later `+DESIGN` restores editability. The bundled
-cyclic example retains its explicit `[8, 14]` lengths despite upstream's new
-`[7, 20]` default.
-
-`ariax restart` continues a saved campaign with its compatible recorded engine
-and scientific settings. `ariax projects export` preserves public settings;
-submitting that JSON creates a new campaign using the server-selected engine.
-Export does not migrate a checkpoint or guarantee the same historical runtime.
-See [recorded settings](agent-skills/core/recorded-settings.md) for provenance.
-
-### BindCraft2 amino-acid preferences
-
-Set optional preferences in `protocol_config.advanced.aa_bias` in the job JSON.
-For example, merge this field into the existing `advanced` object:
-
-```json
-"aa_bias": { "C": 0, "W": 0.4 }
-```
-
-`0` excludes, values between `0` and `1` discourage, and values above `1` favor.
-An explicit `1` removes the preset preference for that amino acid; omitting its
-entry inherits the native preset. Use uppercase standard one-letter codes and
-finite nonnegative JSON numbers. Keep only explicit overrides. These relative
-propensities apply to editable binder residues, not target or fixed scaffold
-residues, and do not specify exact counts or percentages.
-
-Fetch the live schema and inspect the normalized settings before submission:
-
-```sh
-ariax schema bindcraft2 --raw
-ariax validate -f job.json --input-dir ./bc2-inputs --details --json
-ariax projects export PROJECT --output saved-job.json
-```
-
-Export preserves preferences returned by the public config API. Reuse the
-exported job and original inputs for a new campaign; changing preferences
-requires a new project, while `ariax restart` retains scientific settings.
-See the [BindCraft2 guide](agent-skills/skills/ariax-bindcraft2/SKILL.md#amino-acid-preferences)
-for preset examples and validation rules.
-
-### Saved structures
-
-Use the live server schema and validation with the existing job JSON `protocol_config.advanced`. New campaigns default `save_design_trajectory`, `save_failed_trajectories`, `save_failed_refolds`, and `save_binder_monomers` to true; explicit false values are preserved. Packaged BindCraft2 examples show these choices. No additional flags or settings DSL are needed. Retain these values when exporting or reusing a job.
-
-`save_design_trajectory` saves the terminal prediction per predicted state, including rejected/early-terminated trajectories when predictions exist. Accepted/ranked structures are always saved. `save_binder_monomers` controls refolded monomers; terminal trajectory output may also write monomers. Intermediate frames, animations, and relaxation remain separate and are not enabled by these choices.
-
-A missing saved structure is distinct from scientific rejection or acceptance. No finite prediction can mean no structure; an early exit can have a structure but no scored metrics. Never invent scores or claim to recover historical unsaved structures. The website defaults to trajectories with structures while keeping full CSV downloads and attempt counts. The candidates API supports `view=diagnostics&structures_only=true` for BindCraft2; it filters before pagination, reports `total` and `overall_total`, and invalidates cursors when publication/filter changes. Omitted/false keeps all rows. Older publications use bounded discovery and may require retrieving the CSV and artifacts directly.
-
-BindCraft2 `protocol_config.targets[].hotspots` and `coldspots` accept whole selected chains (`A`) as well as numbered selections (`A54,B12-16`). Shorthand is validated against the input and expanded by the server for native execution; no new CLI flags are required.
+For BindCraft2 properties, amino-acid preferences, saved structures and
+continuation, use the [protocol guide](agent-skills/skills/ariax-bindcraft2/SKILL.md)
+and [output guide](agent-skills/skills/ariax-bindcraft2/outputs.md).

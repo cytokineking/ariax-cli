@@ -1,7 +1,10 @@
 # Forge structure preparation, alignment and search
 
+Use `structure-tools` to convert structures, export sequences, align proteins,
+measure contacts/SASA/geometry, and repair or explicitly relax coordinates.
+Use `foldseek` for structure search, clustering and 3Di export.
 
-The qualified fixture environment uses Biopython 1.85, NumPy 1.26.4, PDBFixer v1.11,
+The tool environment uses Biopython 1.85, NumPy 1.26.4, PDBFixer v1.11,
 OpenMM 8.2.0, FreeSASA Python 2.2.1, US-align/TM-align source
 `1fa25a958fe3095900eba2ef9b48562bdc462251`, and Foldseek 10-941cd33. The tools
 accept direct argv. CPU commands omit GPU selection. The Foldseek binary requires
@@ -20,16 +23,16 @@ ariax forge status "$SESSION" --json
 ```
 
 Require session `available` and each needed tool `ready`. `SESSION` is its real
-UUID. `EXAMPLES` is the absolute `data.examples.root` returned by the installed
-Forge skill listing.
+UUID. `EXAMPLES` is the absolute `data.examples.structure-tools` from
+`ariax skills forge --tool structure-tools --json`.
 
-The [bounded fixtures](examples/structure-tools/README.md) contain deposited
+The [example inputs](examples/structure-tools/README.md) contain deposited
 1UBQ, its protein-only chain, a known rigid transform, a missing NZ atom case and
-synthetic insertion/alternate-location contacts. Upload only the needed fixtures:
+synthetic insertion/alternate-location contacts. Upload only the needed examples:
 
 ```sh
 for FILE in 1ubq.pdb 1ubq-protein.pdb 1ubq-transformed.pdb 1ubq-missing-nz.pdb identity.pdb; do
-  ariax forge inputs add "$SESSION" --file "$EXAMPLES/structure-tools/$FILE" --path "structure-tools/$FILE" --json
+  ariax forge inputs add "$SESSION" --file "$EXAMPLES/$FILE" --path "structure-tools/$FILE" --json
 done
 ariax forge inputs list "$SESSION" --json
 ```
@@ -83,8 +86,9 @@ ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 300 --json -
 
 The parent output directory must exist. Direct native US-align can select chains
 with `-chain1`/`-chain2` and a chosen chain map with `-chainmap`. Keep those choices
-and the full native report. Complex correspondence and non-protein modes need
-their own native acceptance evidence. [Pinned US-align help](https://github.com/pylelab/USalign/blob/1fa25a958fe3095900eba2ef9b48562bdc462251/USalign.cpp)
+and the full native report. Complex correspondence and non-protein modes are
+outside the adapter's single-protein-chain scope; validate native assignments
+before interpreting them. [Pinned US-align help](https://github.com/pylelab/USalign/blob/1fa25a958fe3095900eba2ef9b48562bdc462251/USalign.cpp)
 
 Contacts include selected cross-partner non-H/D atoms at or below the stated
 Angstrom cutoff; empty contacts are a valid outcome. SASA is exposed area in
@@ -105,7 +109,7 @@ flags. Unsupported parameterizations fail.
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 900 --json -- structure-tools prepare /inputs/structure-tools/1ubq-missing-nz.pdb --remove-heterogens --ph 7 --seed 7 --platform CPU --threads 1 --relax --restraint-k 1000 --tolerance 10 --max-iterations 200 --out-dir /workspace/structures/prepare1
 ```
 
-This bounded example removes waters and repairs LYS A27 NZ, adds hydrogens at pH 7
+This example removes waters and repairs LYS A27 NZ, adds hydrogens at pH 7
 and minimizes Amber14/OBC2 with HBonds, NoCutoff and the stated heavy-atom restraint.
 `--platform Reference` is an explicit alternate CPU platform. Omitting `--relax`
 stops after repair. `--replace-nonstandard` explicitly allows PDBFixer's recorded
@@ -121,8 +125,10 @@ The image supplies the executable Foldseek 10-941cd33 binary with its source
 metadata and license. The `foldseek` command on PATH invokes that packaged binary.
 Named database assets mount as read-only data.
 `foldseek-fixture` contains a native two-entry database with the prefix
-`/models/foldseek-fixture/db`, constructed from 1UBQ and its rigid copy. The full
-selected native databases mount at `/models/foldseek-pdb/db` (PDB250101) and
+`/models/foldseek-fixture/db`, constructed from 1UBQ and its rigid copy for
+examples. For broader searches, choose the full PDB or Swiss-Prot snapshot
+available in the live catalog and confirm its mount before submitting a command.
+These databases mount at `/models/foldseek-pdb/db` (PDB250101) and
 `/models/foldseek-swissprot/db` (AlphaFold Swiss-Prot v6/2025_03). Each asset retains
 its sequence, structure, coordinate and available cluster members. Source metadata
 and the native `db.version` identify the publisher snapshot. The binary also
@@ -139,9 +145,10 @@ ariax forge run "$SESSION" --tool foldseek --timeout-seconds 300 --json -- folds
 
 Search rows are tab-separated and headerless with the exact stated field order.
 Retain query/target IDs, E-values, bit scores, lengths, aligned sequences and both
-TM-score normalizations. Empty search output can be valid; the native qualification
-case requires its known self-hit. A hit is structural similarity, with its native
-statistical definition, and does not demonstrate binding.
+TM-score normalizations. Empty search output can be valid. When using the
+two-entry example database, check for the query's known self-hit. A hit is
+structural similarity, with its native statistical definition, and does not
+demonstrate binding.
 
 For a project-specific database, deliberately choose/upload structures, stage
 only those files in a writable directory, then run `foldseek createdb DIR PREFIX
@@ -180,18 +187,12 @@ Each amino acid must have one 3Di token. Use the existing stability reader to
 construct interleaved tokens when passing this descriptor onward. Search scores
 and stability predictions retain their separate units and interpretations.
 
-The prepared PDB and Swiss-Prot assets occupy 5,987,536,958 and
-2,608,318,065 bytes. Their retained archives are 5,987,614,720 and
-2,608,353,280 bytes. The one-query native runs used eight threads, took 5.81 and
-11.99 seconds and reached 1,376,740 and 2,150,700 KiB maximum RSS respectively.
-Those times exclude Forge startup and readiness. PDB used a complete publisher
-snapshot with its native cluster members; neither search trimmed the database.
-
 For the installed full-database tool, allow eight CPUs, 8 GiB RAM and 32 GiB
 disk, including both prepared databases, transfer staging and scratch. This is
-a planning allowance for the documented query. Native temporary files were
-removed after each search; filesystem writes measured 320 and 344 KiB. Batch
-queries and retained temporary files need their own space estimate.
+a planning allowance for the documented single query, not an established batch
+capacity. Remove disposable native temporary files after each search. Batch
+queries and retained temporary files need their own space estimate; confirm
+the live tool's resource requirements.
 
 ## Save and interpret results
 

@@ -1,16 +1,11 @@
 # Forge ColabFold / AlphaFold2
 
-
-The image pins [ColabFold 1.6.3](https://github.com/sokrypton/ColabFold/tree/84c27d9cc500489fd9b97545d2325b9d00f251d5),
-commit `84c27d9cc500489fd9b97545d2325b9d00f251d5`,
-`alphafold-colabfold==2.3.20`, Python 3.12 and JAX/CUDA12 0.11.1 in its own
-environment. Native `colabfold_batch` is on PATH. The managed-parameters
-patch disables automatic weight downloads; the CSV patch fixes supplied
-A3M paths in complex detection and MSA-depth sorting. The token-order patch
-retains each sample's processed residue order beside the native outputs.
-The MSA-channel patch preserves each chain's query when a combined A3M starts
-with padded unpaired rows, and preserves absent alignment channels without
-adding homologs or pairing rows.
+Use `af2` for protein monomer or complex structure prediction with
+[ColabFold 1.6.3](https://github.com/sokrypton/ColabFold/tree/84c27d9cc500489fd9b97545d2325b9d00f251d5).
+Native `colabfold_batch` is on PATH. Weights come from the managed model
+asset; workloads do not download them. Outputs retain each sample's
+processed residue order. Supplied combined A3Ms preserve chain queries
+and absent alignment channels without adding homologs or pairing rows.
 
 Read [common MSA choices](af2/msa.md) before submitting sequences to a
 service. Supplied alignments work without a service when templates are off
@@ -46,20 +41,23 @@ The [examples](examples/af2/README.md) include a supplied 76-residue ubiquitin
 alignment, the 21/30-residue pig-insulin chains from 4INS, synthetic
 paired/homomer alignments, two monomer FASTA records, CSV paths and
 experimental 1UBQ/4INS template inputs. Reduced settings exercise
-execution. They have no biological success threshold. Admission minima and broader length/depth envelopes remain unknown.
+execution. They have no biological success threshold. Capacity coverage is
+limited to small examples on one L40; CPU/RAM/VRAM/disk minima and broader
+sequence-length/MSA-depth limits remain unknown.
 
 ## Run with a supplied alignment
 
 Use an authorized session whose deployed catalog includes `af2`, require
 host `available` and tool `ready`, and record the returned input/command IDs.
-`EXAMPLES` is `data.examples.root` from `ariax skills forge --json`.
+`EXAMPLES` is `data.examples.af2` from `ariax skills forge --tool af2 --json`.
+JAX scratch and cache directories must be writable.
 
 ```sh
 ariax forge tools add "$SESSION" --tools af2 --priority af2 --json
 ariax forge tools wait "$SESSION" af2 --timeout 1800 --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/af2/monomer.a3m" --path af2/monomer.a3m --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/af2/alphafold2_ptm.json" --path af2/alphafold2_ptm.json --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/af2/af2_outputs.py" --path af2/af2_outputs.py --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/monomer.a3m" --path af2/monomer.a3m --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/alphafold2_ptm.json" --path af2/alphafold2_ptm.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/af2_outputs.py" --path af2/af2_outputs.py --json
 ariax forge inputs list "$SESSION" --json
 ariax forge run "$SESSION" --tool af2 --gpus 0 --timeout-seconds 3600 --json -- colabfold_batch /inputs/af2/monomer.a3m /workspace/af2-ptm-UNIQUE --model-type alphafold2_ptm --num-models 5 --model-order 1,2,3,4,5 --num-seeds 1 --random-seed 7 --num-recycle 1 --num-ensemble 1 --max-msa 32:64 --num-relax 0 --pair-mode unpaired_paired --pair-strategy greedy --stop-at-score 100 --disable-unified-memory --save-all
 ariax forge watch "$SESSION" "$COMMAND" --timeout 3600 --json
@@ -81,28 +79,24 @@ recycles, MSA depth and sampling for the question, then retain those exact
 settings. `--msa-mode single_sequence` on 1.6.3 discards supplied homologs
 and pairing; use it only when that is the intended inference mode.
 
-## Explicit affinity for the observed wide-CPU startup limit
+## CPU affinity for JAX startup
 
-B26b's first unrestricted JAX startup on a 184-CPU qualification guest reached the
-existing 512-process container limit. A new explicit command used the prefix
-below before its controlled 15-checkpoint mode runner and passed with the
-same scientific settings. It selects the first eight CPUs already allowed
-to the process, prints them and executes the requested program. Children
-inherit that affinity. Use this approach when addressing the observed wide-CPU
-startup failure, then observe the new command ID and check every output.
+On hosts with many CPUs, unrestricted JAX startup can reach the container's
+512-process limit. The prefix below selects the first eight CPUs already
+allowed to the process, prints them and executes the requested program.
+Children inherit that affinity. Use it when addressing this startup failure,
+then observe the new command ID and check every output.
 
-The example applies the exact tested prefix to the shipped `run_modes.sh`.
+The example applies the prefix to the shipped `run_modes.sh`.
 Stage that runner, `monomer.a3m`, `insulin.a3m`, all three mode manifests and
 `af2_outputs.py` under `/inputs/af2`, and choose a fresh workspace root:
 
 ```sh
-ariax forge run "$SESSION" --tool af2 --gpus 0 --timeout-seconds 3600 --json -- python -c "import json,os,sys; cpus=sorted(os.sched_getaffinity(0))[:8]; os.sched_setaffinity(0,cpus); print(json.dumps({'qualification_cpu_affinity':cpus}),flush=True); os.execvp(sys.argv[1],sys.argv[1:])" sh /inputs/af2/run_modes.sh /workspace/af2-wide-UNIQUE
+ariax forge run "$SESSION" --tool af2 --gpus 0 --timeout-seconds 3600 --json -- python -c "import json,os,sys; cpus=sorted(os.sched_getaffinity(0))[:8]; os.sched_setaffinity(0,cpus); print(json.dumps({'cpu_affinity':cpus}),flush=True); os.execvp(sys.argv[1],sys.argv[1:])" sh /inputs/af2/run_modes.sh /workspace/af2-wide-UNIQUE
 ```
 
-This command choice leaves scientific flags intact. Unrestricted startup on
-that wide guest retains the recorded boundary. Other guests have their own
-observed behavior; general CPU/RAM/VRAM/disk minima remain unknown. The
-container process limit and production CPU policy remain unchanged.
+This command leaves scientific flags intact and does not establish general
+resource minima or change the container process limit.
 
 ## Supported templates and batches
 
@@ -174,14 +168,7 @@ ariax forge download "$SESSION" /workspace/af2-ptm-UNIQUE/config.json --checkpoi
 ```
 
 Use the completed checkpoint UUID. Follow the shared outputs guide for
-saved result links, explicit resume and cleanup. The bounded 25-prediction
-offline matrix, all fifteen checkpoints and selected
-template families passed native CUDA/output checks on one L40. Public
-monomer and all three public multimer modes passed native search, prediction
-and unchanged output/handoff checks on October 6, 2026. The retained original
-unpaired failure input exactly matches the fresh service response. These public
-cases used model 1, seed 7, one recycle/ensemble and MSA cap 32:64.
-
+saved result links, explicit resume and cleanup.
 
 ## Selected sample for interface scores
 
@@ -198,7 +185,7 @@ checks the confidence axis and preserves native rank separately from sample
 index. Native confidence JSON has two-decimal rounding; the full-precision
 pickle remains untouched. Original PDB/JSON/raw/config/A3M/template outputs
 are preserved. The handoff retains settings, token derivation and template
-source/alias mapping. It implements B35's `interface-scores-v1` boundary.
+source/alias mapping in the `interface-scores-v1` format.
 
 On a ready interface-scores tool sharing this workspace:
 
@@ -211,38 +198,19 @@ A monomer reports no protein interface. For the paired fixture, use
 Both directional pairs are retained. Predictor ipTM remains a complex
 quantity, separate from recomputed ipSAE/pDockQ/pDockQ2/LIS. Save the original
 handoff with the scorer result because the scorer does not copy all added
-lineage fields. The October 5 selected monomer/insulin handoffs passed B35's
-116-comparison audit. Preserve the original native files and handoff alongside
+lineage fields. Preserve the original native files and handoff alongside
 scorer results.
 
 The [ordered runner](examples/af2/run_native.sh) and
-[matrix](examples/af2/matrix.json) prepare 25 bounded offline predictions,
-including all fifteen checkpoints and selected template families. The
+[matrix](examples/af2/matrix.json) cover all fifteen checkpoints and selected
+template families at reduced settings. The
 [service runner](examples/af2/run_services.sh) takes one selected case and
-an explicit search/predict stage. The offline matrix passed in the assigned
-2026-10-05 native run. October 6 checked all 25 offline outputs again across
-core, batch and remaining-case commands. Two multi-command runner attempts
-stopped on CUDA initialization after host systemd reloads; both failures were
-retained. Completed predictions were preserved, and unfinished cases passed
-in fresh accepted-runtime containers. B26b then reproduced fresh-process
-CUDA loss and accepted Docker cgroupfs bootstrap. Repeated source controls
-passed, and the fresh reload run kept its container, PID and start time
-through all 15 predictions. The original failed attempts remain in the
-historical B31q evidence. Public monomer and all three multimer cases passed
-independently. October11 added native public URL override, three-chain greedy/complete pairing,
-monomer/heteromer template selection and endpoint failure without fallback.
-Broader envelopes and broader reload workloads remain unqualified.
+an explicit search/predict stage. A CUDA initialization failure remains a
+failed command; preserve completed outputs and inspect the runtime before
+explicitly submitting unfinished work. Broader capacity and host-reload
+workloads remain unverified.
 
 Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
 and [project controls](../SKILL.md#project-controls-and-resume) for human
 pause and same-project resume. Web approval clears a hold without allocating
 compute; restoration leaves the next scientific command explicit.
-
-
-Read small functional completion for the wave-seven finite
-matrix, native service templates, three-chain pairing, installed commands and
-full saved-project restoration. Public ColabFold is now
-selected under the recovered user requirement; no separate MSA deployment is
-required. S05-S08 and E01 passed on October11; final restoration proofs are in the
-wave-seven completion handoff. The frozen image requires writable JAX scratch
-cache setup, included in that guide’s command prefix.

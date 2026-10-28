@@ -2,12 +2,12 @@
 
 `interface-scores HANDOFF.json --output RESULT.json [--pae-cutoff 10]` reads
 one matched prediction sample. AF3 input is unsupported. All input files are preserved. Output is
-published by a completed temporary write and atomic move. Invalid input exits
+saved by a completed temporary write and atomic move. Invalid input exits
 one without overwriting an existing result; an output path cannot replace a
 declared original input. An unavailable score is a successful, labeled
 scientific outcome, not a fabricated numeric zero.
 
-The [fixtures](../examples/interface-scores/README.md) show each complete format.
+The [synthetic examples](../examples/interface-scores/README.md) show each complete format.
 Handoff JSON contains:
 
 | Field | Meaning |
@@ -59,16 +59,9 @@ The RF3 source reference is Foundry
 Protenix source context is Ariax fork
 `b806d2540ab326d71edcc47128343e627248c099`,
 [`confidence.py`](https://github.com/cytokineking/Protenix/blob/b806d2540ab326d71edcc47128343e627248c099/protenix/model/sample_confidence.py).
-Boltz context is 2.2.1. The retained B11 Boltz output passed local consumer
-acceptance using native processed records, without sorting chain labels or
-deriving identity from shape. See the local acceptance procedure.
-B31's supplied actual AF2 monomer/insulin handoffs also passed local consumption.
-Their native Protein token sidecars establish the 76 and 21+30 residue axes;
-native PDB/rounded JSON confidence agree. Native confidence rank 5 remains
-distinct from sample index 0 in the retained handoffs. All three offered RF3 choices passed native consumption. Eight accepted B29 Protenix choices passed 928 native v3 comparisons.
+Boltz context is 2.2.1.
 
-
-The score definitions are Roland Dunbrack's retained ipSAE v3 protein
+The score definitions are Roland Dunbrack's ipSAE v3 protein
 definitions. ipSAE averages the PAE kernel strictly below the user cutoff
 with row-specific protein d0, then takes the maximum reference row. LIS
 uses PAE <=12 A without a contact filter. Docking scores use CB, or glycine CA,
@@ -85,9 +78,12 @@ automatic sample selection is provided. The native positional v3 command
 continues to write its original text/by-residue/PyMOL files. Array adapter
 results are a distinct JSON format.
 
+The [metric reference](../../references/ipsae-metrics.md) gives the complete
+definitions and paper references. The runtime retains ipSAE's MIT notice.
+
 ## Export native RF3 identities
 
-On the CPU scorer image, run the owned native exporter explicitly:
+Inside the CPU scorer workload, run the native exporter explicitly:
 
 ```sh
 python /opt/interface-scores/native_handoff.py REQUEST.json --output HANDOFF.json
@@ -102,7 +98,7 @@ protein samples; an explicitly prepared v1 map can exclude other chemical tokens
 when every selected protein chain meets the scoring contract. All originals are
 preserved. It exports files and identities without launching inference.
 
-RF3 export requires the accepted Foundry native-mapping annotations:
+RF3 export requires the Foundry native-mapping annotations:
 `atom_token_ids`, `atom_res_ids`, `atom_res_names`, `atom_names`. It checks them
 against the original mmCIF atom order, maps native string chain iids to labels, and keeps
 global zero-based token IDs and original 0–1 atom pLDDT. The native summary
@@ -110,31 +106,9 @@ global zero-based token IDs and original 0–1 atom pLDDT. The native summary
 it is never interpreted as per-chain pTM. The scorer exposes that meaning under
 `native_confidence`.
 
-The unchanged positional v3 reference accepts the common atom-confidence dialect. For
-RF3 comparisons only, a clearly labeled derived JSON multiplies native atom
-pLDDT by 100 and copies PAE unchanged; raw RF3 files remain untouched. The reference copy changes only
-`_atom_site.id` to one-based atom positions
-for v3, which reads confidence at atom ID minus one. Every coordinate and atom
-identity remains exactly equal to the original; raw RF3 IDs stay untouched. RF3 complex ipTM is excluded from pair-ipTM comparison.
-Reference tolerances remain half the last printed v3 digit: 0.0000005 for pair
-ipSAE, 0.00005 for pDockQ/pDockQ2/LIS and per-residue ipSAE, 0.0005 for per-residue d0.
-
-
-The eight accepted native-default Protenix insulin A/B handoffs passed direct
-v3 comparison (928 checks). For the reference dialect only, native
-`token_pair_pae` is copied as `pae`, native `atom_plddt` is multiplied by 100
-and named `atom_plddts`, and the original `chain_pair_iptm` matrix is copied
-with its A, B, ... order. Original coordinates are byte-identical copies.
-The helper rejects a different summary order rather than remapping it for v3.
-Raw inputs and scientific scoring definitions stay unchanged. The native
-atom-contact expansion with several tokens per residue remains explicitly
-unavailable; no residue aggregation is supported. The recorded consumer comparisons cover the eight accepted checkpoints. B35q qualified
-OpenDDE general/ABAG and OpenBind-0/Preview2 consumers separately.
-
-
 ## OpenDDE and supported OpenFold3 handoffs
 
-OpenDDE uses the accepted B40 exporter and original `token_pair_pae`,
+OpenDDE uses its producer's native handoff exporter and original `token_pair_pae`,
 `atom_plddt`, `atom_to_token_idx` and `token_asym_id`. Keep `native_identity`
 and `original_input` in `files`; both are required for direct correspondence
 checks. Models are exactly `opendde_v1:general` and `opendde_v1:abag`.
@@ -142,18 +116,20 @@ checks. Models are exactly `opendde_v1:general` and `opendde_v1:abag`.
 the separate sorted filename rank. No model prediction is required to export
 or score retained output. Both choices retain their preview designation.
 
-OpenFold3 consumes the B41 handoff and its `native_files.confidence` JSON,
+OpenFold3 consumes its exported handoff and `native_files.confidence` JSON,
 without loading feature PT/pickle files. Native `plddt` must equal exported
 `atom_plddts`; PAE must agree exactly. Retain the original native token index,
 asym/residue identity, atom-to-token membership and native atom identity.
-Accepted engine/checkpoint pairs are OpenBind-0 0.5.0 with
+Supported engine/checkpoint pairs are OpenBind-0 0.5.0 with
 `of3-ob-2025-06-30-174k.pt` and Preview2 0.4.3 with `of3-p2-155k.pt`.
 The sample index is one-based generation order, and rank stays null.
-Preview1 remains excluded after its retained peptide geometry failure.
+Preview1 remains excluded.
 
 For both predictors, score only complete standard protein chains with one
 token per residue. Preserve chemical rows and exclude their tokens explicitly;
 a split protein residue is rejected without aggregation or replacement arrays.
+Protenix atom-contact expansion with several tokens per residue is likewise
+unavailable; no residue aggregation is supported.
 PAE rows name reference residues and columns name partners. Docking scores use
 native CB/glycine-CA atom pLDDT. Native pair ipTM and complex ipTM retain their
 original scopes; absent confidence remains unavailable.

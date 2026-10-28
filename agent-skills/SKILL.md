@@ -1,125 +1,57 @@
 ---
 name: ariax-agent-access
-description: Route scientific work to managed Ariax projects or Forge, and use shared account and lifecycle guidance.
+description: Choose managed Ariax projects or Forge and follow shared account, spending, and recovery guidance.
 ---
 
 # Ariax agent workflow
 
-First identify the scientific goal and choose the execution model. A **managed
-project** runs a defined protocol: Ariax provisions compute, runs the stages,
-reports engine-specific progress and results, persists artifacts, and cleans
-up. Choose it when the live schema supports the experiment. **Forge** provides
-a workspace for explicit native commands and composed workflows: you plan
-commands, inputs, output checks, saves, and session closure; Ariax enforces
-access, isolation, billing, and the resource lifecycle. A shared engine name
-does not make their settings, versions, or qualification interchangeable.
-Read [engine choice](core/engine-choice.md) first:
+Use a **managed project** for a supported protocol with automatic execution,
+artifact storage and cleanup. Use **Forge** for native commands or a custom
+workflow; you manage command order, saved files and session closure. Read
+[engine choice](core/engine-choice.md) when selecting the workflow.
 
-```sh
-ariax skills --reference engine-choice --read --json
-```
-
-For a managed project, read the selected protocol guide and
-[managed lifecycle](core/managed-projects.md):
+Read only the selected protocol or platform guide and references needed for
+the current task:
 
 ```sh
 ariax skills PROTOCOL --read --json
 ariax skills --reference managed-projects --read --json
+# For native commands and custom workflows:
+ariax skills forge --read --json
 ```
 
-For Forge, read the [Forge guide](skills/ariax-forge/SKILL.md), then discover
-and inspect the exact live tool, model and mode before choosing native commands.
-Only read input or output references when they affect the current decision; read
-output guidance before running when it changes required stages or saved files.
+Managed and Forge settings can differ for the same engine. Use the live
+protocol schema or the selected Forge tool/model/mode to configure work.
 
-For Mol-1 specifically, read the [tool guide](skills/ariax-forge/tools/mol1.md)
-for prepared-JSON prediction, recorded scope and separate model/data terms,
-then inspect the live catalog before use.
+## Account access
 
-## Authorization and account
+Check `ariax me --json`. If authentication is missing or rejected, ask the user
+to run `ariax login` in their terminal with a key from
+<https://www.ariax.bio/settings/api-keys>. Never request or print the key or put
+it in command arguments, URLs or job files. If `ARIAX_API_KEY` supplies the key,
+the user must update that secret-manager override. Mutations require both
+`read` and `write` scopes.
 
-If authentication is missing, ask the user to run `ariax login` in their own
-terminal after creating a key at <https://www.ariax.bio/settings/api-keys>.
-Never request the key in conversation, print it, or put it in a command argument,
-URL, or job file. Secret-manager injection through `ARIAX_API_KEY` is supported.
-If an authenticated command reports a rejected API key, follow its
-`error.action`: ask the user to run `ariax login` in their own terminal with a
-new key, or update `ARIAX_API_KEY` in their secret manager if that override is
-in use. Wait for them to finish before rerunning the command.
-Submit, restart, and recovery need both `read` and `write` scopes.
+Use `--json` for scripts; data goes to stdout and progress to stderr. Preserve
+the exit code before parsing output; see the [shell example](core/examples.md#safe-scripted-output).
 
-```sh
-ariax --version --json
-ariax upgrade --check --json
-ariax me --json
-```
+## Run and recover
 
-An `unpublished` upgrade status means no npm release exists; continue with the
-identified GitHub build. Record the verified CLI channel and revision with
-retained evidence. Preserve the user's existing compute authorization, explicit
-scientific constraints and saved preferences; a material change outside that
-scope needs authorization.
+- Keep the user's scientific constraints and existing compute authorization.
+  Check `ariax pricing --json` before choosing an allocation.
+- For managed jobs, prepare inputs and validate the saved configuration before
+  submission. Follow [managed lifecycle](core/managed-projects.md) for GPU
+  selection, submission, recovery and results.
+- After an uncertain managed submission, use `ariax operations` and
+  `ariax recover OPERATION_ID`. For Forge, reconcile the original
+  [session or command ID](skills/ariax-forge/SKILL.md#recover-a-lost-response).
+  A local interruption does not stop remote work; resolve the existing request
+  before starting replacement work.
+- Forge preparation and idle time are billed. Checkpoint useful files,
+  explicitly close the session when done, and check that closure and saving
+  completed. See the [Forge lifecycle](skills/ariax-forge/SKILL.md).
 
-For scripts, `--json` keeps data on stdout and progress on stderr. Preserve the
-CLI exit code before parsing output; see the [safe shell example](core/examples.md#safe-scripted-output).
-
-## Prepare and validate
-
-For a managed project, select the live protocol schema, prepare the inputs and
-validate the saved configuration before submission. The
-[managed lifecycle](core/managed-projects.md#prepare-and-validate) explains
-input provenance, numbering and protocol-specific preparation. A valid request
-is not evidence of a completed run or experimental binding.
-
-## Check prices and choose GPUs
-
-Check `ariax pricing --json` for the selected allocation before spending. Compare
-compatible resources against the user's requirements, budget, deadline and
-available evidence. The [managed GPU policy](core/managed-projects.md#check-prices-and-choose-gpus)
-and [Forge guide](skills/ariax-forge/SKILL.md#discover-plan-run-and-close)
-explain their different allocation models.
-
-## Submit and recover
-
-Use the authorized configuration. If a managed submission or restart response
-is uncertain, inspect `ariax operations` and reconcile the original operation
-with `ariax recover`; do not start a replacement while its outcome is unknown.
-A local wait or interruption does not stop remote work. See
-[managed recovery](core/managed-projects.md#submit-and-recover) for the full
-request and upload rules and [Forge recovery](skills/ariax-forge/SKILL.md#recover-a-lost-response)
-for session and command IDs.
-
-## Export settings
-
-See [managed settings export](core/managed-projects.md#export-settings) for
-what is saved and which inputs must be retained separately.
-
-## Results and errors
-
-Inspect status, logs, results and the selected engine's output guidance before
-interpreting candidates. Scientific acceptance is not proof of experimental
-binding. See [managed results](core/managed-projects.md#results-and-errors)
-for counts, downloads and error behavior, and
-[interpretation](core/interpretation.md) for evidence and metrics.
-
-## Provisioning and job failures
-
-Inspect the same project and retained public evidence before retrying; an
-uncertain response, failed download, local timeout, or zero accepted designs
-never authorizes duplicate paid work. Follow the
-[managed failure and support guidance](core/managed-projects.md#provisioning-and-job-failures).
-
-### Seek technical support
-
-Use the [support guidance](core/managed-projects.md#seek-technical-support) for
-inconsistent evidence, unconfirmed cleanup, or failures without a supported
-correction. Send a support message only when explicitly requested.
-
-## Forge persistence and close
-
-Preparation and idle time consume the Forge GPU-hour allowance; successful
-commands do not close a session. Complete and inspect a checkpoint for useful
-workspace files, explicitly close the session when work is done, and verify
-resource release and persistence separately. Follow the
-[Forge lifecycle](skills/ariax-forge/SKILL.md#discover-plan-run-and-close)
-within the user's existing authorization.
+Read the selected engine's output guide and [metric interpretation](core/interpretation.md)
+when reviewing candidates. Use [campaign planning](core/campaigns.md) to size or
+extend a campaign and [failure guidance](core/managed-projects.md#provisioning-and-job-failures)
+to diagnose problems. Send support messages only when explicitly requested.

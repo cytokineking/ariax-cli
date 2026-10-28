@@ -1,10 +1,14 @@
 # Forge Protenix model choices
 
-The package uses the Ariax template-enabled Protenix fork at `b806d2540ab326d71edcc47128343e627248c099`, package `2.0.0`, with Torch 2.11/CUDA 12.8 and fair-esm 2.0.0. V2's native expected-TM export uses the exact two-file update from Protenix `646492dd2f874b7dd6ea6f85a554974f6f5ef30c`, preserving model precision.
+Use Protenix for protein, chemical and nucleic-acid structure prediction.
+The package uses the Ariax template-enabled Protenix fork, version `2.0.0`.
+Choose a checkpoint explicitly: model features and native defaults differ.
 
-Eight public checkpoints passed 57 native cases covering protein monomers/complexes, ATP/MG, RNA/DNA and supplied protein alignments. Both public v1 choices also cover direct templates and supplied RNA alignments. Grouped PDB/CIF correspondence, soft constraints and two-item explicit batch continuation are qualified, with installed use and complete selected saved-output restoration. The small 51-residue insulin cases use each model's native defaults. Original failures, soft-prior misses and unavailable scores remain explicit.
-
-`protenix-v2` has nine integrated protein-complex samples and three standalone samples in internal development. The standalone cases cover a 76-residue monomer, the same protein with ATP/MG, and RNA8/DNA8 with supplied query-only RNA MSA. Templates, supplied protein MSA and sequential batching retain their accepted integrated coverage. Tool availability follows the selected session's catalog; all nine model identities stay distinct.
+`protenix-models` provides eight checkpoint choices; `protenix-v2` is a separate
+tool with bounded internal-development coverage. V2 customer/public
+redistribution and production delivery remain outside that scope. Tool
+availability follows the selected session's catalog; all nine model identities
+stay distinct.
 
 | Exact choice | Native defaults: cycles / steps | Additional native features |
 | --- | --- | --- |
@@ -18,7 +22,15 @@ Eight public checkpoints passed 57 native cases covering protein monomers/comple
 | `protenix_mini_esm_v0.5.0` | 4 / 5 | ESM2-3B; no MSA by default; supplied MSA is explicit |
 | `protenix_mini_ism_v0.5.0` | 4 / 5 | Distinct ISM ESM2-3B; no MSA by default; supplied MSA is explicit |
 
-Native output supports execution and molecular identity for the recorded cases. It does not establish binding, specificity, accuracy across new inputs or a design hit rate. The larger base-model matrix uses disclosed 3-cycle/20-step settings; the small 51-residue insulin consumer uses native defaults. Mini/tiny keep native 4/5 defaults. Broader/default-setting large workloads need their own capacity qualification. The admission profile is one GPU with 48 GiB VRAM, eight CPUs and 250 GiB disk, with no fixed RAM floor; actual qualification used an H100 PCIe. Native commands and the image default use eight CPU threads. Six same-seed reruns varied by up to 22.983 Å in a coordinate component, so deterministic predictions are not established. Same-forward raw-confidence preservation is verified separately.
+The examples demonstrate execution and molecular identity, not binding,
+specificity, accuracy across new inputs or a design hit rate. Larger base-model
+examples use reduced 3-cycle/20-step settings; the 51-residue insulin example
+uses native defaults. Mini/tiny keep native 4/5 defaults. Capacity for broader
+or large default-setting workloads remains unverified. The admission profile
+is one GPU with 48 GiB VRAM, eight CPUs and 250 GiB disk, with no fixed RAM
+floor; capacity coverage is limited to H100 PCIe. Native commands use eight
+CPU threads. Same-seed reruns can differ; deterministic predictions are not
+established.
 
 ## Prepare and run
 
@@ -43,7 +55,7 @@ Upload user JSON and supporting files through `ariax forge inputs add`, require 
 
 ## Substructure priors
 
-Only `protenix_base_constraint_v0.5.0` accepts constraints. Its new `constraint.structure.tokens` list names at least two token centre atoms with positive 1-based `entity`, `copy` and `position`, an `atom` name and a finite three-number `coordinate`. Duplicate, missing and non-centre selectors fail. Protein centres use CA; other molecular centres must match the actual tokenizer. The full [substructure fixture](protenix-models/substructure.json) preserves fifteen CA coordinates from the pinned 2LWU example.
+Only `protenix_base_constraint_v0.5.0` accepts constraints. Its `constraint.structure.tokens` list names at least two token centre atoms with positive 1-based `entity`, `copy` and `position`, an `atom` name and a finite three-number `coordinate`. Duplicate, missing and non-centre selectors fail. Protein centres use CA; other molecular centres must match the actual tokenizer. The full [substructure fixture](protenix-models/substructure.json) preserves fifteen CA coordinates from the pinned 2LWU example.
 
 ```json
 "constraint": {"structure": {"tokens": [
@@ -77,8 +89,8 @@ Require confirmed compute/resource release before reporting the session closed. 
 
 The package keeps native inference and provides `python /opt/forge-protenix-batch.py`.
 Use it through a selected session whose catalog admits the template-capable tool.
-Grouped PDB/minimal/full-CIF feature correspondence and PDB/minimal-CIF predictions
-are qualified; full CIF has feature coverage. The examples retain their disclosed
+Grouped PDB/minimal-CIF inputs cover feature correspondence and prediction;
+grouped full-CIF coverage is limited to feature generation. The examples use
 3-cycle/20-step settings and native soft-prior interpretation.
 
 Task-level `templates` accept a direct `pdb` or `cif` path. A `.mmcif` path also uses `cif`.
@@ -113,7 +125,7 @@ duplicate chains/indices, fractional/out-of-range indices, absent source chains,
 group mappings fail with a concrete error. A flat `queryIndices`/`templateIndices` mapping is
 supported for one chain pair. Protein templates are supported by the two public v1 choices;
 the constraint checkpoint accepts its native soft priors instead. V2 template
-validation and the small standalone alias are qualified in internal development.
+use remains within its bounded internal-development scope.
 
 The shipped `grouped-pdb.json`, `grouped-cif.json` and `grouped-full-cif.json` examples include
 a query insertion, absent source residue, author insertion code and explicit two-chain correspondence.
@@ -163,17 +175,12 @@ compute; restoration leaves the next scientific command explicit.
 
 ## V2 standalone example
 
-V2's three standalone samples passed strict checkpoint loading, molecular
-identity and saved-confidence checks at native 10-cycle/200-step defaults,
-seed101 and one sample per task. The supplied RNA alignment is query-only;
-its file read and RNA features reaching the native model were observed.
-This is bounded internal-development qualification. Customer/public
-redistribution and production delivery remain separately scoped.
-
-Actual qualification used one H100 PCIe. The three calls peaked at 3.557 GiB
-allocated GPU memory, 3.651 GiB reserved and 4.538 GiB process RAM. These are
-observations for the small inputs, not minimum-capacity or throughput claims.
-The admission floor remains GPU48 GiB/CPU8/disk250 GiB, with no fixed RAM floor.
+The standalone examples contain a 76-residue monomer, the same protein with
+ATP/MG, and RNA8/DNA8 with a supplied query-only RNA MSA. They use native
+10-cycle/200-step defaults, seed 101 and one sample per task. Query-only MSA
+input contains no searched homologs. These small examples do not establish
+broader capacity or throughput. The admission floor remains GPU48 GiB/CPU8/
+disk250 GiB, with no fixed RAM floor.
 
 Use the separate v2 tool and model asset when admitted by the live catalog.
 The image's two-item input contains the existing 76-residue monomer and

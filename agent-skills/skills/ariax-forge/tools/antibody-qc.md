@@ -3,27 +3,28 @@
 Choose `antibody-qc` for paired VH/VL or explicitly declared VHH variable-domain
 sequences. It returns IMGT residue identities, sequence alerts and BioPhi OASis
 repertoire resemblance. The selected TNP sequence module adds nanobody CDR-length
-flags. Check the current catalog qualification states for the observed native,
-installation and restoration gates before execution.
+flags. Check `ariax forge catalog --tool antibody-qc --json` for current
+availability and resources before execution.
 
 The full `oasis-v1` asset mounts at `/models/oasis-v1`. Plan at least 120 GiB usable
-disk for cold preparation and restoration. The demonstrated batch contains two
+disk for cold preparation. The demonstrated batch contains two
 paired 120+107-residue inputs and one 125-residue VHH, using one CPU and 2 GiB RAM
-under read-only isolation. Cold installation used the complete 23,114,940,416-byte
-SQLite reference. Larger batches remain unmeasured. [Methods and terms](antibody-qc/methods.md) explain the
+under read-only isolation. The complete SQLite reference is approximately 22 GiB.
+Larger batches remain unmeasured. [Methods and terms](antibody-qc/methods.md) explain the
 native reference, threshold definitions and excluded structural operations.
 
 Locate the installed example:
 
 ```sh
-ariax skills forge --json
+ariax skills forge --tool antibody-qc --json
 ariax skills forge --reference antibody-qc --read --json
 ariax skills ariax-forge --reference antibody-qc-methods --read --json
 ```
 
-Use `data.examples.antibody-qc` from the discovery response as `EXAMPLES`. Prepare
-inputs with `python3 "$EXAMPLES/prepare.py" --out ./antibody-inputs`. Register
-`batch.json` with `ariax forge inputs add "$SESSION" --file
+Set `EXAMPLES` to `data.examples["antibody-qc"]` from the scoped discovery response.
+Copy `prepare.py` from that directory to the authorized remote host and run
+`python3 prepare.py --out ./antibody-inputs` there. Register
+`batch.json` from that host with `ariax forge inputs add "$SESSION" --file
 ./antibody-inputs/batch.json --path antibody-qc/batch.json`, then wait for readiness.
 Select `antibody-qc` with `ariax forge tools add "$SESSION" --tools antibody-qc`
 and `ariax forge tools wait "$SESSION" antibody-qc`. Run the exact native example:
@@ -51,7 +52,7 @@ suggest follow-up checks. Clinical immunogenicity and experimental developabilit
 remain unmeasured.
 
 Save registered inputs, provenance and the whole output directory with
-`ariax forge sync "$SESSION" --wait`. Record the checkpoint ID. Restore through
-the normal create/resume flow and inspect the saved results before choosing a
-new scientific command. [Example and recovery checks](examples/antibody-qc/README.md)
-include the controlled NGT-to-QGT motif change. Humanization is outside this tool.
+`ariax forge sync "$SESSION" --wait`. Follow the [Files guide](../outputs.md)
+for checkpoint inspection, restoration and session closure. The
+[example](examples/antibody-qc/README.md) includes a controlled NGT-to-QGT motif
+change. Humanization is outside this tool.

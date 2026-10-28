@@ -1,15 +1,15 @@
 # Native PXDesign
 
-The [managed PXDesign protocol](../../ariax-pxdesign/SKILL.md) runs a defined
-project lifecycle with its own schema and results. This native guide has
-separate settings and qualification; inspect the exact live mode.
+Use native PXDesign for protein binder backbone generation, with optional
+ProteinMPNN sequence design and AF2/Protenix evaluation. The
+[managed PXDesign protocol](../../ariax-pxdesign/SKILL.md) has its own project
+lifecycle, schema and results; inspect the exact live mode before choosing a route.
 
-
-## Inputs and stage assets
+## Inputs and model choices
 
 Use `.yaml` or native JSON. The selected dispatch does not treat `.yml` as YAML.
 Use mmCIF with full polymer sequences and explicit label-chain IDs. Example
-source input, using the retained B31 1UBQ mmCIF:
+source input, using the 1UBQ mmCIF software fixture:
 
 ```yaml
 task_name: ubq_binder
@@ -23,13 +23,14 @@ target:
       sequence: MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
 ```
 
-The ubiquitin fixture is a software qualification case, with no binding expectation. Choose biological
-constructs/crops/hotspots deliberately. Hotspots guide sampling and do not prove
+The ubiquitin fixture is a software example, with no binding expectation. Choose
+biological constructs/crops/hotspots deliberately. Hotspots guide sampling and do not prove
 contacts. Native PXDesign can accept a hotspot outside the crop and still run;
 check the effective mask rather than assuming that requested hotspot conditioned
-the sampled structure. It can also return exit0 after skipping a missing chain,
-so inspect native errors and expected output counts. Validate positive binder lengths and intended range endpoints yourself.
-This revision schedules ranges per sample in `diffusion/length_schedule.json`;
+the sampled structure. It can also return exit 0 after skipping a missing chain,
+so inspect native errors and expected output counts. Validate positive binder
+lengths and intended range endpoints yourself.
+Lengths are scheduled per sample in `diffusion/length_schedule.json`;
 `--length-min-per-len` influences coverage. A range is not one length per run.
 Chain order determines native conditioning labels. Discontinuous crops preserve
 the full register; they do not define a new full target sequence.
@@ -42,45 +43,24 @@ running. Record author chain, author residue/insertion, canonical position and
 amino acid. Invalid sequence overrides can be ignored by the native YAML parser;
 check the normalized input and full-coordinate correspondence.
 
-The complete candidate mounts read-only `pxdesign`, `proteinmpnn`,
-`alphafold2` and `protenix-models`. PXDesign supplies diffusion and specialized
-mini-template checkpoints plus its dated three-file CCD cache. B27 supplies
-native original JAX `v_48_020.pkl` under `colabdesign/v1.1.0`; a `.pt` is not that
-loader's input. B31 supplies LICENSE and all fifteen AF2 NPZ files. Shared
-Protenix supplies base/mini-default v0.5 checkpoints. The source recipe uses
-ordinary static image paths and complete named downloads; scientific commands
-do not download weights or inspect all assets per invocation. Native loaders
-report missing required files. Soluble JAX assets remain unavailable for this
-recipe. Source Apache-2.0 does not settle checkpoint/data/output distribution terms.
-Native original, AF2 and PTX CIF exports all carry the noncommercial terms notice.
-The shipped `run_monomer.py` is CC-BY-NC-4.0; binder monomer evaluation instead
-uses the separate Apache-header AF2 script. That source call graph supplies no
-terms exemption. Preserve every native notice. The monomer runner is not invoked
-by binder preview; it remains in the image's distribution review. CIF use must
-respect its explicit noncommercial notice; commercial CIF validation/use requires
-a compatible use decision or upstream clarification. The unreadable terms page
-supplies no grant and no evidence that all private qualification is forbidden.
-B27r completed the named canonical asset and validated the older JMS JAX
-consumer against all 184 native per-residue NLL values. The newer PXDesign consumer strictly loaded the original checkpoint and matched
-all captured native sample arrays in the independent stage comparison. B46b found retained PXDesign checkpoint/CCD
-members for remote reuse, with a full seven-member payload of 1,669,456,719
-bytes and a conservative 2GB uncompressed-tar bound. These metadata findings
-establish no ready PXDesign tool. The exact JAX contract is `joblib.load` of old
-`v_48_020.pkl` (`num_edges` and `model_state_dict`). The native canonical root is
-`colabdesign/v1.1.0/{v_48_010.pkl,v_48_020.pkl,__init__.py,UPSTREAM-LICENSE.txt}`
-with `SNAPSHOT-af-LICENSE.txt`, the native asset's LICENSE/SOURCE.json and all
-original `.pt` members.
-The old tree has a scoped `af/LICENSE.txt`, no root grant; later root Beer-Ware
-applicability to its JAX checkpoints remains an explicit distribution gate.
+The tool mounts read-only `pxdesign`, `proteinmpnn`, `alphafold2` and
+`protenix-models` assets. Native original MPNN uses JAX `v_48_020.pkl` under
+`colabdesign/v1.1.0`; a `.pt` is not that loader's input. Soluble JAX assets
+remain unavailable. Extended evaluation uses Protenix base/mini-template v0.5
+checkpoints. Native loaders report missing required files. MPNN/AF2 require CUDA
+and have no CPU fallback.
 
-The recipe keeps unchanged native Protenix/Torch2.3.1 in its CUDA11.8 interpreter
-and uses B45's qualified JAX0.6/CUDA12.8 family in a separate predictor interpreter.
-CPU Torch there supplies parser/seeding imports; MPNN/AF2 require CUDA and have
-no CPU fallback. Native Protenix source is unchanged. Declared packaging patches separate the
-interpreters, use managed assets and preserve raw outputs. Both pip checks and
-both Torch/JAX import orders passed on the allocated GPU. The JAX subprocess
-uses its Torch parser layernorm while CUDA computation remains in JAX; outer
-diffusion/PTX retain their selected native Torch kernels.
+Preserve every native source, model and output notice, including asset
+`LICENSE`/`SOURCE.json`, `UPSTREAM-LICENSE.txt` and `SNAPSHOT-af-LICENSE.txt`.
+PXDesign source Apache-2.0 does not settle checkpoint, data or output distribution
+terms. Native original, AF2 and PTX CIF exports carry explicit noncommercial
+notices; commercial CIF validation/use requires a compatible use decision or
+upstream clarification. The shipped `run_monomer.py` is CC-BY-NC-4.0. Binder
+preview uses a separate Apache-header AF2 script for monomer evaluation, which
+supplies no exemption from the CIF terms. An unreadable upstream terms page
+supplies no additional grant. The older JAX checkpoint tree has only a scoped
+`af/LICENSE.txt`, with no root grant; applicability of the later root Beer-Ware
+license to those checkpoints remains an unresolved distribution restriction.
 
 Extended needs `pairing.a3m` and `non_pairing.a3m` for each selected full target
 chain. Add `msa: /workspace/pxdesign/inputs/msa/A` to that chain only after checking
@@ -92,28 +72,28 @@ inputs. Missing alignments are a gate. Preview and infer need no target search.
 
 ## Direct command recipe
 
-All execution, installation, tests, images and models belong on an authorized
-remote GPU VM. Require host `available` and each selected tool `ready`; record
-actual devices, allowed CPU IDs and free disk. The measured finite profiles are recorded in completion evidence; small-case
-observations do not establish general resource minima. Set `QUALIFIED_CPUS` to eight actual allowed CPU IDs
-from that host inventory and use the explicit in-container `taskset` prefix;
-OMP threads do not limit JAX startup threads. The catalog requires
-48 GiB/device, CPU8 and disk250 GiB, with no fixed RAM floor. The observed ECC A6000 at
-46,068 MiB/device fails that memory floor. The later quote selects one nominal
-80GB H100/850-GiB root and requires >=600 GiB initially usable free for build and
-full restoration. Do not lower catalog floors or add device memory together.
+Run on an authorized remote GPU VM. Require host `available` and each selected
+tool `ready`; inspect actual devices, allowed CPU IDs and free disk. Set
+`ALLOWED_CPUS` to eight actual allowed CPU IDs from that host inventory and use
+the explicit in-container `taskset` prefix; OMP threads do not limit JAX startup
+threads. Catalog admission requires 48 GiB per device, eight CPUs and 250 GiB
+disk, with no fixed RAM floor. The larger H100 profile used 100 GiB RAM and
+required at least 600 GiB initially usable free disk for preparation and full
+restoration. Smaller resource envelopes are not established by small examples.
+Check reported device memory against the floor; do not add device memory together.
 
-Stage the small YAML and retained target source through the existing input path,
+Set `TASK_YAML` and `TARGET_CIF` to your prepared local input files. Stage them,
 require ready input states, then copy them to the YAML's absolute workspace
-paths. `SOURCE` is the owned runtime source checkout, containing source fixtures.
+paths. The example below expects `target.file` to be
+`/workspace/pxdesign/inputs/target.cif`.
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$SOURCE/science/fixtures/pxdesign/ubiquitin.yaml" --path pxdesign/task.yaml --json
-ariax forge inputs add "$SESSION" --file "$SOURCE/science/fixtures/af2/templates/1ubq.cif" --path pxdesign/target.cif --json
+ariax forge inputs add "$SESSION" --file "$TASK_YAML" --path pxdesign/task.yaml --json
+ariax forge inputs add "$SESSION" --file "$TARGET_CIF" --path pxdesign/target.cif --json
 ariax forge inputs list "$SESSION" --json
 ariax forge run "$SESSION" --tool base --timeout-seconds 60 --json -- sh -lc 'mkdir -p /workspace/pxdesign/inputs; cp /inputs/pxdesign/task.yaml /workspace/pxdesign/inputs/task.yaml; cp /inputs/pxdesign/target.cif /workspace/pxdesign/inputs/target.cif'
-ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 120 --json -- taskset -c "$QUALIFIED_CPUS" forge-pxdesign check-input --yaml /workspace/pxdesign/inputs/task.yaml
-ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 120 --json -- taskset -c "$QUALIFIED_CPUS" forge-pxdesign parse-target --yaml /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/preflight
+ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 120 --json -- taskset -c "$ALLOWED_CPUS" forge-pxdesign check-input --yaml /workspace/pxdesign/inputs/task.yaml
+ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 120 --json -- taskset -c "$ALLOWED_CPUS" forge-pxdesign parse-target --yaml /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/preflight
 ```
 
 Inspect the parsed target CIF against the original register and intended crop.
@@ -126,20 +106,19 @@ native continuation after confirmed terminal failure and stopped writers.
 The complete native preview path performs diffusion, native original MPNN,
 AF2 complex and binder monomer, filtering and export. Counts here are explicit:
 two backbones, one sequence each, one run. AF2 model ID 0 uses native
-ColabDesign's three-recycle initial-guess/binder-template path. This is distinct
-from B31's qualified ColabFold prediction, while reusing its AF2 asset.
+ColabDesign's three-recycle initial-guess/binder-template path. Its settings differ
+from a standalone ColabFold prediction, even when using the same AF2 weights.
 
 ```sh
-ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 3600 --json -- taskset -c "$QUALIFIED_CPUS" forge-pxdesign pipeline --preset preview -i /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/preview-01 --N_sample 2 --N_max_runs 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --analysis-workers 1 --early_stop false --use_fast_ln false --use_deepspeed_evo_attention false --eval.binder.num_seqs 1 --eval.binder.tools.mpnn.weights original --eval.binder.tools.mpnn.temperature 0.0001
+ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 3600 --json -- taskset -c "$ALLOWED_CPUS" forge-pxdesign pipeline --preset preview -i /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/preview-01 --N_sample 2 --N_max_runs 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --analysis-workers 1 --early_stop false --use_fast_ln false --use_deepspeed_evo_attention false --eval.binder.num_seqs 1 --eval.binder.tools.mpnn.weights original --eval.binder.tools.mpnn.temperature 0.0001
 ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
 ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
 ```
 
-Native extended executed in the completion candidate with its specialized
-assets and supplied full-query test MSAs. Its exact mode argv is:
+Extended requires its specialized assets and supplied full-query MSAs:
 
 ```sh
-taskset -c "$QUALIFIED_CPUS" forge-pxdesign pipeline --preset extended -i /workspace/pxdesign/inputs/task-with-msa.yaml -o /workspace/pxdesign/extended-01 --N_sample 2 --N_max_runs 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --analysis-workers 1 --early_stop false --use_fast_ln false --use_deepspeed_evo_attention false
+taskset -c "$ALLOWED_CPUS" forge-pxdesign pipeline --preset extended -i /workspace/pxdesign/inputs/task-with-msa.yaml -o /workspace/pxdesign/extended-01 --N_sample 2 --N_max_runs 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --analysis-workers 1 --early_stop false --use_fast_ln false --use_deepspeed_evo_attention false
 ```
 
 It first predicts the target with base-default v0.5. If target RMSD is at least
@@ -148,7 +127,7 @@ conditioning and MSA disabled for that evaluation. Otherwise it keeps the base
 model/full-target MSA route. Initial PTX defaults are four cycles, one sample,
 two steps. Finalization may run selected PTX-pass candidates at twenty steps and
 seed 2025. Retain that effective model/configuration, the decision artifacts and
-both initial and refinement scores. The completion evidence records each branch and its actual effective settings.
+both initial and refinement scores.
 `custom` leaves evaluation choices to the caller. Extra native overrides follow
 preset flags, so record the final argv and effective config.
 The Click default is `custom`, five samples and one run. It sets both return
@@ -158,7 +137,7 @@ establish the count that ran.
 Generation-only command, in the same admitted GPU envelope:
 
 ```sh
-taskset -c "$QUALIFIED_CPUS" forge-pxdesign infer -i /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/infer-01 --N_sample 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --use_fast_ln false --use_deepspeed_evo_attention false
+taskset -c "$ALLOWED_CPUS" forge-pxdesign infer -i /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/infer-01 --N_sample 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --use_fast_ln false --use_deepspeed_evo_attention false
 ```
 
 Its outputs are backbone CIFs and sequence/register metadata. They establish no
@@ -170,7 +149,7 @@ Keep `config.yaml`, `pipeline_input.json`, `pipeline_state.json`, native status/
 errors/logs, each `runs/run_XXX/diffusion/{structures,orig_seqs.json,length_schedule.json}`,
 `runs/run_XXX/eval/TASK/{sample_level_output.csv,seqs,chain_authority.json,af2_pred,ptx_pred,ptx_mini_pred}`
 and `runs/run_XXX/final/`. Retain `ptx_final_outputs` when finalization refines
-candidates. Not every mode produces every directory. The patched final CSV
+candidates. Not every mode produces every directory. The final CSV
 retains all raw candidate and decision fields as well as native presentation
 aliases. Missing success values stay unavailable and do not become passes.
 
@@ -221,7 +200,7 @@ infer binder identity from chain length, rank filename or sorted chain labels.
 Reranking preview must restore the original settings and sample bound explicitly:
 
 ```sh
-taskset -c "$QUALIFIED_CPUS" forge-pxdesign rank --dump_dir /workspace/pxdesign/preview-01 --run_id 0 --preset custom --N_sample 2 --min_total_return 2 --max_success_return 2 --dtype bf16 --use_fast_ln false --use_deepspeed_evo_attention false --eval.binder.eval_complex true --eval.binder.eval_binder_monomer true --eval.binder.eval_protenix false --eval.binder.eval_protenix_mini false
+taskset -c "$ALLOWED_CPUS" forge-pxdesign rank --dump_dir /workspace/pxdesign/preview-01 --run_id 0 --preset custom --N_sample 2 --min_total_return 2 --max_success_return 2 --dtype bf16 --use_fast_ln false --use_deepspeed_evo_attention false --eval.binder.eval_complex true --eval.binder.eval_binder_monomer true --eval.binder.eval_protenix false --eval.binder.eval_protenix_mini false
 ```
 
 `rank` does not reload the original config automatically. An extended rerank also
@@ -229,15 +208,14 @@ needs its effective post-decision model/template/MSA settings, evaluation flags,
 sample caps and rank weights. It can perform PTX refinement, so authorize its
 GPU work explicitly. It is not a harmless CPU table sort.
 
-B46d's source patch retains each actual AF2 complex/monomer forward as
+Each actual AF2 complex/monomer forward is retained as
 `<candidate>_modelN.aux.pkl` beside its PDB/JSON, including native residue indices,
 atom identities/coordinates, confidence arrays and unrounded metrics before PDB
 remapping. Binder MPNN's complete sample return is `<backbone>.mpnn-native.pkl`
 beside its input PDB. Inspect these with the matching native interpreter on the
-GPU host and retain native chain authority and converted structures. Historical
-completed results without these files remain unavailable; no automatic prediction
-fills the gap. The existing rounded summary still cannot supply a full PAE map.
-The completion candidate retains and checks these actual native forwards.
+GPU host and retain native chain authority and converted structures. For results
+without these files, the raw arrays remain unavailable; no automatic prediction
+fills the gap. A rounded summary cannot supply a full PAE map.
 Diffusion additionally saves `native_forwards/forward_XXXXXX.pt` and stream
 chunks as `sample_XXXXXX.cif.native.pt`. Native PTX saves `native-forward.pt`
 before its rounded writers. Keep these files with their inputs and chain maps.
@@ -247,46 +225,47 @@ cyclic-closure generation option.
 ## Explicit selected-candidate evaluation and save
 
 After choosing a completed snapshot and row, export its exact sequence/full-target
-identity through the source helper. This requires the patched final ID columns
+identity through the source helper. This requires the final ID columns
 and native chain authority; the helper never assumes the selected candidate passed.
 
 ```sh
 ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 120 --json -- python /opt/forge-pxdesign/export_selected.py /workspace/pxdesign/preview-01 --snapshot results --task ubq_binder --rank 1 --output /workspace/pxdesign/selection-01
-ariax forge run "$SESSION" --tool protenix-models --gpus 0 --timeout-seconds 1800 --json -- taskset -c "$QUALIFIED_CPUS" forge-protenix --model_name protenix_base_default_v1.0.0 --input_json_path /workspace/pxdesign/selection-01/protenix.json --dump_dir /workspace/pxdesign/protenix-01 --use_msa false --use_template false --sample_diffusion.N_sample 1 --model.N_cycle 3 --sample_diffusion.N_step 20 --seeds 101 --dtype bf16 --need_atom_confidence true
+ariax forge run "$SESSION" --tool protenix-models --gpus 0 --timeout-seconds 1800 --json -- taskset -c "$ALLOWED_CPUS" forge-protenix --model_name protenix_base_default_v1.0.0 --input_json_path /workspace/pxdesign/selection-01/protenix.json --dump_dir /workspace/pxdesign/protenix-01 --use_msa false --use_template false --sample_diffusion.N_sample 1 --model.N_cycle 3 --sample_diffusion.N_step 20 --seeds 101 --dtype bf16 --need_atom_confidence true
 ariax forge run "$SESSION" --tool protenix-models --gpus 0 --timeout-seconds 120 --json -- python /opt/forge-protenix-check.py /workspace/pxdesign/selection-01/protenix.json /workspace/pxdesign/protenix-01
 ariax forge run "$SESSION" --tool protenix-models --gpus 0 --timeout-seconds 120 --json -- python /opt/forge-protenix-handoff.py /workspace/pxdesign/selection-01/protenix.json /workspace/pxdesign/protenix-01 --run-id "$PREDICTION_COMMAND_ID"
 ariax forge run "$SESSION" --tool interface-scores --timeout-seconds 120 --json -- interface-scores "$EXACT_HANDOFF_JSON" --output /workspace/pxdesign/interface-01.json
 ```
 
-Require each tool's admitted compatible image and actual native output check.
-`PREDICTION_COMMAND_ID` identifies the B30 prediction, not the export command.
-`EXACT_HANDOFF_JSON` is its returned same-sample handoff path. The B30 producer
-derives actual token/atom/asym maps; B35 retains directional metrics and missing
-values. No PAE map is inferred from the PXDesign score table. Native PXDesign
+Require each tool ready with its compatible image and check its actual native output.
+`PREDICTION_COMMAND_ID` identifies the Protenix prediction, not the export command.
+`EXACT_HANDOFF_JSON` is its returned same-sample handoff path. The Protenix producer
+derives actual token/atom/asym maps; interface scoring retains directional metrics
+and missing values. No PAE map is inferred from the PXDesign score table. Native PXDesign
 AF2 summary JSON lacks full matched residue PAE/pLDDT arrays, so it alone cannot
-supply ipSAE. The exported `af2.fasta` is suitable for a separate authorized B31
+supply ipSAE. The exported `af2.fasta` is suitable for a separate authorized AF2
 prediction if that route is chosen; use its original processed token sidecars.
 
-The B30 evaluation above uses full targets and unconditioned base-v1 prediction.
+The Protenix evaluation above uses full targets and unconditioned base-v1 prediction.
 It is independent of the native cropped-target AF2 and native PTX branch scores;
 it does not populate or replace native PXDesign success columns. For deliberate
-grouped-template B30 evaluation, construct its explicit zero-based query/template
-maps from observed coordinates and full sequences under the accepted B30 guide,
-using a fresh command/output path. No implicit predictor or model substitution
+grouped-template Protenix evaluation, construct its explicit zero-based query/template
+maps from observed coordinates and full sequences under the
+[Protenix guide](protenix-models.md), using a fresh command/output path.
+No implicit predictor or model substitution
 occurs. A confidence score does not establish binding or experimental success.
 
 Inspect counts, identities, flags, structures, errors and exact settings before
-calling the campaign complete. After a failure, retain partial output and stop
-writers before an explicit bounded continuation. Watch, restoration and tool
+accepting a result. After a failure, retain partial output and stop writers
+before an explicit bounded continuation. Watch, restoration and tool
 preparation never replay a scientific command. Changed scientific intent needs
 a new output directory. Respect human holds and the original cap/deadline.
 
 Native diffusion continuation restarts its original random seed while generating
-only missing indices. In the qualified 500-index continuation, new indices
-470–499 repeated the unrounded coordinates of prior indices0–29. All prior
-completed bytes were preserved. This establishes the finite 500-row execution
-profile, not500 independent backbones or equivalence to an uninterrupted run.
-Keep that provenance and audit; use a fresh campaign when independence is required.
+only missing indices, so new indices can repeat earlier coordinates. A 500-index
+continuation repeated prior coordinates at indices 470–499. Do not count returned
+rows as independent backbones or assume equivalence to an uninterrupted run.
+Keep continuation provenance and check duplicates; use a fresh run when
+independence is required.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 900 --json
@@ -295,33 +274,19 @@ ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-
-The completion matrix and outcome packet are under `science/evidence/pxdesign/`.
-The pinned 5o45 example contains 129 source residues: crop116+binder80=196 and
-full129+binder80=209. A separately labeled synthetic247+binder80=327 software
-fixture preserves the original capacity endpoint and is not biological PD-L1.
+The 5o45 software example contains 129 source residues: crop 116 + binder 80 = 196
+and full 129 + binder 80 = 209. A synthetic 247-residue target + binder 80 = 327
+is a separate capacity fixture, not biological PD-L1. These examples establish
+execution bounds only, not broader sequence-length or independent-sample support.
 Query-only A3Ms test supplied-MSA plumbing and provide no evolutionary evidence.
 
-
-For the complete large capacity profile, retain the entire native tree in a
-gzip tar and split it into ordered Files parts of at most4GiB, with a JSON
-manifest listing the order and byte sizes. Keep the raw tree until full save
-and restoration pass. The completion harness uses the bounded source helper
-`science/src/pxdesign/archive_delivery.py` on the authorized remote host.
-The tested r3 image's bundled archive helper predates the60GB bound; use the
-current source helper for this large export.
-Keep the closed raw tree outside the checkpoint workspace while saving the
-complete part export; the remote host harness retains it separately. A single
-17.98GB checkpoint exceeded its CLI wait, so use incremental stages that each
-fit the existing900-second transfer limit. Save the first two4GiB parts, then
-add the remaining parts with a new checkpoint. The first stage is partial; only
-the final complete index represents the full scientific export. Retain failed
-operations and use new IDs for explicit retries. No scientific command is replayed.
-Files stores and exports every part plus the original selected inputs. After
-fresh logical restoration into empty scratch/history, concatenate the parts,
-unpack into `/workspace/pxdesign`, compare every native file and rerun native
-output checks. The saved Files listing contains the archive parts; native
-folders become available after explicit unpacking. This retains every array,
-rejected row and failed attempt while keeping the ordinary Files transfer path.
-The small raw-tree profile passed 2,071 files / 2,765,104,061 bytes; broader
-individual-file checkpoint throughput is not inferred from that observation.
+For large native trees, create a gzip tar on the remote host and split it into
+ordered Files parts of at most 4 GiB, with a JSON manifest listing order and sizes.
+Keep the closed raw tree outside the checkpoint workspace until the complete
+export is saved and restored. Use incremental checkpoints that fit the 900-second
+transfer wait; only the final complete index represents the full export. Keep
+every part and the original selected inputs. After restoration, concatenate and
+unpack into `/workspace/pxdesign`, compare native files and rerun output checks.
+Files lists archive parts until they are explicitly unpacked. Retain failed
+transfer operations and use new IDs for explicit retries; restoration does not
+replay scientific commands. See the [output/file workflow](../outputs.md).

@@ -1,9 +1,9 @@
 # Prepared Foundry examples
 
-The manifest contains twenty-six small native cases and fifteen larger resource
-cases. Each entry records its submitted argv, checkpoint, structural expectation
-and input identity. Original settings and scientific failures remain attached to
-those cases. The [Foundry guide](../../foundry.md) explains current sample controls
+Find this directory with `ariax skills forge --tool foundry --json`, field
+`data.examples.foundry`. The manifest contains named generation, prediction and
+capacity examples. Each entry records native argv, checkpoint, structural
+expectation and input identity. The [Foundry guide](../../foundry.md) explains current sample controls
 and observed limits; [output notes](../../foundry/outputs.md) explain confidence
 and geometry findings. Use a tool only when it is present in the configured
 catalog. The image includes the matching manifest and checker at
@@ -65,12 +65,9 @@ ariax forge run SESSION --tool rfd3na -- \
 ```
 
 The generation consumer measures fixed correspondence, C2, AMP chirality,
-RASA/HBPLUS and RNA pair geometry. Default partial diffusion and fixed DNA retain
-their 0.05 Å tolerance failures. Explicit full-precision comparisons pass that
-same threshold. Requested RNA pairs, extra pairs, burial and donor/acceptor
-satisfaction remain individual findings. The complete fixed-ligand writer
-preserves the parsed conditioning graph; earlier unavailable topology remains
-with those saved outputs. A diagnostic exit zero retains each false result.
+RASA/HBPLUS and RNA pair geometry. Inspect each scientific outcome, including
+false or unavailable results; diagnostic exit zero does not clear them. See the
+[output notes](../../foundry/outputs.md) for observed example limits.
 
 A small functional generation run uses one sample at 200 timesteps; use two for a
 batching check. The original manifest entries retain their reduced controls and
@@ -79,7 +76,3 @@ output directory to choose a different sample count. For full sample analysis,
 pass the exact count to `consume.py` or `generation_consume.py` with
 `--expected-samples N --report /workspace/reports/CASE.json`. Keep this report
 outside the native output directory so later inspection sees the same file set.
-
-The retained single-sample preprint 1/24 template AMP C1' failure remains visible.
-Its separate ten-recycle/200-step comparison clears all four centers. RF3 full
-precision remains unqualified after a native cuEquivariance BF16 guard failure.

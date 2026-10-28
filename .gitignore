@@ -2,3 +2,5 @@
 node_modules/
 *.tgz
 *.sha256
+AGENTS.md
+agents.md

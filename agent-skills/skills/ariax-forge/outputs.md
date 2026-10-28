@@ -4,12 +4,10 @@ Read this reference with `ariax skills forge --reference outputs --read --json`
 (alias `ariax-forge`). [Base](tools/base.md), [ipSAE](tools/ipsae.md),
 [Boltz2](tools/boltz2.md), [BindCraft2](tools/bindcraft2.md) and
 [FreeBindCraft](tools/freebindcraft.md) cover native inputs, commands and output
-checks. Use `ariax skills forge --json` to locate their bundled examples.
-B12 passed these bounded workflows and saved-output restoration on both
-qualified providers; broader scientific recipes retain their stated limits.
-The [catalog scope map](references/catalog.md) links every retained SCI package
-to its guide and unresolved gates. Use the selected guide's source/model/settings
-and requested-versus-produced item checks before interpreting native outputs.
+checks. Use `ariax skills forge --tool GUIDE --json` to locate the selected guide's
+references and bundled examples. The [tool index](tools/capabilities/matrix.md)
+compares methods. Use the selected guide's source/model/settings and
+requested-versus-produced item checks before interpreting native outputs.
 
 ## Interpret native results
 
@@ -25,7 +23,7 @@ be rejected. Report planned, attempted, completed and accepted counts separately
 | Interface scores / ipSAE | Use an admitted predictor adapter and the selected standard-protein residue map. Missing or split-token inputs can leave metrics unavailable. Preserve directional scores and original predictor summaries. |
 | MPNN / FAMPNN / JMS / ESMC | Likelihood scores, logits, masked protocol outputs and learned stability estimates have separate conditioning and units. FAMPNN PDB B-factors are PSCE, not pLDDT. JMS half-mask and complete-constituent requirements cannot be filled by ESMFold2/ESMC. |
 | Foundry / Proteina-Complexa | Generated sequence, coordinates, input chemistry and output topology are distinct evidence. Preserve fixed-atom misses, unavailable generated bonds and predictor sentinel rewards. RF3 `chain_ptm` at the shipped source is mean chain pLDDT. |
-| BoltzGen / BindCraft2 / FreeBindCraft / RFantibody | Keep generation, sequence design, complex refold, binder-only prediction, relaxation and selection stages distinct. The retained B43/B44/B45/B50 cases produced zero accepted designs. Unreached stages stay absent; FreeBindCraft's OpenMM placeholder fields are uncomputed. RFantibody confidence uses T/H/L order while its PDB uses H/L/T. |
+| BoltzGen / BindCraft2 / FreeBindCraft / RFantibody | Keep generation, sequence design, complex refold, binder-only prediction, relaxation and selection stages distinct. Unreached stages stay absent; FreeBindCraft's OpenMM placeholder fields are uncomputed. RFantibody confidence uses T/H/L order while its PDB uses H/L/T. |
 | Absolute stability / structure tools | DG_AB estimates full-complex stability. Ensemble spread is model disagreement. RMSD/TM-score, SASA, geometry overlaps and explicitly configured relaxation energy describe different quantities. |
 
 Computational confidence, ranking and consistent exports establish their stated

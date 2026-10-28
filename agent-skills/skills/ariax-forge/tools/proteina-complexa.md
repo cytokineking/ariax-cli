@@ -1,6 +1,5 @@
 # Proteina-Complexa native co-design
 
-
 The tool generates protein sequence and all-atom coordinates together. A supplied ligand keeps its chemical identity. Protein, ligand and atom-motif scaffolding use distinct checkpoint pairs. Shared model directories are read-only:
 
 | Model | Checkpoints under `/models/proteina-complexa` | Conditioning |
@@ -13,7 +12,7 @@ RF3 uses `/models/foundry-rf3/rf3_foundry_01_24_latest_remapped.ckpt`. AF2 uses 
 
 ## Prepare inputs
 
-Find the installed example directory with `ariax skills forge --json`. Its `examples.proteina-complexa` entry contains the original three PDB fixtures, `prepare-inputs.py` and `run-native.py`. Stage each file with:
+Find the installed example directory with `ariax skills forge --tool proteina-complexa --json`. Set `EXAMPLES` to its `data.examples["proteina-complexa"]` entry, which contains the original three PDB fixtures, `prepare-inputs.py` and `run-native.py`. Stage each file with:
 
 ```sh
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/PD-L1.pdb" --path proteina/PD-L1.pdb
@@ -31,11 +30,11 @@ ariax forge run "$SESSION" --tool proteina-complexa --gpus 0 --timeout-seconds 6
 
 PD-L1 uses A1–115 and hotspots A37/A39/A49/A98. The alternate TNF profile uses native A12–157/B12–157/C12–157 and hotspots A113/C73. OQO retains all 38 original atoms, formal charges and CCD bonds. Complete AME uses the natural 1CTT chain-A protein with DHZ and Zn, retaining its coordinates. Its motif is A102 ND1/CG/CE1, A104 OE1/CD, A129 SG/CB and A132 SG/CB/CA. The preparation report records component identities, bonds and omissions.
 
-The older M0024 BCA fixture has 53 observed atoms. O7A/O8A/O9A/P3D are absent from the supplied and deposited structures. Keep that observed subgraph and its original motif evidence distinct from complete DHZ/ZN chemistry. Do not synthesize missing coordinates.
+The older M0024 BCA fixture has 53 observed atoms. O7A/O8A/O9A/P3D are absent from the supplied and deposited structures. Keep that observed subgraph distinct from complete DHZ/ZN chemistry. Do not synthesize missing coordinates.
 
 ## Run an explicit native command
 
-Create a new working directory for each attempt. The example runner supplies ordinary native paths and overrides. It preserves 400 sampling steps, seed5, eight CPUs, native checkpoint loaders and LoRA settings. It sets `AF2_DIR` and the AME v2 environment before native imports. It bounds CPU affinity and OpenMP/MKL pools to eight CPUs so JAX fits Forge’s container process limit on large hosts.
+Create a new working directory for each attempt. The example runner supplies ordinary native paths and overrides. It preserves 400 sampling steps, seed 5, eight CPUs, native checkpoint loaders and LoRA settings. It sets `AF2_DIR` and the AME v2 environment before native imports. It bounds CPU affinity and OpenMP/MKL pools to eight CPUs so JAX fits Forge’s container process limit on large hosts.
 
 ```sh
 ariax forge run "$SESSION" --tool proteina-complexa --gpus 0 --timeout-seconds 60 -- \
@@ -52,18 +51,18 @@ Use `--model ligand --length 100` for OQO, or `--model ame --length 180` for DHZ
 | --- | --- | --- |
 | Single pass | `--algorithm single-pass --reward none` | Unranked generation |
 | Best of two | `--algorithm best-of-n --reward rf3` | Native two replicas |
-| Beam search | `--algorithm beam-search --reward rf3` | Four branches/four beams, checkpoints0/100/200/300/400 |
-| FK steering | `--algorithm fk-steering --reward rf3` | Four branches/four particles, temperature0.1 |
-| MCTS | `--algorithm mcts --reward rf3` | Twenty simulations per checkpoint, exploration0.5/constant1 |
+| Beam search | `--algorithm beam-search --reward rf3` | Four branches/four beams, checkpoints 0/100/200/300/400 |
+| FK steering | `--algorithm fk-steering --reward rf3` | Four branches/four particles, temperature 0.1 |
+| MCTS | `--algorithm mcts --reward rf3` | Twenty simulations per checkpoint, exploration 0.5/constant 1 |
 | Protein AF2 reward | `--algorithm single-pass --reward af2` | Native multimer, three recycles, original negative interface-PAE loss |
 | Protein greedy refinement | `--algorithm single-pass --reward none --refine greedy` | Fifteen greedy iterations, 1% proposals, three recycles |
-| Protein soft/hard/greedy | `--algorithm single-pass --reward none --refine soft` | Soft45, hard5, greedy15, original loss weights and three recycles |
+| Protein soft/hard/greedy | `--algorithm single-pass --reward none --refine soft` | Soft 45, hard 5, greedy 15, original loss weights and three recycles |
 
-RF3 keeps seed0, ten recycles, 50 diffusion steps and five complete samples per reward call. Its reward is `-min_ipAE/31`. Beam/FK each make 68 calls; MCTS makes81. `search.max_batch_size=16` controls branch throughput while the target dataset stays batch1. A slow search needs an adequate explicit command timeout and enough time under any optional session limit. It cannot close on missing predictions, zero fallback rewards or reduced scientific settings.
+RF3 keeps seed 0, ten recycles, 50 diffusion steps and five complete samples per reward call. Its reward is `-min_ipAE/31`. Beam/FK each make 68 calls; MCTS makes 81. `search.max_batch_size=16` controls branch throughput while the target dataset stays batch 1. A slow search needs an adequate explicit command timeout and enough time under any optional session limit. Missing predictions or fallback zero rewards do not establish a successful search. Preserve the configured settings when comparing search methods.
 
-The supported single-pass, unranked profile matrix covers protein/ligand lengths32–256 and AME64–256, baseline batch4 with four samples, at most64 supplied ligand heavy atoms and one/two AME chemical components. Multi-item runs use the original target and baseline length100 for protein/ligand or180 for AME. RF3 searches use one baseline target, samples1 and batch1. AF2 reward and refinement use a single100-residue PD-L1 binder; refinement runs separately from reward scoring. Protein complexes stay at most512 residues. `--tnf --model protein --length 32` selects the alternate target; its438 target residues bound binder length to74. Resource admission follows the deployed catalog and qualified profile evidence. Wider inputs remain outside this matrix. Ligand/AME TMOL and ligand-complex AF2 reward/refinement are unsupported.
+The supported single-pass, unranked profile matrix covers protein/ligand lengths 32–256 and AME 64–256, baseline batch 4 with four samples, at most 64 supplied ligand heavy atoms and one/two AME chemical components. Multi-item runs use the original target and baseline length 100 for protein/ligand or 180 for AME. RF3 searches use one baseline target, samples 1 and batch 1. AF2 reward and refinement use a single 100-residue PD-L1 binder; refinement runs separately from reward scoring. Protein complexes stay at most 512 residues. `--tnf --model protein --length 32` selects the alternate target; its 438 target residues bound binder length to 74. Resource admission follows the selected catalog record. Wider inputs remain outside the supported profile matrix. Ligand/AME TMOL and ligand-complex AF2 reward/refinement are unsupported.
 
-The deployment recommendation for these profiles is one GPU with24GiB VRAM,48GiB host RAM,16 CPU cores and100GiB disk. Qualification used L40 GPUs and native containers with a16-CPU quota and48GiB limit. Observed peaks were14.1GiB GPU memory and12.4GiB container RAM. The recommendation includes headroom; hardware was not experimentally minimized.
+Plan for one GPU with 24 GiB VRAM, 48 GiB host RAM, 16 CPU cores and 100 GiB disk for these profiles. Measurements used L40 GPUs with a 16-CPU quota and 48 GiB container limit; observed peaks were 14.1 GiB GPU memory and 12.4 GiB container RAM. These allowances include headroom, and smaller hardware has not been established. Check `ariax forge catalog --tool proteina-complexa --json` for availability, model IDs and resource admission.
 
 ## Explicit ligand RF3 evaluation
 
@@ -80,13 +79,13 @@ ariax forge run "$SESSION" --tool proteina-complexa --gpus 0 --timeout-seconds 1
   'ground_truth_conformer_selection=[A]'
 ```
 
-Keep its complete confidence arrays, native ranking, paired CIF and token/atom mapping. The separate accepted RF3 tool also exposes the two preprint checkpoints; this Proteina matrix uses the latest checkpoint.
+Keep its complete confidence arrays, native ranking, paired CIF and token/atom mapping. The separate RF3 tool also exposes two preprint checkpoints; this Proteina profile uses the latest checkpoint.
 
 ## Inspect and retain results
 
 Native `inference/` directories contain generated structures, reward CSVs, timings and original prediction/conditioning NPZ arrays. Hydra logs retain resolved settings. Preserve the supplied chemistry, atom names and component graph alongside PDB exports, which cannot carry all chemical information. Native centering changes global coordinates; compare relative geometry and the retained transform.
 
-RF3 retains every sample CIF, ranking and full confidence/token-to-atom arrays. Its pLDDT is0–1 and PAE is in Å. `chain_ptm` in this source is mean chain pLDDT. Canonical CIF `Cl` and native annotation `CL` identify chlorine; keep both raw fields. AF2 exports actual native confidence/loss arrays and optimization logs. Refinement retains the unrefined final alongside the selected structure. An exit0 with a caught refinement failure leaves the required optimization route unqualified.
+RF3 retains every sample CIF, ranking and full confidence/token-to-atom arrays. Its pLDDT is 0–1 and PAE is in Å. `chain_ptm` in this source is mean chain pLDDT. Canonical CIF `Cl` and native annotation `CL` identify chlorine; keep both raw fields. AF2 exports actual native confidence/loss arrays and optimization logs. Refinement retains the unrefined final alongside the selected structure. An exit code of zero can accompany a caught refinement failure; inspect the optimization log and required outputs before treating refinement as complete.
 
 After a rewarded run, native filtering can select the highest-scoring candidate. The following path assumes a protein AF2 run named `protein-ranked-01`:
 

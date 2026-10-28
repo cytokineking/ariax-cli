@@ -1,14 +1,11 @@
 # Forge absolute stability
 
-B36 carries forward the 20 exact native comparisons from October 6 and adds
-28 comparisons on one L40 for all four three-member ensembles. The qualified
-execution envelope is DG through 512 selected residues, two-chain complexes
-through 512 total residues, and full scans through 128 residues with mutation
-batch sizes 1 through 4. The measured cases, artificial boundary fixtures and
-resource recommendation are in qualification.
-Use a tool after it appears in the deployment catalog and is ready. Both family
-images and complete named assets use the existing private delivery. The
-coordinator integrates the owned resource fragment into the deployment catalog.
+Use these tools for learned absolute protein stability, single-substitution
+scans, or full-complex stability estimates. The documented execution envelope
+on one L40 is `dg` through 512 selected residues, `complex` through 512 total
+residues across two selected chains, and full scans through 128 residues with
+mutation batch sizes 1 through 4. These bounds describe execution support;
+they do not establish experimental calibration.
 
 The pinned [absolute-stability-predictor source](https://github.com/yehlincho/absolute-stability-predictor/tree/c55db530f67dcaefb083954750af66212e4da76b)
 is package 0.1.0. It supplies fine-tuned LoRA rank-4 stability heads and
@@ -18,13 +15,12 @@ member sequentially on one selected GPU and retains every member's output.
 | Tool | Explicit model IDs | Base and named mounts |
 | --- | --- | --- |
 | `absolute-stability-esm3` | `esm3-augmented`, `esm3-base` | `biohub/esm3-sm-open-v1`; `/models/stability-esm3` |
-| `absolute-stability-saprot` | `saprot-augmented`, `saprot-base` | Transformers `westlake-repl/SaProt_650M_AF2`; `/models/stability-saprot`, B34 `/models/foldseek` |
+| `absolute-stability-saprot` | `saprot-augmented`, `saprot-base` | Transformers `westlake-repl/SaProt_650M_AF2`; `/models/stability-saprot`, `/models/foldseek` |
 
 `base` here selects the non-augmented fine-tuned three-member ensemble.
 It still includes LoRA and stability heads. Both augmented and base ensembles
 support `dg`, `scan` and `complex`. [Assets and access](absolute-stability/assets.md)
-give the exact layouts and selected MIT source route. Qualification
-records the qualified cases and remaining gates.
+give the layouts, source versions and license notices.
 
 ## Input and identity
 
@@ -49,27 +45,35 @@ The [domain PDB](examples/absolute-stability/stability_1998469.pdb) and
 and 60 residues. The [nanobody CIF](examples/absolute-stability/nanobody_1zvh.cif)
 has chain A and 125 residues. The [TrkA complex](examples/absolute-stability/Trka_binder_AF2_10.pdb)
 uses binder A and target B. These are retained upstream structures under the
-adjacent MIT license, with no B36 model outputs. Their provenance is in
+adjacent MIT license. Their provenance is in
 [the fixture notes](examples/absolute-stability/README.md).
 
 ## Prepare an authorized session
 
-`SESSION` is the actual session UUID; `EXAMPLES` is the absolute
-`data.examples.root` from `ariax skills forge --json`. Read the bundled reference with
-`ariax skills forge --reference absolute-stability --read --json`.
-The commands below use the frozen B13/B22 GPU-selection interface, which
-is integrated in the accepted CLI base. Select the matching
-deployed tool, then require host available and
-tool ready. The example below uses SaProt. Use the matching ESM3 tool/model
-pair after deployment.
+Inspect the selected model and mode in the current catalog, then locate the
+bundled guide and examples:
+
+```sh
+ariax forge catalog --tool absolute-stability-saprot --model saprot-augmented --mode dg --json
+ariax skills forge --tool absolute-stability --json
+ariax skills forge --reference absolute-stability --read --json
+```
+
+`SESSION` is an authorized session UUID; `EXAMPLES` is the absolute
+`data.examples["absolute-stability"]` directory returned by the scoped skill
+lookup. Follow the shared [session lifecycle](../SKILL.md#discover-plan-run-and-close)
+for allocation, billing and closure. Require the host to be available and the
+selected tool to be ready. The examples use SaProt; for ESM3, select
+`absolute-stability-esm3` and a matching `esm3-*` model from the table. Inspect
+the catalog for each intended mode before running it.
 
 ```sh
 ariax forge tools add "$SESSION" --tools absolute-stability-saprot --json
 ariax forge tools wait "$SESSION" absolute-stability-saprot --timeout 1800 --json
 ariax forge status "$SESSION" --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/absolute-stability/stability_1998469.pdb" --path absolute-stability/domain.pdb --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/absolute-stability/stability_1998469.cif" --path absolute-stability/domain.cif --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/absolute-stability/Trka_binder_AF2_10.pdb" --path absolute-stability/complex.pdb --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/stability_1998469.pdb" --path absolute-stability/domain.pdb --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/stability_1998469.cif" --path absolute-stability/domain.cif --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/Trka_binder_AF2_10.pdb" --path absolute-stability/complex.pdb --json
 ariax forge inputs list "$SESSION" --json
 ```
 
@@ -119,13 +123,12 @@ insertion code, wild type, mutant, raw mean and population spread. The
 scaled tensor is a difference after upstream `SigmoidScaling`, distinct from
 the raw reported DDG. Self substitutions must remain numerically zero.
 
-Default `--max-scan-residues 128` bounds the expensive full scan. Full scans at
-128 residues passed with batches 1 and 4 for every ensemble; batches 2 and 3
-also passed at 60 and 59 residues, respectively. The 59-residue batch-3
-case exercises a final one-mutation chunk. Use batch sizes 1 through 4 within
-this execution envelope; the default stays 1. Memory includes quadratic scan arrays, and
-runtime includes 20L substitutions per checkpoint. Raising the guard or batch
-above this envelope requires separate qualification and assigned resources.
+Default `--max-scan-residues 128` bounds the expensive full scan. Use batch
+sizes 1 through 4 within this execution envelope; the default is 1. Memory
+includes quadratic scan arrays, and runtime includes 20L substitutions per
+checkpoint. Raising the guard or batch
+above this envelope is outside the supported scope and requires separate
+resource and scientific assessment.
 Independent proteins run as explicit serial commands; native scan batching
 groups mutations within one selected protein.
 SaProt rejects sequences beyond its base model's token capacity rather than
@@ -162,14 +165,13 @@ ariax forge files "$SESSION" --path /workspace/stability --json
 ariax forge download "$SESSION" /workspace/stability/domain-pdb/result.json --dest ./stability-result.json --json
 ```
 
-Checkpoint before sharing the project/result link or closing compute. A lost
-reply or watch timeout requires inspection of the same durable command ID.
-Correct a scientific failure explicitly and retain the failed run. The
-models were trained for small-domain stability. Larger complexes and novel
+Follow [saved results](../outputs.md) to inspect the completed checkpoint and
+create checkpoint-pinned links before sharing or closing compute. Use the
+shared [recovery instructions](../SKILL.md#recover-a-lost-response) after a lost
+reply or watch timeout. Correct a scientific failure explicitly and retain the
+failed run. The models were trained for small-domain stability. Larger complexes and novel
 constructs require appropriate scientific scrutiny; execution success alone
 does not establish calibration, binding or experimental success.
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
-pause and same-project resume. Web approval clears a hold without allocating
-compute; restoration leaves the next scientific command explicit.
+Use [project controls](../SKILL.md#project-controls-and-resume) for human pause
+and same-project resume; restoration leaves the next scientific command explicit.

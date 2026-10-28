@@ -1,7 +1,20 @@
-# B72 bounded comparison inputs
+# Boltz-2 residual-shortcut examples
 
-complex.yaml is the accepted synthetic pair, protein A AGSTAGST and B GSTAGSTA. affinity_smiles.yaml and affinity_ccd.yaml use the same accepted397-token affinity envelope with L-tyrosine represented as SMILES or CCD TYR. Every protein uses msa: empty. No public MSA request is needed for these examples. The primary guide supplies the literal native prediction and check command. For an affinity example replace the input filename, choose a new output root and use its stem in boltz_results_<stem>; preserve all native affinity fields.
+`complex.yaml` contains synthetic proteins A `AGSTAGST` and B `GSTAGSTA`.
+`affinity_smiles.yaml` and `affinity_ccd.yaml` describe the same 397-token
+affinity input, with L-tyrosine as SMILES or CCD TYR. All proteins use
+`msa: empty`; these examples need no MSA service.
 
-check_modes.py is the accepted native identity/chemistry checker. compare.py compares prediction file paths, CIF/JSON bytes and uncompressed NPY serialization within NPZ files between two saved roots. measure.py is qualification instrumentation for generation spans and in-process timing. It accepts off/resid before native predict argv. Whole process elapsed and memory require the host's measurement. General speed and scientific accuracy remain unmeasured outside the recorded fixtures.
+Use the [main guide](../../boltz2-acceleration.md) for prediction and checking.
+For an affinity example, change the input filename, use a new output directory
+and its stem in `boltz_results_<stem>`, and retain all native affinity fields.
 
-The original nine pairs agreed exactly. An additional CCD memory profile changed the ordering of two TYR chemical-component rows in CIF while coordinates, JSON and NPY members agreed. compare.py deliberately reports this byte difference as failure. Preserve that report; CCD artifact exactness remains held. See the mode reference for the finite timings and resource observations.
+`check_modes.py` checks native identities and chemistry. `compare.py` compares
+saved paths, CIF/JSON bytes and uncompressed NPY members inside NPZ files.
+It reports reordered CIF chemical-component rows as a difference even when
+coordinates agree; CCD artifact exactness remains unresolved.
+
+For timing diagnostics, `measure.py` takes `off` or `resid` before native
+predict arguments. Whole-process elapsed time and memory need host measurement.
+The [mode guide](../../boltz2-acceleration/modes.md) describes scope and resource
+limits. These inputs do not establish general speed or accuracy benefits.

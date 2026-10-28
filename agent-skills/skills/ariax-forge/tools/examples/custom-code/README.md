@@ -9,5 +9,4 @@ saved source using an offline local wheel. Outputs go to workspace.
 `prepare.py` uses Git from base. `bootstrap.py` requires Python with venv and
 pip. `run.py` reads two DNA FASTA records and imports the installed dependency;
 `check.py` validates the actual length/GC-fraction output and local label.
-This tiny source/environment fixture has no model assets. Real scientific
-container, shared-weight and B16/B18 qualification remain separate gates.
+This example does not install model assets.

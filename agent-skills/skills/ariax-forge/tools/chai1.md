@@ -7,8 +7,8 @@ those models, the ESM2 embedding model and conformer table at `/models/chai1`.
 The image uses PyTorch 2.7.1 with CUDA 12.6 and Kalign 3.4.0.
 
 Read this guide with `ariax skills forge --reference chai1 --read --json`.
-Set `EXAMPLES` to the installed `data.examples.root` returned by
-`ariax skills forge --json`; use the real session UUID for `SESSION`.
+Set `EXAMPLES` to `data.examples.chai1` returned by
+`ariax skills forge --tool chai1 --json`; use the real session UUID for `SESSION`.
 The [input inventory](examples/chai1/README.md) describes each small example.
 Select the molecules, exact sequences and chemical identities before prediction.
 
@@ -17,10 +17,10 @@ Select the molecules, exact sequences and chemical identities before prediction.
 ```sh
 ariax forge tools add "$SESSION" --tools chai1 --json
 ariax forge tools wait "$SESSION" chai1 --timeout 1800 --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/chai1/monomer.fasta" --path chai1/monomer.fasta --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/chai1/predict.py" --path chai1/predict.py --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/chai1/check.py" --path chai1/check.py --json
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/chai1/monomer.expected.json" --path chai1/monomer.expected.json --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/monomer.fasta" --path chai1/monomer.fasta --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/predict.py" --path chai1/predict.py --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/check.py" --path chai1/check.py --json
+ariax forge inputs add "$SESSION" --file "$EXAMPLES/monomer.expected.json" --path chai1/monomer.expected.json --json
 ariax forge inputs list "$SESSION" --json
 ```
 
@@ -133,10 +133,11 @@ For scheduling these cases, allow one GPU with 16 GiB VRAM, 32 GiB RAM, eight CP
 and 40 GiB disk for the image, asset preparation, scratch and results. These are
 conservative planning allowances; the measured hardware was the L40 profile.
 
-The Wave 2 scope is one GPU and bounded examples within the 256-token native
-padding size. Larger systems and additional sampling require their own capacity
-assessment. Fresh restoration recovers saved inputs and outputs; inspect those
-files before choosing further computation.
+The measured examples use one GPU within the 256-token native padding size.
+Larger systems and additional sampling need a separate capacity assessment.
+Use [saved results](../outputs.md) and
+[project controls](../SKILL.md#project-controls-and-resume) for checkpointing,
+closure and explicit continuation.
 
 [Creator documentation](https://github.com/chaidiscovery/chai-lab/blob/66c38d1fe5c6756a89ff8596b1dea87d305ec06f/README.md),
 [native inference](https://github.com/chaidiscovery/chai-lab/blob/66c38d1fe5c6756a89ff8596b1dea87d305ec06f/chai_lab/chai1.py).

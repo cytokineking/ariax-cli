@@ -2,18 +2,18 @@
 
 Mol-1 predicts the joint structure of specified proteins, DNA, RNA, ligands and
 ions. Choose it when the requested experiment calls for this model's cofolding
-method or a separately qualified comparison with other predictors. It predicts
+method or an explicitly chosen comparison with other predictors. It predicts
 supplied molecular identities, rather than generating binder sequences or
-measuring affinity. Compare the actual qualified modes of [Boltz-2](boltz2.md),
+measuring affinity. Compare the available modes of [Boltz-2](boltz2.md),
 [Protenix](protenix-models.md), [RF3](foundry.md) and
 [OpenFold3/OpenBind](openfold3.md). Preserve an explicit model choice; similar
 input schemas do not make their models, assets or scores interchangeable.
 
 This guide covers upstream source
 [`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/tree/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0),
-model `mol-1-base`, and the finite checks below. The tool key and guide ID are
+model `mol-1-base`, within the scope below. The tool key and guide ID are
 `mol1`; `mol-1` is a guide alias only. Inspect the live catalog for current
-account availability, mode evidence and resources before selecting or spending.
+account availability, supported modes and resources before selecting or spending.
 A bundled guide alone does not establish availability or resource minima.
 
 ```sh
@@ -55,9 +55,9 @@ downloads missing default weights; the Forge image blocks that fallback.
 An explicit absent checkpoint fails instead. Do not download weights
 or reference data in a customer command, replace assets with another predictor's
 files, or make `/models` writable. Missing assets are a tool-preparation failure.
-The selected named asset/source identity and distribution terms must accompany
-qualification; the reviewed source identifies a mutable public weight URL and
-does not establish an explicit weight distribution license.
+Keep the selected named asset/source identity with the results. The source
+identifies a mutable public weight URL and does not establish an explicit weight
+distribution license; check the separate code, weight and data terms before use.
 
 Disposable temporary, Python, Torch extension, Triton, CUDA and other JIT caches
 belong under `/scratch`. Forge supplies `HOME=/workspace`; save inputs, commands,
@@ -65,72 +65,31 @@ logs, structures and confidence in `/workspace`. The small
 [example runner](examples/mol1/run.py) sets those cache paths and uses the native
 module without changing its scoring.
 
-The recorded checks cover the `protein-monomer` and `ligand-ccd` fixtures below.
+<a id="recorded-native-checks"></a>
+
+## Scope and limits
+
+The documented Forge modes are `protein-monomer` and `ligand-ccd`, limited to
+small no-MSA examples: a ubiquitin monomer and a constructed ubiquitin–ATP pair.
+The ATP example demonstrates input identity and output coverage; it is not a
+known binding pose or evidence of binding. These examples do not validate ATP
+bonds, chirality or charge, or establish predictive accuracy.
+
 Broader multimers, other ligands/ions, nucleic acids, modifications, covalent
-conditioning, supplied MSAs, templates and batches remain outside the recorded
-native scope. Training and fine-tuning are outside this recipe.
+conditioning, supplied MSAs, templates and batches remain outside this recipe's
+validated scope. Training and fine-tuning are outside this recipe. Hardware
+coverage is limited to a single L40; larger systems and other GPUs remain
+untested. No minimum VRAM, RAM, CPU or disk requirement or runtime guarantee is
+established here; use live resource guidance and a bounded representative pilot.
 
-## Recorded native checks
-
-The checks on one L40 with CUDA 12.8 used `mol-1-base`, seed 101, 20 cycles,
-200 diffusion steps and five samples per input, with protein MSA, template and RNA MSA use disabled
-and full confidence output enabled. Both used the bundled `run.py` and its
-native sampling settings; this is bounded execution and output validation, not
-an accuracy benchmark.
-
-| Mode and fixture | Native result | Finite output scope |
-| --- | --- | --- |
-| `protein-monomer`, `monomer.json` | Passed | Ubiquitin chain A: 76 tokens, 602 atoms, five samples |
-| `ligand-ccd`, `protein-atp.json` | Passed | Ubiquitin A plus CCD ATP B: 107 tokens, 633 atoms, five samples; all 31 ATP heavy-atom names/elements retained |
-
-The validator checked finite coordinates, sequence and backbone identity, basic
-geometry, CIF confidence scales, confidence mappings and ranking. It did not
-establish experimental binding, affinity or predictive accuracy, or validate
-ATP bonds, chirality, charge or binding pose. The constructed ubiquitin–ATP pair
-is an identity/coverage fixture. Larger systems and other GPUs remain untested.
-
-Native container wall times were 370.503 seconds for the cold monomer run,
-including compilation, and 182.586 seconds for the warm ligand run. The warm
-ligand driver took 185.381 seconds overall; native model forward computation
-accounted for 62.23 seconds. These observations apply to those inputs and that
-environment, not runtime guarantees or minimum memory requirements.
-
-## Installation and recovery scope
-
-A fresh-host installation check prepared the image and previously absent model
-assets through the shipped runtime and backend asset-authorization code, then
-passed a one-sample native prediction and output check. It retained 20 cycles,
-200 steps and the same no-MSA/template/RNA-MSA settings. The test used isolated
-authorization and storage fixtures; it did not exercise live account admission
-or status-event delivery.
-
-Files restoration recovered four inputs and 51 workspace files byte-for-byte.
-Both saved five-sample outputs passed their output checks after restoration,
-without generating new predictions. This establishes recovery of those saved
-files, not resumable model state or general prediction correctness.
-
-Full image and both model/data archives loaded and compared successfully in
-separate empty stores. A new monomer prediction from those restored components
-and its output checker both exited successfully. This cold check took 337.283
-seconds with seed 101, 20 cycles, 200 steps and one sample, with protein MSA,
-template and RNA MSA use disabled. It establishes executable archive recovery
-for that monomer. The ATP recovery evidence is the output validation of its
-restored saved five-sample results; no new ATP prediction after archive restore
-is claimed.
-
-These installation and recovery checks used isolated authorization and storage
-fixtures. Live account admission and status-event delivery remain unverified.
-Check the live catalog and selected session's tool readiness before relying on
-these paths for a new workload.
-
-## Defaults and a bounded smoke
+## Runner settings
 
 These are the pinned **direct runner** settings, not the short flags of
-`mol pred`. Each option takes a value, including booleans. The fixture's default
+`mol pred`. Each option takes a value, including booleans. The example's default
 profile preserves native sampling; disabling MSA changes conditioning, so it is
 not the full upstream default experiment.
 
-| Direct-runner option | Native default | Fixture default / smoke |
+| Direct-runner option | Native default | Example default / smoke |
 | --- | --- | --- |
 | `--model_name` | `mol-1-base` | same / same |
 | `--seeds` | `101` | same / same |
@@ -144,7 +103,7 @@ not the full upstream default experiment.
 | `--need_atom_confidence` | `false` | `true` / `true` to retain PAE and mappings |
 | `--use_seeds_in_json` | `false` | same / same |
 | `--enable_tf32` | `false` | same / same |
-| `--triangle_multiplicative`, `--triangle_attention` | `cuequivariance` | same / same, subject to image qualification |
+| `--triangle_multiplicative`, `--triangle_attention` | `cuequivariance` | same / same; use the prepared image's supported kernels |
 | `--infer_setting.sample_diffusion_chunk_size` | `1` | same / same |
 | `--diffusion_cache_mode` | `full` | same / same |
 
@@ -154,15 +113,14 @@ changes precision by token count and forces FP32/Torch on compute capability
 7.x; retain resolved settings and hardware with results. Explicit seeds do not
 guarantee bitwise equality across kernels, devices or environments. Longer
 sequences, atom-tokenized chemistry, more samples and more seeds need capacity
-assessment. The timings above apply only to the recorded L40 runs; no minimum
-VRAM, RAM, CPU or disk requirement is established here. A reduced smoke checks
-execution only and cannot support an accuracy or production-size claim.
+assessment. A reduced smoke checks execution only and cannot support an accuracy
+or production-size claim.
 
 ## Stage and run
 
 Read the [platform lifecycle](../SKILL.md) and [inputs/outputs flow](../outputs.md).
-After live qualification and within existing compute authorization, choose a
-compatible GPU and a bounded session. Creating a session starts billing;
+After checking catalog availability and within existing compute authorization,
+choose a compatible GPU and a bounded session. Creating a session starts billing;
 preparation and idle time count toward its limit.
 
 ```sh
@@ -174,22 +132,24 @@ ariax forge tools wait SESSION mol1 --timeout 1800 --json
 
 Use the returned session UUID as `SESSION`. Set `EXAMPLES` to the installed
 `data.examples.mol1` directory returned by `ariax skills forge --tool mol1 --json`.
-Upload both required files; this exact fixture has no companion MSAs or structures.
+Set `INPUT_JSON` to the prepared JSON for the requested molecules, following the
+[input rules](mol1/inputs.md). Upload it, the helper and every referenced companion.
+The helper always disables MSAs. For a bundled demonstration, choose
+`$EXAMPLES/monomer.json` as `INPUT_JSON`; it has no companion MSAs or structures.
 
 ```sh
-ariax forge inputs add "$SESSION" --file "$EXAMPLES/monomer.json" --path mol1/monomer.json --json
+ariax forge inputs add "$SESSION" --file "$INPUT_JSON" --path mol1/input.json --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/run.py" --path mol1/run.py --json
 ariax forge inputs status "$SESSION" JSON_INPUT_ID --json
 ariax forge inputs status "$SESSION" RUNNER_INPUT_ID --json
 ```
 
-Wait until **each** returned input is `ready` and the tool is `ready`. The
-76-residue ubiquitin monomer is the protein fixture described above. Use a
+Wait until **each** returned input is `ready` and the tool is `ready`. Use a
 fresh directory; the runner refuses to reuse an existing one.
 
 ```sh
 ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --timeout-seconds 1800 --json -- \
-  python /inputs/mol1/run.py --input /inputs/mol1/monomer.json \
+  python /inputs/mol1/run.py --input /inputs/mol1/input.json \
   --out-dir /workspace/mol1/default-001 --profile default
 ariax forge watch "$SESSION" COMMAND_ID --timeout 1800 --json
 ariax forge command "$SESSION" COMMAND_ID --json
@@ -199,13 +159,13 @@ ariax forge logs "$SESSION" COMMAND_ID --tail 1000 --json
 For an explicitly chosen reduced execution check, use the same invocation with
 `--out-dir /workspace/mol1/smoke-001 --profile smoke`. This retains 20 cycles
 and 200 steps and reduces only samples from five to one. The
-[runner source](examples/mol1/run.py) shows all native argv and saves them with the result. The equivalent scientific
-command for the default fixture is:
+[runner source](examples/mol1/run.py) shows all native argv and saves them with
+the result. The native command for the same sampling and conditioning is:
 
 ```sh
 ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --timeout-seconds 1800 --json -- \
   python -m mol.runner.inference \
-  --input_json_path /inputs/mol1/monomer.json \
+  --input_json_path /inputs/mol1/input.json \
   --dump_dir /workspace/mol1/native-001 \
   --load_checkpoint_path /models/mol1-models/checkpoint/mol-1-base.pt \
   --model_name mol-1-base --device cuda:0 --seeds 101 \
@@ -217,17 +177,17 @@ ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --timeout-secon
 This equivalent command relies on the prepared image's `/scratch` cache
 configuration; prefer the example runner to retain full logs and provenance.
 The platform `--gpus 0` reserves a GPU; native `cuda:0` addresses that container's
-visible device. Multi-GPU throughput and concurrent workloads are unqualified.
+visible device. Multi-GPU throughput and concurrent workloads remain unvalidated.
 Do not rerun after a lost response or a watch timeout: inspect the same command
 ID first. A new intentional attempt needs a fresh output directory.
 
 ## Inspect, save and close
 
 Check the terminal command state and exit code, then the
-[output inventory and scientific checks](mol1/outputs.md). The default fixture
-expects five CIF/summary/full-data triples under
-`predictions/ubiquitin/seed_101/predictions/` inside its run directory; smoke
-expects one. Preserve error reports and failed samples. A completed process or
+[output inventory and scientific checks](mol1/outputs.md). Check every requested
+job, seed and sample against the actual input. The example helper's default
+profile writes five CIF/summary/full-data triples per job; smoke writes one.
+Preserve error reports and failed samples. A completed process or
 high confidence score does not establish a correct fold or biological activity.
 
 After all writers stop, inspect for symlinks/special files (checkpointing rejects
@@ -244,8 +204,22 @@ ariax forge status "$SESSION" --json
 
 Use the completed sync's checkpoint ID. Confirm `closed` for resource release
 and inspect persistence separately. Download only required files within the
-user's storage constraints. Restoration recovers saved files, not running model
-state; verify a completed restore before choosing any new prediction.
+user's storage constraints.
+
+<a id="installation-and-recovery-scope"></a>
+
+## Restore saved work
+
+Follow the [checkpoint and restore flow](../outputs.md) to resume the existing
+project from a completed checkpoint and a terminal source session. Resume creates
+a new paid allocation, prepares the selected tools/assets and restores saved
+workspace files and ready inputs before commands can run. Inspect tool readiness
+and the restored inputs, predictions and logs before choosing the next command.
+Saved commands are not replayed, and Mol-1 has no advertised resumable diffusion
+state or skip-existing recipe. The example runner refuses an existing output
+directory, including one restored from an interrupted run; an intentional new
+prediction needs a fresh directory. Reconcile an uncertain command's original ID
+before retrying.
 
 Code, weights, chemical data and service terms are separate. Read the
 [public provenance/terms notice](examples/mol1/NOTICE.md); repository Apache-2.0

@@ -45,8 +45,8 @@ sequences in each native call. The full TNP predictor, compactness, PSH, PPC and
 PNC remain unavailable. Public [salt-bridge key](https://github.com/oxpig/TNP/pull/3)
 and [loop indentation](https://github.com/oxpig/TNP/pull/4) reports match the
 selected structural source; [failed-score handling](https://github.com/oxpig/TNP/pull/5)
-requires correction before structural support. Full TAP is also deferred pending
-canonical executable terms and dated threshold reconciliation.
+describes another limitation of that structural source. Full TAP is unavailable;
+its executable terms and threshold version remain unresolved.
 
 BioPhi and AbNumber code use MIT terms. ANARCI and selected TNP code use
 BSD-3-Clause, while HMMER uses BSD-3-Clause. OASis uses CC BY 4.0 with creator credit.
@@ -61,4 +61,4 @@ Scientific provenance: [BioPhi paper](https://doi.org/10.1080/19420862.2021.2020
 [TNP source](https://github.com/oxpig/TNP/tree/29dcac72f1380e8538e8870f45a699d3c6156162).
 The selected scores carry no clinical immunogenicity or measured binding claim.
 
-Coordinator terms clarification, October 15: the [current IMGT policy](https://www.imgt.org/about/termsofuse.php) states CC BY 4.0 for underlying germline source data. Separate terms for the packaged ANARCI derived HMM snapshot remain unverified. ANARCI code retains its BSD-3-Clause notice.
+The [IMGT policy](https://www.imgt.org/about/termsofuse.php) states CC BY 4.0 for underlying germline source data. Separate terms for the packaged ANARCI derived HMM snapshot remain unverified. ANARCI code retains its BSD-3-Clause notice.

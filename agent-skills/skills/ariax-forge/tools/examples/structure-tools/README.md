@@ -1,4 +1,4 @@
-# B34 fixtures
+# Structure-tool example inputs
 
 `1ubq.pdb` is the deposited 1UBQ ubiquitin structure downloaded from
 https://files.rcsb.org/download/1UBQ.pdb on October 4, 2026. It includes chain A,
@@ -31,5 +31,6 @@ The explicitly selected shared search database is `foldseek-fixture`, built from
 native `db*` files plus source/settings. Input basenames remain distinct. The
 query is `1ubq-protein.pdb`. Native search must find its self-hit and rigid-copy
 hit. Native clustering must include both members. No public PDB/AlphaFold database
-is downloaded or selected by this contribution. Larger databases require an
-explicit snapshot, asset name, disk/RAM measurements and catalog assembly by B55.
+is selected by these examples. For a larger search, choose an available
+database snapshot and its resource requirements from the
+[tool guide](../../structure-tools.md) and live catalog.

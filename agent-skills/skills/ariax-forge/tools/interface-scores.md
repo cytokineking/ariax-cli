@@ -1,33 +1,13 @@
 # Forge predictor interface scores
 
+`interface-scores` computes ipSAE, pDockQ, pDockQ2 and LIS from one supplied
+prediction and its matched native confidence files. It runs on CPU and does
+not launch prediction or select a best sample. AF3 input is unsupported.
 
-B35q passed remote consumption of 22 retained B40/B41 samples without new
-prediction: OpenDDE general and ABAG, OpenBind-0 and Preview2. Eight insulin
-dimers passed 920 unchanged v3 comparisons; OpenFold3's eight imported pair
-values also matched its native labeled dictionary exactly. Monomer and mixed
-cases retain `no_protein_interface` for their single selected protein chain.
-The final image reproduced one dimer per checkpoint, and 26 existing scorer
-tests passed. This extends the one-CPU/1-GiB qualification through 115 native
-tokens and 958 atoms. Larger workloads remain unqualified. B55e privately published this corrected image and verified its ordinary managed pull and original-file guards.
-The final correction also rejects output paths that would replace declared
-native confidence or feature files. Both original failures were reproduced
-on remote copies; three focused preservation checks passed.
-
-The retained B11 Boltz prediction has passed local actual-file scoring and
-comparison with the accepted positional v3 script. Both directions, aggregates
-and per-residue values agree within v3's printed precision. See the
-local acceptance procedure for native
-Boltz token export and consuming B31's supplied AF2 handoffs. The actual AF2
-76-residue monomer and 21+30-residue insulin handoffs have also passed. Insulin
-matches v3 across 116 comparisons; the monomer reports no protein interface.
-The three native RF3 dimers also passed 432 v3 comparisons. The scorer used one
-CPU and 1 GiB RAM with no GPU; the proposed disk floor is 1 GiB. B35q extends
-the measured scope through 115 native tokens and 958 atoms.
-AF3 input is unsupported.
-Completion uses a small authorized example per distinct import path through real
-installation, scoring, saved outputs and restoration, with ordinary resource
-measurements. Accepted native evidence covers the retained predictor features;
-larger resource sweeps and repeated sample series are optional benchmarks.
+The documented resource scope is one CPU and 1 GiB RAM, with no GPU, through
+115 native tokens and 958 atoms; capacity beyond that scope is unestablished.
+A 1 GiB disk floor is a planning estimate; check the live catalog's resource
+requirements.
 
 Read the [adapter contract](interface-scores/adapters.md) before preparing
 real prediction handoffs. The [metric reference](../references/ipsae-metrics.md)
@@ -44,8 +24,8 @@ selected chain sequences and token/atom mappings. The complete
 not predictions. Every selected residue maps to one native token and has a
 CA. Other chemical tokens may be explicitly excluded with null entries;
 retain their original rows in the raw input. Only selected standard protein
-chains are scored. Modified residues, nucleic-acid or ligand interface
-calibration needs a separately qualified adapter.
+chains are scored. Modified residues, nucleic-acid or ligand interfaces are
+outside the supported scoring scope.
 
 | Predictor | Confidence/mapping facts |
 | --- | --- |
@@ -131,9 +111,7 @@ ariax forge download "$SESSION" /workspace/interface-scores/af2.json --checkpoin
 ```
 
 Require the returned checkpoint synced. Use the [complete saved-output procedure](interface-scores/saved-output-restoration.md)
-for native inputs, reference files, saved-file links and restoration, together
+for native inputs, saved-file links and restoration, together
 with the [outputs guide](../outputs.md). Restore recovers files for explicit later
 checks and does not rerun predictions/scoring. Close owned compute and confirm
 closed state when work ends.
-
-Current acceptance covers the supported predictor mappings and their recorded resource envelope.
