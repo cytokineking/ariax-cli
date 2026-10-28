@@ -896,5 +896,13 @@
   "agent-skills/skills/ariax-forge/tools/examples/tmol/run.py",
   "agent-skills/skills/ariax-forge/tools/rfd4/recipes.md",
   "agent-skills/skills/ariax-forge/tools/rfd4/search.md",
-  "agent-skills/skills/ariax-forge/tools/tmol.md"
+  "agent-skills/skills/ariax-forge/tools/tmol.md",
+  "agent-skills/skills/ariax-forge/tools/examples/mol1/NOTICE.md",
+  "agent-skills/skills/ariax-forge/tools/examples/mol1/README.md",
+  "agent-skills/skills/ariax-forge/tools/examples/mol1/protein-atp.json",
+  "agent-skills/skills/ariax-forge/tools/examples/mol1/monomer.json",
+  "agent-skills/skills/ariax-forge/tools/examples/mol1/run.py",
+  "agent-skills/skills/ariax-forge/tools/mol1.md",
+  "agent-skills/skills/ariax-forge/tools/mol1/inputs.md",
+  "agent-skills/skills/ariax-forge/tools/mol1/outputs.md"
 ]

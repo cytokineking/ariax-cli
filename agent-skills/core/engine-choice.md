@@ -59,3 +59,7 @@ Each managed workflow can be narrower than its source repository. Do not work
 around its public contract with internal routes; use its live schema for
 supported fields. Check Forge separately for the exact native mode and its
 qualification instead of assuming upstream options are available.
+
+For an explicit Mol-1 prediction request, read the [Forge guide](../skills/ariax-forge/tools/mol1.md)
+and its recorded scope, then inspect the live catalog. Mol-1 uses prepared native
+inputs and separate asset/service terms; it is not a managed protocol.
