@@ -2,7 +2,7 @@
 
 Read with `ariax skills forge --reference mol1-outputs --read --json`. This is
 the pinned native output contract; the [entry guide](../mol1.md) records the
-bounded native evidence and the pending Forge installation/restoration gates.
+finite scientific, installation and recovery scope.
 
 ## Files and identities
 
@@ -86,18 +86,13 @@ calling a run useful:
    binding pose; compare its atoms with the selected CCD and preserve all mapping
    dimensions rather than assuming monomer token counts.
 
-Both default fixtures passed native execution and bounded output validation on
-an L40 with CUDA 12.8, using five samples, seed 101, 20 cycles and 200 steps.
-The monomer produced 76 tokens/602 atoms; the ATP case produced 107 tokens/633
-atoms and retained all 31 ATP heavy-atom names/elements. These checks cover the
-listed sequence/backbone, basic geometry, finite-coordinate, confidence-scale,
-mapping and ranking properties. ATP bond chemistry, chirality, charge and pose
-remain unvalidated; no binding, affinity or accuracy claim follows.
-
-Managed Forge installation and archive/Files restoration remain pending, as do
-broader hardware and input sizes. Installed CLI packaging checks are separate
-from installing the scientific tool into a Forge session. Do not promote a
-reduced smoke to full-default or larger-input qualification.
+The central guide records the [native output checks](../mol1.md#recorded-native-checks)
+and [installation/recovery checks](../mol1.md#installation-and-recovery-scope).
+Their finite scope does not establish broader hardware/input capacity, ATP bond
+chemistry, chirality, charge, binding pose, affinity or predictive accuracy.
+Installed CLI packaging checks are separate from installing the scientific tool
+into a Forge session. Do not promote a reduced smoke to full-default or
+larger-input qualification.
 
 ## Downstream choices and recovery
 

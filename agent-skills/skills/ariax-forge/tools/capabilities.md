@@ -31,10 +31,9 @@ Its presence in the CLI does not establish a live catalog
 entry, qualified scientific mode or measured resource minimum. Consult the live
 catalog before considering it alongside existing design methods.
 
-[Mol-1](mol1.md) documents candidate protein-monomer and CCD-ligand prediction
-with prepared JSON and no public MSA search. Two bounded native cases passed
-on an L40; installation and restoration remain pending. Consult the live catalog
-before selecting it. Broader upstream cofolding modalities remain outside scope.
+[Mol-1](mol1.md) documents prepared-JSON molecular prediction without public
+MSA search. Read its central scope and limits alongside the live catalog before
+selecting a mode; upstream cofolding capabilities alone do not establish support.
 
 [Tmol](tmol.md) provides protein energy scoring, interface interaction scoring
 and Cartesian minimization through an uploaded Python adapter. It needs no model

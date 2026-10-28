@@ -56,7 +56,7 @@ the full reference and example index.
 | `rfd4`, `rfdiffusion4` | [RFd4 native co-design](skills/ariax-forge/tools/rfd4.md); check the live catalog for availability |
 | `rfd4-inputs`, `rfd4-modes`, `rfd4-outputs`, `rfd4-fixtures` | [Conditioning](skills/ariax-forge/tools/rfd4/inputs.md), [modes](skills/ariax-forge/tools/rfd4/modes.md), [outputs](skills/ariax-forge/tools/rfd4/outputs.md), [examples](skills/ariax-forge/tools/examples/rfd4/README.md) |
 | `rfd4-recipes`, `rfd4-search` | [Generation and evaluation](skills/ariax-forge/tools/rfd4/recipes.md), [structure-only search and continuation](skills/ariax-forge/tools/rfd4/search.md) |
-| `mol1`, `mol-1`, `mol1-inputs`, `mol1-outputs`, `mol1-fixtures`, `mol1-notice` | [Mol-1 candidate prediction guide](skills/ariax-forge/tools/mol1.md), [fixtures and terms](skills/ariax-forge/tools/examples/mol1/README.md); two bounded native cases passed; installation/restoration pending, check live catalog |
+| `mol1`, `mol-1`, `mol1-inputs`, `mol1-outputs`, `mol1-fixtures`, `mol1-notice` | [Mol-1 prediction, scope and limits](skills/ariax-forge/tools/mol1.md), [fixtures and terms](skills/ariax-forge/tools/examples/mol1/README.md); consult the live catalog |
 | `tmol`, `tmol-fixtures` | [Protein energy scoring and Cartesian minimization](skills/ariax-forge/tools/tmol.md), [uploadable adapter](skills/ariax-forge/tools/examples/tmol/README.md); check live mode evidence |
 
 

@@ -1,15 +1,5 @@
 # Mol-1 molecular structure prediction
 
-**Two bounded native cases passed; Forge installation and restoration remain pending.**
-This guide records the proposed Forge interface at upstream source
-[`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/tree/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0).
-The initial candidate modes are `protein-monomer` and `ligand-ccd`, using
-ubiquitin and ubiquitin plus CCD ATP respectively. Mol-1 was absent from the
-live public catalog at the initial 2026-10-28 check. A bundled guide does not
-establish account availability, qualified modes or a resource minimum. Inspect
-the live catalog before selecting or spending on it.
-The tool key and guide ID are `mol1`; `mol-1` is a guide alias only.
-
 Mol-1 predicts the joint structure of specified proteins, DNA, RNA, ligands and
 ions. Choose it when the requested experiment calls for this model's cofolding
 method or a separately qualified comparison with other predictors. It predicts
@@ -18,6 +8,13 @@ measuring affinity. Compare the actual qualified modes of [Boltz-2](boltz2.md),
 [Protenix](protenix-models.md), [RF3](foundry.md) and
 [OpenFold3/OpenBind](openfold3.md). Preserve an explicit model choice; similar
 input schemas do not make their models, assets or scores interchangeable.
+
+This guide covers upstream source
+[`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/tree/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0),
+model `mol-1-base`, and the finite checks below. The tool key and guide ID are
+`mol1`; `mol-1` is a guide alias only. Inspect the live catalog for current
+account availability, mode evidence and resources before selecting or spending.
+A bundled guide alone does not establish availability or resource minima.
 
 ```sh
 ariax forge catalog --task molecular-prediction --compact --json
@@ -30,7 +27,7 @@ ariax skills forge --reference mol1-outputs --read --json
 
 ## Interface, assets and scope
 
-The initial interface uses the native module directly:
+The Forge recipe uses the native module directly:
 
 ```text
 python -m mol.runner.inference --input_json_path INPUT.json --dump_dir OUTPUT
@@ -38,14 +35,14 @@ python -m mol.runner.inference --input_json_path INPUT.json --dump_dir OUTPUT
 
 It reads prepared JSON without invoking the protein MSA search preprocessing in
 `mol pred`. Native `mol pred -i INPUT.json -o OUTPUT` remains an upstream
-interface, but is not the initial Forge recipe: its default `--use_msa true`
+interface, but is not this Forge recipe: its default `--use_msa true`
 can send protein sequences to the public ColabFold service when an MSA is
 missing or its path does not exist. This guide does not authorize that service
 or the `mol msa`/`mol prep` search commands. Keep templates and RNA MSA search
 disabled. Supplied protein MSAs and explicit no-MSA inference are separate
 experiments; see [input rules](mol1/inputs.md).
 
-The proposed package separates two read-only named assets:
+The package separates two read-only named assets:
 
 | Asset | Mount and content |
 | --- | --- |
@@ -54,7 +51,7 @@ The proposed package separates two read-only named assets:
 
 The prepared image configures `MOL_ROOT_DIR` to resolve these separate mounts;
 keep its configured root and pass the checkpoint explicitly. Upstream normally
-downloads missing default weights; the proposed image blocks that fallback.
+downloads missing default weights; the Forge image blocks that fallback.
 An explicit absent checkpoint fails instead. Do not download weights
 or reference data in a customer command, replace assets with another predictor's
 files, or make `/models` writable. Missing assets are a tool-preparation failure.
@@ -67,18 +64,16 @@ belong under `/scratch`. Forge supplies `HOME=/workspace`; save inputs, commands
 logs, structures and confidence in `/workspace`. The small
 [example runner](examples/mol1/run.py) sets those cache paths and uses the native
 module without changing its scoring.
-Both bundled default cases completed on one L40 with CUDA 12.8 through this
-example runner. The finite native evidence is summarized below. Managed tool
-installation, archive/Files restoration and public availability are separate
-pending gates. Broader multimers, other ligands/ions, nucleic acids,
-modifications, covalent conditioning, supplied MSAs, templates and batches
-remain outside the recorded native scope. Training and fine-tuning are outside
-this recipe.
+
+The recorded checks cover the `protein-monomer` and `ligand-ccd` fixtures below.
+Broader multimers, other ligands/ions, nucleic acids, modifications, covalent
+conditioning, supplied MSAs, templates and batches remain outside the recorded
+native scope. Training and fine-tuning are outside this recipe.
 
 ## Recorded native checks
 
-The 2026-10-28 checks used `mol-1-base`, seed 101, 20 cycles, 200 diffusion steps
-and five samples per input, with protein MSA, template and RNA MSA use disabled
+The checks on one L40 with CUDA 12.8 used `mol-1-base`, seed 101, 20 cycles,
+200 diffusion steps and five samples per input, with protein MSA, template and RNA MSA use disabled
 and full confidence output enabled. Both used the bundled `run.py` and its
 native sampling settings; this is bounded execution and output validation, not
 an accuracy benchmark.
@@ -94,11 +89,39 @@ establish experimental binding, affinity or predictive accuracy, or validate
 ATP bonds, chirality, charge or binding pose. The constructed ubiquitin–ATP pair
 is an identity/coverage fixture. Larger systems and other GPUs remain untested.
 
-The cold monomer run took approximately 371 seconds including compilation; the
-warm ligand run took 185.381 seconds overall, with 62.23 seconds reported for
-native model forward computation. These are observations for those runs, not
-runtime guarantees or evidence of memory minima. Forge installation,
-archive/Files restoration and any live QA or CLI release remain unconfirmed.
+Native container wall times were 370.503 seconds for the cold monomer run,
+including compilation, and 182.586 seconds for the warm ligand run. The warm
+ligand driver took 185.381 seconds overall; native model forward computation
+accounted for 62.23 seconds. These observations apply to those inputs and that
+environment, not runtime guarantees or minimum memory requirements.
+
+## Installation and recovery scope
+
+A fresh-host installation check prepared the image and previously absent model
+assets through the shipped runtime and backend asset-authorization code, then
+passed a one-sample native prediction and output check. It retained 20 cycles,
+200 steps and the same no-MSA/template/RNA-MSA settings. The test used isolated
+authorization and storage fixtures; it did not exercise live account admission
+or status-event delivery.
+
+Files restoration recovered four inputs and 51 workspace files byte-for-byte.
+Both saved five-sample outputs passed their output checks after restoration,
+without generating new predictions. This establishes recovery of those saved
+files, not resumable model state or general prediction correctness.
+
+Full image and both model/data archives loaded and compared successfully in
+separate empty stores. A new monomer prediction from those restored components
+and its output checker both exited successfully. This cold check took 337.283
+seconds with seed 101, 20 cycles, 200 steps and one sample, with protein MSA,
+template and RNA MSA use disabled. It establishes executable archive recovery
+for that monomer. The ATP recovery evidence is the output validation of its
+restored saved five-sample results; no new ATP prediction after archive restore
+is claimed.
+
+These installation and recovery checks used isolated authorization and storage
+fixtures. Live account admission and status-event delivery remain unverified.
+Check the live catalog and selected session's tool readiness before relying on
+these paths for a new workload.
 
 ## Defaults and a bounded smoke
 
@@ -161,7 +184,7 @@ ariax forge inputs status "$SESSION" RUNNER_INPUT_ID --json
 ```
 
 Wait until **each** returned input is `ready` and the tool is `ready`. The
-76-residue ubiquitin monomer is the initial protein candidate fixture. Use a
+76-residue ubiquitin monomer is the protein fixture described above. Use a
 fresh directory; the runner refuses to reuse an existing one.
 
 ```sh

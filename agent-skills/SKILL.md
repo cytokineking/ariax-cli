@@ -32,10 +32,9 @@ and inspect the exact live tool, model and mode before choosing native commands.
 Only read input or output references when they affect the current decision; read
 output guidance before running when it changes required stages or saved files.
 
-For Mol-1 specifically, the [candidate guide](skills/ariax-forge/tools/mol1.md)
-records prepared-JSON prediction and separate model/data terms. Two bounded
-protein-monomer/CCD-ligand native cases passed; installation and restoration
-remain pending. Discover live availability and qualification before use.
+For Mol-1 specifically, read the [tool guide](skills/ariax-forge/tools/mol1.md)
+for prepared-JSON prediction, recorded scope and separate model/data terms,
+then inspect the live catalog before use.
 
 ## Authorization and account
 

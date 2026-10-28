@@ -1,16 +1,15 @@
-# Mol-1 candidate fixtures
+# Mol-1 fixtures
 
-**Two bounded native default cases passed; installation and restoration pending.** Discover this installed directory as
-`data.examples.mol1` with `ariax skills forge --tool mol1 --json` (the `mol-1`
-guide alias resolves to the same directory). Use the
-[Mol-1 guide](../../mol1.md) for qualification gates, staging and the complete
-checkpoint/close flow. Mol-1 is absent from the public catalog at the initial
-2026-10-28 read-only check; these files do not make it available.
+Discover this installed directory as `data.examples.mol1` with
+`ariax skills forge --tool mol1 --json` (the `mol-1` guide alias resolves to the
+same directory). Use the [Mol-1 guide](../../mol1.md) for recorded scientific,
+installation and recovery scope, current-availability checks, staging and the
+complete checkpoint/close flow.
 
 | File | Exact purpose |
 | --- | --- |
-| [monomer.json](monomer.json) | `protein-monomer` candidate: one 76-residue ubiquitin, chain A, job `ubiquitin` |
-| [protein-atp.json](protein-atp.json) | `ligand-ccd` candidate: the same chain plus one `CCD_ATP`, chain B, job `ubiquitin_atp` |
+| [monomer.json](monomer.json) | `protein-monomer`: one 76-residue ubiquitin, chain A, job `ubiquitin` |
+| [protein-atp.json](protein-atp.json) | `ligand-ccd`: the same chain plus one `CCD_ATP`, chain B, job `ubiquitin_atp` |
 | [run.py](run.py) | Standard-library remote launcher; copies input and invocation, sets scratch caches, runs the pinned native module and saves full logs/exit status |
 | [NOTICE.md](NOTICE.md) | Public provenance and separate code/weight/data/service terms |
 
@@ -48,12 +47,7 @@ features too. For a separately qualified supplied-MSA experiment use the native
 command and [input guidance](../../mol1/inputs.md), preserving every companion.
 Every run needs a fresh output directory. Follow
 [output inspection](../../mol1/outputs.md) for required identities, confidence
-scales, mappings, error handling and retention. Both default cases completed on
-an L40 with CUDA 12.8 through this launcher: monomer A had 76 tokens/602 atoms;
-protein plus ATP A+B had 107 tokens/633 atoms and retained all 31 ATP heavy-atom
-names/elements. The checks support finite output identity and basic geometry,
-confidence scales, mappings and ranking. They do not establish biological
-binding, affinity, accuracy or ATP bond/chiral/charge/pose validity. See the
-[recorded scope](../../mol1.md#recorded-native-checks) for timings and limits.
-The one-sample recovery smoke and archive/Files restoration are not claimed as
-passed here.
+scales, mappings, error handling and retention. See the central guide's
+[native checks](../../mol1.md#recorded-native-checks) and
+[installation/recovery scope](../../mol1.md#installation-and-recovery-scope)
+for the finite observed results and their limits.

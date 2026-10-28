@@ -2,12 +2,12 @@
 
 Reviewed source: Molence Bio's Mol-1 commit
 [`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/tree/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0).
-The proposed Forge package is `mol1` version `1.0.0`. Its two bundled default
-cases passed bounded native output checks; public availability, managed
-installation and restoration are not asserted. The model configuration is `mol-1-base`. Code and
-model bytes have separate identities: the reviewed release source points to a
-mutable checkpoint URL, not an immutable model revision. The eventual remote
-evidence must identify the selected named assets and their source, without treating a mutable URL as an immutable revision.
+The Forge package is `mol1` version `1.0.0`, with model configuration
+`mol-1-base`. See the [central guide](../../mol1.md) for recorded scope and
+current-availability checks. Code and model bytes have separate identities:
+the reviewed release source points to a mutable checkpoint URL, not an immutable
+model revision. Preserve the selected named asset/source identity without
+treating that URL as an immutable revision.
 
 | Component | Recorded source terms and limit |
 | --- | --- |

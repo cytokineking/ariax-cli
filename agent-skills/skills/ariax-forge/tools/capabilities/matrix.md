@@ -67,11 +67,9 @@ unavailable historical JMS backbone reproduction retain untested scope.
 the live catalog for its current availability, installation and restoration
 evidence, and resource requirements.
 
-[Mol-1](../mol1.md) has two initial candidate modes, `protein-monomer` and
-`ligand-ccd`, with `mol-1-base`. The five-sample ubiquitin and ubiquitin-plus-ATP
-native cases passed on L40/CUDA 12.8; installation and restoration remain
-pending. The initial public-catalog check found no Mol-1 entry; no resource
-floor, broader molecular qualification or biological binding claim is inferred.
+[Mol-1](../mol1.md) records the `mol-1-base` prediction interface and finite
+scientific, installation and recovery scope. Consult that guide and the live
+catalog for mode evidence, resource limits and availability.
 
 [Tmol](../tmol.md) supplies protein scoring, interface interaction scoring and
 Cartesian minimization without model assets. Check its live mode qualifications;
