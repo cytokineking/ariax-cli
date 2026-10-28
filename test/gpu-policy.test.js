@@ -110,3 +110,9 @@ it('blocks limited-only structure submissions before upload authorization', asyn
   await assert.rejects(submit(ctx), (error) => error.exitCode === EXIT.VALIDATION);
   assert.equal(fs.existsSync(path.join(root, '.ariax')), false);
 });
+
+
+it('requires a core GPU fallback for Forge while permitting RTX 5090 as preferred', async () => {
+  await assert.rejects(checkGpuPolicy({ client: {} }, { protocol: 'forge', allowed_gpus: ['RTX5090'] }), /no compatible core GPU/);
+  await checkGpuPolicy({ client: {} }, { protocol: 'forge', allowed_gpus: ['RTX5090', 'L40S'] });
+});

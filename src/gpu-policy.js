@@ -4,6 +4,7 @@ import { printProgress } from './output.js';
 import { protocolId } from './structure-input.js';
 
 const CORE = Object.freeze({
+  forge: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
   bindcraft: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
   bindcraft2: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
   boltzgen: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
@@ -35,7 +36,7 @@ function policyError(protocol, allowed, core, action, reason) {
 
 /** Check an explicit policy or the effective live schema default. Never changes the payload. */
 export async function checkGpuPolicy(ctx, spec, { source = 'job', saved = false, advise = true } = {}) {
-  const protocol = protocolId(spec?.protocol);
+  const protocol = spec?.protocol === 'forge' ? 'forge' : protocolId(spec?.protocol);
   if (!protocol) return;
   const core = CORE[protocol];
   const action = saved
