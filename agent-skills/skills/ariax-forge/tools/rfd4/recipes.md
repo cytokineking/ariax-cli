@@ -66,6 +66,11 @@ TAGS='[design,antibody,3d_coordinate_conditioning,internal_coordinate_conditioni
 EXTRA=('recycle_strategy=high/front_loaded' '+generation.dataset.sampling_transforms=[{_target_:rfproteina.transforms.hotspot_sampling.SampleNearbyHotspots,num_hotspots:[2,3],min_distance:5.0,patch_diameter:15.0,min_atom_sasa:1.0}]')
 ```
 
+For authored, fixed `C_HOT` sites, omit the hotspot-sampling transform. The
+pinned default config has no `generation.dataset.sampling_transforms` key;
+omit an unnecessary null override, or use Hydra's `+` syntax when adding it.
+
+
 For partial diffusion, check the actual assembled seed **before** sampling:
 
 ```sh
