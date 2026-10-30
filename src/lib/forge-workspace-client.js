@@ -1,4 +1,4 @@
-/** Proposed current-project file and active-session sync contract.
+/** Current-project file and active-session sync contract.
  * Transfer grants and daemon error text stay out of ordinary output and journals.
  */
 import { usageError } from '../args.js';
@@ -6,7 +6,7 @@ import { ApiError, NetworkError, sanitize, validateTransferUrl } from '../http.j
 import { forgeRequest } from './forge-client.js';
 
 const API = '/api/v1/forge';
-const SYNC_STATES = new Set(['pending', 'queued', 'syncing', 'saved', 'failed']);
+const SYNC_STATES = new Set(['pending', 'queued', 'saved', 'failed']);
 
 // Responses and diagnostics can contain URLs supplied by remote services. Keep
 // grants and bearer credentials out of human/JSON output and local journals.
@@ -76,26 +76,38 @@ function publicResult(result, data) {
 
 function entryForDirectory(entry, directory) {
   if (!entry || typeof entry !== 'object' || !['file', 'directory'].includes(entry.kind)
-      || !Number.isSafeInteger(entry.size_bytes) || entry.size_bytes < 0) throw invalidResponse();
+      || (entry.kind === 'directory' ? entry.size_bytes !== null
+        : !Number.isSafeInteger(entry.size_bytes) || entry.size_bytes < 0)
+      || !Number.isSafeInteger(entry.version) || entry.version <= 0
+      || (!(entry.kind === 'directory' && entry.mode === null)
+        && (!Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o777))) throw invalidResponse();
   try { workspacePath(entry.path); } catch { throw invalidResponse(); }
   const prefix = directory + '/';
   if (!entry.path.startsWith(prefix) || entry.path.slice(prefix.length).includes('/')) throw invalidResponse();
-  return { path:entry.path, kind:entry.kind, size_bytes:entry.size_bytes };
+  return { path:entry.path, kind:entry.kind, size_bytes:entry.size_bytes, version:entry.version, mode:entry.mode };
 }
 
 export async function listProjectFiles(ctx, projectId, target) {
-  let cursor, result;
+  let cursor, result, firstRevision, revisionChanged = false;
   const entries = [], seen = new Set();
   for (let page = 0; page < 1000; page++) {
     try {
       result = await ctx.client.get(`${API}/projects/${projectId}/files`, { query:{path:target, ...(cursor ? {cursor} : {})} });
     } catch (error) { throw cleanError(error, 'Project file listing'); }
     const data = dataEnvelope(result);
-    if (!Array.isArray(data.entries) || !(data.next_cursor === null || typeof data.next_cursor === 'string')) throw invalidResponse();
+    if (!Array.isArray(data.entries) || !(data.next_cursor === null || typeof data.next_cursor === 'string')
+        || !Number.isSafeInteger(data.mutation_revision) || data.mutation_revision < 0
+        || !['saved', 'pending', 'failed'].includes(data.sync_state)
+        || !(data.last_synced_at === null || (typeof data.last_synced_at === 'string' && Number.isFinite(Date.parse(data.last_synced_at))))
+        || typeof data.durability_gap !== 'boolean') throw invalidResponse();
+    if (firstRevision === undefined) firstRevision = data.mutation_revision;
+    else if (firstRevision !== data.mutation_revision) revisionChanged = true;
     entries.push(...data.entries.map(entry => entryForDirectory(entry,target)));
     if (entries.length > 100000) throw new NetworkError('File listing exceeded its entry limit.');
     cursor = data.next_cursor;
-    if (cursor === null) return publicResult(result,{project_id:projectId,path:target,entries,next_cursor:null});
+    if (cursor === null) return publicResult(result,{project_id:projectId,path:target,entries,next_cursor:null,
+      mutation_revision:data.mutation_revision, sync_state:data.sync_state, last_synced_at:data.last_synced_at,
+      durability_gap:data.durability_gap, pagination_changed:revisionChanged});
     if (!cursor || cursor.length > 4096 || seen.has(cursor)) throw invalidResponse();
     seen.add(cursor);
   }
@@ -109,9 +121,15 @@ export async function projectFileGrant(ctx, projectId, target) {
   } catch (error) { throw cleanError(error, 'Project file authorization'); }
   const data = dataEnvelope(result);
   if (data.path !== target || !Number.isSafeInteger(data.size_bytes) || data.size_bytes < 0
+      || !Number.isSafeInteger(data.version) || data.version <= 0
+      || typeof data.checksum !== 'string' || !/^[0-9a-f]{32}-[1-9][0-9]{0,3}$/.test(data.checksum)
+      || !Number.isSafeInteger(data.part_size) || data.part_size < 5 * 1024 ** 2 || data.part_size > 5 * 1024 ** 3
+      || Number(data.checksum.split('-')[1]) !== Math.max(1,Math.ceil(data.size_bytes / data.part_size))
+      || !Number.isSafeInteger(data.mode) || data.mode < 0 || data.mode > 0o777
       || typeof data.download_url !== 'string') throw invalidResponse();
   validateTransferUrl(data.download_url, 'Download');
-  return publicResult(result,{path:target,size_bytes:data.size_bytes,download_url:data.download_url});
+  return publicResult(result,{path:target,size_bytes:data.size_bytes,version:data.version,checksum:data.checksum,
+    part_size:data.part_size,mode:data.mode,download_url:data.download_url});
 }
 
 function syncResult(result, syncId) {

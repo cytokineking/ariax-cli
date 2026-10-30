@@ -14,6 +14,12 @@ loss, quality gates or population admission. Run either on a trusted remote GPU
 controller; keep credentials outside workloads and saved scientific state.
 Desktop sign-in alone does not authenticate Harness.
 
+The controller and saved-batch bridge hold before dispatch if the project-files
+API cannot confirm that a published local input is installed on the active
+session. They can continue when the server reports daemon-backed installation
+status; retain the original controller, CLI root, input IDs and command IDs in
+the meantime. Older servers may not expose this confirmation.
+
 ```sh
 ariax forge catalog --task binder-design --compact --json
 ariax forge catalog --tool TOOL --model MODEL --json

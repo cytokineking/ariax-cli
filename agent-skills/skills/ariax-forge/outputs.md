@@ -66,16 +66,17 @@ require the original URL again if the server has no accepted operation. Request
 records exclude signed URLs and transfer grants.
 
 `sync --wait` waits locally; `--timeout SECONDS` or Ctrl-C leaves an accepted
-flush running. Inspect its returned state: `pending`, `queued` or `syncing`
-means unfinished, `saved` means the flush completed, and `failed` reports a
-failure. A flush covers its changed files and is not an atomic multi-file
+flush running. Inspect its returned state: `pending` or `queued` means
+unfinished, `saved` means the flush completed, and `failed` is terminal for that
+sync ID. After resolving a terminal failure, start a new flush with a new ID;
+keep the same ID when the outcome is uncertain. A flush covers its changed files and is not an atomic multi-file
 snapshot; later changes can remain pending. Stop writers when a coherent set
 is required, and inspect synchronization failures. A successful scientific
 command alone does not prove its output is durable.
 
 Files lists immediate children of the current saved project namespace, fetching
 all bounded pages. Downloads require project access, stream through a private
-temporary file, and publish only after the declared byte count arrives. Use a
+temporary file, and publish only after the declared byte count and multipart checksum match. Use a
 fresh destination path. Pages and file bytes can change while the project is
 active; neither a listing nor a link pins a historical version.
 

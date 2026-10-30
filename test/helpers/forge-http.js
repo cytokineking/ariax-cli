@@ -6,12 +6,21 @@ import path from 'node:path';
 import http from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify, isDeepStrictEqual } from 'node:util';
-import { randomUUID, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { createHash, randomUUID, generateKeyPairSync, sign, verify } from 'node:crypto';
 
 const execute = promisify(execFile);
 const actor = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const otherActor = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const key = 'arx_forge_testcredential';
+const partSize = 16 * 1024 * 1024;
+const digest = bytes => createHash('md5').update(bytes).digest();
+function fileChecksum(bytes) {
+  const parts = [];
+  for (let offset = 0; offset < bytes.length || !parts.length; offset += partSize) {
+    parts.push(digest(bytes.subarray(offset, offset + partSize)));
+  }
+  return `${digest(Buffer.concat(parts)).toString('hex')}-${parts.length}`;
+}
 
 async function boundary(root) {
   // This fixture is the CLI's external API/tunnel boundary. Joined tests use
@@ -60,7 +69,8 @@ async function boundary(root) {
   const makeSession = (body, user, project) => {
     state.allocations++;
     const allocatedAt = new Date().toISOString();
-    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), data: {
+    assert.equal(body.files_contract, 2);
+    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), inputs: new Map(), data: {
       session_id: body.session_id, project_id: project.id, name: project.name,
       state: 'starting', gpu_type: body.gpu_type, gpu_count: body.gpu_count,
       tools: [toolState('base', 'queued'), ...body.tools.map(tool => toolState(tool, 'queued'))],
@@ -75,6 +85,19 @@ async function boundary(root) {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
+      if (req.method === 'PUT' && url.pathname.startsWith('/__part/')) {
+        const [, , projectId, operationId, attemptId, number] = url.pathname.split('/');
+        const operation = projects.get(projectId)?.fileOperations.get(operationId);
+        if (!operation || operation.attempt_id !== attemptId || url.searchParams.get('signature') !== 'private-transfer-grant') return error(res,403,'forbidden','Transfer denied');
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const bytes = Buffer.concat(chunks);
+        assert.equal(req.headers['content-length'],String(bytes.length));
+        assert.equal(req.headers['content-md5'],digest(bytes).toString('base64'));
+        operation.parts.set(Number(number),bytes);
+        if (state.drop === 'input-put') { state.drop = null; req.socket.destroy(); return; }
+        res.writeHead(200); res.end(); return;
+      }
       if (req.method === 'GET' && url.pathname.startsWith('/__object/')) {
         const project = projects.get(url.pathname.slice('/__object/'.length));
         const file = project?.files.get(url.searchParams.get('path'));
@@ -115,12 +138,20 @@ async function boundary(root) {
         state.posts++;
         let text = '';
         for await (const chunk of req) text += chunk;
-        body = JSON.parse(text);
+        body = text ? JSON.parse(text) : undefined;
         // Every mutation reaches this boundary only after its complete local record exists.
         const files = await fs.readdir(path.join(root, '.ariax/forge'));
         const records = await Promise.all(files.filter(f => f.endsWith('.json')).map(async f =>
           JSON.parse(await fs.readFile(path.join(root, '.ariax/forge', f), 'utf8'))));
-        if (!url.pathname.endsWith('/files/presign')) assert.ok(records.some(record => record.actor_user_id === user
+        const projectMutation = /\/files\/intents(?:\/([0-9a-f-]{36}))?/.exec(url.pathname);
+        if (projectMutation) {
+          const operationId = projectMutation[1] ?? body?.operation_id;
+          assert.ok(records.some(record => record.actor_user_id === user && record.id === operationId
+            && record.request.type === 'project-file-input-v2'), 'project input has no durable request');
+        } else if (direct && direct[2] === '/v1/inputs') {
+          assert.ok(records.some(record => record.actor_user_id === user && record.id === body.input_id
+            && record.request.body?.source?.kind === body.source.kind), 'input import has no durable request');
+        } else if (!url.pathname.endsWith('/files/presign')) assert.ok(records.some(record => record.actor_user_id === user
           && isDeepStrictEqual(record.request, { method: 'POST', ...(direct ? {session_id:direct[1]} : {}), path: direct ? direct[2] : url.pathname, body })), 'mutation has no durable request');
       }
       if (url.pathname === '/api/v1/forge/sessions') {
@@ -130,7 +161,7 @@ async function boundary(root) {
         if (session && (session.owner !== user || !isDeepStrictEqual(session.request, body))) return error(res, 409, 'request_conflict', 'Session request differs');
         if (!session) {
           assert.equal(Object.hasOwn(body, 'restore'), false);
-          const project = { id: randomUUID(), owner: user, name: body.name, status: 'running', files: new Map(), control: {
+          const project = { id: randomUUID(), owner: user, name: body.name, status: 'running', files: new Map(), fileOperations: new Map(), fileRevision:0, control: {
             revision: 0, human_resume_required: false, stop_origin: null, stop_reason: null, stopped_by: null, stopped_at: null,
           } };
           projects.set(project.id, project);
@@ -147,14 +178,95 @@ async function boundary(root) {
         if (parts[5] === 'files') {
           assert.ok(req.headers['x-request-id']);
           if (state.fileError) return error(res, 503, 'storage_unavailable', 'private-transfer-grant https://example.org/?signature=secret');
+          const active = history.find(item => item.data.state === 'available');
+          if (req.method === 'GET' && parts[6] === 'status') return reply(res,200,{
+            session_id:active?.data.session_id ?? history[0]?.data.session_id,writer_session_id:active?.data.session_id ?? null,
+            session_state:active?.data.state ?? 'closed',hydration_state:'ready',control_revision:project.control.revision,
+            writer_epoch:state.fileWriterEpoch ?? 1,mutation_revision:project.fileRevision,sync_state:'saved',last_synced_at:null,durability_gap:false});
+          if (req.method === 'GET' && parts[6] === 'metadata') {
+            const name = url.searchParams.get('path'), file = project.files.get(name);
+            return reply(res,200,file ? {kind:'file',version:1,mutation_revision:project.fileRevision,size_bytes:file.length}
+              : {kind:'absent',version:0,mutation_revision:project.fileRevision});
+          }
+          if (req.method === 'GET' && parts[6] === 'operations') {
+            const operation = project.fileOperations.get(parts[7]);
+            if (!operation) return error(res,404,'not_found','File operation not found');
+            if (state.confirmInstall && operation.state === 'published') {
+              const installed = path.join(root,'inputs',operation.body.path.slice('/inputs/'.length));
+              await fs.mkdir(path.dirname(installed),{recursive:true});
+              await fs.writeFile(installed,project.files.get(operation.body.path));
+            }
+            return reply(res,200,{operation_id:parts[7],session_id:operation.body.session_id,source:'host',
+              state:operation.state,version:operation.version ?? null,expires_at:new Date(Date.now()+3600000).toISOString(),
+              // The updated backend obtains this status from the current writer daemon.
+              local_state:state.noFileWriter ? 'not_applicable' : state.conflictInstall ? 'conflict' : state.confirmInstall ? 'ready'
+                : state.pendingInstall ? 'pending' : 'unknown'});
+          }
           if (req.method === 'GET' && parts.length === 6) {
-            if (state.fileCursorCycle) return reply(res,200,{entries:[],next_cursor:'repeated-cursor'});
+            const pageState = {mutation_revision:project.fileRevision,sync_state:'saved',last_synced_at:null,durability_gap:false};
+            if (state.fileCursorCycle) return reply(res,200,{entries:[],next_cursor:'repeated-cursor',...pageState});
             const directory = url.searchParams.get('path'), cursor = Number(url.searchParams.get('cursor') || 0);
-            const entries = [...project.files].filter(([name]) => name.startsWith(directory + '/')
-              && !name.slice(directory.length + 1).includes('/'))
-              .map(([name, bytes]) => ({path:name,kind:'file',size_bytes:bytes.length})).sort((a,b) => a.path.localeCompare(b.path));
-            if (state.fileBadPath) entries[0] = {path:'/workspace/../escape',kind:'file',size_bytes:1};
-            return reply(res, 200, {entries:entries.slice(cursor,cursor+1),next_cursor:cursor+1<entries.length?String(cursor+1):null});
+            const byName = new Map();
+            for (const [name, bytes] of project.files) {
+              if (!name.startsWith(directory + '/')) continue;
+              const relative = name.slice(directory.length + 1), slash = relative.indexOf('/');
+              const entryPath = directory + '/' + (slash < 0 ? relative : relative.slice(0,slash));
+              byName.set(entryPath,slash < 0 ? {path:entryPath,kind:'file',size_bytes:bytes.length,version:1,mode:0o644}
+                : {path:entryPath,kind:'directory',size_bytes:null,version:1,mode:null});
+            }
+            const entries = [...byName.values()].sort((a,b) => a.path.localeCompare(b.path));
+            if (state.fileBadPath) entries[0] = {path:'/workspace/../escape',kind:'file',size_bytes:1,version:1,mode:0o644};
+            if (state.fileBadSize) entries[0].size_bytes = null;
+            return reply(res, 200, {entries:entries.slice(cursor,cursor+1),next_cursor:cursor+1<entries.length?String(cursor+1):null,...pageState});
+          }
+          if (req.method === 'POST' && parts[6] === 'intents') {
+            if (parts.length === 7) {
+              assert.equal(body.session_id,active?.data.session_id);
+              assert.equal(body.control_revision,project.control.revision);
+              assert.equal(body.writer_epoch,state.fileWriterEpoch ?? 1);
+              assert.equal(body.part_size,partSize);
+              assert.match(body.checksum,/^[0-9a-f]{32}-[1-9][0-9]*$/);
+              let operation = project.fileOperations.get(body.operation_id);
+              if (operation && !isDeepStrictEqual(operation.body,body)) return error(res,409,'idempotency_conflict','Input intent differs');
+              if (!operation) {
+                assert.equal(body.expected_project_revision,project.fileRevision);
+                assert.equal(body.expected_version,0);
+                operation = {body,state:'open',parts:new Map(),attempt_id:null};
+                project.fileOperations.set(body.operation_id,operation);
+              }
+              if (state.drop === 'input-intent') { state.drop = null; req.socket.destroy(); return; }
+              return reply(res,200,{state:operation.state,...(operation.version ? {version:operation.version} : {})});
+            }
+            const operation = project.fileOperations.get(parts[7]);
+            if (!operation) return error(res,404,'not_found','File operation not found');
+            if (parts.length === 9 && parts[8] === 'attempts') {
+              if (operation.state === 'published') return reply(res,200,{state:'published',version:operation.version});
+              operation.attempt_id ??= randomUUID();
+              if (state.drop === 'input-attempt') { state.drop = null; req.socket.destroy(); return; }
+              return reply(res,200,{state:'uploading',attempt_id:operation.attempt_id});
+            }
+            assert.equal(parts[9],operation.attempt_id);
+            if (parts[10] === 'parts') {
+              if (operation.state === 'published') return reply(res,200,{state:'published',version:operation.version});
+              const remaining = Math.max(0,operation.body.size_bytes-(body.number-1)*partSize);
+              const grant = new URL(`http://127.0.0.1:${server.address().port}/__part/${project.id}/${parts[7]}/${parts[9]}/${body.number}`);
+              grant.searchParams.set('signature','private-transfer-grant');
+              return reply(res,200,{upload_url:grant.href,upload_method:'PUT',upload_headers:{
+                'Content-Length':String(Math.min(partSize,remaining)),'Content-MD5':body.md5},expires_in:900});
+            }
+            assert.equal(parts[10],'complete');
+            if (operation.state !== 'published') {
+              const count = Math.max(1,Math.ceil(operation.body.size_bytes/partSize));
+              assert.equal(operation.parts.size,count);
+              const bytes = Buffer.concat(Array.from({length:count},(_,index) => operation.parts.get(index+1)));
+              assert.equal(bytes.length,operation.body.size_bytes);
+              assert.equal(fileChecksum(bytes),operation.body.checksum);
+              project.files.set(operation.body.path,bytes);
+              operation.version = ++project.fileRevision;
+              operation.state = 'published';
+            }
+            if (state.drop === 'input-complete') { state.drop = null; req.socket.destroy(); return; }
+            return reply(res,200,{state:'published',version:operation.version});
           }
           assert.equal(req.method, 'POST');
           assert.equal(parts[6], 'presign');
@@ -164,7 +276,9 @@ async function boundary(root) {
           const grant = new URL(`http://127.0.0.1:${server.address().port}/__object/${project.id}`);
           grant.searchParams.set('path',body.path);
           grant.searchParams.set('signature','private-transfer-grant');
-          return reply(res, 200, {path:state.fileBadGrant?'/workspace/other':body.path,size_bytes:file.length,download_url:grant.href});
+          return reply(res, 200, {path:state.fileBadGrant?'/workspace/other':body.path,size_bytes:file.length,
+            version:1,checksum:state.fileBadChecksum?'00000000000000000000000000000000-1':fileChecksum(file),
+            part_size:partSize,mode:0o644,download_url:grant.href,expires_at:new Date(Date.now()+900000).toISOString()});
         }
         if (req.method === 'GET' && parts.length === 5) {
           const start = Number(url.searchParams.get('cursor') || 0), limit = Number(url.searchParams.get('limit') || 50);
@@ -200,6 +314,17 @@ async function boundary(root) {
         return reply(res, 200, session.data);
       }
       const project = projects.get(session.data.project_id);
+      if (parts[5] === 'inputs') {
+        if (req.method === 'GET' && parts.length === 6) return reply(res,200,{inputs:[...session.inputs.values()]});
+        if (req.method === 'GET') {
+          const input = session.inputs.get(parts[6]);
+          return input ? reply(res,200,input) : error(res,404,'not_found','Input not found');
+        }
+        const input = {input_id:body.input_id,path:body.path,state:'ready',size_bytes:0};
+        session.inputs.set(body.input_id,input);
+        return reply(res,202,input);
+      }
+      if (parts[5] === 'uploads') return error(res,426,'upgrade_required','Legacy uploads are unsupported');
       if (parts[5] === 'sync') {
         assert.ok(direct, 'sync must use the active-session transport');
         if (req.method === 'GET') {
@@ -588,6 +713,64 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(Date.parse(session.data.expires_at) - Date.parse(session.data.allocated_at), 4 * 3600000);
     session.data.state = 'available';
     session.data.tools.forEach(t => t.state = 'ready');
+    assert.equal((await record(sid)).request.body.files_contract,2);
+    const legacyId = randomUUID(), legacy = await record(sid);
+    legacy.id = legacyId;
+    legacy.request.body.session_id = legacyId;
+    delete legacy.request.body.files_contract;
+    await fs.writeFile(path.join(root,'.ariax/forge',`${legacyId}.json`),JSON.stringify(legacy));
+    const beforeLegacy = state.posts;
+    const legacyReplay = await invoke(['forge','create','--name','Device experiment','--gpu','L40','--session-id',legacyId],7);
+    assert.equal(legacyReplay.payload.error.code,'upgrade_required');
+    assert.equal(state.posts,beforeLegacy,'legacy admission was silently replayed');
+
+    const emptyPath = path.join(root,'empty-input'), multiPath = path.join(root,'multipart-input');
+    await fs.writeFile(emptyPath,Buffer.alloc(0));
+    await fs.writeFile(multiPath,Buffer.alloc(partSize + 23,0x61));
+    const emptyId = randomUUID();
+    const empty = await invoke(['forge','inputs','add',sid,'--file',emptyPath,'--path','harness/empty','--input-id',emptyId]);
+    assert.equal(empty.payload.data.storage_state,'published');
+    assert.equal(empty.payload.data.state,'pending');
+    assert.equal(empty.payload.data.installation_status,'unconfirmed');
+    assert.equal(project.files.get('/inputs/harness/empty').length,0);
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
+    await invoke(['forge','inputs','status',sid,emptyId],4,false,'arx_forge_othercredential');
+    assert.ok((await invoke(['forge','inputs','list',sid])).payload.data.inputs.some(item => item.input_id === emptyId));
+    state.pendingInstall = true;
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.installation_status,'pending');
+    state.pendingInstall = false;
+    state.conflictInstall = true;
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'failed');
+    state.conflictInstall = false;
+    state.noFileWriter = true;
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
+    state.noFileWriter = false;
+    state.confirmInstall = true;
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'ready');
+    assert.equal((await invoke(['forge','inputs','list',sid])).payload.data.inputs.find(item => item.input_id === emptyId).state,'ready');
+    state.fileWriterEpoch = 2;
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
+    state.fileWriterEpoch = 1;
+    state.confirmInstall = false;
+    const artifact = await invoke(['forge','inputs','add',sid,'--artifact',`${pid}:artifact.txt`,'--path','artifact.txt']);
+    assert.equal(artifact.payload.data.state,'ready');
+    assert.equal((await invoke(['forge','inputs','status',sid,artifact.payload.data.input_id])).payload.data.state,'ready');
+    const remote = await invoke(['forge','inputs','add',sid,'--url','https://example.org/input.dat','--path','remote.dat']);
+    assert.equal(remote.payload.data.state,'ready');
+    for (const loss of ['input-intent','input-attempt','input-put','input-complete']) {
+      const id = randomUUID(), target = `harness/${loss}`;
+      const args = ['forge','inputs','add',sid,'--file',multiPath,'--path',target,'--input-id',id];
+      state.drop = loss;
+      const lost = await invoke(args,9);
+      assert.doesNotMatch(lost.stdout+lost.stderr,/private-transfer-grant|signature=/);
+      const retried = await invoke(args);
+      assert.equal(retried.payload.data.state,'pending');
+      assert.equal(retried.payload.data.storage_state,'published');
+      assert.deepEqual(project.files.get(`/inputs/${target}`),await fs.readFile(multiPath));
+      const journal = await record(id);
+      assert.match(journal.request.body.checksum,/-2$/);
+      assert.doesNotMatch(JSON.stringify(journal),/private-transfer-grant|signature=|upload_url|upload_headers/);
+    }
     const catalog = await invoke(['forge', 'catalog', '--details'], 0, true);
     assert.match(catalog.stdout, /sources:.*https:\/\/example.org\/boltz2/);
     assert.match(catalog.stdout, /models:.*boltz2/);
@@ -657,6 +840,13 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
       'require("node:fs").writeFileSync(process.argv[1], "saved command output"); console.log("explicit devices")', savedName]);
     assert.deepEqual(multiple.payload.data.gpu_ids, [1, 0]);
     await invoke(['forge', 'watch', sid, multiple.payload.data.command_id, '--timeout', '30']);
+    state.confirmInstall = true;
+    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'ready');
+    const inputConsumer = await invoke(['forge','run',sid,'--tool','base','--',process.execPath,'-e',
+      'if (require("node:fs").readFileSync(process.argv[1]).length !== 0) process.exit(23)',
+      path.join(root,'inputs/harness/empty')]);
+    assert.equal((await invoke(['forge','watch',sid,inputConsumer.payload.data.command_id,'--timeout','30'])).payload.data.state,'succeeded');
+    state.confirmInstall = false;
 
     state.drop = 'limit';
     const edit = ['forge', 'limit', sid, '--gpu-hours', '12', '--limit-revision', '0'];
@@ -743,7 +933,14 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     project.files.set(savedPath,await fs.readFile(path.join(root,savedName)));
     project.files.set('/workspace/another.txt',Buffer.from('another'));
     project.files.set('/inputs/source.txt',Buffer.from('input'));
-    assert.deepEqual((await invoke(['forge','files',pid,'--path','/inputs'])).payload.data.entries.map(e => e.path),['/inputs/source.txt']);
+    const inputListing = (await invoke(['forge','files',pid,'--path','/inputs'])).payload.data;
+    assert.deepEqual(inputListing.entries.map(e => e.path),['/inputs/harness','/inputs/source.txt']);
+    assert.equal(inputListing.entries[0].kind,'directory');
+    assert.equal(inputListing.entries[0].size_bytes,null);
+    assert.equal(inputListing.entries[0].mode,null);
+    assert.equal(inputListing.mutation_revision,project.fileRevision);
+    assert.equal(inputListing.sync_state,'saved');
+    assert.equal(inputListing.durability_gap,false);
     const listed = (await invoke(['forge','files',pid,'--path','/workspace'])).payload.data;
     assert.equal(listed.entries.length,2, 'all pages were not fetched');
     assert.deepEqual(listed.entries.map(entry => entry.path).sort(), ['/workspace/another.txt',savedPath].sort());
@@ -751,6 +948,11 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const downloaded = await invoke(['forge','download',pid,savedPath,'--dest',destination]);
     assert.equal(await fs.readFile(destination,'utf8'),'saved command output');
     assert.doesNotMatch(downloaded.stdout + downloaded.stderr,/private-transfer-grant|download_url|signature=/);
+    state.fileBadChecksum = true;
+    const corruptedDest = path.join(root,'bad-checksum');
+    await invoke(['forge','download',pid,savedPath,'--dest',corruptedDest],10);
+    await assert.rejects(fs.access(corruptedDest));
+    state.fileBadChecksum = false;
     await invoke(['forge','download',pid,savedPath,'--dest',path.join(root,'forbidden')],4,false,'arx_forge_othercredential');
     const linked = (await invoke(['forge', 'link', pid, savedPath])).payload.data;
     const savedUrl = new URL(linked.url);
@@ -769,6 +971,9 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     state.fileBadPath = true;
     await invoke(['forge','files',pid],9);
     state.fileBadPath = false;
+    state.fileBadSize = true;
+    await invoke(['forge','files',pid],9);
+    state.fileBadSize = false;
     state.fileCursorCycle = true;
     await invoke(['forge','files',pid],9);
     state.fileCursorCycle = false;

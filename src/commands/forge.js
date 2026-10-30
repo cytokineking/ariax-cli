@@ -223,6 +223,9 @@ export async function submit(ctx, id, request, label, recovery) {
     try { atomicWrite(file, JSON.stringify(candidate, null, 2) + '\n', true); record = candidate; }
     catch (error) { if (error.code !== 'EEXIST') throw error; record = readRecord(file); }
   }
+  if (label === 'session_id' && record?.id === id && record.request?.body?.files_contract !== 2) {
+    throw new ApiError({ status: 409, code: 'upgrade_required', message: `Saved session request ${id} uses the legacy file contract. Inspect the original session; it cannot be replayed as a current-workspace request.` });
+  }
   if (record?.id !== id || !isDeepStrictEqual(record.request, request)) {
     throw new ApiError({ status: 409, code: 'request_conflict', message: `Forge request ${id} differs from its saved request. Use the original fields to retry.` });
   }
@@ -446,7 +449,7 @@ async function runAction(ctx) {
   if (action === 'create' || action === 'resume') {
     const sessionId = flags['session-id'] === undefined ? randomUUID() : uuid(flags['session-id'], 'session ID');
     const resuming = action === 'resume';
-    const body = { session_id: sessionId, ...sessionOptions(flags),
+    const body = { session_id: sessionId, files_contract: 2, ...sessionOptions(flags),
       ...(resuming ? { expected_control_revision: number(flags['control-revision'], 'control-revision', { integer: true, zero: true }) }
         : { name: required(flags.name, 'name') }) };
     const destination = resuming ? `${API}/projects/${uuid(ctx.positionals[1], 'project ID')}/sessions` : `${API}/sessions`;
