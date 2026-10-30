@@ -131,12 +131,38 @@ ariax --root-dir "$CLI_ROOT" forge close "$PARTIAL_SESSION" --json
 ariax --root-dir "$CLI_ROOT" forge status "$PARTIAL_SESSION" --json
 ```
 
-Verify the flush state is `saved` and confirm resource release. The external
-controller's optimizer continuation currently requires a legacy Forge checkpoint
-identity. Its adapter must be updated and validated for current project files
-before this continuation is used with the new CLI. Retain the trusted controller
-journals and model-use reservations; do not substitute a current path for the old
-pinned identity or rerun scientific work to reconstruct missing state.
+Require the flush state `saved` and confirm resource release. Follow
+[same-project resume](../../../SKILL.md#project-controls-and-resume): resolve
+any human hold, read the current control revision and choose an authorized new
+session and allocation limit. Set `RESUME_REVISION` from `control.revision`.
+Approval itself starts no compute.
+
+```sh
+ariax --root-dir "$CLI_ROOT" forge project "$PARTIAL_PROJECT" --json
+ariax --root-dir "$CLI_ROOT" forge resume "$PARTIAL_PROJECT" \
+  --session-id "$RESUMED_SESSION" --gpu "$SELECTED_GPU" --tools opendde-harness \
+  --control-revision "$RESUME_REVISION" --max-gpu-hours "$APPROVED_HOURS" --json
+ariax --root-dir "$CLI_ROOT" forge tools wait "$RESUMED_SESSION" opendde-harness --timeout 1800 --json
+"$HARNESS_PYTHON" "$HARNESS_ADAPTER/controller.py" continue --resume \
+  --workflow /srv/harness/partial/workflow.json --state-dir /srv/harness/partial/state \
+  --cli-root "$CLI_ROOT" --session "$RESUMED_SESSION" --project "$PARTIAL_PROJECT" \
+  --task-id harness-partial --control-revision "$RESUME_REVISION" \
+  --max-model-calls 16 --max-input-bytes 524288 --max-output-tokens 32768
+```
+
+The controller reads the current project's `native/optimizer.json` through the
+authorized file service and requires an exact match with its retained optimizer
+or publication intent. An optional `--restored-boundary FILE` supplies an
+additional JSON document to compare with that current file. A missing, older or
+different optimizer blocks continuation. Keep the original trusted controller
+journals, CLI account/API origin and model-use reservations. Retained operation
+results must match their original requests and current project files; do not
+rerun scientific work to reconstruct missing state. Because a flush is not an
+atomic multi-file snapshot, stop writers and verify the actual files needed.
+
+Use matching versions of the CLI, Forge services and Harness adapter. The new
+project-file continuation requires remote integration and scientific validation
+before release; earlier checkpoint-based qualification does not establish it.
 
 Other explicit hold points are available for the corresponding native cursors:
 
@@ -146,7 +172,7 @@ Other explicit hold points are available for the corresponding native cursors:
 | `--hold-at cycle:8` | Continue after population/history/RNG/streak commit, before remote publication. |
 | `--hold-at terminal/1/mpnn:1` | Continue remaining MPNN parents after the first saved parent, preserving 40-sample filtering and the four-survivor policy. |
 | `--hold-at terminal/3/pose:1` | Continue remaining pose processing after the first candidate, preserving metadata and command IDs. |
-| `--hold-after-publication cycle:4` | Legacy checkpoint-pinned publication; unavailable until the adapter is updated. |
+| `--hold-after-publication cycle:4` | Hold after the current optimizer and operation result are saved, before local acknowledgement. |
 
 Use these only when eligible native inputs reach that cursor. Omit the previous
 hold flag when continuing. Keep native filter failures and shortfalls; partial
