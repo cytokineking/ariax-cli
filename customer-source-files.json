@@ -803,6 +803,7 @@
   "agent-skills/skills/ariax-forge/tools/examples/campaigns/molecular/positive-rf3.json",
   "agent-skills/skills/ariax-forge/tools/examples/campaigns/molecular/positive.yaml",
   "src/lib/forge-client.js",
+  "src/lib/forge-workspace-client.js",
   "agent-skills/skills/ariax-forge/tools/chai1.md",
   "agent-skills/skills/ariax-forge/tools/examples/bindcraft2/direct_check.py",
   "agent-skills/skills/ariax-forge/tools/examples/chai1/README.md",

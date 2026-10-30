@@ -47,10 +47,11 @@ async function boundary(root) {
   }));
   const toolState = (tool, state) => ({ ...catalog.find(item => item.tool === tool), tool, state, error: null });
   const state = { sessions, projects, allocations: 0, executions: 0, releases: 0, posts: 0, preparations: 0,
-    drop: 'create', holdReads: false, unknown: false, cleanupBlocked: false, fault: null };
+    drop: 'create', holdReads: false, unknown: false, cleanupBlocked: false, fault: null,
+    syncMode: 'saved', syncPosts: 0, fileError: false, fileBadPath: false, fileBadGrant: false, fileCursorCycle: false, legacyResume: false };
   const reply = (res, status, data) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data })); };
   const error = (res, status, code, message, details) => {
-    res.writeHead(status, { 'content-type': 'application/json' });
+    res.writeHead(status, { 'content-type': 'application/json', 'x-request-id': 'request-fixture-1' });
     res.end(JSON.stringify({ error: { code, message, retryable: false, ...(details ? { details } : {}) } }));
   };
   const held = (res, project) => error(res, 409, 'human_resume_required', 'A human must allow this project to resume', {
@@ -59,14 +60,14 @@ async function boundary(root) {
   const makeSession = (body, user, project) => {
     state.allocations++;
     const allocatedAt = new Date().toISOString();
-    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), data: {
+    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), data: {
       session_id: body.session_id, project_id: project.id, name: project.name,
       state: 'starting', gpu_type: body.gpu_type, gpu_count: body.gpu_count,
       tools: [toolState('base', 'queued'), ...body.tools.map(tool => toolState(tool, 'queued'))],
       max_gpu_hours: body.max_gpu_hours ?? null, limit_revision: 0, applied_limit_revision: 0, allocated_at: allocatedAt,
       expires_at: body.max_gpu_hours === undefined ? null : new Date(Date.parse(allocatedAt) + body.max_gpu_hours / body.gpu_count * 3600000).toISOString(),
       hardware: { gpu_count: body.gpu_count, vram_gib_per_gpu: 48, ram_gib: 128, cpu_count: 16, disk_gib: 500 },
-      persistence: { state: 'pending', checkpoint: null, error: null }, error: null,
+      persistence: { state: 'pending', error: null }, error: null,
     } };
     sessions.set(body.session_id, session);
     return session;
@@ -74,6 +75,14 @@ async function boundary(root) {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
+      if (req.method === 'GET' && url.pathname.startsWith('/__object/')) {
+        const project = projects.get(url.pathname.slice('/__object/'.length));
+        const file = project?.files.get(url.searchParams.get('path'));
+        if (url.searchParams.get('signature') !== 'private-transfer-grant' || !file) return error(res, 403, 'forbidden', 'Transfer denied');
+        res.writeHead(200, {'content-type':'application/octet-stream'});
+        res.end(file);
+        return;
+      }
       const direct = /^\/__direct\/([0-9a-f-]{36})(\/v1\/.*)$/.exec(url.pathname);
       let user;
       const rawToken = (req.headers.authorization || '').replace(/^Bearer /, '');
@@ -120,13 +129,8 @@ async function boundary(root) {
         let session = sessions.get(body.session_id);
         if (session && (session.owner !== user || !isDeepStrictEqual(session.request, body))) return error(res, 409, 'request_conflict', 'Session request differs');
         if (!session) {
-          if (body.restore) {
-            const source = sessions.get(body.restore.session_id);
-            if (!source || source.owner !== user) return error(res, 404, 'not_found', 'Source not found');
-            const sourceProject = projects.get(source.data.project_id);
-            if (sourceProject.control.human_resume_required) return held(res, sourceProject);
-          }
-          const project = { id: randomUUID(), owner: user, name: body.name, status: 'running', control: {
+          assert.equal(Object.hasOwn(body, 'restore'), false);
+          const project = { id: randomUUID(), owner: user, name: body.name, status: 'running', files: new Map(), control: {
             revision: 0, human_resume_required: false, stop_origin: null, stop_reason: null, stopped_by: null, stopped_at: null,
           } };
           projects.set(project.id, project);
@@ -140,6 +144,28 @@ async function boundary(root) {
         const project = projects.get(parts[4]);
         if (!project || project.owner !== user) return error(res, 404, 'not_found', 'Project not found');
         const history = [...sessions.values()].filter(s => s.data.project_id === project.id).reverse();
+        if (parts[5] === 'files') {
+          assert.ok(req.headers['x-request-id']);
+          if (state.fileError) return error(res, 503, 'storage_unavailable', 'private-transfer-grant https://example.org/?signature=secret');
+          if (req.method === 'GET' && parts.length === 6) {
+            if (state.fileCursorCycle) return reply(res,200,{entries:[],next_cursor:'repeated-cursor'});
+            const directory = url.searchParams.get('path'), cursor = Number(url.searchParams.get('cursor') || 0);
+            const entries = [...project.files].filter(([name]) => name.startsWith(directory + '/')
+              && !name.slice(directory.length + 1).includes('/'))
+              .map(([name, bytes]) => ({path:name,kind:'file',size_bytes:bytes.length})).sort((a,b) => a.path.localeCompare(b.path));
+            if (state.fileBadPath) entries[0] = {path:'/workspace/../escape',kind:'file',size_bytes:1};
+            return reply(res, 200, {entries:entries.slice(cursor,cursor+1),next_cursor:cursor+1<entries.length?String(cursor+1):null});
+          }
+          assert.equal(req.method, 'POST');
+          assert.equal(parts[6], 'presign');
+          assert.deepEqual(Object.keys(body), ['path']);
+          const file = project.files.get(body.path);
+          if (!file) return error(res, 404, 'not_found', 'File not found');
+          const grant = new URL(`http://127.0.0.1:${server.address().port}/__object/${project.id}`);
+          grant.searchParams.set('path',body.path);
+          grant.searchParams.set('signature','private-transfer-grant');
+          return reply(res, 200, {path:state.fileBadGrant?'/workspace/other':body.path,size_bytes:file.length,download_url:grant.href});
+        }
         if (req.method === 'GET' && parts.length === 5) {
           const start = Number(url.searchParams.get('cursor') || 0), limit = Number(url.searchParams.get('limit') || 50);
           return reply(res, 200, { project_id: project.id, name: project.name, status: project.status, control: project.control,
@@ -154,12 +180,11 @@ async function boundary(root) {
         if (resumed && (resumed.owner !== user || resumed.data.project_id !== project.id || !isDeepStrictEqual(resumed.request, body))) return error(res, 409, 'request_conflict', 'Resume request differs');
         if (!resumed) {
           if (project.control.human_resume_required) return held(res, project);
+          if (state.legacyResume) return error(res, 409, 'checkpoint_required', 'Legacy server requires a checkpoint');
           if (body.expected_control_revision !== project.control.revision) return error(res, 409, 'control_revision_conflict', 'Project control changed');
           if (history.some(s => s.data.state === 'closing')) return error(res, 409, 'session_cleanup_pending', 'Cleanup pending');
           if (history.some(s => !['closed', 'failed'].includes(s.data.state))) return error(res, 409, 'project_session_active', 'Session active');
-          const source = sessions.get(body.restore.session_id);
-          if (!source || source.owner !== user || source.data.project_id !== project.id) return error(res, 404, 'not_found', 'Source not found');
-          if (source.data.persistence.checkpoint !== body.restore.checkpoint_id) return error(res, 409, 'checkpoint_required', 'Saved files required');
+          assert.equal(Object.hasOwn(body, 'restore'), false);
           resumed = makeSession(body, user, project);
           project.status = 'running';
         }
@@ -175,20 +200,30 @@ async function boundary(root) {
         return reply(res, 200, session.data);
       }
       const project = projects.get(session.data.project_id);
-      if (parts[5] === 'checkpoints') {
-        assert.equal(req.method, 'GET');
-        const saved = session.savedFile;
-        if (!saved || parts[6] !== saved.checkpoint_id) return error(res, 404, 'not_found', 'Checkpoint not found');
-        return reply(res, 200, { checkpoint_id: saved.checkpoint_id, session_id: session.data.session_id,
-          state: 'synced', completed_at: saved.completed_at, file_count: 1, size_bytes: saved.bytes.length });
-      }
-      if (parts[5] === 'files' && parts[6] === 'presign') {
+      if (parts[5] === 'sync') {
+        assert.ok(direct, 'sync must use the active-session transport');
+        if (req.method === 'GET') {
+          const operation = session.syncs.get(parts[6]);
+          if (!operation) return error(res, 404, 'not_found', 'Sync not found');
+          if (operation.state === 'pending' && operation.nextState) operation.state = operation.nextState;
+          return reply(res, 200, operation);
+        }
         assert.equal(req.method, 'POST');
-        const saved = session.savedFile;
-        if (!saved || (body.checkpoint && body.checkpoint !== saved.checkpoint_id)) return error(res, 409, 'checkpoint_required', 'Saved files required');
-        if (body.path !== saved.path) return error(res, 404, 'not_found', 'Saved file not found');
-        return reply(res, 200, { path: saved.path, checkpoint: saved.checkpoint_id, size_bytes: saved.bytes.length,
-          download_url: 'https://example.org/storage?signature=private-transfer-grant', expires_at: 'future' });
+        assert.equal(req.headers['idempotency-key'], body.sync_id);
+        assert.ok(req.headers['x-request-id']);
+        state.syncPosts++;
+        let operation = session.syncs.get(body.sync_id);
+        if (!operation) {
+          if (session.data.state !== 'available') return error(res, 409, 'session_unready', 'Session not available');
+          const mode = state.syncMode;
+          operation = {sync_id:body.sync_id,state:mode.startsWith('pending')?'pending':mode,
+            ...(mode === 'pending_then_saved' ? {nextState:'saved'} : {}),
+            ...(mode === 'pending_then_failed' ? {nextState:'failed'} : {}),
+            ...(mode.includes('failed') ? {error:{code:'upload_failed',message:'private-transfer-grant https://example.org/?signature=secret'}} : {})};
+          session.syncs.set(body.sync_id,operation);
+        }
+        if (state.drop === 'sync') { state.drop = null; req.socket.destroy(); return; }
+        return reply(res, 202, operation);
       }
       if (parts[5] === 'limit') {
         assert.equal(req.method, 'POST');
@@ -533,10 +568,10 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
   const api = await boundary(root), { state } = api;
   const privateClient = await tunnelEnvironment(root, api.origin, baseEnv);
   const env = { ...privateClient.env, ARIAX_API_KEY: key, NO_UPDATE_NOTIFIER: '1' };
-  async function invoke(args, code = 0, human = false) {
+  async function invoke(args, code = 0, human = false, actorKey = key) {
     let out;
     try { out = { code: 0, ...await execute(process.execPath, [script, human ? '--no-json' : '--json',
-      '--root-dir', root, '--base-url', api.origin, ...args], { env, timeout: 60_000 }) }; }
+      '--root-dir', root, '--base-url', api.origin, ...args], { env:{...env,ARIAX_API_KEY:actorKey}, timeout: 60_000 }) }; }
     catch (cause) { if (typeof cause.code !== 'number') throw cause; out = cause; }
     assert.equal(out.code, code, `${args}: ${out.stdout}\n${out.stderr}`);
     assert.doesNotMatch(out.stdout + out.stderr, new RegExp(key));
@@ -650,6 +685,42 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(session.data.limit_revision, 3);
     await invoke(['forge', 'limit', sid, '--clear', '--gpu-hours', '4', '--limit-revision', '3'], 1);
 
+    session.data.persistence = {state:'failed',error:{code:'upload_failed',
+      message:'transfer https://storage.example/file?X-Amz-Signature=private-signature',
+      download_url:'https://storage.example/file?X-Amz-Signature=private-signature',access_token:'private-token',token:'private-token'}};
+    const redactedStatus = await invoke(['forge','status',sid]);
+    assert.doesNotMatch(redactedStatus.stdout + redactedStatus.stderr,/private-signature|private-token|download_url|access_token/);
+    assert.doesNotMatch(JSON.stringify(await record(sid)),/private-signature|private-token|download_url|access_token/);
+    session.data.persistence = {state:'pending',error:null};
+
+    const commandsBeforeSync = state.executions;
+    state.syncMode = 'pending_then_saved';
+    const flushed = await invoke(['forge','sync',sid,'--wait','--timeout','30']);
+    assert.equal(flushed.payload.data.state,'saved');
+    assert.equal(state.executions,commandsBeforeSync,'sync replayed a scientific command');
+    state.syncMode = 'pending_then_failed';
+    const syncFailure = await invoke(['forge','sync',sid,'--wait','--timeout','30'],10);
+    assert.equal(syncFailure.payload.error.code,'sync_failed');
+    assert.doesNotMatch(syncFailure.stdout + syncFailure.stderr,/private-transfer-grant|signature=/);
+    state.syncMode = 'pending';
+    const pendingSync = await invoke(['forge','sync',sid]);
+    assert.equal(pendingSync.payload.data.state,'pending');
+    const syncId = pendingSync.payload.data.sync_id, beforeSyncWait = state.syncPosts;
+    const syncTimeout = await invoke(['forge','sync',sid,'--sync-id',syncId,'--wait','--timeout','0.05'],9);
+    assert.match(syncTimeout.payload.error.message,/remote work continues/);
+    assert.equal(state.syncPosts,beforeSyncWait,'sync wait submitted another flush');
+    session.syncs.get(syncId).state = 'saved';
+    assert.equal((await invoke(['forge','sync',sid,'--sync-id',syncId,'--wait'])).payload.data.state,'saved');
+    assert.equal(state.syncPosts,beforeSyncWait,'sync recovery resubmitted an accepted flush');
+    state.syncMode = 'saved';
+    state.drop = 'sync';
+    const lostSync = await invoke(['forge','sync',sid],9);
+    const lostSyncId = lostSync.stderr.match(/sync_id: ([0-9a-f-]{36})/)[1];
+    const afterLostSync = state.syncPosts;
+    assert.equal((await invoke(['forge','sync',sid,'--sync-id',lostSyncId,'--wait'])).payload.data.state,'saved');
+    assert.equal(state.syncPosts,afterLostSync,'uncertain accepted flush was duplicated');
+    assert.equal(state.executions,commandsBeforeSync,'sync recovery replayed a scientific command');
+
     project.control = { revision: 1, human_resume_required: true, stop_origin: 'web', stop_reason: 'human_pause',
       stopped_by: actor, stopped_at: new Date().toISOString() };
     project.status = 'paused';
@@ -668,25 +739,60 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.match(heldRun.payload.error.action, /replacement project/);
     assert.equal(state.executions, executions);
     await invoke(['forge', 'close', sid]);
-    session.data.persistence = { state: 'synced', checkpoint: randomUUID(), error: null };
-    session.savedFile = { checkpoint_id: session.data.persistence.checkpoint, path: `/workspace/${savedName}`,
-      completed_at: new Date().toISOString(), bytes: await fs.readFile(path.join(root, savedName)) };
-    const linked = (await invoke(['forge', 'link', sid, session.savedFile.path])).payload.data;
+    const savedPath = `/workspace/${savedName}`;
+    project.files.set(savedPath,await fs.readFile(path.join(root,savedName)));
+    project.files.set('/workspace/another.txt',Buffer.from('another'));
+    project.files.set('/inputs/source.txt',Buffer.from('input'));
+    assert.deepEqual((await invoke(['forge','files',pid,'--path','/inputs'])).payload.data.entries.map(e => e.path),['/inputs/source.txt']);
+    const listed = (await invoke(['forge','files',pid,'--path','/workspace'])).payload.data;
+    assert.equal(listed.entries.length,2, 'all pages were not fetched');
+    assert.deepEqual(listed.entries.map(entry => entry.path).sort(), ['/workspace/another.txt',savedPath].sort());
+    const destination = path.join(root,'downloaded-result.txt');
+    const downloaded = await invoke(['forge','download',pid,savedPath,'--dest',destination]);
+    assert.equal(await fs.readFile(destination,'utf8'),'saved command output');
+    assert.doesNotMatch(downloaded.stdout + downloaded.stderr,/private-transfer-grant|download_url|signature=/);
+    await invoke(['forge','download',pid,savedPath,'--dest',path.join(root,'forbidden')],4,false,'arx_forge_othercredential');
+    const linked = (await invoke(['forge', 'link', pid, savedPath])).payload.data;
     const savedUrl = new URL(linked.url);
     assert.equal(savedUrl.pathname, `/projects/forge/${pid}`);
-    assert.equal(savedUrl.searchParams.get('session'), sid);
-    assert.equal(savedUrl.searchParams.get('checkpoint'), session.savedFile.checkpoint_id);
-    assert.equal(savedUrl.searchParams.get('path'), session.savedFile.path);
-    assert.equal(linked.size_bytes, session.savedFile.bytes.length);
-    assert.doesNotMatch(JSON.stringify(linked), /private-transfer-grant|download_url/);
-    const resume = ['forge', 'resume', pid, '--restore-session', sid, '--checkpoint', session.data.persistence.checkpoint,
-      '--control-revision', '1', '--gpu', 'L40', '--gpu-count', '2', '--tools', 'boltz2'];
+    assert.equal(savedUrl.searchParams.get('session'), null);
+    assert.equal(savedUrl.searchParams.get('checkpoint'), null);
+    assert.equal(savedUrl.searchParams.get('path'), savedPath);
+    assert.equal(linked.size_bytes, project.files.get(savedPath).length);
+    assert.doesNotMatch(JSON.stringify(linked), /private-transfer-grant|download_url|signature=/);
+    state.fileError = true;
+    const fileFailure = await invoke(['forge','download',pid,savedPath,'--dest',path.join(root,'error')],10);
+    assert.equal(fileFailure.payload.error.code,'storage_unavailable');
+    assert.equal(fileFailure.payload.request_id,'request-fixture-1');
+    assert.doesNotMatch(fileFailure.stdout + fileFailure.stderr,/private-transfer-grant|signature=|https:\/\/example.org/);
+    state.fileError = false;
+    state.fileBadPath = true;
+    await invoke(['forge','files',pid],9);
+    state.fileBadPath = false;
+    state.fileCursorCycle = true;
+    await invoke(['forge','files',pid],9);
+    state.fileCursorCycle = false;
+    state.fileBadGrant = true;
+    await invoke(['forge','link',pid,savedPath],9);
+    state.fileBadGrant = false;
+    const formerSession = await invoke(['forge','files',sid],4);
+    assert.match(formerSession.payload.error.action,/PROJECT ID.*SESSION form is unsupported/);
+    for (const unsafe of ['/etc/passwd','/workspace/../bad','/workspace//bad','/workspace/./bad','/workspace/','/workspace/..\\bad']) {
+      await invoke(['forge','link',pid,unsafe],1);
+    }
+    const resume = ['forge', 'resume', pid, '--control-revision', '1', '--gpu', 'L40', '--gpu-count', '2', '--tools', 'boltz2'];
     const heldResume = await invoke(resume, 7);
     assert.match(heldResume.payload.error.action, new RegExp(`/projects/forge/${pid}`));
-    await invoke(['forge', 'create', '--name', 'Held replacement', '--gpu', 'L40', '--restore-session', sid,
-      '--checkpoint', session.data.persistence.checkpoint], 7);
+    const removed = await invoke(['forge', 'resume', pid, '--restore-session', sid, '--checkpoint', randomUUID(),
+      '--control-revision', '1', '--gpu', 'L40'], 1);
+    assert.match(removed.payload.error.message, /no longer supported.*current project workspace/);
+    for (const args of [['checkpoints',sid],['checkpoint',sid,randomUUID()],['files',pid,'--checkpoint',randomUUID()],
+      ['sync',sid,'--checkpoint-id',randomUUID()]]) {
+      const rejected = await invoke(['forge',...args],1);
+      assert.match(rejected.payload.error.message,/no longer supported/);
+    }
     assert.equal(state.allocations, allocations, 'a human hold allocated compute');
-    assert.equal(state.projects.size, 1, 'held restore created a replacement project');
+    assert.equal(state.projects.size, 1, 'held resume created a replacement project');
     // Represent the human-authenticated approval boundary. CLI inspection cannot approve it.
     project.control.human_resume_required = false;
     project.control.revision = 2;
@@ -697,8 +803,13 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(state.posts, afterApproval);
     assert.equal(state.allocations, allocations);
     assert.equal((await invoke(resume, 7)).payload.error.code, 'control_revision_conflict');
-    state.drop = 'resume';
     const approved = [...resume, '--control-revision', '2'];
+    state.legacyResume = true;
+    const legacyServer = await invoke(approved,7);
+    assert.match(legacyServer.payload.error.action,/removed Forge checkpoint contract.*Upgrade/);
+    state.legacyResume = false;
+    assert.equal(state.allocations,allocations,'legacy-server rejection allocated compute');
+    state.drop = 'resume';
     const lostResume = await invoke(approved, 9), resumedId = lostResume.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
     assert.equal((await record(resumedId)).result, null);
     const retryResume = [...approved, '--session-id', resumedId];
@@ -708,6 +819,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(resumed.payload.data.max_gpu_hours, null, 'resume inherited an old session cap');
     assert.equal((await record(resumedId)).request.body.expected_control_revision, 2);
     assert.equal((await record(resumedId)).request.body.name, undefined);
+    assert.equal(Object.hasOwn((await record(resumedId)).request.body,'restore'),false);
     assert.equal(state.allocations, allocations + 1);
     assert.equal(state.executions, executions, 'resume replayed a scientific command');
     await invoke([...retryResume, '--gpu-count', '1'], 7);

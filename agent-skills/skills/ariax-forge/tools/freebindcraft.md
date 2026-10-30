@@ -203,33 +203,35 @@ design. Share rejected results when Accepted/Ranked files are absent.
 
 ## Save, download and restore results
 
-After run/check commands are terminal, create a completed checkpoint:
+After run/check commands are terminal, flush the changed files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path "$RUN_DIR" --checkpoint "$CHECKPOINT" --json
-ariax forge files "$SESSION" --path "$RUN_DIR/Accepted" --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" "$RUN_DIR/final_design_stats.csv" --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" "$RUN_DIR/Accepted/$ACCEPTED_FILE" --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path "$RUN_DIR" --json
+ariax forge files "$PROJECT" --path "$RUN_DIR/Accepted" --json
+ariax forge link "$PROJECT" "$RUN_DIR/final_design_stats.csv" --json
+ariax forge link "$PROJECT" "$RUN_DIR/Accepted/$ACCEPTED_FILE" --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Set `CHECKPOINT` to the returned completed checkpoint UUID and require `synced`.
+Require the flush state `saved`.
 Set `ACCEPTED_FILE` from the completed listing and match it to the checked
 result. If none were accepted, link the available rejection tables instead.
 To download a checked result, set `RESULT_DEST` to an authorized destination
-and use the same completed checkpoint:
+and read the current project files:
 
 ```sh
-ariax forge download "$SESSION" "$RUN_DIR/final_design_stats.csv" --checkpoint "$CHECKPOINT" --dest "$RESULT_DEST/freebindcraft-final.csv" --json
-ariax forge download "$SESSION" "$RUN_DIR/Accepted/$ACCEPTED_FILE" --checkpoint "$CHECKPOINT" --dest "$RESULT_DEST/freebindcraft-complex.pdb" --json
+ariax forge download "$PROJECT" "$RUN_DIR/final_design_stats.csv" --dest "$RESULT_DEST/freebindcraft-final.csv" --json
+ariax forge download "$PROJECT" "$RUN_DIR/Accepted/$ACCEPTED_FILE" --dest "$RESULT_DEST/freebindcraft-complex.pdb" --json
 ```
 
 Keep inputs, effective settings, logs, failure tables, NativeArrays,
-NativeMPNN and original decisions in Files. Completed checkpoint reads remain
+NativeMPNN and original decisions in Files. Saved project files remain
 available after close. Public `closed` confirms allocation release; inspect
-persistence errors separately and preserve the last completed checkpoint.
+synchronization errors separately.
 
 Set `PROJECT` from the session and `REVISION` from its current `control.revision`.
 If held, wait for authenticated web approval and user direction, then read the
@@ -238,7 +240,7 @@ project only within the authorized budget:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40 --tools freebindcraft --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40 --tools freebindcraft --control-revision "$REVISION" --max-gpu-hours 1 --json
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" freebindcraft --timeout 1800 --json
 ariax forge run "$RESTORED_SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 120 --json -- freebindcraft-check "$RUN_DIR"
@@ -252,4 +254,4 @@ readiness and watch the explicit checker command before closure. Use the
 checker appropriate to the saved layout. Restoration recovers workspace and
 ready staged inputs without replaying design. Each new session uses normal
 allocation and billing. Read the [outputs reference](../outputs.md) for
-checkpoint and recovery semantics.
+project-file and recovery semantics.

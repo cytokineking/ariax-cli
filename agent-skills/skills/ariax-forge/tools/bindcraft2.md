@@ -185,27 +185,27 @@ duration, including compilation and validation time.
 
 ## Save, inspect and restore
 
-After all writers are terminal, create a completed checkpoint:
+After all writers are terminal, flush the changed files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path "$OUTPUT" --checkpoint "$CHECKPOINT" --json
-ariax forge files "$SESSION" --path "$OUTPUT/3_Ranked" --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" "$OUTPUT/3_Ranked/!_Ranked.csv" --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" "$OUTPUT/3_Ranked/$RANKED_DESIGN.cif" --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path "$OUTPUT" --json
+ariax forge files "$PROJECT" --path "$OUTPUT/3_Ranked" --json
+ariax forge link "$PROJECT" "$OUTPUT/3_Ranked/!_Ranked.csv" --json
+ariax forge link "$PROJECT" "$OUTPUT/3_Ranked/$RANKED_DESIGN.cif" --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Set `CHECKPOINT` to the returned UUID and require `synced`. Set `RANKED_DESIGN`
-from the actual ranked table (or the example checker JSON) and confirm its file
-in the checkpoint listing before linking. If no ranked design exists, link
-the stage/rejection tables and available structures instead. Completed
-checkpoints remain available after close; use the [outputs reference](../outputs.md)
+Require the flush state `saved`. Set `RANKED_DESIGN` from the actual ranked
+table (or the example checker JSON) and confirm its file in the project listing
+before linking. If no ranked design exists, link the stage/rejection tables and
+available structures instead. Saved project files remain available after close; use the [outputs reference](../outputs.md)
 for downloads and storage limits. Keep bulk scientific outputs on remote
 storage under the applicable workstation policy. Public `closed` confirms
-allocation release; inspect persistence errors separately and preserve the last
-completed checkpoint.
+allocation release; inspect synchronization errors separately.
 
 Set `PROJECT` from the session and `REVISION` from its current `control.revision`.
 If held, wait for authenticated web approval and user direction, then read the
@@ -215,7 +215,7 @@ it with an appropriate check for other results:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40 --tools bindcraft2 --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40 --tools bindcraft2 --control-revision "$REVISION" --max-gpu-hours 1 --json
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" bindcraft2 --timeout 1800 --json
 ariax forge run "$RESTORED_SESSION" --tool bindcraft2 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"

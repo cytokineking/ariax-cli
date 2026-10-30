@@ -202,13 +202,15 @@ other tools. Compare scores only with matching settings and molecule types.
 Relaxation potential energy, SASA, geometric overlaps, RMSD and TM-score are
 separate quantities. Unsupported metrics remain unavailable.
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --json
-ariax forge files "$SESSION" --path /workspace/structures --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" /workspace/structures/geometry1/result.json --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/structures --json
+ariax forge link "$PROJECT" /workspace/structures/geometry1/result.json --json
 ```
 
-Set `CHECKPOINT` from the completed sync; choose an actual saved path for the
-link. Use saved checkpoint paths and the project link for sharing. Preserve the project
+Require the flush state `saved`; choose an actual project file path for the
+link. Links refer to current files and can change after later writes. Preserve the project
 identity and human hold through pause/resume. Resume restores files and requires
 an explicit decision on the next command.

@@ -112,7 +112,7 @@ error (PSCE); backbone values are zero. It is not pLDDT or experimental temperat
 factor. `structures/` changes only the upstream chain letter to the corresponding
 input chain ID. Keep the complete native directory alongside mapped exports.
 
-Save unique outputs and modifications through ordinary Forge Files checkpointing.
+Save unique outputs and modifications through ordinary Forge project file synchronization.
 An explicit restore recovers files; scientific execution is not automatically
 replayed. Public unmodified weights can be prepared again from the recorded source
 revision, layout and upstream model card.
@@ -141,6 +141,6 @@ source-to-input residue map. It preserves author numbering gaps while renaming
 A/B to Y/Z and adding 1000/2000 to author numbers. Its `profiles.json` lists exact
 present fixed positions. A range spanning an absent author residue is rejected.
 
-Use [saved results](../outputs.md) for checkpoint-pinned exports and
+Use [saved results](../outputs.md) for current project exports and
 [project controls](../SKILL.md#project-controls-and-resume) for pause, closure
 and explicit continuation.

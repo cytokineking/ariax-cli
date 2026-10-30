@@ -26,4 +26,4 @@ available choices; missing resource minima are unknown. Read the selected
 guide for inputs and commands, and wait for its tool and inputs to be ready.
 
 Follow the component notices: source, weights and databases can have different
-terms. Use the [checkpoint flow](../outputs.md) to save inputs and useful outputs.
+terms. Use the [file synchronization flow](../outputs.md) to save inputs and useful outputs.

@@ -235,13 +235,15 @@ Keep source structures, plans, residue maps, actual sequences, scores,
 checker reports, native settings and command IDs together. Save before
 sharing or closing compute:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/mpnn-demo --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/mpnn-demo/protein-design/check.json --checkpoint "$CHECKPOINT" --dest ./mpnn-check.json --json
+ariax forge files "$PROJECT" --path /workspace/mpnn-demo --json
+ariax forge download "$PROJECT" /workspace/mpnn-demo/protein-design/check.json --dest ./mpnn-check.json --json
 ```
 
-Use the returned completed checkpoint UUID for exports.
+Require a successful flush before exporting current project files.
 
 Measured examples span 93–805 protein residues, batch one, two samples and
 explicit selected positions, including paired/VHH/scFv constraints and DNA/zinc
@@ -250,6 +252,6 @@ context. Peak observed process RAM was 1,082,056 KiB and sampled GPU use was
 not establish a general resource minimum or design-quality claim. Keep the
 antibody-input restrictions above.
 
-Use [saved results](../outputs.md) for checkpoint-pinned exports and
+Use [saved results](../outputs.md) for current project exports and
 [project controls](../SKILL.md#project-controls-and-resume) for pause, closure
 and explicit continuation.

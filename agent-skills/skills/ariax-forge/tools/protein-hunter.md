@@ -130,14 +130,16 @@ refolding a conditioned export. A separate refold never rewrites native acceptan
 
 ## Save, restore and explicit continuation
 
-After writers stop, create and retain a completed checkpoint:
+After writers stop, flush the changed files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 900 --json
-ariax forge files "$SESSION" --path /workspace/protein-hunter/pdl1 --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/protein-hunter/pdl1 --json
 ```
 
-Use the completed sync’s checkpoint UUID for inspection and exports. See
+Require a successful flush before inspection and exports. See
 [saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume)
 for closure and same-project resume. Read saved settings, native outcomes,
 inputs and arrays before continuing; restoration does not replay science.

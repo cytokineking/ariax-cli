@@ -39,7 +39,7 @@ differing molecular sequences, unsupported modalities and missing campaign
 paths. It reads the saved structures and scores without a generation or
 prediction call. It writes `shortlists.json`, `shortlists.tsv` and five per-path
 JSON shortlists to a fresh `--out` directory. Saved inputs can be read in the
-current workspace or after an optional [checkpoint restore](../../outputs.md).
+current workspace or after an optional [same-project resume](../../outputs.md).
 
 Pose RMSD fits corresponding molecular roles and sequence positions using
 C-alpha atoms for proteins and phosphate P atoms for nucleic acids. It uses

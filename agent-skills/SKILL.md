@@ -47,7 +47,7 @@ the exit code before parsing output; see the [shell example](core/examples.md#sa
   [session or command ID](skills/ariax-forge/SKILL.md#recover-a-lost-response).
   A local interruption does not stop remote work; resolve the existing request
   before starting replacement work.
-- Forge preparation and idle time are billed. Checkpoint useful files,
+- Forge preparation and idle time are billed. Flush useful files,
   explicitly close the session when done, and check that closure and saving
   completed. See the [Forge lifecycle](skills/ariax-forge/SKILL.md).
 

@@ -145,7 +145,7 @@ size and sampling settings; these examples establish no larger-workload capacity
 or hardware minimum.
 
 Save exact YAML/MSA/template inputs, raw predictions and complete `processed/`
-files, reports, argv/seed/settings, command IDs and logs to a completed checkpoint.
+files, reports, argv/seed/settings, command IDs and logs to the current project workspace.
 Follow [save and restore](../boltz2.md#save-and-restore), close the session and
 confirm resource release. Restore saved files and check their input/rank/chemistry
 mapping before reuse; restoration does not replay inference. Keep an existing

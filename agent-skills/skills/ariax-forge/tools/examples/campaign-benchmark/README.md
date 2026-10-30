@@ -27,7 +27,7 @@ relative locations; the benchmark root must contain every saved dependency.
 No scientific outputs or experimental observations are bundled here.
 
 To inspect saved results or optionally regenerate reports after a
-[checkpoint restore](../../../outputs.md), retain the original campaign files,
+[same-project resume](../../../outputs.md), retain the original campaign files,
 prepared selection/queries, QC/search outputs and any measurement sources.
 `report.json` lists the complete input closure by relative path and size.
 Choose a fresh report output directory. Report generation rereads those saved

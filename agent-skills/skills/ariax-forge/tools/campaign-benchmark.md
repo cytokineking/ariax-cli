@@ -39,7 +39,7 @@ legacy field with `runtime`, `backend` and `cli` revisions. Place the original
 `campaign-delivery/` and `campaign-shortlists/` directories beneath
 `/workspace/benchmark/`, retaining
 every file referenced by their manifest and shortlist. They can come from the
-current workspace or an optional [checkpoint restore](../outputs.md).
+current workspace or an optional [same-project resume](../outputs.md).
 Candidates outside the selected three remain in the exclusions table.
 
 Prepare `base`, `design-qc` and `mmseqs2-uniref90`. The search helper requires

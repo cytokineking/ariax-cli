@@ -13,33 +13,32 @@ handoff beside that derivative.
 Write scores, checker reports and logs under `/workspace/interface-scores`,
 along with any native positional v3 text, by-residue and PyMOL files used for
 comparison. Preserve failed attempts and unavailable values. Scratch is
-disposable. Wait for every writer to finish, sync and require a completed checkpoint:
+disposable. Wait for every writer to finish, sync and require the flush state `saved`:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge checkpoints "$SESSION" --json
-ariax forge checkpoint "$SESSION" "$CHECKPOINT" --json
-ariax forge files "$SESSION" --path /inputs --checkpoint "$CHECKPOINT" --json
-ariax forge files "$SESSION" --path /workspace/interface-scores --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" /workspace/interface-scores/af2.json --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /inputs --json
+ariax forge files "$PROJECT" --path /workspace/interface-scores --json
+ariax forge link "$PROJECT" /workspace/interface-scores/af2.json --json
 ```
 
-Use the returned checkpoint ID. `files` lists immediate children; inspect each
+`files` lists immediate children; inspect each
 required subdirectory. Confirm that the complete registered input set and all
 workspace result/reference/log files are retained, with expected paths and byte
 counts. Saving just the final result JSON cannot restore its native evidence.
-Use stable checkpoint links to inspect/download scientific files. Bulk output
+Use project links to inspect/download current scientific files; later writes can change their bytes. Bulk output
 remains in private remote storage under the workstation storage policy.
 
 The [shared outputs guide](../../outputs.md) supplies the ordinary authorized
 resume command and the distinction between same-project resume and a new project.
 A resume allocates normal billed compute and needs available authorization; this
-guide grants no extra allocation. Require the chosen checkpoint restored before
-command admission. Restore recovers input and workspace files, starts with empty
-scratch and command history, and performs no scientific replay.
+guide grants no extra allocation. Require current project files to load before command admission. Resume loads
+input and workspace files, starts with empty scratch, and performs no scientific replay.
 
-After restore, compare every saved input/workspace path and byte to the selected
-checkpoint. Check the restored result explicitly, using its original availability
+After resume, compare saved input/workspace paths and bytes to the recorded
+scientific evidence. Check the restored result explicitly, using its original availability
 expectation:
 
 ```sh

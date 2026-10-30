@@ -32,7 +32,7 @@ ProteinBase offers an attributed public export at its [download page](https://pr
 An export download supplies no claim about a public bulk REST API. Keep the original
 CSV, retrieval timestamp and source/version text. Dataset download and processing
 belong on the remote host. Include: “This work used Proteinbase by Adaptyv Bio under
-ODC-BY license”. The full original CSV belongs in registered inputs and checkpoint
+ODC-BY license”. The full original CSV belongs in registered inputs and the project workspace
 storage; the installed package ships only helper source.
 
 ## Run the installed example
@@ -103,15 +103,17 @@ source values or sequences carry separate flags. This tool performs no averaging
 or unit conversion. Preserve unsuccessful, nonbinding, unavailable and fit-failed
 outcomes alongside measured values.
 
-Checkpoint the original inputs, ledger, draft, identity map and raw/result files.
-Store the checkpoint/session/project IDs with the review. Inspect saved files:
+Flush the original inputs, ledger, draft, identity map and raw/result files.
+Store the sync/session/project IDs with the review. Inspect saved files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --json
-ariax forge files "$SESSION" --path /workspace/lab-feedback --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/lab-feedback --json
 ```
 
-Use the completed checkpoint UUID returned by sync. Follow the [Files guide](../outputs.md)
+Require a successful flush. Follow the [Files guide](../outputs.md)
 for remote export, session closure and restoration, and [project controls](../SKILL.md#project-controls-and-resume)
 to continue the same project. Run `inspect` on a restored ledger when reviewing it.
 A later result import uses its own persisted import UUID and saved identity map.

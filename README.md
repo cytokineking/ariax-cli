@@ -254,7 +254,7 @@ chosen engine and existing compute authorization. Read the selected guide and
 the relevant live schema or exact Forge tool and mode qualification. Check
 current pricing and prepare the inputs and configuration. For managed work,
 validate, submit within my authorized scope, monitor, and retrieve results. For
-Forge, plan the native commands, inspect results, complete a checkpoint, close
+Forge, plan the native commands, inspect results, flush changed files, close
 the session, and verify persistence and resource release. Reconcile uncertain
 requests before repeating work. If Ariax is not connected, ask me to run
 `ariax login` in my terminal. Never ask me to paste an API key into this
@@ -273,7 +273,7 @@ capabilities and input rules.
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
 | Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `tools`, `run`, `watch`, `close`; read `ariax skills forge --read` |
-| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs list`, `inputs status`, `sync`, `checkpoints`, `checkpoint`, `files`, `download`; read `ariax skills forge --reference outputs --read` |
+| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs list`, `inputs status`, `sync`, `files`, `download`, `link`; read `ariax skills forge --reference outputs --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
 | Launch | `ariax submit -f job.json --name NAME [--input target.pdb] [--wait]` |

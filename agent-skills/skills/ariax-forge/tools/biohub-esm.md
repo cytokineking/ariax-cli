@@ -160,7 +160,7 @@ Folding requires a separately admitted hardware choice.
 Numeric files are read back and directly compared with the live arrays from
 that inference. No second native invocation is needed for this comparison.
 
-## Explicit resume, checkpoint and custom code
+## Explicit resume, saving and custom code
 
 Use a fresh output directory for a new scientific request. Existing batches
 require `--resume`; only their unfinished items receive new attempts. Inputs,
@@ -182,12 +182,14 @@ An uncertain delivery is resolved with its saved command ID before any new
 scientific submission. Diagnose failed items and preserve all prior outcomes.
 The adapter runs once per unfinished item during an explicitly submitted command.
 
-After all writers are terminal, sync and record the completed checkpoint UUID:
+After all writers are terminal, flush the changed files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/biohub-esm/fast-complex --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" "$EXPORTED_CIF_PATH" --checkpoint "$CHECKPOINT" --dest ./sample.cif --json
+ariax forge files "$PROJECT" --path /workspace/biohub-esm/fast-complex --json
+ariax forge download "$PROJECT" "$EXPORTED_CIF_PATH" --dest ./sample.cif --json
 ```
 
 Use a file path from `batch.json`; attempt UUIDs are generated per execution.
@@ -195,7 +197,7 @@ Restore through the platform's accepted same-project control path, honor any
 human hold, and read/check completed files before an explicit unfinished-item
 resume. Restoration reinstalls named assets normally and starts no inference.
 Close and confirm cleanup within the user's task scope. Follow the
-[saved-output guide](../outputs.md) for checkpoint-backed downloads and links.
+[saved-output guide](../outputs.md) for current project downloads and links.
 
 Project-local source and environments belong in workspace/scratch. Shared `/opt`
 and `/models` remain read-only. Record the custom revision, edits and compatibility
@@ -210,7 +212,7 @@ The [larger pair fixture](examples/biohub-esm/pairs-interrupt.csv) and
 [layer-state fixture](examples/biohub-esm/sequences-interrupt.fasta) are
 interruption examples without a biological accuracy claim.
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
+Use [saved results](../outputs.md) for current project `forge link` paths,
 and [project controls](../SKILL.md#project-controls-and-resume) for human
 pause and same-project resume. Web approval clears a hold without allocating
 compute; restoration leaves the next scientific command explicit.

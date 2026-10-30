@@ -55,7 +55,7 @@ files fail the save. Stop source writers and audit saved files first.
 The helper writes a regular tar and a separate `.source.json` containing
 commit, local changes, tool and supplied asset names. On explicit unpack it
 requires a fresh destination and Python 3.11.8+ with tar's standard safe
-data filter. Environments stay in scratch and are never checkpointed. To
+data filter. Environments stay in disposable scratch and are not saved. To
 recreate Git history after unpack, explicitly `git init`, add the reviewed
 origin, fetch the saved commit and `git reset --mixed FETCH_HEAD`; inspect
 status before pulling. This preserves saved edits and deleted files.
@@ -102,18 +102,20 @@ length 8/GC fraction 0, both labeled `project-local`.
 
 ## Save and close
 
-Stop writers, sync and retain the completed checkpoint ID:
+Stop writers and flush the changed files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 900 --json
-ariax forge files "$SESSION" --checkpoint "$CHECKPOINT" --path /workspace/custom --json
+ariax forge files "$PROJECT" --path /workspace/custom --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Set `CHECKPOINT` from the completed sync. Require `synced` and source state
-`closed`, which confirms resource release. The saved source, bootstrap and
-outputs remain available through the [checkpoint file commands](../outputs.md).
+Require a `saved` flush and source state `closed`, which confirms resource
+release. The saved source, bootstrap and outputs remain available through the
+[project file commands](../outputs.md).
 
 ## Continue saved code when needed
 
@@ -126,7 +128,7 @@ or reinstall dependencies.
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --session-id "$NEW_SESSION_ID" --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --gpu L40 --gpu-count 1 --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --session-id "$NEW_SESSION_ID" --control-revision "$REVISION" --gpu L40 --gpu-count 1 --max-gpu-hours 1 --json
 ```
 
 Set `REVISION` from `control.revision` and use a fresh UUID for `NEW_SESSION_ID`.
@@ -150,8 +152,8 @@ ariax forge run "$RESTORED_SESSION" --tool base --json -- python3 /inputs/custom
 ```
 
 Watch each command to `succeeded` in sequence. Save the new outputs in a
-completed checkpoint, close the session and confirm `closed`. Use links or
-downloads from that checkpoint for result consumption; keep bulk outputs
+successful flush, close the session and confirm `closed`. Use links or
+downloads from the current project for result consumption; keep bulk outputs
 on remote storage under the workstation storage policy.
 
 ## Use a scientific container

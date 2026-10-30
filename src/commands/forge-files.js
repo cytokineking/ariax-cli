@@ -9,6 +9,7 @@ import { usageError } from '../args.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
 import { ApiError, validateTransferUrl } from '../http.js';
 import { printProgress } from '../output.js';
+import { workspacePath, listProjectFiles, projectFileGrant, readSync, startSync } from '../lib/forge-workspace-client.js';
 import { uuid, required, recordPath, readRecord, saveResult, report, poll, failed, projectUrl } from './forge.js';
 
 function safePath(value, absolute = false) {
@@ -90,17 +91,17 @@ async function download(grant, destination) {
       else callback(null,chunk);
     }});
     await pipeline(Readable.fromWeb(response.body),counter,fs.createWriteStream(temporary,{flags:'wx',mode:0o600}),{signal:controller.signal});
-    if (bytes !== grant.size_bytes) throw new Error('Download size differs from checkpoint.');
+    if (bytes !== grant.size_bytes) throw new Error('Download size differs from the declared file size.');
     const fd = fs.openSync(temporary,'r');
     try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     fs.linkSync(temporary,dest);
-    return {path:grant.path,checkpoint:grant.checkpoint,destination:dest,size_bytes:bytes};
+    return {path:grant.path,destination:dest,size_bytes:bytes};
   } catch (error) {
     throw new Error(controller.signal.aborted ? 'Download exceeded its 900 second limit.' : 'Download failed; the destination was not published.');
   } finally { clearTimeout(timer); fs.rmSync(temporary,{force:true}); }
 }
 
-export async function runFiles(ctx, action, sessionId, sessionPath) {
+export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   const flags = ctx.flags;
   const direct = '/v1';
   const read = (resource) => flags.retained
@@ -157,64 +158,49 @@ export async function runFiles(ctx, action, sessionId, sessionPath) {
   if (action === 'inputs list') return report(ctx,await read(`${direct}/inputs`),'inputs');
   if (action === 'inputs status') return report(ctx,await read(`${direct}/inputs/${uuid(ctx.positionals[3],'input ID')}`));
   if (action === 'sync') {
-    const id = flags['checkpoint-id'] === undefined ? randomUUID() : uuid(flags['checkpoint-id'],'checkpoint ID');
-    const request = {method:'POST',session_id:sessionId,path:`${direct}/checkpoints`,body:{checkpoint_id:id}};
-    const {file,record} = await fileRecord(ctx,id,request,'checkpoint_id');
-    const resource = `${direct}/checkpoints/${id}`;
+    const id = flags['sync-id'] === undefined ? randomUUID() : uuid(flags['sync-id'], 'sync ID');
+    const request = { method:'POST', session_id:sessionId, path:`${direct}/sync`, body:{sync_id:id} };
+    const {file,record} = await fileRecord(ctx,id,request,'sync_id');
+    const resource = `${direct}/sync/${id}`;
+    const resume = `ariax forge sync ${sessionId} --sync-id ${id} --wait`;
     let result;
     try {
-      result = await observe(ctx,resource,sessionId) || await forgeRequest(ctx,sessionId,'POST',request.path,{body:request.body});
+      try { result = await readSync(ctx,sessionId,id); }
+      catch (error) { if (error.status !== 404) throw error; }
+      if (!result) result = await startSync(ctx,sessionId,id);
       saveResult(file,record,result.data);
-    } catch (error) { error.action = `Inspect ariax forge checkpoint ${sessionId} ${id}; retry sync with --checkpoint-id ${id}.`; throw error; }
-    if (flags.wait) {
-      result = await poll(ctx,resource,id,checkpoint => {
-        if (checkpoint.state === 'failed') failed('checkpoint_failed',`Checkpoint ${id} failed`,checkpoint.error);
-        return {state:checkpoint.state,done:checkpoint.state==='synced'};
-      },`ariax forge sync ${sessionId} --checkpoint-id ${id} --wait`,sessionId);
+    } catch (error) {
+      error.action = `Inspect or retry the same flush with ${resume}, using the original account, API origin and root directory. The server and session must support the current project workspace.`;
+      throw error;
+    }
+    const inspect = sync => {
+      if (sync.state === 'failed') failed('sync_failed', `Sync ${id} failed${sync.error?.code ? ` (${sync.error.code})` : ''}`, undefined,
+        `Inspect session status and retry a new flush only after resolving the failure. ${resume} observes this flush.`);
+      return { state:sync.state, done:sync.state === 'saved' };
+    };
+    const current = inspect(result.data);
+    if (flags.wait && !current.done) {
+      result = await poll(ctx,resource,id,inspect,resume,sessionId,
+        options => readSync(ctx,sessionId,id,options));
     }
     return report(ctx,result);
   }
-  if (action === 'checkpoints') return report(ctx,await read(`${direct}/checkpoints`),'checkpoints');
-  if (action === 'checkpoint') return report(ctx,await read(`${direct}/checkpoints/${uuid(ctx.positionals[2],'checkpoint ID')}`));
-  const checkpoint = flags.checkpoint === undefined ? undefined : uuid(flags.checkpoint,'checkpoint ID');
   if (action === 'files') {
-    const target = flags.path === undefined ? '/workspace' : required(flags.path,'path');
-    if (!['/workspace','/inputs'].includes(target)) safePath(target,true);
-    let cursor,entries=[],result,chosenCheckpoint=checkpoint;
-    do {
-      result = await ctx.client.get(`${sessionPath}/files`,{query:{path:target,...(chosenCheckpoint ? {checkpoint:chosenCheckpoint} : {}),...(cursor ? {cursor} : {})}});
-      chosenCheckpoint = result.data.checkpoint;
-      entries.push(...result.data.entries);
-      cursor = result.data.next_cursor;
-      if (entries.length>100000) throw new Error('File listing exceeded its entry limit.');
-    } while (cursor);
-    return report(ctx,{...result,data:{checkpoint:result.data.checkpoint,entries,next_cursor:null}},'files');
+    const target = workspacePath(flags.path === undefined ? '/workspace' : flags.path, true);
+    const result = await listProjectFiles(ctx,projectId,target);
+    return report(ctx,result,'files');
   }
-  if (action === 'download') {
-    const target = safePath(ctx.positionals[2],true);
-    const result = await ctx.client.post(`${sessionPath}/files/presign`,{body:{path:target,...(checkpoint ? {checkpoint} : {})}});
-    return report(ctx,{...result,data:await download(result.data,required(flags.dest,'dest'))});
-  }
-  if (action === 'link') {
-    const target = safePath(ctx.positionals[2], true);
-    const session = await ctx.client.get(sessionPath);
-    // The existing file service selects and authorizes one completed file version.
-    // Its temporary transfer grant stays in memory and outside the result/link.
-    const res = await ctx.client.post(`${sessionPath}/files/presign`, { body: {
-      path: target, ...(checkpoint ? { checkpoint } : {}),
-    } });
-    const chosen = uuid(res.data.checkpoint, 'checkpoint ID');
-    if (res.data.path !== target || (checkpoint && chosen !== checkpoint)) throw new Error('Saved file response differs from the requested file.');
-    const saved = await ctx.client.get(`${sessionPath}/checkpoints/${chosen}`);
-    if (saved.data.state !== 'synced') throw new ApiError({ status: 409, code: 'checkpoint_unready', message: 'Saved file links require a completed checkpoint.' });
-    const projectId = uuid(session.data.project_id, 'project ID');
-    const url = new URL(projectUrl(ctx, projectId));
-    url.searchParams.set('session', sessionId);
-    url.searchParams.set('checkpoint', chosen);
-    url.searchParams.set('path', target);
-    return report(ctx, { ...res, data: {
-      project_id: projectId, session_id: sessionId, checkpoint_id: chosen, path: target,
-      completed_at: saved.data.completed_at, size_bytes: res.data.size_bytes, url: url.href,
-    } });
+  if (action === 'download' || action === 'link') {
+    const target = workspacePath(ctx.positionals[2]);
+    const result = await projectFileGrant(ctx,projectId,target);
+    if (action === 'download') {
+      return report(ctx,{...result,data:await download(result.data,required(flags.dest,'dest'))});
+    }
+    // The transfer grant is used only to authorize and verify the current file;
+    // it is never included in the project-page link or printed result.
+    const url = new URL(projectUrl(ctx,projectId));
+    url.searchParams.set('path',target);
+    return report(ctx,{...result,data:{project_id:projectId,path:target,
+      size_bytes:result.data.size_bytes,url:url.href}});
   }
 }

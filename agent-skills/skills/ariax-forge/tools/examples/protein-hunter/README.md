@@ -16,4 +16,4 @@ The consumer requires LigandMPNN’s `solublempnn_v_48_020.pt`, which differs fr
 the original ProteinMPNN soluble-trained checkpoint. Preserve all native failures,
 best-cycle records, unavailable metrics and acceptance fields. New configurations
 need new staged paths and explicit new command IDs. Use
-[saved results](../../../outputs.md) for checkpointing inputs and outputs.
+[saved results](../../../outputs.md) for synchronizing inputs and outputs.

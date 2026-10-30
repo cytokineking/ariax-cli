@@ -104,13 +104,15 @@ missing confidence with B-factors, PDE, averaged PAE or zero vectors.
 
 Save results and raw originals before closure:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/interface-scores --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/interface-scores/af2.json --checkpoint "$CHECKPOINT" --dest ./interface-scores-af2.json --json
+ariax forge files "$PROJECT" --path /workspace/interface-scores --json
+ariax forge download "$PROJECT" /workspace/interface-scores/af2.json --dest ./interface-scores-af2.json --json
 ```
 
-Require the returned checkpoint synced. Use the [complete saved-output procedure](interface-scores/saved-output-restoration.md)
+Require the flush state `saved`. Use the [complete saved-output procedure](interface-scores/saved-output-restoration.md)
 for native inputs, saved-file links and restoration, together
 with the [outputs guide](../outputs.md). Restore recovers files for explicit later
 checks and does not rerun predictions/scoring. Close owned compute and confirm

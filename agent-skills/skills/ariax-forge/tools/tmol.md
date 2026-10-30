@@ -139,7 +139,7 @@ orientations included by the Tmol API, not an affinity or dissociation constant.
 Observe the returned command ID with `ariax forge watch` and inspect its logs;
 a lost reply or watch timeout does not justify rerunning the science. After all
 writers finish, use `ariax forge sync "$SESSION" --wait --json`, inspect the
-completed checkpoint and its files, and restore only for a new explicit command
+current saved project files, and restore only for a new explicit command
 as described in the [platform guide](../SKILL.md) and [outputs guide](../outputs.md).
 Follow the session's normal close/status procedure.
 

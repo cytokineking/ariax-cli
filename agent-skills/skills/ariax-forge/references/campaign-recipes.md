@@ -109,7 +109,7 @@ ariax forge logs "$SESSION" "$COMMAND" --tail 1000 --json
 Read state, exit code, native logs and expected files together. Watch timeout
 or Ctrl-C leaves remote work running. After an uncertain reply, inspect the
 original ID; if redelivery is needed, use `--command-id` with that ID and identical
-fields. Reconcile saved create, selection, input and checkpoint requests in the
+fields. Reconcile saved create, selection, input and sync requests in the
 same way. A fresh ID means new work. Never automatically rerun inference. Use a
 fresh output directory for an authorized new attempt; keep failed/interrupted
 attempts and unreached stages.
@@ -240,7 +240,7 @@ one-token-per-residue map or repair dimensions.
 ariax forge run "$SESSION" --tool interface-scores --timeout-seconds 120 --json -- interface-scores "$HANDOFF" --output /workspace/campaigns/evaluation/interface.json --pae-cutoff 10
 ```
 
-Inspect the result remotely or through a checkpoint-pinned link. Preserve
+Inspect the result remotely or through a current project link. Preserve
 A→B (target row/binder column) and B→A values: PAE is directional. ipSAE takes
 a row-specific maximum at PAE strictly below 10 Å. pDockQ is symmetric with
 CB/glycine-CA contacts ≤8 Å; pDockQ2 uses directional PAE and can exceed one.
@@ -423,20 +423,21 @@ Stop all workspace writers before saving:
 ariax forge sync "$SESSION" --wait --timeout 900 --json
 ```
 
-Set `CHECKPOINT` to the returned ID and require `synced`, then inspect/link saved
+Require the flush state `saved`, then inspect/link saved
 files. `STRUCTURE_PATH` is the actual selected workload path:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
-ariax forge checkpoint "$SESSION" "$CHECKPOINT" --json
-ariax forge files "$SESSION" --path /workspace/campaigns --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" /workspace/campaigns/protein-review/review.json --checkpoint "$CHECKPOINT" --json
-ariax forge link "$SESSION" "$STRUCTURE_PATH" --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/campaigns --json
+ariax forge link "$PROJECT" /workspace/campaigns/protein-review/review.json --json
+ariax forge link "$PROJECT" "$STRUCTURE_PATH" --json
 ```
 
 For antibody work use its actual review/export paths. Share rejection tables
 and partial-stage records if there is no accepted structure. Each link returns
-an authorized project-page URL pinned to session/checkpoint/path; include it in
-the handoff. The page previews uncompressed PDB/CIF/mmCIF ≤10,000,000 bytes.
+an authorized project-page URL for the current path; include it in
+the handoff, noting that later updates can change the linked bytes. The page previews uncompressed PDB/CIF/mmCIF ≤10,000,000 bytes.
 Make any decompressed preview copy on the VM and save it beside the original.
 Keep structures/arrays/bulk files remote. Use `forge download ... --dest ...`
 only on an authorized remote host for restore/analysis; downloaded files publish
@@ -456,19 +457,18 @@ ariax forge status "$SESSION" --json
 ariax forge activity "$PROJECT" --limit 50 --json
 ```
 
-Inspect cleanup and the last completed checkpoint. A final-save failure can
-release compute while leaving an earlier checkpoint available; unsaved files
-stay unavailable. Read `output_available`, `output_complete`, `output_truncated`
+Inspect cleanup and the current synchronization state. A final-save failure can
+release compute while leaving unsaved changes unavailable. Read `output_available`, `output_complete`, `output_truncated`
 and `output_error` together. A captured empty tail is available; complete
 terminal output can still omit its prefix. Activity saves command/control
 events, not private agent conversations.
 
 After source resource release and any required web approval, read
-`control.revision` into `REVISION`. Choose checkpoint, hardware, tools and renewed
+`control.revision` into `REVISION`. Choose hardware, tools and renewed
 allowance explicitly. The joined protein example is:
 
 ```sh
-ariax forge resume "$PROJECT" --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --gpu "$GPU" --gpu-count 1 --min-ram-gib 100 --min-cpu-count 8 --min-disk-gib 250 --tools boltzgen,protenix-models,interface-scores --priority boltzgen --max-gpu-hours "$RESUME_GPU_HOURS" --json
+ariax forge resume "$PROJECT" --control-revision "$REVISION" --gpu "$GPU" --gpu-count 1 --min-ram-gib 100 --min-cpu-count 8 --min-disk-gib 250 --tools boltzgen,protenix-models,interface-scores --priority boltzgen --max-gpu-hours "$RESUME_GPU_HOURS" --json
 ariax forge status "$RESUMED" --json
 ariax forge tools wait "$RESUMED" base --timeout 600 --json
 ariax forge tools wait "$RESUMED" boltzgen --timeout 1800 --json
@@ -509,8 +509,8 @@ Keep native filtering distinct from any agreed experimental selection rationale.
 
 Prepare a review table remotely with candidate ID, full sequence(s), construct
 format, target/register, generation/evaluation model, seed/sample, original
-pass/rejection flags, unavailable metrics, selection rationale and pinned
-structure/settings links. Keep failed rows. If no row passes, report no
+pass/rejection flags, unavailable metrics, selection rationale and current
+structure/settings links, recording that linked paths can change. Keep failed rows. If no row passes, report no
 computationally accepted shortlist; a deliberate negative/diagnostic experiment
 needs its own rationale and authority. A zero-pass result does not establish
 that the target cannot be designed.

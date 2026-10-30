@@ -50,7 +50,7 @@ version from the tool guide. GPU execution and scientific interpretation
 remain distinct gates.
 
 Follow the [shared lifecycle](../../SKILL.md) for command monitoring, recovery,
-billing and closure, and [checkpoint instructions](../../outputs.md) to save
+billing and closure, and [file synchronization instructions](../../outputs.md) to save
 outputs. Run scientific helpers and native commands on the authorized remote
 VM with the required image dependencies.
 

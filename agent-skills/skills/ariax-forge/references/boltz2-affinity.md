@@ -76,7 +76,7 @@ synthetic outputs; they are not predictions for the user's molecule.
 
 For the user's results, verify the intended molecule, actual processed chemistry,
 matched top-rank structure and complete affinity output. Retain the original
-inputs, native settings, command IDs, terminal logs and a completed checkpoint.
+inputs, native settings, command IDs, terminal logs and successfully flushed project files.
 Boltz2 ipSAE handoffs have their own [mapping limits](boltz2-results.md).
 
 The packaged `affinity_ccd.yaml` specifies CCD TYR against the same target. This

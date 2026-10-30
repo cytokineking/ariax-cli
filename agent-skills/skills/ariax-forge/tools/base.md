@@ -44,7 +44,7 @@ reads the actual JSON and exits nonzero on missing or incorrect results.
 
 Forge executes direct argv. To use shell syntax, explicitly pass `/bin/sh -c`
 as argv, as in the ipSAE copy example. `/inputs` and `/models` are read-only;
-`/workspace` is writable; `/scratch` is temporary and not checkpointed. The
+`/workspace` is writable; `/scratch` is temporary and not saved. The
 root filesystem is read-only and the workload runs as UID/GID 10001. Choose
 workspace paths for deliverables.
 
@@ -52,34 +52,36 @@ workspace paths for deliverables.
 
 After commands are terminal:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/base-demo --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/base-demo/result.json --checkpoint "$CHECKPOINT" --dest ./base-result.json --json
+ariax forge files "$PROJECT" --path /workspace/base-demo --json
+ariax forge download "$PROJECT" /workspace/base-demo/result.json --dest ./base-result.json --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Use the returned completed checkpoint UUID for `CHECKPOINT`, require `synced`,
-and confirm the source session is `closed`. File listing and download read
-completed checkpoint content, so a successful command alone does not make
+Require the flush state `saved` and confirm the source session is `closed`.
+File listing and download read current saved project files, so a successful
+command alone does not make
 workspace bytes durable. Read the [outputs reference](../outputs.md) with
 `ariax skills forge --reference outputs --read --json` for storage behavior.
 
-Continue the same project from a terminal source session and completed checkpoint.
+Continue the same project after prior-session cleanup and a successful flush.
 Set `PROJECT` from the session and `REVISION` from `control.revision`. If held,
 stop and wait for authenticated web approval and user direction, then read the
 new revision. Approval itself leaves compute unallocated:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40 --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40 --control-revision "$REVISION" --max-gpu-hours 1 --json
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge run "$RESTORED_SESSION" --tool base --timeout-seconds 60 --json -- python3 /inputs/base/check.py /workspace/base-demo/result.json
 ```
 
 Use the new session UUID and wait for host/base readiness before the checker.
-Watch the new check command to completion. Restore recovers selected files
+Watch the new check command to completion. Resume loads current project files
 and staged inputs without replaying commands. Close the new session and
 confirm resource release when finished.
 

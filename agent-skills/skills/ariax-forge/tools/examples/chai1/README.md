@@ -21,5 +21,5 @@ as `1UBQ.cif` and copy it to writable `/scratch/chai-templates/1UBQ.cif`.
 The template is obtained from the [RCSB entry](https://www.rcsb.org/structure/1UBQ).
 
 Read the [Chai-1 guide](../../chai1.md) for input staging, native settings,
-inspection and checkpoint commands. Preserve the precise input files and
+inspection and file synchronization commands. Preserve the precise input files and
 configuration alongside each result.

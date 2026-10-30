@@ -267,9 +267,11 @@ rows as independent backbones or assume equivalence to an uninterrupted run.
 Keep continuation provenance and check duplicates; use a fresh run when
 independence is required.
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 900 --json
-ariax forge files "$SESSION" --path /workspace/pxdesign --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/pxdesign --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
@@ -282,9 +284,9 @@ Query-only A3Ms test supplied-MSA plumbing and provide no evolutionary evidence.
 
 For large native trees, create a gzip tar on the remote host and split it into
 ordered Files parts of at most 4 GiB, with a JSON manifest listing order and sizes.
-Keep the closed raw tree outside the checkpoint workspace until the complete
-export is saved and restored. Use incremental checkpoints that fit the 900-second
-transfer wait; only the final complete index represents the full export. Keep
+Keep the closed raw tree outside the saved workspace until the complete
+export is saved and restored. Flush the parts and verify every saved file before relying on the export;
+a flush is not an atomic snapshot. Keep
 every part and the original selected inputs. After restoration, concatenate and
 unpack into `/workspace/pxdesign`, compare native files and rerun output checks.
 Files lists archive parts until they are explicitly unpacked. Retain failed

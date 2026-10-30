@@ -68,12 +68,14 @@ Observe `forge command`, `forge watch` and `forge logs` until each command
 succeeds. A client wait timeout leaves the command running; inspect the
 original command ID before deciding on an explicit new operation.
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/jms-legacy --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/jms-legacy --json
 ```
 
-Use the completed checkpoint UUID returned by sync. Preserve complete output
+Require a successful flush. Preserve complete output
 directories, including arrays and FASTA. Follow the [Files guide](../outputs.md)
 for saved links, remote export, restoration and session closure, and
 [project controls](../SKILL.md#project-controls-and-resume) for pause and same-project resume.

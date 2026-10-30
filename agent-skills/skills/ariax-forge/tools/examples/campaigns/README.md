@@ -54,7 +54,7 @@ outputs and per-command records under one campaign root, using the
 five paths, with one or two candidates per path. Run it in the selected remote
 RF3 workload, where Gemmi and NumPy are available; use a fresh `--out` directory.
 Saved files may come from an existing workspace or an optional
-[checkpoint restore](../../../outputs.md).
+[same-project resume](../../../outputs.md).
 
 The molecular fixtures preserve the exact B43 ubiquitin candidates, the B66
 paired-six-CDR antibody proposal, L1 OQO-conditioned design and RNA64 sample 0.

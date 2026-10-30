@@ -30,7 +30,7 @@ ariax forge inputs add "$SESSION" --file "$EXAMPLES/consensus.py" --path campaig
 
 Supply `campaign.json`, original native outputs and per-command records beneath
 one campaign root. They can come from
-the existing workspace or an optional [checkpoint restore](../outputs.md).
+the existing workspace or an optional [same-project resume](../outputs.md).
 All helper/scientific execution runs remotely. Follow the
 [Forge lifecycle](../SKILL.md) for preparation, billing, durable command IDs,
 recovery and closure within the existing authorized allowance.
@@ -125,7 +125,7 @@ whose name differs from its meaning; the native checker preserves that interpret
 
 Stop workspace writers, then save inputs, settings, native outputs, numbering
 maps, the manifest and shortlists with `ariax forge sync "$SESSION" --wait --json`.
-Export through checkpoint-pinned Files. Use [saved results](../outputs.md) to
+Export through current project Files. Use [saved results](../outputs.md) to
 resume and inspect saved candidates before continuing. Restoration does not
 replay generation, optimization or prediction.
 

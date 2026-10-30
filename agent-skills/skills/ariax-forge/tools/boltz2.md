@@ -117,16 +117,18 @@ reuse stale preprocessing. Preserve previous runs, command IDs and settings.
 
 After prediction and check commands are terminal:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/boltz2-demo/run1 --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/boltz2-demo/run1/boltz_results_complex/predictions/complex/complex_model_0.cif --checkpoint "$CHECKPOINT" --dest ./complex_model_0.cif --json
+ariax forge files "$PROJECT" --path /workspace/boltz2-demo/run1 --json
+ariax forge download "$PROJECT" /workspace/boltz2-demo/run1/boltz_results_complex/predictions/complex/complex_model_0.cif --dest ./complex_model_0.cif --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Use the returned completed checkpoint UUID and require `synced`, then confirm
-source `closed`. Listing/download reads completed checkpoint bytes. Creating or
+Require the flush state `saved`, then confirm source `closed`. Listing and
+download read the current saved project files. Creating or
 resuming a session allocates paid resources; preparation and idle time count
 toward its GPU-hour limit, and a successful command does not close it. Continue
 that same `PROJECT` with `REVISION` from its current `control.revision`. If held,
@@ -135,7 +137,7 @@ revision. Approval itself leaves compute unallocated:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40 --tools boltz2 --restore-session "$SESSION" --checkpoint "$CHECKPOINT" --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40 --tools boltz2 --control-revision "$REVISION" --max-gpu-hours 1 --json
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" boltz2 --timeout 1800 --json
 ```

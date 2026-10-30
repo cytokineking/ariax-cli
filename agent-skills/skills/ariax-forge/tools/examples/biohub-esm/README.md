@@ -26,7 +26,7 @@ the [ESMC capacity guide](../../biohub-esm/esmc-capacity.md) for language-model 
 `pairs-interrupt.csv` and `sequences-interrupt.fasta` are separate longer native
 cancellation fixtures, with lengths 32/1040/32 and 16/1024 respectively. The
 language fixture's second stable ID retains its historical suffix 512. They
-exercise checkpoint/restore and explicit resume while retaining first results;
+exercise file synchronization and explicit resume while retaining first results;
 the original short inputs retain independent coverage.
 
 

@@ -190,19 +190,20 @@ profile writes five CIF/summary/full-data triples per job; smoke writes one.
 Preserve error reports and failed samples. A completed process or
 high confidence score does not establish a correct fold or biological activity.
 
-After all writers stop, inspect for symlinks/special files (checkpointing rejects
-them), then complete and inspect the checkpoint before closing:
+After all writers stop, inspect for symlinks/special files (synchronization rejects
+them), then flush and inspect the project files before closing:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge run "$SESSION" --tool base -- sh -eu -c 'find /workspace/mol1 ! -type f ! -type d -print'
 ariax forge sync "$SESSION" --wait --json
-ariax forge checkpoint "$SESSION" CHECKPOINT_ID --json
-ariax forge files "$SESSION" --checkpoint CHECKPOINT_ID --path /workspace/mol1 --json
+ariax forge files "$PROJECT" --path /workspace/mol1 --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-Use the completed sync's checkpoint ID. Confirm `closed` for resource release
+Require the flush state `saved`. Confirm `closed` for resource release
 and inspect persistence separately. Download only required files within the
 user's storage constraints.
 
@@ -210,8 +211,8 @@ user's storage constraints.
 
 ## Restore saved work
 
-Follow the [checkpoint and restore flow](../outputs.md) to resume the existing
-project from a completed checkpoint and a terminal source session. Resume creates
+Follow the [project file and resume flow](../outputs.md) to resume the existing
+project after a successful flush and prior-session cleanup. Resume creates
 a new paid allocation, prepares the selected tools/assets and restores saved
 workspace files and ready inputs before commands can run. Inspect tool readiness
 and the restored inputs, predictions and logs before choosing the next command.

@@ -66,7 +66,7 @@ finite annotated output and capture it as for other generation. This does not
 qualify a larger token bucket or a different host.
 
 The image directs writable caches into `/scratch`, which is disposable and
-excluded from checkpoints; keep intended outputs and Hydra directories under
+not saved in the project workspace; keep intended outputs and Hydra directories under
 `/workspace`. Bound metric threads as shown in the recipes. The selected CUDA
 12.8 profile has limited hardware/driver evidence in the catalog. In the
 specific recorded Blackwell fallback case, pass

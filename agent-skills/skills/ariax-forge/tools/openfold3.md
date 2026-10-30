@@ -149,7 +149,7 @@ ariax forge run SESSION --tool interface-scores --timeout-seconds 120 -- \
 ```
 
 For Preview2, use its own output root and recorded `result.json` path.
-Retain native files and handoff through checkpoint/restoration. The scorer
+Retain native files and handoff through project synchronization and resume. The scorer
 accepts supported maps and reports current availability.
 Its output guard protects every declared native confidence and feature path.
 Read [interface scoring](interface-scores.md) for the result.
@@ -165,12 +165,12 @@ unchanged. Run the shipped geometry command on that copy. Reports retain overlap
 and backbone distances. These checks do not establish experimental accuracy,
 binding affinity, ligand pose accuracy or complete chemical stereochemistry.
 
-Checkpoint useful files with `ariax forge sync SESSION --wait`. View CIFs through
+Flush useful files with `ariax forge sync SESSION --wait`. View CIFs through
 the Files page. Restore retains files without scientific replay; inspect restored
 native and handoff files before requesting another prediction. See the
 [Forge output/file workflow](../outputs.md).
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
+Use [saved results](../outputs.md) for current project `forge link` paths,
 and [project controls](../SKILL.md#project-controls-and-resume) for human
 pause and same-project resume. Web approval clears a hold without allocating
 compute; restoration leaves the next scientific command explicit.

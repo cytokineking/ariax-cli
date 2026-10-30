@@ -29,7 +29,7 @@ settings and native Forge scope are separate; compare
 [execution models](../../../core/engine-choice.md) when either might fit.
 
 Require ready tools and inputs, inspect native output and rejection records,
-then use the [checkpoint and restore flow](../outputs.md) before closing compute.
+then use the [project file and resume flow](../outputs.md) before closing compute.
 After a lost acknowledgment, reconcile the original command/session ID through
 the [Forge lifecycle](../SKILL.md#recover-a-lost-response). For a human pause,
 follow [project controls](../SKILL.md#project-controls-and-resume); approval

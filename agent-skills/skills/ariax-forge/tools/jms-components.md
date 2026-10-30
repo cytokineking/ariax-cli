@@ -64,9 +64,11 @@ Other notebook hybrids need unsupported AF2/ESM-IF constituents or have inconsis
 
 Inspect `result.json` status, model, conditioning, sequence and structure fields, plus actual per-residue/sample output. Keep the complete result directories, including per-residue arrays, structures and recorded settings. The 46-residue ESMFold example used about 9 GiB GPU memory and 9.5 GB container memory; larger inputs can require more. Choose hardware from the deployed tool requirements.
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/jms --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/jms --json
 ```
 
-Use the completed checkpoint UUID returned by sync. Keep NPZ arrays, PDB exports, JSON results and exact argv together. Follow the [Files guide](../outputs.md) for saved-result links, remote export, restoration and session closure, and [project controls](../SKILL.md#project-controls-and-resume) for pause and same-project resume.
+Require a successful flush. Keep NPZ arrays, PDB exports, JSON results and exact argv together. Follow the [Files guide](../outputs.md) for saved-result links, remote export, restoration and session closure, and [project controls](../SKILL.md#project-controls-and-resume) for pause and same-project resume.

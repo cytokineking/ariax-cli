@@ -127,42 +127,16 @@ session/project and read its current `OBSERVED_REVISION` before starting.
   --max-model-calls 16 --max-input-bytes 524288 --max-output-tokens 32768 \
   --hold-after-cycle 1
 ariax --root-dir "$CLI_ROOT" forge sync "$PARTIAL_SESSION" --wait --timeout 900 --json
-# Save the completed checkpoint ID as PARTIAL_CHECKPOINT.
 ariax --root-dir "$CLI_ROOT" forge close "$PARTIAL_SESSION" --json
 ariax --root-dir "$CLI_ROOT" forge status "$PARTIAL_SESSION" --json
-ariax --root-dir "$CLI_ROOT" forge project "$PARTIAL_PROJECT" --json
 ```
 
-Follow [same-project resume](../../../SKILL.md#project-controls-and-resume):
-confirm source cleanup, resolve any human hold through **Allow agent to
-resume**, then read the new revision and explicitly choose a session ID,
-checkpoint and approved allocation limit. Approval itself creates no compute.
-
-```sh
-ariax --root-dir "$CLI_ROOT" forge resume "$PARTIAL_PROJECT" \
-  --session-id "$RESUMED_SESSION" --gpu "$SELECTED_GPU" --tools opendde-harness \
-  --restore-session "$PARTIAL_SESSION" --checkpoint "$PARTIAL_CHECKPOINT" \
-  --control-revision "$RESUME_REVISION" --max-gpu-hours "$APPROVED_HOURS" --json
-ariax --root-dir "$CLI_ROOT" forge tools wait "$RESUMED_SESSION" opendde-harness --timeout 1800 --json
-ariax --root-dir "$CLI_ROOT" forge download "$PARTIAL_SESSION" \
-  /workspace/harness/harness-partial/native/optimizer.json \
-  --checkpoint "$PARTIAL_CHECKPOINT" --dest /srv/harness/partial/restored-optimizer.json --json
-"$HARNESS_PYTHON" "$HARNESS_ADAPTER/controller.py" continue --resume \
-  --restored-boundary /srv/harness/partial/restored-optimizer.json \
-  --restore-session "$PARTIAL_SESSION" --restore-checkpoint "$PARTIAL_CHECKPOINT" \
-  --workflow /srv/harness/partial/workflow.json --state-dir /srv/harness/partial/state \
-  --cli-root "$CLI_ROOT" --session "$RESUMED_SESSION" --project "$PARTIAL_PROJECT" \
-  --task-id harness-partial --control-revision "$RESUME_REVISION" \
-  --max-model-calls 16 --max-input-bytes 524288 --max-output-tokens 32768
-```
-
-Keep the original trusted controller journals, CLI account/API origin and
-model-use reservations. Download optimizer state only to the remote controller.
-Restore its scientific state and private ID/use records from private remote
-storage when needed; credentials remain separate. A scientific boundary alone
-does not replace the journals or reset spending limits. Inspect retained command
-IDs and outcomes before continuing; completed work is reused. Save final results
-and close through the [checkpoint workflow](../../../outputs.md).
+Verify the flush state is `saved` and confirm resource release. The external
+controller's optimizer continuation currently requires a legacy Forge checkpoint
+identity. Its adapter must be updated and validated for current project files
+before this continuation is used with the new CLI. Retain the trusted controller
+journals and model-use reservations; do not substitute a current path for the old
+pinned identity or rerun scientific work to reconstruct missing state.
 
 Other explicit hold points are available for the corresponding native cursors:
 
@@ -172,7 +146,7 @@ Other explicit hold points are available for the corresponding native cursors:
 | `--hold-at cycle:8` | Continue after population/history/RNG/streak commit, before remote publication. |
 | `--hold-at terminal/1/mpnn:1` | Continue remaining MPNN parents after the first saved parent, preserving 40-sample filtering and the four-survivor policy. |
 | `--hold-at terminal/3/pose:1` | Continue remaining pose processing after the first candidate, preserving metadata and command IDs. |
-| `--hold-after-publication cycle:4` | Finish acknowledgement from the exact committed target and pinned checkpoint. |
+| `--hold-after-publication cycle:4` | Legacy checkpoint-pinned publication; unavailable until the adapter is updated. |
 
 Use these only when eligible native inputs reach that cursor. Omit the previous
 hold flag when continuing. Keep native filter failures and shortfalls; partial

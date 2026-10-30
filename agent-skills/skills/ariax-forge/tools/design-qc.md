@@ -51,7 +51,7 @@ see the format reference. It performs no new interface calculation.
 
 Keep registered structures, partner maps, prediction/reference provenance,
 input interface reports and all output directories using the [Files guide](../outputs.md)
-for checkpoints, restoration and session closure.
+for file synchronization, resume and session closure.
 
 Sources: DSSP v4.6.1 at
 [d8278f9](https://github.com/PDB-REDO/dssp/tree/d8278f9f4f8c49fc353b580b7d0d7bc8b1b4e384)

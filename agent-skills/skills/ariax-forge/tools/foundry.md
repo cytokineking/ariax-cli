@@ -232,9 +232,11 @@ need separate evidence.
 
 Sync actual outputs before sharing a saved-file link or ending compute:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync SESSION --wait
-ariax forge files SESSION --path /workspace/outputs
+ariax forge files "$PROJECT" --path /workspace/outputs
 ```
 
 RFD3/RFD3NA outputs are `.cif.gz` plus native JSON. Decompress a separate copy for
@@ -249,6 +251,6 @@ and [RF3 guide](https://github.com/RosettaCommons/foundry/blob/94c78ab125c6ef2cc
 HBPLUS source access follows the
 [current EBI download page](https://www.ebi.ac.uk/thornton-srv/software/HBPLUS/download.html).
 
-Use [saved results](../outputs.md) for checkpoint-pinned exports and
+Use [saved results](../outputs.md) for current project exports and
 [project controls](../SKILL.md#project-controls-and-resume) for pause, closure
 and explicit continuation.

@@ -8,4 +8,4 @@ Discover this directory through `ariax skills forge --tool igdesign --json`, fie
 
 For an AbMPNN comparison, use the unchanged abmpnn tool, mpnn-prepare, paired.pdb and abmpnn.plan.json. Select two samples at temperature 0.5/seed7 and retain its native FASTA/probability scores. AbMPNN and IgDesign-family losses retain their method definitions.
 
-Checkpoint registered inputs and selected outputs before closure. See [saved results](../../../outputs.md) and [project controls](../../../SKILL.md#project-controls-and-resume); further sequence generation requires an explicit command.
+Flush registered inputs and selected outputs before closure. See [saved results](../../../outputs.md) and [project controls](../../../SKILL.md#project-controls-and-resume); further sequence generation requires an explicit command.

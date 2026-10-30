@@ -63,9 +63,11 @@ Write a missing-match statement as: “No hit was retained against UniRef90 2026
 
 ## Save and continue
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace --json
 ```
 
-Use the completed checkpoint UUID returned by sync. Retain original candidate accessions, query FASTA, exact argv and database metadata alongside TSVs, A3M files and cluster representatives. Follow the [Files guide](../outputs.md) for saved results, restoration and session closure.
+Require a successful flush. Retain original candidate accessions, query FASTA, exact argv and database metadata alongside TSVs, A3M files and cluster representatives. Follow the [Files guide](../outputs.md) for saved results, restoration and session closure.

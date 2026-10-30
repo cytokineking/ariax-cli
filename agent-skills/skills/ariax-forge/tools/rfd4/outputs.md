@@ -59,7 +59,7 @@ order, retain its chain/residue mapping and compare processed tokens and output
 identities. Empty MSA is a choice, not a general quality recommendation. A
 monomer handoff does not validate target mapping, ligand transfer or binding.
 
-## Capture and checkpoint
+## Capture and save
 
 Native RFd4 has no standalone run manifest. Use unique `out_dir` and
 `hydra.run.dir` paths under `/workspace`, preserve input specs and companions,
@@ -93,11 +93,11 @@ native evaluator links to the specified input, its referenced structures,
 regular structures in that run's `inference_samples/`, or regular files under
 the recorded evaluation input directory. It rejects other links. Keep the
 selected input directory as well as the regular sidecars and ID/path crosswalk.
-Inspect helper output and correct remaining unsafe files; Forge checkpoints
-reject symlinks and special files.
+Inspect helper output and correct remaining unsafe files; project file
+synchronization rejects symlinks and special files.
 
-When all writers stop, run `ariax forge sync "$SESSION" --wait --json`, inspect
-the completed checkpoint, then list or download its files as described in the
+When all writers stop, run `ariax forge sync "$SESSION" --wait --json`, verify
+the flush state is `saved`, then list or download the project files as described in the
 [Forge outputs guide](../../outputs.md). A failed sync does not save results.
 Verify restored files before an explicitly intended new command. The current
 catalog describes the bounded monomer, no-oracle and search restore scope; it

@@ -161,13 +161,15 @@ native `config.json` together. Preserve server/pairing settings from the
 MSA-generation run separately when prediction consumes saved alignments.
 Then save through the existing file path:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/af2-ptm-UNIQUE --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/af2-ptm-UNIQUE/config.json --checkpoint "$CHECKPOINT" --dest ./af2-config.json --json
+ariax forge files "$PROJECT" --path /workspace/af2-ptm-UNIQUE --json
+ariax forge download "$PROJECT" /workspace/af2-ptm-UNIQUE/config.json --dest ./af2-config.json --json
 ```
 
-Use the completed checkpoint UUID. Follow the shared outputs guide for
+Require a successful flush. Follow the shared outputs guide for
 saved result links, explicit resume and cleanup.
 
 ## Selected sample for interface scores
@@ -210,7 +212,7 @@ failed command; preserve completed outputs and inspect the runtime before
 explicitly submitting unfinished work. Broader capacity and host-reload
 workloads remain unverified.
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
+Use [saved results](../outputs.md) for current project `forge link` paths,
 and [project controls](../SKILL.md#project-controls-and-resume) for human
 pause and same-project resume. Web approval clears a hold without allocating
 compute; restoration leaves the next scientific command explicit.

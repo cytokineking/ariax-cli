@@ -110,13 +110,15 @@ choose a fresh output directory to avoid overwriting an earlier result.
 
 Save terminal results before closure:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/ipsae-demo --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" /workspace/ipsae-demo/toy_10_10.txt --checkpoint "$CHECKPOINT" --dest ./ipsae-scores.txt --json
+ariax forge files "$PROJECT" --path /workspace/ipsae-demo --json
+ariax forge download "$PROJECT" /workspace/ipsae-demo/toy_10_10.txt --dest ./ipsae-scores.txt --json
 ```
 
-`CHECKPOINT` is the returned completed checkpoint UUID; require `synced`.
+Require the flush state `saved` before inspecting current project files.
 Read the [outputs reference](../outputs.md) with
 `ariax skills forge --reference outputs --read --json` for durability/restore
 behavior and

@@ -22,7 +22,7 @@ Inspect each `result.json`. The secondary assignments agree between classic and
 annotated formats for the same complete residues. The changed DockQ is lower
 than the relabeled identity score. The predicted-reference result says
 `pose_agreement`. Retain native reports and partner/residue ledgers before
-checkpointing. The fixture demonstrates execution and mapping; it makes no
+synchronization. The fixture demonstrates execution and mapping; it makes no
 claim about a newly designed binder.
 
 The table keeps one explicit candidate per row. Missing comparisons carry a reason.

@@ -119,14 +119,13 @@ Preserve the original CLI root/account/API origin, state, bundle and runner
 files. Follow [saved results](../outputs.md) and
 [same-project resume](../SKILL.md#project-controls-and-resume) to save and
 restore `/workspace/harness/native-batch` when moving to a new allocation.
-Use a completed source checkpoint and a ready same-project `opendde` session.
-Set `HARNESS_CHECKPOINT` to that checkpoint ID and `HARNESS_RESUMED` to the
-ready restored session ID. All downloads below stay on the remote controller.
+Require a successful flush and a ready same-project `opendde` session.
+Set `HARNESS_PROJECT` to the project ID and `HARNESS_RESUMED` to the
+ready resumed session ID. All downloads below stay on the remote controller.
 
 ```bash
-ariax --root-dir /srv/harness/controller forge download "$HARNESS_SESSION" \
+ariax --root-dir /srv/harness/controller forge download "$HARNESS_PROJECT" \
   /workspace/harness/native-batch/prediction/batch.json \
-  --checkpoint "$HARNESS_CHECKPOINT" \
   --dest /srv/harness/controller/restored-batch-state.json --json
 node "$HARNESS_BRIDGE" continue --state /srv/harness/controller/batch.json \
   --session "$HARNESS_RESUMED" \

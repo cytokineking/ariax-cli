@@ -125,18 +125,18 @@ RFd4 search results or experimental evidence of binding.
 
 After the writer stops, follow [outputs](rfd4/outputs.md) to capture the
 input, model, Hydra settings and mapping, and to materialize any evaluation
-sidecars before checkpointing.
+sidecars before flushing.
 
-Once all writers have stopped, save and inspect a checkpoint:
+Once all writers have stopped, flush and inspect the project files:
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --json
-ariax forge checkpoints "$SESSION" --json
-ariax forge checkpoint "$SESSION" CHECKPOINT_ID --json
-ariax forge files "$SESSION" --path /workspace/rfd4/monomer-001 --checkpoint CHECKPOINT_ID --json
+ariax forge files "$PROJECT" --path /workspace/rfd4/monomer-001 --json
 ```
 
-Inspect the completed checkpoint and persistence error before closing. When the
+Inspect the flush result and synchronization error before closing. When the
 session's authorized work is finished, close it and inspect status until `closed`
 confirms resource release:
 
@@ -145,7 +145,7 @@ ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
 
-The [outputs guide](../outputs.md) covers pinned downloads, restore and the
+The [outputs guide](../outputs.md) covers current-file downloads, resume and the
 remaining persistence checks. Restoration saves files, not automatic scientific
 replay. Continue only with an explicit intended command after completed
 restoration and verification of inputs, outputs and configuration.

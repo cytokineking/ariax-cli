@@ -59,5 +59,5 @@ complex/binder sequence correspondence, including the recorded unchanged
 rejection decision. Diagnostic refolding does not promote the original
 candidate to an accepted design. For different targets, settings or export
 layouts, use result checks appropriate to those inputs. Follow the shared
-[checkpoint and recovery workflow](../../../../outputs.md) to save or recover
+[project file and recovery workflow](../../../../outputs.md) to save or recover
 results without automatically replaying design.

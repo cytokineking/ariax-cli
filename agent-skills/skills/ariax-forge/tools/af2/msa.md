@@ -88,7 +88,7 @@ this package's supported scope. Preserve actual settings and failures.
 External search can run before renting a Forge GPU. Upload the resulting
 alignments and source settings through the ordinary input API. Never put
 large MSA databases or public/private sequence caches into shared model
-assets. Save campaign alignments in the project, checkpoint them and
+assets. Save campaign alignments in the project, flush them and
 explicitly reuse them after restoration.
 
 The [service runner](../examples/af2/run_services.sh) takes one selected

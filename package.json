@@ -678,6 +678,7 @@
     "src/gpu-policy.js",
     "src/http.js",
     "src/lib/forge-client.js",
+    "src/lib/forge-workspace-client.js",
     "src/input-manifest.js",
     "src/input-source.js",
     "src/input.js",

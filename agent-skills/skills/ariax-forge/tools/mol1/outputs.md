@@ -115,8 +115,8 @@ predictor. Sequence redesign through MPNN is a separate experiment requiring
 compatible input chemistry and subsequent refolding, not a default continuation
 of cofolding. Experimental validation is necessary for binding/function claims.
 
-Complete a [Files checkpoint](../../outputs.md) after writers stop, inspect its
-manifest and confirm required outputs, then close and verify resource release.
+Complete a [file flush](../../outputs.md) after writers stop, inspect the
+current project files and confirm required outputs, then close and verify resource release.
 Resume starts a new paid allocation and restores saved files before admitting
 commands; saved commands are never replayed. Inspect tool readiness and restored
 inputs/outputs before explicitly choosing any further work. There is no

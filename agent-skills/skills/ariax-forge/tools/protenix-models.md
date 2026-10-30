@@ -74,11 +74,13 @@ Set the handoff run ID to the actual prediction command ID or attempt identity. 
 
 The checker requires all requested items/seeds/samples, finite structures, polymer/chemical identities, confidence shapes and atom/token/chain mappings, and rejects retained native error files. A zero prediction exit alone is insufficient. Keep original failed attempts beside corrected runs.
 
-After commands are terminal, save actual outputs with a completed checkpoint. Restoration recovers saved files and never reruns predictions.
+After commands are terminal, flush actual outputs to the project workspace. Restoration recovers saved files and never reruns predictions.
+
+Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/protenix/insulin-01 --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/protenix/insulin-01 --json
 ariax forge close "$SESSION" --json
 ariax forge status "$SESSION" --json
 ```
@@ -147,7 +149,7 @@ untouched. Continuation requires explicit item names and unchanged input/model/s
 ```sh
 ariax forge run "$SESSION" --tool protenix-models --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/template-batch.json --output /workspace/protenix/template-batch --model protenix_base_default_v1.0.0 --cycles 3 --steps 20 --seeds 101 --samples 1 --use-template --max-items 1
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/protenix/template-batch --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/protenix/template-batch --json
 ```
 
 After cancellation, wait for the command to be terminal before saving. Use the accepted project
@@ -168,7 +170,7 @@ attempt's `input.json` and `native` directory. Set `--run-id` to its original co
 item/attempt identity. This retains native confidence and the scoring adapter's availability boundary. Template
 and substructure geometry remains a soft prior; preserve the reported deviations.
 
-Use [saved results](../outputs.md) for checkpoint-pinned `forge link` paths,
+Use [saved results](../outputs.md) for current project `forge link` paths,
 and [project controls](../SKILL.md#project-controls-and-resume) for human
 pause and same-project resume. Web approval clears a hold without allocating
 compute; restoration leaves the next scientific command explicit.

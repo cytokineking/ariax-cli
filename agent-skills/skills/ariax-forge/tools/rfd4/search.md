@@ -62,8 +62,7 @@ continuation decision, expected state paths and resume metadata. The observer
 does not change sampling or selection; a trace failure stops the command. The
 native CSV alone does not mark winners, and state filenames give beam rank rather
 than the originating candidate ID. Confirm that expected state files actually
-exist and match the trace. Save the trace with the run and inspect the completed
-checkpoint before any restore. Consult the catalog for the bounded restoration
+exist and match the trace. Save the trace with the run and verify the flush completed before any resume. Consult the catalog for the bounded restoration
 scope; restoring files does not automatically continue a search.
 
 ## Continue a selected state explicitly

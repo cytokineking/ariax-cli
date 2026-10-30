@@ -13,13 +13,14 @@ import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
+import { redactForgeOutput, redactForgeText } from '../lib/forge-workspace-client.js';
 
 import { runFiles } from './forge-files.js';
 
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
 const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
-  'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id', 'restore-session', 'checkpoint'];
+  'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id'];
 const OPTIONS = {
   create: [['name', ...SESSION_OPTIONS], 1],
   resume: [['control-revision', ...SESSION_OPTIONS], 2],
@@ -34,14 +35,13 @@ const OPTIONS = {
   commands: [['retained'], 2], command: [['retained'], 3], watch: [['timeout'], 3],
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
-  sync: [['wait', 'checkpoint-id', 'timeout'], 2], checkpoints: [['retained'], 2], checkpoint: [['retained'], 3],
-  files: [['path', 'checkpoint'], 2], download: [['dest', 'checkpoint'], 3],
-  link: [['checkpoint'], 3],
+  sync: [['wait', 'sync-id', 'timeout'], 2],
+  files: [['path'], 2], download: [['dest'], 3], link: [[], 3],
   logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [[], 2],
 };
 
 export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
-  ariax forge resume PROJECT --restore-session SOURCE --checkpoint UUID --control-revision N --gpu GPU [usual hardware/tool options] [--session-id UUID]
+  ariax forge resume PROJECT --control-revision N --gpu GPU [usual hardware/tool options] [--session-id UUID]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge limit SESSION (--gpu-hours H | --clear) --limit-revision N
@@ -64,13 +64,12 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID]
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
-  ariax forge sync SESSION [--wait] [--checkpoint-id UUID] [--timeout SECONDS]
-  ariax forge checkpoints SESSION [--retained]
-  ariax forge checkpoint SESSION CHECKPOINT_ID [--retained]
-  ariax forge files SESSION [--path /workspace] [--checkpoint UUID]
-  ariax forge download SESSION PATH --dest LOCAL [--checkpoint UUID]
-  ariax forge link SESSION PATH [--checkpoint UUID]
-  ariax forge create --name NAME --gpu GPU --restore-session SOURCE --checkpoint UUID [usual create options]
+  ariax forge sync SESSION [--wait] [--sync-id UUID] [--timeout SECONDS]
+  ariax forge files PROJECT [--path /workspace]
+  ariax forge download PROJECT PATH --dest LOCAL
+  ariax forge link PROJECT PATH
+  Files and links refer to the current project workspace, not a historical version.
+  Sync flushes changed files on an active session; it is not an atomic multi-file snapshot.
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40, L40S, or RTX6000PRO.
   Use catalog --compact to find tools; --model/--mode select exact IDs and their requirements.
@@ -85,6 +84,10 @@ function actionOf(positionals) {
 export function validateArguments({ positionals, flags, passthrough, globals }) {
   if (!positionals.length && globals.help && !Object.keys(flags).length) return;
   const action = actionOf(positionals);
+  if (['checkpoint', 'checkpoints'].includes(action)
+      || ['checkpoint', 'checkpoint-id', 'restore-session'].some(name => Object.hasOwn(flags, name))) {
+    throw usageError('Forge checkpoints and restore selectors are no longer supported. Use the current project workspace; upgrade the CLI and server together. Run: ariax forge --help');
+  }
   if (!Object.hasOwn(OPTIONS, action)) throw usageError('forge: unknown action. Run: ariax forge --help');
   const [allowed, operands] = OPTIONS[action];
   for (const name of Object.keys(flags)) {
@@ -125,11 +128,7 @@ function csv(value, flag) {
   return parts;
 }
 
-function sessionOptions(flags, resuming) {
-  if ((flags['restore-session'] === undefined) !== (flags.checkpoint === undefined)
-      || (resuming && flags['restore-session'] === undefined)) {
-    throw usageError(`forge ${resuming ? 'resume' : 'create'}: --restore-session and --checkpoint are required together.`);
-  }
+function sessionOptions(flags) {
   const hardware = {};
   for (const [flag, field] of [['min-ram-gib', 'min_ram_gib'], ['min-cpu-count', 'min_cpu_count'], ['min-disk-gib', 'min_disk_gib']]) {
     if (flags[flag] !== undefined) hardware[field] = number(flags[flag], flag, { integer: field === 'min_cpu_count' });
@@ -139,10 +138,7 @@ function sessionOptions(flags, resuming) {
     gpu_count: flags['gpu-count'] === undefined ? 1 : number(flags['gpu-count'], 'gpu-count', { integer: true }),
     ...selection(flags),
     ...(Object.keys(hardware).length ? { hardware } : {}),
-    ...(flags['max-gpu-hours'] === undefined ? {} : { max_gpu_hours: number(flags['max-gpu-hours'], 'max-gpu-hours') }),
-    restore: flags['restore-session'] === undefined ? null : {
-      session_id: uuid(flags['restore-session'], 'restore session ID'), checkpoint_id: uuid(flags.checkpoint, 'checkpoint ID'),
-    } };
+    ...(flags['max-gpu-hours'] === undefined ? {} : { max_gpu_hours: number(flags['max-gpu-hours'], 'max-gpu-hours') }) };
 }
 
 function gpuSelection(value) {
@@ -204,7 +200,7 @@ export function readRecord(file) {
 }
 
 export function saveResult(file, record, result) {
-  const next = { ...record, result,
+  const next = { ...record, result: redactForgeOutput(result),
     ...(isUUID(result?.project_id) ? { project_id: result.project_id } : {}) };
   atomicWrite(file, JSON.stringify(next, null, 2) + '\n');
 }
@@ -260,6 +256,8 @@ function remember(ctx, id, resourcePath, result) {
 }
 
 export function report(ctx, res, kind) {
+  res = { ...res, data: redactForgeOutput(res.data), meta: redactForgeOutput(res.meta),
+    requestId: typeof res.requestId === 'string' ? redactForgeText(res.requestId) : res.requestId };
   if (res.data?.state === 'unknown') printProgress(`Command outcome is uncertain. Inspect the same command ID ${res.data.command_id}; keep that ID and its saved request until the outcome is known. A fresh command could duplicate execution.`);
   if (ctx.json) { printJson({ data: res.data, meta: res.meta, request_id: res.requestId }); return; }
   const data = res.data;
@@ -278,7 +276,6 @@ export function report(ctx, res, kind) {
     else printTable(['tool', 'state', 'error'], data.tools.map(t => [t.tool, t.state, t.error?.message]));
   }
   else if (kind === 'inputs') printTable(['input_id', 'path', 'state', 'size_bytes'], data.inputs.map(i => [i.input_id, i.path, i.state, i.size_bytes]));
-  else if (kind === 'checkpoints') printTable(['checkpoint_id', 'state', 'file_count', 'size_bytes'], data.checkpoints.map(c => [c.checkpoint_id, c.state, c.file_count, c.size_bytes]));
   else if (kind === 'files') printTable(['path', 'kind', 'size_bytes'], data.entries.map(e => [e.path, e.kind, e.size_bytes]));
   else if (kind === 'activity') {
     printTable(['created_at', 'kind', 'id', 'session_id', 'state/action', 'origin'], data.events.map(e =>
@@ -351,7 +348,7 @@ function selectedCatalogTool(tool, model, mode) {
   };
 }
 
-export async function poll(ctx, resourcePath, id, inspect, resume, sessionId) {
+export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, readResult) {
   const timeoutMs = ctx.flags.timeout === undefined ? 0 : number(ctx.flags.timeout, 'timeout', { zero: true }) * 1000;
   const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   const controller = new AbortController();
@@ -377,20 +374,20 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId) {
         }
         if (lifecycle.data.state === 'available') break;
         if (lifecycle.data.state !== lastState) {
-          printProgress(`state: ${lifecycle.data.state}`);
+          printProgress(`state: ${redactForgeText(String(lifecycle.data.state))}`);
           lastState = lifecycle.data.state;
         }
         await delay(3000, undefined, { signal: controller.signal });
       }
     }
     for (;;) {
-      const res = sessionId
+      const res = readResult ? await readResult({ signal: controller.signal }) : sessionId
         ? await forgeRequest(ctx, sessionId, 'GET', resourcePath, { signal: controller.signal })
         : await ctx.client.get(resourcePath, { signal: controller.signal });
       remember(ctx, id, resourcePath, res.data);
       const { state, done } = inspect(res.data);
       if (state !== lastState) {
-        printProgress(`state: ${state}`);
+        printProgress(`state: ${redactForgeText(String(state))}`);
         if (state === 'unknown') printProgress('Keep the same command ID while its outcome is uncertain; a fresh command could duplicate execution.');
         lastState = state;
       }
@@ -449,7 +446,7 @@ async function runAction(ctx) {
   if (action === 'create' || action === 'resume') {
     const sessionId = flags['session-id'] === undefined ? randomUUID() : uuid(flags['session-id'], 'session ID');
     const resuming = action === 'resume';
-    const body = { session_id: sessionId, ...sessionOptions(flags, resuming),
+    const body = { session_id: sessionId, ...sessionOptions(flags),
       ...(resuming ? { expected_control_revision: number(flags['control-revision'], 'control-revision', { integer: true, zero: true }) }
         : { name: required(flags.name, 'name') }) };
     const destination = resuming ? `${API}/projects/${uuid(ctx.positionals[1], 'project ID')}/sessions` : `${API}/sessions`;
@@ -492,9 +489,13 @@ async function runAction(ctx) {
       : report(ctx, { ...res, data: { ...res.data, project_url: projectUrl(ctx, id) } });
   }
   if (action === 'list') return report(ctx, await ctx.client.get(`${API}/sessions`), 'sessions');
+  if (['files', 'download', 'link'].includes(action)) {
+    const projectId = uuid(ctx.positionals[1], 'project ID');
+    return runFiles(ctx, action, undefined, undefined, projectId);
+  }
   const sessionId = uuid(ctx.positionals[(action.startsWith('tools ') || action.startsWith('inputs ')) ? 2 : 1], 'session ID');
   const sessionPath = `${API}/sessions/${sessionId}`;
-  if (action.startsWith('inputs ') || ['sync','checkpoints','checkpoint','files','download','link'].includes(action)) return runFiles(ctx, action, sessionId, sessionPath);
+  if (action.startsWith('inputs ') || action === 'sync') return runFiles(ctx, action, sessionId, sessionPath);
   if (action === 'limit') {
     if ((flags['gpu-hours'] === undefined) === (flags.clear === undefined) || (flags.clear !== undefined && flags.clear !== true)) {
       throw usageError('forge limit: supply exactly one of --gpu-hours H or --clear.');
@@ -586,7 +587,7 @@ export async function run(ctx) {
         if (!projectId && ['resume', 'project'].includes(action)) projectId = uuid(ctx.positionals[1], 'project ID');
         else if (!projectId && action === 'inputs add' && ctx.flags.artifact !== undefined) projectId = uuid(ctx.flags.artifact.split(':')[0], 'project ID');
         else if (!projectId) {
-          const sessionId = action === 'create' ? ctx.flags['restore-session']
+          const sessionId = action === 'create' ? undefined
             : ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
           if (isUUID(sessionId)) projectId = (await ctx.client.get(`${API}/sessions/${uuid(sessionId, 'session ID')}`)).data.project_id;
         }
@@ -597,14 +598,11 @@ export async function run(ctx) {
         ? `Stop this project's work and ask your user to open ${link} and choose "Allow agent to resume". Await their direction, inspect the project control revision, then explicitly resume the same project. Do not continue held work through a replacement project.`
         : `Project control changed. Inspect ${isUUID(projectId) ? `ariax forge project ${projectId}` : 'the project'} before continuing; a newer pause may require human approval.`;
     } else if (['checkpoint_required', 'checkpoint_unready'].includes(error.code)) {
-      const action = actionOf(ctx.positionals);
-      error.action = ['create', 'resume'].includes(action)
-        ? `Inspect ariax forge checkpoints ${ctx.flags['restore-session']} and select a completed checkpoint with --checkpoint UUID. A terminal source cannot create a new checkpoint.`
-        : `Run ariax forge sync ${ctx.positionals[1]} --wait to save files, or select an existing completed checkpoint with --checkpoint UUID.`;
+      error.action = 'This server requires the removed Forge checkpoint contract. Upgrade the CLI and server together before using the current project workspace.';
     } else if (['limit_revision_conflict', 'session_closing'].includes(error.code)) {
       error.action = `Inspect ariax forge status ${ctx.positionals[1]} for the current state, max_gpu_hours, limit_revision, applied_limit_revision and expires_at before another edit. Closing compute must finish cleanup.`;
-    } else if (['session_cleanup_pending', 'project_session_active', 'restore_source_active'].includes(error.code)) {
-      error.action = `Inspect the project history and source session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
+    } else if (['session_cleanup_pending', 'project_session_active'].includes(error.code)) {
+      error.action = `Inspect the project history and active session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
     } else if (error.code === 'session_unready') {
       const action = actionOf(ctx.positionals);
       const sessionId = ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
@@ -612,6 +610,10 @@ export async function run(ctx) {
     } else if (['request_conflict', 'idempotency_conflict', 'command_conflict'].includes(error.code)) {
       error.action = 'Inspect the saved request and existing session or command. Recover its original fields and caller ID; resolve the existing outcome before choosing any new operation.';
     }
+    if (typeof error.message === 'string') error.message = redactForgeText(error.message);
+    if (typeof error.action === 'string') error.action = redactForgeText(error.action);
+    if (typeof error.requestId === 'string') error.requestId = redactForgeText(error.requestId);
+    if (error.details) error.details = redactForgeOutput(error.details);
     throw error;
   }
 }

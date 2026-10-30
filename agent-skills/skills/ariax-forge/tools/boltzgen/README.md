@@ -80,7 +80,7 @@ listed examples; they do not validate arbitrary inputs or experimental binding.
 
 Use `archive-native.py` when you need the native directory as one Files export.
 It packs and checks the archive, then moves the source to the explicit scratch
-backup, which is outside the checkpoint. Set `BOLTZGEN_EXAMPLES` from
+backup, which is outside the saved workspace. Set `BOLTZGEN_EXAMPLES` from
 `data.examples.boltzgen` in `ariax skills forge --tool boltzgen --json`:
 
 ```sh

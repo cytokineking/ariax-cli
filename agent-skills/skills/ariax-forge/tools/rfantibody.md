@@ -118,16 +118,17 @@ example also supports `check-0.json`, `check-1.json`, and so on.
 Save the complete workspace and inputs, including source helpers, rejected
 outputs, arrays, settings and source maps:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --json
-ariax forge files "$SESSION" --json
-ariax forge link "$SESSION" /workspace/paired/predict/pdbs/design_0_dldesign_0_best.pdb --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --json
+ariax forge link "$PROJECT" /workspace/paired/predict/pdbs/design_0_dldesign_0_best.pdb --json
 ```
 
-Use the returned checkpoint ID for saved-result links. Restoration starts with
-empty scratch and command history. Sync the restored session explicitly before
-closing it so it has its own complete checkpoint. Keep existing links pinned
-to their original checkpoint. Submit the next scientific command explicitly.
+Project links refer to the current file path and can show newer bytes after an
+update. Resume starts with empty scratch and does not replay commands. Flush any
+new changes before closing, and submit the next scientific command explicitly.
 See [saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume).
 The [example inputs](rfantibody/README.md) retain their source attribution and
 [MIT license](rfantibody/LICENSE.RFantibody).

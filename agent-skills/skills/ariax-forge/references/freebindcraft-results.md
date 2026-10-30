@@ -80,7 +80,7 @@ general validation of those results.
 
 Preserve effective filters, scoring mode, native logs, raw CSVs, sequence and
 structure stage with a shortlist. Review interface geometry and target context
-before choosing experimental candidates. Follow the [checkpoint and recovery
+before choosing experimental candidates. Follow the [project file and recovery
 workflow](../outputs.md); recover a missing saved artifact without automatically
 replaying design.
 

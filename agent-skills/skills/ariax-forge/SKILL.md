@@ -19,7 +19,7 @@ Managed and native settings can differ for the same engine.
 3. Stage inputs, wait for the tool, run commands and inspect their results.
    Use [campaign guidance](references/campaign-recipes.md) to compose stages
    or size a pilot; example sizes are not campaign recommendations.
-4. Checkpoint useful files under `/workspace`, close the session when done,
+4. Flush useful files under `/workspace`, close the session when done,
    and confirm both resource release and saved files.
 
 Creating or resuming a session starts paid resource allocation. Preparation and
@@ -42,8 +42,7 @@ ariax forge tools SESSION --json
 ariax forge tools wait SESSION TOOL --timeout 1800 --json
 # Run and inspect the selected native commands; then save and close:
 ariax forge sync SESSION --wait --json
-ariax forge checkpoint SESSION CHECKPOINT_ID --json
-ariax forge files SESSION --checkpoint CHECKPOINT_ID --json
+ariax forge files PROJECT --json
 ariax forge close SESSION --json
 ariax forge status SESSION --json
 ```
@@ -103,7 +102,7 @@ lost to rotation or reconnection; save fuller output in workspace files when
 needed. `watch` shares the same bounded cursor protocol. Cancellation first
 reports `stopping` while the host enforces the saved intent.
 
-Use `--retained` with commands, command, logs, inputs list/status or checkpoint
+Use `--retained` with commands, command, logs or inputs list/status
 reads to inspect saved history after closure or host loss. Retained records
 may lag live commands; keep the original ID while an outcome is uncertain.
 
@@ -133,7 +132,7 @@ cancellation retain devices until reconciliation confirms the container stopped.
 `activity PROJECT` lists command and project-control history. Pass its
 `next_cursor` to `--cursor` for older pages; `--limit` accepts 1–100. Session
 command lists contain the newest 100 records. Retained logs are bounded and
-may omit earlier output; save fuller logs in workspace files and checkpoints.
+may omit earlier output; save fuller logs in workspace files and flush them.
 
 ## Recover a lost response
 
@@ -165,7 +164,7 @@ the usual global `--timeout` remains a per-request limit in milliseconds.
 ```sh
 ariax forge project PROJECT --limit 50 --json
 ariax forge status SESSION --json
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --restore-session SOURCE_SESSION --checkpoint CHECKPOINT_UUID --control-revision N --gpu L40 --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
+ariax forge resume PROJECT --session-id NEW_SESSION_UUID --control-revision N --gpu L40 --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
 ariax forge limit SESSION --gpu-hours 12 --limit-revision N --json
 ariax forge limit SESSION --clear --limit-revision N --json
 ```
@@ -182,15 +181,15 @@ user's direction, inspect the new control revision, then explicitly resume
 that same project. API-key requests cannot approve the hold. Preserve the
 held project's identity when its files or outputs are needed.
 
-Resume requires a terminal source session from the same project and a completed
-checkpoint. Wait for confirmed source cleanup and inspect `project` if another
-session is active. A newer pause invalidates an observed control revision.
+Resume loads the current saved files of the same project. Wait for confirmed
+prior-session cleanup and inspect `project` if another session is active. A
+newer pause invalidates an observed control revision.
 A definitive hold or stale-revision rejection permits a new explicit request
 with the newly observed revision and a fresh session ID. A lost acknowledgment
 requires the original ID and fields. Local saved requests remain immutable.
 
-Resume starts a new allocation in the same project and restores the selected
-files. Choose hardware, tools, priority and an optional new cap; the old
+Resume starts a new allocation in the same project and loads its current
+saved files. Choose hardware, tools, priority and an optional new cap; the old
 session's allowance is separate. Run the next scientific command explicitly.
 
 Limits count preparation and idle time. Eight GPU-hours on four GPUs allow
@@ -233,11 +232,15 @@ Before active file operations, wait for the workspace with `ariax forge tools wa
 
 Stage a local file, an authorized Ariax artifact, or an individual public HTTPS object with `ariax forge inputs add SESSION --file FILE --path targets/input.yaml`. Use `--artifact PROJECT_ID:PATH` or `--url URL` for the other sources. `--path` is relative to `/inputs` (for example `targets/input.yaml`); commands read the absolute `/inputs/targets/input.yaml`. Inspect readiness with `inputs status SESSION INPUT_ID` before a command reads them.
 
-Run `ariax forge sync SESSION --wait` to publish a checkpoint, then use `files` or `download`. Read `ariax skills forge --reference outputs --read --json` for these commands
-and restore. Checkpoints preserve stable file versions and ready inputs. Concurrent writers can fail a sync. Inspect `persistence.checkpoint` and `persistence.error` after close or expiry to learn what became durable.
+Run `ariax forge sync SESSION --wait` to flush changed files, then use
+`ariax forge files PROJECT`, `download PROJECT PATH`, or `link PROJECT PATH`
+with the session's `project_id`. Sync reports saved, pending or failed work;
+it is not an atomic multi-file snapshot. Files changed after the flush can remain
+pending. Inspect synchronization and errors after close or expiry; abrupt loss
+can leave unsaved changes unavailable. Links identify the current path and do
+not pin an earlier version.
 
-Use `resume PROJECT` for continuing a project's saved work. An explicitly
-requested new project can use `create --restore-session SOURCE --checkpoint
-CHECKPOINT` from an authorized terminal source whose hold permits restoration.
-Read [project-local code](references/custom-code.md) for saved source/bootstrap
-instructions and explicit environment recreation after restoration.
+Use `resume PROJECT` to continue the same project's saved work. It loads current
+files without replaying scientific commands. Read the [outputs reference](outputs.md)
+and [project-local code](references/custom-code.md) for file operations and
+explicit environment recreation after resume.

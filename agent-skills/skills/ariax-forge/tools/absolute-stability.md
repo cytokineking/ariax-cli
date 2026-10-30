@@ -159,14 +159,16 @@ run, inspect saved mapping, source, ensemble completeness, arrays and logs.
 A command can fail after partial files were written; only a completed
 `result.json` plus a successful checker marks a usable output.
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge sync "$SESSION" --wait --json
-ariax forge files "$SESSION" --path /workspace/stability --json
-ariax forge download "$SESSION" /workspace/stability/domain-pdb/result.json --dest ./stability-result.json --json
+ariax forge files "$PROJECT" --path /workspace/stability --json
+ariax forge download "$PROJECT" /workspace/stability/domain-pdb/result.json --dest ./stability-result.json --json
 ```
 
-Follow [saved results](../outputs.md) to inspect the completed checkpoint and
-create checkpoint-pinned links before sharing or closing compute. Use the
+Follow [saved results](../outputs.md) to inspect the current saved files and
+create project links before sharing or closing compute. Use the
 shared [recovery instructions](../SKILL.md#recover-a-lost-response) after a lost
 reply or watch timeout. Correct a scientific failure explicitly and retain the
 failed run. The models were trained for small-domain stability. Larger complexes and novel

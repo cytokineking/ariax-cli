@@ -302,4 +302,4 @@ recovery controls are in this pinned native `run --help`. Do not manually reset
 SQLite, start duplicate workers, silently retry or change backend/model to evade
 an error. Unsaved output remains unavailable after compute loss. Before closing
 the session, save required workspace files through Files and confirm the save
-completed. Restore that checkpoint explicitly when continuing the campaign.
+completed. Resume the same project to load its current saved files when continuing the campaign.

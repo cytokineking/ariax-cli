@@ -106,13 +106,15 @@ input inspection; predictions retain the ESM model.
 
 ## Inspect and save
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge run "$SESSION" --tool chai1 --timeout-seconds 180 --json -- python /inputs/chai1/check.py /workspace/chai1/monomer1 /inputs/chai1/monomer.expected.json --output /workspace/chai1/monomer1-check.json
 ariax forge sync "$SESSION" --wait --json
-ariax forge files "$SESSION" --path /workspace/chai1 --checkpoint "$CHECKPOINT" --json
+ariax forge files "$PROJECT" --path /workspace/chai1 --json
 ```
 
-Use the checkpoint ID from the completed sync. The inspector verifies chain
+Require a successful flush. The inspector verifies chain
 identity, polymer sequence, molecule atom coverage, finite coordinates and
 confidence shapes. The glycan expectation also checks the N–C bond distance.
 Expected files describe these specific fixtures; write corresponding expectations
@@ -136,7 +138,7 @@ conservative planning allowances; the measured hardware was the L40 profile.
 The measured examples use one GPU within the 256-token native padding size.
 Larger systems and additional sampling need a separate capacity assessment.
 Use [saved results](../outputs.md) and
-[project controls](../SKILL.md#project-controls-and-resume) for checkpointing,
+[project controls](../SKILL.md#project-controls-and-resume) for synchronization,
 closure and explicit continuation.
 
 [Creator documentation](https://github.com/chaidiscovery/chai-lab/blob/66c38d1fe5c6756a89ff8596b1dea87d305ec06f/README.md),

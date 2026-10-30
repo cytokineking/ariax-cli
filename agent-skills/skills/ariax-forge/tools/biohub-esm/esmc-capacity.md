@@ -64,14 +64,16 @@ After the command is terminal and any same-project restore is complete, read
 `batch.json`. Completed items stay complete. An explicit new command with the
 same input/settings and `--resume` runs only unfinished items:
 
+Set `PROJECT` to the session's returned `project_id`.
+
 ```sh
 ariax forge run "$SESSION" --tool esmc-6b --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-6b --mode hidden-states --precision bf16 --input /inputs/biohub-esm/interruption.json --output /workspace/biohub-esm/interrupted-6b --resume
 ariax forge watch "$SESSION" "$RESUME_COMMAND_ID" --timeout 3600 --json
 ariax forge run "$SESSION" --tool esmc-6b --timeout-seconds 1800 --json -- biohub-esm-check /workspace/biohub-esm/interrupted-6b
 ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 1800 --json
 ariax forge sync "$SESSION" --wait --timeout 1800 --json
-ariax forge files "$SESSION" --path /workspace/biohub-esm/interrupted-6b --checkpoint "$CHECKPOINT" --json
-ariax forge download "$SESSION" "$EXPORTED_NPZ_PATH" --checkpoint "$CHECKPOINT" --dest ./sequence.npz --json
+ariax forge files "$PROJECT" --path /workspace/biohub-esm/interrupted-6b --json
+ariax forge download "$PROJECT" "$EXPORTED_NPZ_PATH" --dest ./sequence.npz --json
 ```
 
 Use the NPZ path from the successful item's manifest, including its generated

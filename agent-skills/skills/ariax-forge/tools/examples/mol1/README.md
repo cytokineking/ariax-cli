@@ -4,7 +4,7 @@ Discover this installed directory as `data.examples.mol1` with
 `ariax skills forge --tool mol1 --json` (the `mol-1` guide alias resolves to the
 same directory). Use the [Mol-1 guide](../../mol1.md) for recorded scientific,
 installation and recovery scope, current-availability checks, staging and the
-complete checkpoint/close flow.
+complete sync/close flow.
 
 | File | Exact purpose |
 | --- | --- |
