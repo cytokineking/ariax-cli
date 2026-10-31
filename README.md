@@ -272,8 +272,8 @@ capabilities and input rules.
 | Local input inspection/preparation | `ariax inputs inspect --input FILE`, `ariax inputs prepare --input FILE -f job.json --output DIR` |
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
-| Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `run --wait-ready --wait`, `recover`, `close`; read `ariax skills forge --read` |
-| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs list`, `inputs status`, `sync`, `files`, `download`, `link`; read `ariax skills forge --reference outputs --read` |
+| Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `run --wait-ready --wait`, `recover`, `finish --wait`; read `ariax skills forge --read` |
+| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs status`, `sync`, `files`, `files recover`, `download`, `link`; read `ariax skills forge --reference outputs --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
 | Launch | `ariax submit -f job.json --name NAME [--input target.pdb] [--wait]` |
@@ -319,6 +319,17 @@ Omit `--input-ids` when no staged inputs are needed. `--wait-timeout SECONDS`
 limits this local operation (default 1800); `--timeout-seconds` limits remote
 execution (default 86400). Ctrl-C or a local timeout leaves accepted remote work
 running; recover the same ID rather than starting another command.
+
+`ariax forge finish SESSION --wait` asks the server to finish accepted work,
+save files, and release compute. Its fixed remote deadline defaults to 3600
+seconds; `--timeout-seconds` sets it for a new finish request. The result
+separately reports execution, pre-stop save, final durability and release. A
+local wait timeout does not extend the remote deadline or cancel the request.
+`ariax forge files recover PROJECT` copies an authorized catalog version,
+archived file, or managed artifact into the current project workspace; the
+server performs the copy and enforces the destination's writer and version.
+`forge resume` and `forge limit` fetch their current revision when omitted and
+retain it in the saved request. A later control change remains a conflict.
 
 The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents a
 native joint sequence and structure design workflow. Its checks are bounded;

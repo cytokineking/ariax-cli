@@ -46,6 +46,9 @@ ariax forge inputs status SESSION INPUT_ID --json
 ariax forge run SESSION --tool base -- python3 -c 'from pathlib import Path; Path("result.txt").write_text(Path("/inputs/target.fasta").read_text())'
 ariax forge sync SESSION --wait --wait-timeout 900 --json
 ariax forge files PROJECT --path /workspace --json
+ariax forge files recover PROJECT --path /workspace/copied.cif --catalog SOURCE_PROJECT:/workspace/original.cif --version VERSION --wait --json
+ariax forge files recover PROJECT --path /workspace/old.cif --archive SOURCE_PROJECT:CHECKPOINT_ID:/workspace/old.cif --wait --json
+ariax forge files recover PROJECT --path /workspace/artifact.cif --artifact SOURCE_PROJECT:output/result.cif --wait --json
 ariax forge download PROJECT /workspace/result.txt --dest ./result.txt --json
 ariax forge link PROJECT /workspace/result.txt --json
 ```
@@ -68,11 +71,22 @@ confirm installation in an active workspace. When an import has no saved
 successful result, repeat a URL input with its original URL and ID so the server
 can compare the source. Request records exclude URLs and transfer grants.
 
+`files recover` copies an authorized catalog version, archived checkpoint file,
+or managed-project artifact within storage. It records the source, destination,
+writer epoch and revisions before sending the operation; recover the same ID
+after uncertainty. An existing destination requires `--overwrite`. A published
+copy is `ready` only after active-workspace installation is confirmed; `saved`
+with `installation_status: not_applicable` means the copy is stored for a future
+workspace, not installed. Server-side copying does not pass file bytes through
+the CLI. Archive and managed-artifact sources are pinned to their observed
+storage ETag because their legacy metadata lacks the current-file checksum.
+
 `sync --wait` waits locally; `--wait-timeout SECONDS` or Ctrl-C leaves an accepted
 flush running. Inspect its returned state: `pending` or `queued` means
-unfinished, `saved` means the flush completed, and `failed` is terminal for that
-sync ID. After resolving a terminal failure, start a new flush with a new ID;
-keep the same ID when the outcome is uncertain. A flush covers its changed files and is not an atomic multi-file
+unfinished, `saved` means the flush completed, and `failed` includes bounded
+file diagnostics. After resolving the cause, retry the same ID with `forge
+recover ID --wait` or `forge sync SESSION --sync-id ID --wait`. A final-save
+deadline failure cannot be reopened. A flush covers its changed files and is not an atomic multi-file
 snapshot; later changes can remain pending. Stop writers when a coherent set
 is required, and inspect synchronization failures. A successful scientific
 command alone does not prove its output is durable.
@@ -84,13 +98,16 @@ fresh destination path. Pages and file bytes can change while the project is
 active; neither a listing nor a link pins a historical version.
 
 ```sh
-ariax forge close SESSION --json
+ariax forge finish SESSION --wait --json
 ariax forge status SESSION --json
 ariax forge project PROJECT --json
 ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40 --control-revision N --max-gpu-hours 2 --json
 ```
 
-Close stops writers and drains pending files within the existing 75-second
+Finish waits for accepted commands and a pre-stop flush within its fixed
+deadline, then requests normal closure. Check its `execution`, `drain`,
+`durability`, `release` and `termination` fields separately. `close` remains an
+immediate stop. Close stops writers and drains pending files within the existing 75-second
 maximum close opportunity. Compute release and file durability are separate
 outcomes: inspect synchronization errors and confirm `closed`. Abrupt VM loss
 can leave unsaved changes unavailable. Saved project files remain available

@@ -15,7 +15,7 @@ import { printData, printJson, printKv, printProgress, printTable } from '../out
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
 import { readSync, redactForgeOutput, redactForgeText } from '../lib/forge-workspace-client.js';
 
-import { runFiles, inputStatus, recoverFile } from './forge-files.js';
+import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js';
 
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
@@ -26,26 +26,28 @@ const OPTIONS = {
   resume: [['control-revision', ...SESSION_OPTIONS], 2],
   project: [['limit', 'cursor'], 2],
   activity: [['limit', 'cursor'], 2],
-  limit: [['gpu-hours', 'clear', 'limit-revision'], 2],
+  limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
   catalog: [['details', 'task', 'tool', 'compact', 'model', 'mode'], 1],
   list: [[], 1], status: [[], 2], tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
   'tools wait': [['timeout', 'wait-timeout'], 4],
   run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout'], 2],
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
+  finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
   commands: [['retained'], 2], command: [['retained'], 3], watch: [['timeout', 'wait-timeout'], 3],
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
-  files: [['path'], 2], download: [['dest'], 3], link: [[], 3],
+  files: [['path'], 2], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
+  download: [['dest'], 3], link: [[], 3],
   logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [[], 2],
 };
 
 export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
-  ariax forge resume PROJECT --control-revision N --gpu GPU [usual hardware/tool options] [--session-id UUID]
+  ariax forge resume PROJECT [--control-revision N] --gpu GPU [usual hardware/tool options] [--session-id UUID]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
-  ariax forge limit SESSION (--gpu-hours H | --clear) --limit-revision N
+  ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
   ariax forge catalog [--details | --compact] [--task FAMILY] [--tool TOOL]
   ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--json]
   ariax forge list
@@ -56,6 +58,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] -- COMMAND ARG...
   ariax forge operations
   ariax forge recover OPERATION_ID [--wait] [--wait-timeout SECONDS]
+  ariax forge finish SESSION [--timeout-seconds SECONDS] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge commands SESSION [--retained]
   ariax forge command SESSION COMMAND_ID [--retained]
   ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS]
@@ -69,13 +72,15 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs status SESSION INPUT_ID
   ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
   ariax forge files PROJECT [--path /workspace]
+  ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge download PROJECT PATH --dest LOCAL
   ariax forge link PROJECT PATH
   Files and links refer to the current project workspace, not a historical version.
   Sync flushes changed files on an active session; it is not an atomic multi-file snapshot.
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
   --wait-ready waits for the session, tool, listed inputs and command capacity before dispatch.
-  --wait-timeout bounds local waiting in seconds (run default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
+  --wait-timeout bounds local waiting in seconds (run/files recover default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
+  Finish uses --timeout-seconds for its fixed remote deadline (default 3600); its --wait-timeout defaults to 7200 seconds.
   For tools wait, watch and sync, --wait-timeout is in seconds; omission or 0 waits indefinitely. Their older --timeout option also uses seconds.
   Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40, L40S, or RTX6000PRO.
@@ -85,6 +90,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
 function actionOf(positionals) {
   if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
   if (positionals[0] === 'tools' && ['add', 'wait'].includes(positionals[1])) return `tools ${positionals[1]}`;
+  if (positionals[0] === 'files' && positionals[1] === 'recover') return 'files recover';
   return positionals[0];
 }
 
@@ -215,13 +221,13 @@ export function saveResult(file, record, result) {
   atomicWrite(file, JSON.stringify(next, null, 2) + '\n');
 }
 
-function localWaitSeconds(value, fallback, { allowZero = false } = {}) {
+export function localWaitSeconds(value, fallback, { allowZero = false } = {}) {
   const seconds = value === undefined ? fallback : number(value, 'wait-timeout', { zero: allowZero });
   if (seconds > 86400) throw usageError('forge: --wait-timeout cannot exceed 86400 seconds.');
   return seconds;
 }
 
-async function controlled(ctx, id, seconds, operation) {
+export async function controlled(ctx, id, seconds, operation, {resume} = {}) {
   const controller = new AbortController();
   let expired = false;
   const interrupt = () => controller.abort();
@@ -229,14 +235,25 @@ async function controlled(ctx, id, seconds, operation) {
   process.once('SIGINT', interrupt);
   try { return await operation(controller.signal); }
   catch (error) {
-    if (!controller.signal.aborted) throw error;
-    let saved = false;
-    try { saved = !!readRecord(recordPath(ctx,id)); } catch { /* Preserve the interruption. */ }
-    const stopped = new Error(saved
-      ? `${expired ? 'Local wait timed out' : 'Interrupted'}; remote work may continue. Recover the same operation with: ariax forge recover ${id}`
+    if (!controller.signal.aborted) {
+      if (!error.action) {
+        try { if (readRecord(recordPath(ctx,id))) error.action = `Inspect or recover the same operation with ariax forge recover ${id}.`; }
+        catch { /* Preserve the original error. */ }
+      }
+      throw error;
+    }
+    let saved;
+    try { saved = readRecord(recordPath(ctx,id)); } catch { /* Preserve the interruption. */ }
+    const next = saved ? `ariax forge recover ${id}` : resume;
+    const stopped = new Error(next
+      ? `${expired ? 'Local wait timed out' : 'Interrupted'}; remote work may continue. Continue with: ${next}`
       : `${expired ? 'Local wait timed out' : 'Interrupted'} before the request was saved; no operation was sent.`);
     stopped.exitCode = expired ? EXIT.NETWORK : EXIT.INTERRUPTED;
-    if (saved) stopped.action = `Use ariax forge recover ${id} with the original root directory, account and API origin. Local interruption does not cancel remote work.`;
+    if (next) stopped.action = `Use ${next} with the original account and API origin. Local interruption does not cancel remote work.`;
+    if (saved && savedKind(id,saved.request) === 'finish' && saved.result) {
+      stopped.details = {finish:redactForgeOutput(saved.result)};
+      printProgress(`Last observed finish: execution ${saved.result.execution}; drain ${saved.result.drain}; durability ${saved.result.durability}; release ${saved.result.release}.`);
+    }
     throw stopped;
   } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
 }
@@ -245,9 +262,12 @@ function savedKind(id, request) {
   if (request?.method !== 'POST' || !request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return null;
   if (!request.session_id && request.body.session_id === id && (request.path === `${API}/sessions`
       || new RegExp(`^${API}/projects/[0-9a-f-]{36}/sessions$`).test(request.path))) return 'session';
-  const control = new RegExp(`^${API}/sessions/([0-9a-f-]{36})/(close|limit)$`).exec(request.path ?? '');
+  const control = new RegExp(`^${API}/sessions/([0-9a-f-]{36})/(close|limit|finish)$`).exec(request.path ?? '');
   if (!request.session_id && control && isUUID(control[1])) {
     if (control[2] === 'close' && !Object.keys(request.body).length) return 'close';
+    if (control[2] === 'finish' && request.body.operation_id === id
+        && Number.isSafeInteger(request.body.timeout_seconds) && request.body.timeout_seconds >= 1
+        && request.body.timeout_seconds <= 86400 && Object.keys(request.body).length === 2) return 'finish';
     if (control[2] === 'limit' && Object.keys(request.body).length === 2
         && (request.body.max_gpu_hours === null || (typeof request.body.max_gpu_hours === 'number' && request.body.max_gpu_hours > 0))
         && Number.isSafeInteger(request.body.expected_limit_revision) && request.body.expected_limit_revision >= 0) return 'limit';
@@ -258,6 +278,7 @@ function savedKind(id, request) {
   if (request.path === '/v1/sync' && request.body.sync_id === id) return 'sync';
   if (request.path === '/v1/inputs' && request.body.input_id === id) return 'input';
   if (request.type === 'project-file-input-v2' && request.body.operation_id === id) return 'input';
+  if (request.type === 'project-file-copy-v1' && request.body.operation_id === id) return 'file-recovery';
   if (new RegExp(`^/v1/commands/[0-9a-f-]{36}/cancel$`).test(request.path) && !Object.keys(request.body).length) return 'cancel';
   return null;
 }
@@ -350,7 +371,7 @@ async function waitReady(ctx, record, account, signal) {
 
 async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
   const { id, request } = record, kind = savedKind(id, request);
-  const retrySafe = ['session', 'command', 'selection', 'cancel', 'close', 'limit'].includes(kind);
+  const retrySafe = ['session', 'command', 'selection', 'cancel', 'close', 'limit', 'finish'].includes(kind);
   let failures = 0;
   for (;;) {
     try {
@@ -394,6 +415,7 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
       const label = { session: 'session_id', command: 'command_id', selection: 'selection_id' }[kind];
       if (label && res.data?.[label] !== id) throw new NetworkError(`Forge response has no matching ${label}.`);
       if (kind === 'command') checkCommand(record, res);
+      if (kind === 'finish') validateFinish(res.data,id,request.path.split('/')[5]);
       saveResult(file, record, res.data);
       return res;
     } catch (error) {
@@ -673,8 +695,47 @@ async function waitCommandResult(ctx, session, id, signal, current) {
   return result;
 }
 
+function validateFinish(data, id, session) {
+  const valid = (field, values) => values.includes(data?.[field]);
+  if (data?.operation_id !== id || data.session_id !== session
+      || !valid('phase',['draining','closing','completed'])
+      || !valid('execution',['pending','succeeded','failed','cancelled','interrupted','timed_out'])
+      || !valid('drain',['pending','saved','failed','interrupted'])
+      || !valid('durability',['pending','saved','failed']) || !valid('release',['pending','released'])
+      || !valid('termination',[null,'finished','timed_out','interrupted'])
+      || !(data.selected_command_ids === null || (Array.isArray(data.selected_command_ids)
+        && data.selected_command_ids.length <= 64 && data.selected_command_ids.every(isUUID)))) {
+    throw new NetworkError('Forge finish response is invalid or belongs to another operation.');
+  }
+}
+
+function finishOutcome(data) {
+  if (data.phase !== 'completed') return;
+  if (data.release === 'released' && data.durability === 'saved' && data.drain === 'saved'
+      && data.execution === 'succeeded' && data.termination === 'finished') return;
+  const error = new ApiError({status:500,code:'finish_incomplete',message:'Finish completed with failed or interrupted work, saving, or release.',retryable:false});
+  error.details = {finish:redactForgeOutput(data)};
+  error.action = `Inspect finish operation ${data.operation_id}, its command outcomes and saved files. Release and durability are reported separately.`;
+  printProgress(`execution: ${data.execution}; drain: ${data.drain}; durability: ${data.durability}; release: ${data.release}; termination: ${data.termination}`);
+  throw error;
+}
+
+async function waitFinish(ctx, id, session, initial, signal, file, record) {
+  let result = initial;
+  for (;;) {
+    validateFinish(result.data,id,session);
+    if (result.data.phase === 'completed') { finishOutcome(result.data); return result; }
+    printProgress(`Finish ${id}: ${result.data.phase}; execution ${result.data.execution}; save ${result.data.durability}; release ${result.data.release}`);
+    await delay(3000,undefined,{signal});
+    result = await ctx.client.get(`${API}/sessions/${session}/finish`,{signal});
+    validateFinish(result.data,id,session);
+    if (file && record) saveResult(file,record,result.data);
+  }
+}
+
 async function waitRecovered(ctx, record, result, kind, account, signal) {
   const id = record.id, session = record.request.session_id;
+  if (kind === 'finish') return waitFinish(ctx,id,record.request.path.split('/')[5],result,signal,recordPath(ctx,id),record);
   if (kind === 'command') return waitCommandResult(ctx, session, id, signal, result);
   if (kind === 'cancel') return watchCommand(ctx, session, record.request.path.split('/')[3], {signal});
   if (kind === 'input' && result.retained) {
@@ -695,17 +756,23 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
       const failure = tools.find(tool => tool?.state === 'failed');
       if (failure) failed('tool_failed', `Tool ${failure.tool} failed`, failure.error);
       if (tools.every(tool => tool?.state === 'ready')) return result;
+    } else if (kind === 'file-recovery') {
+      if (data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
+        `Inspect the destination and operation ${id} before another action.`);
+      if (['ready','saved'].includes(data.state)) return result;
     } else if (kind === 'sync' || kind === 'input') {
-      if (data.state === 'failed') failed(`${kind}_failed`, `${kind === 'sync' ? 'Sync' : 'Input'} ${id} failed`, data.error,
-        `Inspect the same ${kind} ID before starting a new operation.`);
+      if (data.state === 'failed' && kind === 'sync') failedSync(id,session,data);
+      if (data.state === 'failed') failed('input_failed', `Input ${id} failed`, data.error,
+        `Inspect the same input ID before starting a new operation.`);
       if (data.state === (kind === 'sync' ? 'saved' : 'ready')) return result;
     } else throw usageError(`Waiting is not supported for saved operation ${id}.`);
     printProgress(`Waiting for saved operation ${id}: ${data.state ?? 'pending'}`);
-    await delay(3000, undefined, {signal});
+    await delay(kind === 'file-recovery' ? Math.max(1000,(data.retry_after ?? 3)*1000) : 3000, undefined, {signal});
     if (kind === 'session') result = await ctx.client.get(`${API}/sessions/${id}`, {signal});
     else if (kind === 'close') result = await ctx.client.get(record.request.path.slice(0,-'/close'.length), {signal});
     else if (kind === 'selection') result = await forgeRequest(ctx,session,'GET','/v1/session',{signal});
     else if (kind === 'input') result = await inputStatus(ctx,session,id,{signal,account});
+    else if (kind === 'file-recovery') result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal,account});
     else result = await readSync(ctx,session,id,{signal});
     saveResult(recordPath(ctx,id), readRecord(recordPath(ctx,id)) ?? record, result.data);
   }
@@ -723,10 +790,30 @@ async function runAction(ctx) {
   if (action === 'create' || action === 'resume') {
     const sessionId = flags['session-id'] === undefined ? randomUUID() : uuid(flags['session-id'], 'session ID');
     const resuming = action === 'resume';
+    const projectId = resuming ? uuid(ctx.positionals[1], 'project ID') : undefined;
+    let revision;
+    if (resuming) {
+      if (flags['control-revision'] !== undefined) revision = number(flags['control-revision'], 'control-revision', { integer: true, zero: true });
+      else {
+        const prior = readRecord(recordPath(ctx,sessionId));
+        if (prior) {
+          if (prior.request?.path !== `${API}/projects/${projectId}/sessions`
+              || !Number.isSafeInteger(prior.request.body?.expected_control_revision) || prior.request.body.expected_control_revision < 0) {
+            throw new ApiError({status:409,code:'request_conflict',message:`Saved session ${sessionId} is not this resume request.`});
+          }
+          revision = prior.request.body.expected_control_revision;
+        } else {
+          const project = (await ctx.client.get(`${API}/projects/${projectId}`)).data;
+          if (!Number.isSafeInteger(project.control?.revision) || project.control.revision < 0) throw new NetworkError('Project control revision is unavailable.');
+          if (project.control.human_resume_required === true) throw new ApiError({status:409,code:'human_resume_required',message:'A human must allow this project to resume.',details:{project_id:projectId,control_revision:project.control.revision}});
+          revision = project.control.revision;
+        }
+      }
+    }
     const body = { session_id: sessionId, files_contract: 2, ...sessionOptions(flags),
-      ...(resuming ? { expected_control_revision: number(flags['control-revision'], 'control-revision', { integer: true, zero: true }) }
+      ...(resuming ? { expected_control_revision: revision }
         : { name: required(flags.name, 'name') }) };
-    const destination = resuming ? `${API}/projects/${uuid(ctx.positionals[1], 'project ID')}/sessions` : `${API}/sessions`;
+    const destination = resuming ? `${API}/projects/${projectId}/sessions` : `${API}/sessions`;
     return report(ctx, await submit(ctx, sessionId, { method: 'POST', path: destination, body }, 'session_id',
       `Inspect ariax forge status ${sessionId}; retry the same ${action} request with --session-id ${sessionId}, identical fields, and the same --root-dir, account, and API origin.`));
   }
@@ -807,10 +894,14 @@ async function runAction(ctx) {
       checkIdentity(record,account,id);
       printProgress(`Recovering saved operation: ${id}`);
       try {
-        let result = ['sync','input'].includes(kind)
-          ? await recoverFile(ctx,id,record,{signal,account})
+        let result = ['sync','input','file-recovery'].includes(kind)
+          ? await recoverFile(ctx,id,record,{signal,account,retryFailedSync:kind === 'sync'})
           : await dispatchSaved(ctx,file,record,account,{previous:true,signal});
+        if (kind === 'sync' && result.data?.state === 'failed') failedSync(id,record.request.session_id,result.data);
+        if (kind === 'file-recovery' && result.data?.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
+          `Inspect the destination and operation ${id} before another action.`);
         if (flags.wait) result = await waitRecovered(ctx,record,result,kind,account,signal);
+        if (kind === 'finish') finishOutcome(result.data);
         return report(ctx,result);
       } catch (error) {
         error.action ||= `Inspect or recover the same operation ${id} using the original root directory, account and API origin.`;
@@ -818,8 +909,8 @@ async function runAction(ctx) {
       }
     });
   }
-  if (['files', 'download', 'link'].includes(action)) {
-    const projectId = uuid(ctx.positionals[1], 'project ID');
+  if (['files', 'files recover', 'download', 'link'].includes(action)) {
+    const projectId = uuid(ctx.positionals[action === 'files recover' ? 2 : 1], 'project ID');
     return runFiles(ctx, action, undefined, undefined, projectId);
   }
   const sessionId = uuid(ctx.positionals[(action.startsWith('tools ') || action.startsWith('inputs ')) ? 2 : 1], 'session ID');
@@ -835,12 +926,58 @@ async function runAction(ctx) {
     if ((flags['gpu-hours'] === undefined) === (flags.clear === undefined) || (flags.clear !== undefined && flags.clear !== true)) {
       throw usageError('forge limit: supply exactly one of --gpu-hours H or --clear.');
     }
-    const body = { max_gpu_hours: flags.clear ? null : number(flags['gpu-hours'], 'gpu-hours'),
-      expected_limit_revision: number(flags['limit-revision'], 'limit-revision', { integer: true, zero: true }) };
-    const res = await submit(ctx, randomUUID(), { method: 'POST', path: `${sessionPath}/limit`, body }, 'request_id',
+    const id = flags['operation-id'] === undefined ? randomUUID() : uuid(flags['operation-id'],'operation ID');
+    let revision;
+    if (flags['limit-revision'] !== undefined) revision = number(flags['limit-revision'], 'limit-revision', { integer: true, zero: true });
+    else {
+      const prior = readRecord(recordPath(ctx,id));
+      if (prior) {
+        if (prior.request?.path !== `${sessionPath}/limit` || !Number.isSafeInteger(prior.request.body?.expected_limit_revision)
+            || prior.request.body.expected_limit_revision < 0) {
+          throw new ApiError({status:409,code:'request_conflict',message:`Saved operation ${id} is not this limit edit.`});
+        }
+        revision = prior.request.body.expected_limit_revision;
+      } else {
+        const session = (await ctx.client.get(sessionPath)).data;
+        if (session.session_id !== sessionId || !Number.isSafeInteger(session.limit_revision) || session.limit_revision < 0) throw new NetworkError('Session limit revision is unavailable.');
+        revision = session.limit_revision;
+      }
+    }
+    const body = { max_gpu_hours: flags.clear ? null : number(flags['gpu-hours'], 'gpu-hours'), expected_limit_revision: revision };
+    const res = await submit(ctx, id, { method: 'POST', path: `${sessionPath}/limit`, body }, 'request_id',
       `Inspect ariax forge status ${sessionId} for max_gpu_hours, limit_revision, applied_limit_revision, and expires_at before another edit. An accepted edit replaces the total allowance from allocation; the host retains its previous deadline until applied_limit_revision matches limit_revision.`);
     remember(ctx, sessionId, sessionPath, res.data);
     return report(ctx, res);
+  }
+  if (action === 'finish') {
+    if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge finish: --wait-timeout requires --wait.');
+    const suppliedId = flags['operation-id'] === undefined ? undefined : uuid(flags['operation-id'],'operation ID');
+    const prior = suppliedId ? readRecord(recordPath(ctx,suppliedId)) : null;
+    if (prior && prior.request?.path !== `${sessionPath}/finish`) throw new ApiError({status:409,code:'request_conflict',message:`Saved operation ${suppliedId} is not this finish request.`});
+    const duration = flags['timeout-seconds'] === undefined
+      ? prior?.request?.body?.timeout_seconds ?? 3600 : number(flags['timeout-seconds'],'timeout-seconds',{integer:true});
+    if (!Number.isSafeInteger(duration) || duration < 1) throw usageError('forge finish: --timeout-seconds must be between 1 and 86400.');
+    if (duration > 86400) throw usageError('forge finish: --timeout-seconds must be between 1 and 86400.');
+    const existing = await optionalRead(() => ctx.client.get(`${sessionPath}/finish`));
+    if (existing && flags['operation-id'] === undefined) {
+      const id = uuid(existing.data?.operation_id,'finish operation ID');
+      validateFinish(existing.data,id,sessionId);
+      if (flags['timeout-seconds'] !== undefined) throw usageError(`A finish operation already exists. Inspect operation ${id}; its accepted deadline cannot be changed.`);
+      if (!flags.wait) { finishOutcome(existing.data); return report(ctx,existing); }
+      return controlled(ctx,id,localWaitSeconds(flags['wait-timeout'],7200),async signal => {
+        try { return report(ctx,await waitFinish(ctx,id,sessionId,existing,signal)); }
+        catch (error) { error.action ||= `Inspect ariax forge finish ${sessionId}; do not create another finish operation.`; throw error; }
+      },{resume:`ariax forge finish ${sessionId} --wait`});
+    }
+    const id = suppliedId ?? randomUUID();
+    const request = {method:'POST',path:`${sessionPath}/finish`,body:{operation_id:id,timeout_seconds:duration}};
+    const perform = async signal => {
+      let result = await submit(ctx,id,request,'operation_id',`Inspect ariax forge finish ${sessionId} before starting another finish.`,{signal});
+      if (flags.wait) result = await waitFinish(ctx,id,sessionId,result,signal,recordPath(ctx,id),readRecord(recordPath(ctx,id)));
+      finishOutcome(result.data);
+      return report(ctx,result);
+    };
+    return controlled(ctx,id,flags.wait ? localWaitSeconds(flags['wait-timeout'],7200) : 60,perform);
   }
   if (action === 'tools add') {
     const id = flags['selection-id'] === undefined ? randomUUID() : uuid(flags['selection-id'], 'selection ID');
@@ -938,6 +1075,7 @@ export async function run(ctx) {
       let projectId = isUUID(error.details?.project_id) ? uuid(error.details.project_id, 'project ID') : undefined;
       try {
         if (!projectId && ['resume', 'project'].includes(action)) projectId = uuid(ctx.positionals[1], 'project ID');
+        else if (!projectId && action === 'files recover') projectId = uuid(ctx.positionals[2], 'project ID');
         else if (!projectId && action === 'recover' && isUUID(recovered?.request?.project_id)) projectId = recovered.request.project_id;
         else if (!projectId && action === 'inputs add' && ctx.flags.artifact !== undefined) projectId = uuid(ctx.flags.artifact.split(':')[0], 'project ID');
         else if (!projectId) {
@@ -959,11 +1097,20 @@ export async function run(ctx) {
     } else if (['session_cleanup_pending', 'project_session_active'].includes(error.code)) {
       error.action = `Inspect the project history and active session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
     } else if (error.code === 'session_unready') {
-      const sessionId = action === 'recover' ? recoveredSession
-        : ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
-      error.action = `Inspect ariax forge status ${sessionId}. If provisioning or starting, run ariax forge tools wait ${sessionId} base --timeout 1800, then retry the original operation with the same IDs. A closing, closed or failed session requires inspection of its project controls and retained history. ${error.action || ''}`.trim();
+      if (action === 'files recover' || (action === 'recover' && recovered?.request?.type === 'project-file-copy-v1')) {
+        const project = action === 'files recover' ? ctx.positionals[2] : recovered.request.project_id;
+        error.action = `Inspect ariax forge project ${project} and the destination writer state; recover the same operation after the workspace is available.`;
+      } else if (action === 'finish' || (action === 'recover' && savedKind(ctx.positionals[1],recovered?.request) === 'finish')) {
+        const session = action === 'finish' ? ctx.positionals[1] : recoveredSession;
+        error.action = `Inspect ariax forge status ${session}, its control state and finish_supported. A session without compatible finish support cannot begin finish; do not assume compute is released.`;
+      } else {
+        const sessionId = action === 'recover' ? recoveredSession
+          : ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
+        error.action = `Inspect ariax forge status ${sessionId}. If provisioning or starting, run ariax forge tools wait ${sessionId} base --wait-timeout 1800, then retry the original operation with the same IDs. A closing, closed or failed session requires inspection of its project controls and retained history. ${error.action || ''}`.trim();
+      }
     } else if (['request_conflict', 'idempotency_conflict', 'command_conflict'].includes(error.code)) {
-      error.action = 'Inspect the saved request and existing session or command. Recover its original fields and caller ID; resolve the existing outcome before choosing any new operation.';
+      error.action = action === 'finish' ? `Inspect ariax forge finish ${ctx.positionals[1]}; a session has only one finish operation and its deadline cannot be changed.`
+        : 'Inspect the saved request and existing session or command. Recover its original fields and caller ID; resolve the existing outcome before choosing any new operation.';
     }
     if (typeof error.message === 'string') error.message = redactForgeText(error.message);
     if (typeof error.action === 'string') error.action = redactForgeText(error.action);

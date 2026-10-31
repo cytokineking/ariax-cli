@@ -19,8 +19,8 @@ Managed and native settings can differ for the same engine.
 3. Stage inputs, wait for the tool, run commands and inspect their results.
    Use [campaign guidance](references/campaign-recipes.md) to compose stages
    or size a pilot; example sizes are not campaign recommendations.
-4. Flush useful files under `/workspace`, close the session when done,
-   and confirm both resource release and saved files.
+4. Finish the session when done, then inspect execution, saved files and
+   confirmed resource release separately.
 
 Creating or resuming a session starts paid resource allocation. Preparation and
 idle time consume the GPU-hour allowance; an omitted limit leaves the session
@@ -40,10 +40,9 @@ ariax forge list --json
 ariax forge status SESSION --json
 ariax forge tools SESSION --json
 ariax forge tools wait SESSION TOOL --timeout 1800 --json
-# Run and inspect the selected native commands; then save and close:
-ariax forge sync SESSION --wait --json
+# Run and inspect the selected native commands; then finish and release:
+ariax forge finish SESSION --wait --json
 ariax forge files PROJECT --json
-ariax forge close SESSION --json
 ariax forge status SESSION --json
 ```
 
@@ -157,8 +156,8 @@ ariax forge recover COMMAND_ID --wait --wait-timeout 1800 --json
 
 `operations` lists this root's account-bound records and their last locally
 observed states; it is not a live inventory.
-Recovery supports session admission, tool selection, commands, inputs, sync,
-cancellation, closure, and limit edits. It checks live and retained command
+Recovery supports session admission, tool selection, commands, inputs, file
+copies, sync, finish, cancellation, closure, and limit edits. It checks live and retained command
 records before any retry. A pending, unstarted command can continue with its
 same ID; an uncertain, failed, interrupted or cancelled command is not started
 again. If a previously observed operation is absent from current history,
@@ -174,6 +173,13 @@ confirmed failure or interruption requires an explicit new action.
 
 `run --wait-ready` and `run --wait` use `--wait-timeout SECONDS` for the whole
 local operation (default 1800, maximum 86400); `recover` defaults to 60 seconds.
+`finish --wait` defaults to a 7200-second local deadline. Its separate
+`--timeout-seconds` fixes the remote finish deadline at admission, default 3600
+seconds; repeats cannot extend it. `finish` observes an existing finish rather
+than starting another, and reports execution, pre-stop save, final durability,
+termination and verified release separately. A completed finish with failed
+work or saving exits nonzero. Immediate human stops and the existing GPU-hour
+deadline still take precedence. A local timeout or Ctrl-C does not stop it.
 `tools wait`, `watch` and `sync --wait` accept `--wait-timeout SECONDS`, with
 zero or omission meaning no local deadline. Their older `--timeout` spelling
 also means seconds; elsewhere global `--timeout` is a per-request limit in
@@ -185,15 +191,18 @@ milliseconds. A local timeout or Ctrl-C does not cancel remote work. Use
 ```sh
 ariax forge project PROJECT --limit 50 --json
 ariax forge status SESSION --json
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --control-revision N --gpu L40 --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
-ariax forge limit SESSION --gpu-hours 12 --limit-revision N --json
-ariax forge limit SESSION --clear --limit-revision N --json
+ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40 --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
+ariax forge limit SESSION --gpu-hours 12 --json
+ariax forge limit SESSION --clear --json
 ```
 
 `project` returns the project's status, control snapshot, session history and
 current active/latest session IDs. Older history uses `--cursor`. `status`
 reports the session's compute and persistence state with its `limit_revision`
 and the project's current `control.revision` and hold.
+When omitted, the CLI reads the current revision before saving a new resume or
+limit request. Recovery retains that original revision and ID; a later pause or
+edit is a conflict, not permission to refresh the request or clear a human hold.
 
 A human pause sets `human_resume_required`. Stop the project's work and ask
 the user to open the supplied project page and choose **Allow agent to resume**.
@@ -205,8 +214,9 @@ held project's identity when its files or outputs are needed.
 Resume loads the current saved files of the same project. Wait for confirmed
 prior-session cleanup and inspect `project` if another session is active. A
 newer pause invalidates an observed control revision.
-A definitive hold or stale-revision rejection permits a new explicit request
-with the newly observed revision and a fresh session ID. A lost acknowledgment
+A stale-revision rejection permits a new explicit request with the newly
+observed revision and a fresh session ID once any human hold has been cleared
+through the authenticated web flow. A lost acknowledgment
 requires the original ID and fields. Local saved requests remain immutable.
 
 Resume starts a new allocation in the same project and loads its current

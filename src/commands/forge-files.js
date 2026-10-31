@@ -7,11 +7,12 @@ import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
 import { setImmediate as yieldToEvents, setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
+import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
 import { ApiError, NetworkError, backoffDelay, validateTransferUrl } from '../http.js';
 import { printProgress } from '../output.js';
 import { workspacePath, listProjectFiles, projectFileGrant, readSync, startSync } from '../lib/forge-workspace-client.js';
-import { uuid, required, recordPath, readRecord, saveResult, report, poll, failed, projectUrl, transient } from './forge.js';
+import { uuid, required, recordPath, readRecord, saveResult, report, poll, failed, projectUrl, transient, controlled, localWaitSeconds } from './forge.js';
 
 function safePath(value, absolute = false) {
   const relative = absolute ? value?.replace(/^\/(workspace|inputs)\//, '') : value;
@@ -25,7 +26,7 @@ function safePath(value, absolute = false) {
 }
 
 async function fileRecord(ctx, id, request, label, signal) {
-  const account = request.session_id
+  const account = request.session_id && request.type !== 'project-file-copy-v1'
     ? await forgeAccountIdentity(ctx, request.session_id, {signal})
     : await accountIdentity(ctx, {signal});
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
@@ -48,6 +49,7 @@ async function fileRecord(ctx, id, request, label, signal) {
 
 const PART_SIZE = 16 * 1024 * 1024;
 const PROJECT_INPUT = 'project-file-input-v2';
+const FILE_COPY = 'project-file-copy-v1';
 const API = '/api/v1/forge';
 
 function fileSnapshot(fd, file) {
@@ -284,21 +286,69 @@ async function observeInput(ctx, session, id, record, signal) {
   return null;
 }
 
+async function copyStatus(ctx, record, signal) {
+  const {id,request} = record;
+  let result;
+  try { result = await ctx.client.get(`${API}/projects/${request.project_id}/files/operations/${id}`,{signal}); }
+  catch (error) { if (error.status === 404) return null; throw error; }
+  const value = result.data;
+  if (value?.operation_id !== id || value.session_id !== request.session_id
+      || !['open','published','expired'].includes(value.state) || !['host','offline'].includes(value.source)
+      || !['ready','pending','conflict','unknown','not_applicable'].includes(value.local_state)
+      || (value.state === 'published' && (!Number.isSafeInteger(value.version) || value.version <= 0))) {
+    throw new NetworkError('File recovery response does not match the saved operation.');
+  }
+  const state = value.state === 'expired' || value.local_state === 'conflict' ? 'failed'
+    : value.state !== 'published' ? 'pending' : value.local_state === 'ready' ? 'ready'
+    : value.local_state === 'not_applicable' ? 'saved' : 'pending';
+  return {...result,data:{operation_id:id,project_id:request.project_id,session_id:request.session_id,
+    path:request.body.path,source:request.body.source,state,storage_state:value.state,
+    installation_status:value.local_state,...(value.version == null ? {} : {version:value.version}),
+    copy_origin:value.source}};
+}
+
+async function recoverCopy(ctx, record, signal) {
+  const {id,request} = record, project = uuid(request.project_id,'project ID');
+  if (request.path !== `${API}/projects/${project}/files/recover` || request.body?.operation_id !== id
+      || request.body?.session_id !== request.session_id) throw usageError(`Saved file recovery ${id} is malformed.`);
+  let current = await copyStatus(ctx,record,signal);
+  if (!current && record.result) throw new ApiError({status:409,code:'file_recovery_unconfirmed',message:`Previously observed file recovery ${id} is absent from project history.`});
+  if (current?.data.state === 'failed') return current;
+  // Offline copies make bounded progress on each identical POST. Host-backed
+  // copies advance in the daemon; repeat once to validate an unconfirmed ID.
+  if (!current || !record.result || (current.data.storage_state === 'open' && current.data.copy_origin === 'offline')) {
+    const started = await ctx.client.post(request.path,{body:request.body,signal});
+    if (!['open','published'].includes(started.data?.state)) throw new NetworkError('File recovery returned an invalid receipt.');
+    if (started.data.retry_after !== undefined && (typeof started.data.retry_after !== 'number'
+        || !Number.isFinite(started.data.retry_after) || started.data.retry_after < 0 || started.data.retry_after > 120)) {
+      throw new NetworkError('File recovery returned an invalid retry interval.');
+    }
+    current = await copyStatus(ctx,record,signal);
+    if (!current) throw new NetworkError('File recovery receipt is not yet observable.');
+    if (started.data.retry_after !== undefined) current.data.retry_after = started.data.retry_after;
+  }
+  return current;
+}
+
 // The URL itself is deliberately not journaled. A same-process retry can use
 // the original in-memory URL; a later recovery may only observe its outcome.
-export async function recoverFile(ctx, id, record, {signal, account, body} = {}) {
+export async function recoverFile(ctx, id, record, {signal, account, body, retryFailedSync = false} = {}) {
   const request = record.request, session = uuid(request?.session_id,'session ID');
   const file = recordPath(ctx,id);
   for (let attempt = 0; ; attempt++) {
     try {
       let result;
-      if (request.type !== PROJECT_INPUT && request.path !== '/v1/inputs') {
+      if (request.type !== PROJECT_INPUT && request.type !== FILE_COPY && request.path !== '/v1/inputs') {
         const identity = await forgeAccountIdentity(ctx,session,{signal});
         if (Object.keys(identity).some(field => record[field] !== identity[field])) {
           throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
         }
       }
-      if (request.type === PROJECT_INPUT) {
+      if (request.type === FILE_COPY) {
+        const identity = account ?? await accountIdentity(ctx,{signal});
+        if (Object.keys(identity).some(field => record[field] !== identity[field])) throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
+        result = await recoverCopy(ctx,record,signal);
+      } else if (request.type === PROJECT_INPUT) {
         const project = uuid(request.project_id,'project ID');
         const target = safePath(request.body?.path?.replace(/^\/inputs\//,''));
         if (request.method !== 'POST' || request.path !== `${API}/projects/${project}/files/intents`
@@ -322,6 +372,9 @@ export async function recoverFile(ctx, id, record, {signal, account, body} = {})
         try { result = await readSync(ctx,session,id,{signal}); }
         catch (error) { if (error.status !== 404) throw error; }
         if (!result && record.result) throw new ApiError({status:409,code:'sync_unconfirmed',message:`Previously observed sync ${id} is absent from session history. Inspect saved files before another flush.`});
+        if (result?.data.state === 'failed' && retryFailedSync && result.data.error?.code !== 'final_sync_incomplete') {
+          result = await startSync(ctx,session,id,{signal});
+        }
         if (!result) result = await startSync(ctx,session,id,{signal});
       } else if (request.path === '/v1/inputs' && request.body?.input_id === id) {
         result = await observeInput(ctx,session,id,record,signal);
@@ -364,6 +417,18 @@ export async function recoverFile(ctx, id, record, {signal, account, body} = {})
       await delay(error.retryAfterMs ?? backoffDelay(attempt,500,3000),undefined,{signal});
     }
   }
+}
+
+export function failedSync(id, session, data) {
+  const final = data.error?.code === 'final_sync_incomplete';
+  const error = new ApiError({status:500,code:'sync_failed',
+    message:`Sync ${id} failed${data.error?.code ? ` (${data.error.code})` : ''}.`,retryable:!final});
+  error.details = {sync_id:id,...(data.diagnostics ? {diagnostics:data.diagnostics} : {})};
+  error.action = final ? 'The final-save deadline cannot be reopened. Inspect retained files and session status.'
+    : `Inspect the listed files, resolve the cause, then retry this same flush with ariax forge sync ${session} --sync-id ${id} --wait or ariax forge recover ${id} --wait.`;
+  for (const item of data.diagnostics?.files ?? []) printProgress(`file: ${item.path ?? '(path unavailable)'} [${item.code}]`);
+  if (data.diagnostics?.truncated) printProgress('Additional file diagnostics were truncated.');
+  throw error;
 }
 
 async function download(grant, destination) {
@@ -418,8 +483,77 @@ async function download(grant, destination) {
   } finally { clearTimeout(timer); fs.rmSync(temporary,{force:true}); }
 }
 
+function copySource(flags) {
+  const supplied = ['catalog','archive','artifact'].filter(name => flags[name] !== undefined);
+  if (supplied.length !== 1) throw usageError('forge files recover: choose one of --catalog, --archive, or --artifact.');
+  const kind = supplied[0], raw = required(flags[kind],kind), first = raw.indexOf(':');
+  if (first < 0) throw usageError(`forge files recover: --${kind} requires a project ID and path.`);
+  const project_id = uuid(raw.slice(0,first),'source project ID');
+  let rest = raw.slice(first + 1), checkpoint_id;
+  if (kind === 'archive') {
+    const second = rest.indexOf(':');
+    if (second < 0) throw usageError('forge files recover: --archive requires PROJECT:CHECKPOINT:PATH.');
+    checkpoint_id = uuid(rest.slice(0,second),'checkpoint ID');
+    rest = rest.slice(second + 1);
+  }
+  const sourcePath = kind === 'artifact' ? safePath(rest) : workspacePath(rest);
+  if (kind !== 'catalog' && flags.version !== undefined) throw usageError('forge files recover: --version applies only to --catalog.');
+  let version;
+  if (kind === 'catalog') {
+    version = Number(required(flags.version,'version'));
+    if (!Number.isSafeInteger(version) || version <= 0) throw usageError('forge files recover: --version must be a positive integer.');
+  }
+  return {kind,project_id,path:sourcePath,...(version === undefined ? {} : {version}),
+    ...(checkpoint_id === undefined ? {} : {checkpoint_id})};
+}
+
+async function runCopy(ctx, projectId) {
+  const flags = ctx.flags, target = workspacePath(required(flags.path,'path'));
+  const source = copySource(flags);
+  if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge files recover: --wait-timeout requires --wait.');
+  const id = flags['operation-id'] === undefined ? randomUUID() : uuid(flags['operation-id'],'operation ID');
+  return controlled(ctx,id,flags.wait ? localWaitSeconds(flags['wait-timeout'],1800) : 60,async signal => {
+    let request, prior = readRecord(recordPath(ctx,id));
+    if (prior) {
+      request = prior.request;
+      if (request?.type !== FILE_COPY || request.project_id !== projectId || request.body?.path !== target
+          || !isDeepStrictEqual(request.body?.source,source)) {
+        throw new ApiError({status:409,code:'request_conflict',message:`File recovery ${id} differs from its saved request.`});
+      }
+    } else {
+      const base = `${API}/projects/${projectId}/files`;
+      const context = (await ctx.client.get(`${base}/status`,{signal})).data;
+      const metadata = (await ctx.client.get(`${base}/metadata`,{query:{path:target},signal})).data;
+      if (!isUUID(context.session_id) || !Number.isSafeInteger(context.control_revision) || context.control_revision < 0
+          || !Number.isSafeInteger(context.writer_epoch) || context.writer_epoch < 0
+          || !Number.isSafeInteger(metadata.version) || metadata.version < 0
+          || !Number.isSafeInteger(metadata.mutation_revision) || metadata.mutation_revision < 0) {
+        throw new NetworkError('Project file context is unavailable.');
+      }
+      if (metadata.kind === 'directory') throw usageError('The destination is a directory; choose a file path.');
+      if (metadata.kind === 'file' && !flags.overwrite) throw usageError('The destination exists; use --overwrite to replace that saved file.');
+      if (!['file','absent','tombstone'].includes(metadata.kind)) throw new NetworkError('Destination metadata is invalid.');
+      request = {type:FILE_COPY,method:'POST',session_id:context.session_id,project_id:projectId,path:`${base}/recover`,
+        body:{operation_id:id,session_id:context.session_id,operation_started_at:new Date().toISOString(),path:target,
+          control_revision:context.control_revision,writer_epoch:context.writer_epoch,
+          expected_version:metadata.version,expected_project_revision:metadata.mutation_revision,source}};
+    }
+    const {record} = await fileRecord(ctx,id,request,'operation_id',signal);
+    let result = await recoverFile(ctx,id,record,{signal});
+    while (flags.wait && result.data.state === 'pending') {
+      printProgress(`Waiting for file recovery ${id}: ${result.data.storage_state}, installation ${result.data.installation_status}`);
+      await delay(Math.max(1000,(result.data.retry_after ?? 3)*1000),undefined,{signal});
+      result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal});
+    }
+    if (result.data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
+      `Inspect the destination and operation ${id}; resolve any writer or file conflict before a new action.`);
+    return report(ctx,result);
+  });
+}
+
 export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   const flags = ctx.flags;
+  if (action === 'files recover') return runCopy(ctx,projectId);
   const direct = '/v1';
   const read = (resource) => flags.retained
     ? ctx.client.get(`${sessionPath}${resource.slice(3)}`)
@@ -510,14 +644,13 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     const resume = `ariax forge sync ${sessionId} --sync-id ${id} --wait`;
     let result;
     try {
-      result = await recoverFile(ctx,id,record);
+      result = await recoverFile(ctx,id,record,{retryFailedSync:flags['sync-id'] !== undefined});
     } catch (error) {
       error.action = `Inspect or retry the same flush with ${resume}, using the original account, API origin and root directory. The server and session must support the current project workspace.`;
       throw error;
     }
     const inspect = sync => {
-      if (sync.state === 'failed') failed('sync_failed', `Sync ${id} failed${sync.error?.code ? ` (${sync.error.code})` : ''}`, undefined,
-        `Inspect session status and retry a new flush only after resolving the failure. ${resume} observes this flush.`);
+      if (sync.state === 'failed') failedSync(id,sessionId,sync);
       return { state:sync.state, done:sync.state === 'saved' };
     };
     const current = inspect(result.data);

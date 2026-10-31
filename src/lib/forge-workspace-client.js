@@ -152,6 +152,17 @@ function syncResult(result, syncId) {
   if (data.error && typeof data.error.code === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(data.error.code)) {
     value.error = {code:data.error.code};
   }
+  if (data.diagnostics !== undefined) {
+    const diagnostics = data.diagnostics;
+    if (!diagnostics || !Array.isArray(diagnostics.files) || diagnostics.files.length > 8
+        || typeof diagnostics.truncated !== 'boolean') throw invalidResponse();
+    value.diagnostics = {files:diagnostics.files.map(item => {
+      if (!item || typeof item.code !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(item.code)
+          || (item.path !== undefined && (typeof item.path !== 'string' || item.path.length > 270
+            || !/^\/(workspace|inputs)\//.test(item.path) || /[\x00-\x1f\x7f]/.test(item.path)))) throw invalidResponse();
+      return {code:item.code,...(item.path === undefined ? {} : {path:redactForgeText(item.path)})};
+    }),truncated:diagnostics.truncated};
+  }
   return publicResult(result,value);
 }
 

@@ -59,6 +59,7 @@ async function boundary(root) {
     drop: 'create', holdReads: false, unknown: false, cleanupBlocked: false, fault: null,
     connects: 0, rejectPost401: 0, rejectedPost401: 0, liveCommandMissing: false, liveInputMissing: false,
     pendingAdmission: false, commandFailures: 0, rejectedCommands: 0, inputAdmissions: 0,
+    copyPosts: 0, finishPosts: 0, finishAutoComplete: false, finishFailure: false, bumpResume: false,
     syncMode: 'saved', syncPosts: 0, fileError: false, fileBadPath: false, fileBadGrant: false, fileCursorCycle: false, legacyResume: false };
   const reply = (res, status, data) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data })); };
   const error = (res, status, code, message, details) => {
@@ -156,6 +157,9 @@ async function boundary(root) {
           const operationId = projectMutation[1] ?? body?.operation_id;
           assert.ok(records.some(record => record.actor_user_id === user && record.id === operationId
             && record.request.type === 'project-file-input-v2'), 'project input has no durable request');
+        } else if (url.pathname.endsWith('/files/recover')) {
+          assert.ok(records.some(record => record.actor_user_id === user && record.id === body.operation_id
+            && record.request.type === 'project-file-copy-v1' && isDeepStrictEqual(record.request.body,body)), 'file recovery has no durable request');
         } else if (direct && direct[2] === '/v1/inputs') {
           assert.ok(records.some(record => record.actor_user_id === user && record.id === body.input_id
             && record.request.body?.source?.kind === body.source.kind), 'input import has no durable request');
@@ -200,16 +204,37 @@ async function boundary(root) {
             const operation = project.fileOperations.get(parts[7]);
             if (!operation) return error(res,404,'not_found','File operation not found');
             if (state.confirmAfterReads > 0 && --state.confirmAfterReads === 0) state.confirmInstall = true;
-            if (state.confirmInstall && operation.state === 'published') {
+            if (!operation.copy && state.confirmInstall && operation.state === 'published') {
               const installed = path.join(root,'inputs',operation.body.path.slice('/inputs/'.length));
               await fs.mkdir(path.dirname(installed),{recursive:true});
               await fs.writeFile(installed,project.files.get(operation.body.path));
             }
-            return reply(res,200,{operation_id:parts[7],session_id:operation.body.session_id,source:'host',
+            return reply(res,200,{operation_id:parts[7],session_id:operation.body.session_id,source:operation.source ?? 'host',
               state:operation.state,version:operation.version ?? null,expires_at:new Date(Date.now()+3600000).toISOString(),
               // The updated backend obtains this status from the current writer daemon.
-              local_state:state.noFileWriter ? 'not_applicable' : state.conflictInstall ? 'conflict' : state.confirmInstall ? 'ready'
+              local_state:operation.source === 'offline' || state.noFileWriter ? 'not_applicable'
+                : operation.copy ? (state.copyConflict ? 'conflict' : state.copyInstall ? 'ready' : 'pending')
+                : state.conflictInstall ? 'conflict' : state.confirmInstall ? 'ready'
                 : state.pendingInstall ? 'pending' : 'unknown'});
+          }
+          if (req.method === 'POST' && parts[6] === 'recover') {
+            state.copyPosts++;
+            let operation = project.fileOperations.get(body.operation_id);
+            if (operation && !isDeepStrictEqual(operation.body,body)) return error(res,409,'idempotency_conflict','File recovery request differs');
+            if (!operation) {
+              if (body.control_revision !== project.control.revision || body.writer_epoch !== (state.fileWriterEpoch ?? 1)) return error(res,409,'writer_fenced','Writer changed');
+              if (body.expected_project_revision !== project.fileRevision) return error(res,409,'file_revision_conflict','Files changed');
+              operation = {body,state:'open',copy:true,source:active ? 'host' : 'offline',posts:0};
+              project.fileOperations.set(body.operation_id,operation);
+            }
+            operation.posts++;
+            if (operation.source === 'host' || operation.posts >= 2) {
+              operation.state = 'published';
+              operation.version ??= ++project.fileRevision;
+              project.files.set(body.path,Buffer.from('recovered'));
+            }
+            if (state.drop === 'file-copy') { state.drop = null; req.socket.destroy(); return; }
+            return reply(res,200,{state:operation.state,...(operation.version ? {version:operation.version} : {retry_after:1})});
           }
           if (req.method === 'GET' && parts.length === 6) {
             const pageState = {mutation_revision:project.fileRevision,sync_state:'saved',last_synced_at:null,durability_gap:false};
@@ -302,6 +327,7 @@ async function boundary(root) {
         let resumed = sessions.get(body.session_id);
         if (resumed && (resumed.owner !== user || resumed.data.project_id !== project.id || !isDeepStrictEqual(resumed.request, body))) return error(res, 409, 'request_conflict', 'Resume request differs');
         if (!resumed) {
+          if (state.bumpResume) { state.bumpResume = false; project.control.revision++; project.control.human_resume_required = true; }
           if (project.control.human_resume_required) return held(res, project);
           if (state.legacyResume) return error(res, 409, 'checkpoint_required', 'Legacy server requires a checkpoint');
           if (body.expected_control_revision !== project.control.revision) return error(res, 409, 'control_revision_conflict', 'Project control changed');
@@ -323,6 +349,32 @@ async function boundary(root) {
         return reply(res, 200, session.data);
       }
       const project = projects.get(session.data.project_id);
+      if (parts[5] === 'finish') {
+        if (req.method === 'GET') {
+          if (!session.finish) return error(res,404,'finish_not_found','Finish not found');
+          if (state.finishAutoComplete && session.finish.phase !== 'completed') {
+            Object.assign(session.finish,{phase:'completed',execution:'succeeded',drain:'saved',
+              durability:state.finishFailure ? 'failed' : 'saved',release:'released',termination:'finished'});
+            session.data.state = 'closed';
+            if (!session.released) { session.released = true; state.releases++; }
+          }
+          return reply(res,200,session.finish);
+        }
+        state.finishPosts++;
+        if (session.finish && (session.finish.operation_id !== body.operation_id || session.finishTimeout !== body.timeout_seconds)) {
+          return error(res,409,'idempotency_conflict','Finish request differs');
+        }
+        if (!session.finish) {
+          const created = Date.now();
+          session.finishTimeout = body.timeout_seconds;
+          session.finish = {operation_id:body.operation_id,session_id:session.data.session_id,
+            created_at:new Date(created).toISOString(),deadline_at:new Date(created + body.timeout_seconds*1000).toISOString(),
+            budget_deadline_at:null,phase:'draining',selected_command_ids:[],execution:'pending',drain:'pending',
+            durability:'pending',release:'pending',termination:null};
+        }
+        if (state.drop === 'finish') { state.drop = null; req.socket.destroy(); return; }
+        return reply(res,202,session.finish);
+      }
       if (parts[5] === 'inputs') {
         if (req.method === 'GET' && parts.length === 6) return reply(res,200,{inputs:[...session.inputs.values()]});
         if (req.method === 'GET') {
@@ -356,13 +408,19 @@ async function boundary(root) {
         assert.ok(req.headers['x-request-id']);
         state.syncPosts++;
         let operation = session.syncs.get(body.sync_id);
+        if (operation?.state === 'failed' && operation.error?.code !== 'final_sync_incomplete') {
+          operation.state = state.syncMode === 'saved' ? 'saved' : 'pending';
+          operation.error = null;
+        }
         if (!operation) {
           if (session.data.state !== 'available') return error(res, 409, 'session_unready', 'Session not available');
           const mode = state.syncMode;
-          operation = {sync_id:body.sync_id,state:mode.startsWith('pending')?'pending':mode,
+          operation = {sync_id:body.sync_id,state:mode.startsWith('pending')?'pending':mode === 'final_failed' ? 'failed' : mode,
             ...(mode === 'pending_then_saved' ? {nextState:'saved'} : {}),
             ...(mode === 'pending_then_failed' ? {nextState:'failed'} : {}),
-            ...(mode.includes('failed') ? {error:{code:'upload_failed',message:'private-transfer-grant https://example.org/?signature=secret'}} : {})};
+            ...(mode.includes('failed') ? {error:{code:'file_sync_failed',message:'private-transfer-grant https://example.org/?signature=secret'},
+              diagnostics:{files:[{path:'/workspace/result.txt',code:'file_revision_conflict'}],truncated:false}} : {}),
+            ...(mode === 'final_failed' ? {error:{code:'final_sync_incomplete'}} : {})};
           session.syncs.set(body.sync_id,operation);
         }
         if (state.drop === 'sync') { state.drop = null; req.socket.destroy(); return; }
@@ -778,6 +836,48 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const noncore = await invoke(['forge', 'create', '--name', 'Missing fallback', '--gpu', 'RTX5090'], { code: 5 });
     assert.match(noncore.payload.error.message, /no compatible core GPU/);
     assert.equal(state.posts, beforeCoreRejection, 'missing fallback sent an admission mutation');
+    const finishSession = (await invoke(['forge','create','--name','Finish workspace','--gpu','L40'])).payload.data.session_id;
+    state.sessions.get(finishSession).data.state = 'available';
+    state.drop = 'finish';
+    const waitingFinish = await invoke(['forge','finish',finishSession,'--timeout-seconds','120','--wait','--wait-timeout','1'],{code:9});
+    const finishId = waitingFinish.stderr.match(/operation_id: ([0-9a-f-]{36})/)[1];
+    assert.equal((await record(finishId)).request.body.timeout_seconds,120);
+    assert.equal(state.sessions.get(finishSession).finish.phase,'draining');
+    const finishPosts = state.finishPosts;
+    assert.equal((await invoke(['forge','finish',finishSession])).payload.data.operation_id,finishId);
+    assert.equal(state.finishPosts,finishPosts,'observing finish created another operation');
+    state.finishAutoComplete = true;
+    const completedFinish = await invoke(['forge','recover',finishId,'--wait','--wait-timeout','15']);
+    assert.equal(completedFinish.payload.data.release,'released');
+    assert.equal(completedFinish.payload.data.durability,'saved');
+    assert.equal(state.sessions.get(finishSession).finish.operation_id,finishId);
+    const failedSession = (await invoke(['forge','create','--name','Finish failure','--gpu','L40'])).payload.data.session_id;
+    state.sessions.get(failedSession).data.state = 'available';
+    state.finishFailure = true;
+    const failedFinish = await invoke(['forge','finish',failedSession,'--wait','--wait-timeout','15'],{code:10});
+    assert.equal(failedFinish.payload.error.code,'finish_incomplete');
+    assert.equal(failedFinish.payload.error.details.finish.durability,'failed');
+    assert.equal(failedFinish.payload.error.details.finish.release,'released');
+    state.finishFailure = false;
+    const webSession = (await invoke(['forge','create','--name','Existing finish','--gpu','L40'])).payload.data.session_id;
+    state.sessions.get(webSession).data.state = 'available';
+    const webFinishId = randomUUID(), now = Date.now();
+    state.sessions.get(webSession).finish = {operation_id:webFinishId,session_id:webSession,
+      created_at:new Date(now).toISOString(),deadline_at:new Date(now+60000).toISOString(),budget_deadline_at:null,
+      phase:'draining',selected_command_ids:[],execution:'pending',drain:'pending',durability:'pending',release:'pending',termination:null};
+    state.finishAutoComplete = false;
+    const beforeWebFinish = state.finishPosts;
+    const conflictingFinish = await invoke(['forge','finish',webSession,'--operation-id',randomUUID()],{code:7});
+    assert.equal(conflictingFinish.payload.error.code,'idempotency_conflict');
+    assert.equal(state.sessions.get(webSession).finish.operation_id,webFinishId);
+    const afterConflict = state.finishPosts;
+    const webWait = await invoke(['forge','finish',webSession,'--wait','--wait-timeout','1'],{code:9});
+    assert.match(webWait.payload.error.message,new RegExp(`forge finish ${webSession}`));
+    assert.doesNotMatch(webWait.payload.error.message,/no operation was sent/);
+    assert.equal(state.finishPosts,afterConflict,'existing finish was recreated');
+    assert.equal(afterConflict,beforeWebFinish+1);
+    state.finishAutoComplete = true;
+    assert.equal((await invoke(['forge','finish',webSession,'--wait'])).payload.data.release,'released');
     for (const name of await fs.readdir(path.join(root, '.ariax/forge'))) {
       const bytes = await fs.readFile(path.join(root, '.ariax/forge', name), 'utf8');
       assert.doesNotMatch(bytes, new RegExp(key));
@@ -918,6 +1018,39 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
       assert.match(journal.request.body.checksum,/-2$/);
       assert.doesNotMatch(JSON.stringify(journal),/private-transfer-grant|signature=|upload_url|upload_headers/);
     }
+    project.files.set('/workspace/source.dat',Buffer.from('original'));
+    const copyId = randomUUID();
+    state.drop = 'file-copy';
+    const copy = await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat',
+      '--catalog',`${pid}:/workspace/source.dat`,'--version','1','--operation-id',copyId]);
+    assert.equal(copy.payload.data.storage_state,'published');
+    assert.equal(copy.payload.data.state,'pending');
+    assert.equal((await record(copyId)).request.body.source.version,1);
+    state.copyInstall = true;
+    const copyPosts = state.copyPosts;
+    assert.equal((await invoke(['forge','recover',copyId,'--wait'])).payload.data.state,'ready');
+    assert.equal(state.copyPosts,copyPosts,'published recovery was copied again');
+    await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat','--catalog',`${pid}:/workspace/source.dat`,
+      '--version','2','--operation-id',copyId],7);
+    assert.equal(state.copyPosts,copyPosts,'changed source reused a file recovery ID');
+    await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat','--catalog',`${pid}:/workspace/source.dat`,'--version','1'],1);
+    const overwritten = await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat',
+      '--catalog',`${pid}:/workspace/source.dat`,'--version','1','--overwrite']);
+    assert.equal(overwritten.payload.data.state,'ready');
+    state.copyConflict = true;
+    assert.equal((await invoke(['forge','recover',copyId],10)).payload.error.code,'file_recovery_failed');
+    state.copyConflict = false;
+    const archiveId = randomUUID();
+    const archive = await invoke(['forge','files','recover',pid,'--path','/workspace/archive.dat',
+      '--archive',`${pid}:${archiveId}:/workspace/old.dat`,'--wait']);
+    assert.equal(archive.payload.data.source.checkpoint_id,archiveId);
+    const managedProject = randomUUID();
+    const artifactCopy = await invoke(['forge','files','recover',pid,'--path','/workspace/artifact.dat',
+      '--artifact',`${managedProject}:output/file.cif`,'--wait']);
+    assert.equal(artifactCopy.payload.data.source.kind,'artifact');
+    assert.equal(artifactCopy.payload.data.source.project_id,managedProject);
+    for (const item of ['/workspace/source.dat','/workspace/copied.dat','/workspace/archive.dat','/workspace/artifact.dat']) project.files.delete(item);
+    state.copyInstall = false;
     const catalog = await invoke(['forge', 'catalog', '--details'], 0, true);
     assert.match(catalog.stdout, /sources:.*https:\/\/example.org\/boltz2/);
     assert.match(catalog.stdout, /models:.*boltz2/);
@@ -1025,11 +1158,12 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     state.confirmInstall = false;
 
     state.drop = 'limit';
-    const edit = ['forge', 'limit', sid, '--gpu-hours', '12', '--limit-revision', '0'];
+    const limitId = randomUUID();
+    const edit = ['forge', 'limit', sid, '--gpu-hours', '12', '--operation-id',limitId];
     const lostLimit = await invoke(edit, 7);
     assert.equal(lostLimit.payload.error.code, 'limit_revision_conflict');
     assert.match(lostLimit.payload.error.action, /limit_revision/);
-    const limitId = lostLimit.stderr.match(/request_id: ([0-9a-f-]{36})/)[1];
+    assert.equal((await record(limitId)).request.body.expected_limit_revision,0);
     const limitRecovery = await invoke(['forge','recover',limitId],7);
     assert.match(limitRecovery.payload.error.action,new RegExp(`forge status ${sid}`));
     assert.match(limitRecovery.payload.error.action,/does not establish/);
@@ -1039,7 +1173,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(capped.max_gpu_hours, 12);
     assert.equal(Date.parse(capped.expires_at) - Date.parse(capped.allocated_at), 6 * 3600000);
     assert.equal((await invoke(edit, 7)).payload.error.code, 'limit_revision_conflict');
-    await invoke(['forge', 'limit', sid, '--gpu-hours', '4', '--limit-revision', '1']);
+    await invoke(['forge', 'limit', sid, '--gpu-hours', '4']);
     assert.equal(Date.parse(session.data.expires_at) - Date.parse(session.data.allocated_at), 2 * 3600000);
     state.applyLimit = false;
     const pending = await invoke(['forge', 'limit', sid, '--clear', '--limit-revision', '2'], 0, true);
@@ -1072,10 +1206,18 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     state.syncMode = 'pending_then_failed';
     const syncFailure = await invoke(['forge','sync',sid,'--wait','--timeout','30'],10);
     assert.equal(syncFailure.payload.error.code,'sync_failed');
+    assert.deepEqual(syncFailure.payload.error.details.diagnostics.files,[{path:'/workspace/result.txt',code:'file_revision_conflict'}]);
     assert.doesNotMatch(syncFailure.stdout + syncFailure.stderr,/private-transfer-grant|signature=/);
     const failedSyncId = syncFailure.stderr.match(/sync_id: ([0-9a-f-]{36})/)[1], failedSyncPosts = state.syncPosts;
-    assert.equal((await invoke(['forge','recover',failedSyncId,'--wait'],10)).payload.error.code,'sync_failed');
-    assert.equal(state.syncPosts,failedSyncPosts,'a failed flush was restarted');
+    state.syncMode = 'saved';
+    assert.equal((await invoke(['forge','recover',failedSyncId,'--wait'])).payload.data.state,'saved');
+    assert.equal(state.syncPosts,failedSyncPosts + 1,'failed flush did not reuse the same ID');
+    assert.equal(state.executions,commandsBeforeSync,'flush retry repeated scientific work');
+    state.syncMode = 'final_failed';
+    const finalFailure = await invoke(['forge','sync',sid],10);
+    const finalSyncId = finalFailure.stderr.match(/sync_id: ([0-9a-f-]{36})/)[1], finalPosts = state.syncPosts;
+    assert.equal((await invoke(['forge','recover',finalSyncId],10)).payload.error.code,'sync_failed');
+    assert.equal(state.syncPosts,finalPosts,'final-save deadline was reopened');
     state.syncMode = 'pending';
     const pendingSync = await invoke(['forge','sync',sid]);
     assert.equal(pendingSync.payload.data.state,'pending');
@@ -1125,6 +1267,14 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.match(heldRecovery.payload.error.action,/Allow agent to resume/);
     assert.equal(state.executions,executions,'recovery bypassed the human stop');
     await invoke(['forge', 'close', sid]);
+    const beforeOfflineCopy = state.copyPosts;
+    const offlineCopy = await invoke(['forge','files','recover',pid,'--path','/workspace/offline.dat',
+      '--artifact',`${managedProject}:output/retained.cif`,'--wait','--wait-timeout','15']);
+    assert.equal(offlineCopy.payload.data.state,'saved');
+    assert.equal(offlineCopy.payload.data.installation_status,'not_applicable');
+    assert.equal(state.copyPosts,beforeOfflineCopy + 2,'offline copy did not advance with the same operation');
+    assert.equal(state.allocations,allocations,'offline recovery allocated compute');
+    project.files.delete('/workspace/offline.dat');
     const savedPath = `/workspace/${savedName}`;
     project.files.set(savedPath,await fs.readFile(path.join(root,savedName)));
     project.files.set('/workspace/another.txt',Buffer.from('another'));
@@ -1184,6 +1334,8 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const resume = ['forge', 'resume', pid, '--control-revision', '1', '--gpu', 'L40', '--gpu-count', '2', '--tools', 'boltz2'];
     const heldResume = await invoke(resume, 7);
     assert.match(heldResume.payload.error.action, new RegExp(`/projects/forge/${pid}`));
+    const automaticHeld = await invoke(['forge','resume',pid,'--gpu','L40'],7);
+    assert.equal(automaticHeld.payload.error.code,'human_resume_required');
     const removed = await invoke(['forge', 'resume', pid, '--restore-session', sid, '--checkpoint', randomUUID(),
       '--control-revision', '1', '--gpu', 'L40'], 1);
     assert.match(removed.payload.error.message, /no longer supported.*current project workspace/);
@@ -1204,7 +1356,17 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(state.posts, afterApproval);
     assert.equal(state.allocations, allocations);
     assert.equal((await invoke(resume, 7)).payload.error.code, 'control_revision_conflict');
-    const approved = [...resume, '--control-revision', '2'];
+    const raceId = randomUUID();
+    state.bumpResume = true;
+    const raced = await invoke(['forge','resume',pid,'--gpu','L40','--session-id',raceId],7);
+    assert.equal(raced.payload.error.code,'human_resume_required');
+    assert.equal((await record(raceId)).request.body.expected_control_revision,2);
+    assert.equal(state.allocations,allocations);
+    project.control.human_resume_required = false;
+    project.control.revision = 4;
+    assert.equal((await invoke(['forge','recover',raceId],7)).payload.error.code,'control_revision_conflict');
+    assert.equal((await record(raceId)).request.body.expected_control_revision,2,'recovery refreshed a fenced revision');
+    const approved = ['forge','resume',pid,'--gpu','L40','--gpu-count','2','--tools','boltz2'];
     state.legacyResume = true;
     const legacyServer = await invoke(approved,7);
     assert.match(legacyServer.payload.error.action,/removed Forge checkpoint contract.*Upgrade/);
@@ -1218,7 +1380,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(resumed.payload.data.project_id, pid);
     assert.equal(resumed.payload.data.name, 'Device experiment');
     assert.equal(resumed.payload.data.max_gpu_hours, null, 'resume inherited an old session cap');
-    assert.equal((await record(resumedId)).request.body.expected_control_revision, 2);
+    assert.equal((await record(resumedId)).request.body.expected_control_revision, 4);
     assert.equal((await record(resumedId)).request.body.name, undefined);
     assert.equal(Object.hasOwn((await record(resumedId)).request.body,'restore'),false);
     assert.equal(state.allocations, allocations + 1);
