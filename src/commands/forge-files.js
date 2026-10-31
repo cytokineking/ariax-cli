@@ -5,12 +5,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
+import { setImmediate as yieldToEvents, setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
-import { ApiError, NetworkError, validateTransferUrl } from '../http.js';
+import { ApiError, NetworkError, backoffDelay, validateTransferUrl } from '../http.js';
 import { printProgress } from '../output.js';
 import { workspacePath, listProjectFiles, projectFileGrant, readSync, startSync } from '../lib/forge-workspace-client.js';
-import { uuid, required, recordPath, readRecord, saveResult, report, poll, failed, projectUrl } from './forge.js';
+import { uuid, required, recordPath, readRecord, saveResult, report, poll, failed, projectUrl, transient } from './forge.js';
 
 function safePath(value, absolute = false) {
   const relative = absolute ? value?.replace(/^\/(workspace|inputs)\//, '') : value;
@@ -23,10 +24,10 @@ function safePath(value, absolute = false) {
   return value;
 }
 
-async function fileRecord(ctx, id, request, label) {
+async function fileRecord(ctx, id, request, label, signal) {
   const account = request.session_id
-    ? await forgeAccountIdentity(ctx, request.session_id)
-    : await accountIdentity(ctx);
+    ? await forgeAccountIdentity(ctx, request.session_id, {signal})
+    : await accountIdentity(ctx, {signal});
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
   const file = recordPath(ctx, id, true);
   const candidate = { id, ...account, request, result: null };
@@ -43,11 +44,6 @@ async function fileRecord(ctx, id, request, label) {
   }
   printProgress(`${label}: ${id}`);
   return {file,record};
-}
-
-async function observe(ctx, resource, sessionId) {
-  try { return await forgeRequest(ctx, sessionId, 'GET', resource); }
-  catch (error) { if (error.status === 404) return null; throw error; }
 }
 
 const PART_SIZE = 16 * 1024 * 1024;
@@ -71,19 +67,22 @@ function readPart(fd, size, position) {
   return bytes;
 }
 
-function checksums(fd, metadata) {
+async function checksums(fd, metadata, signal) {
   const digests = [];
   const count = Math.max(1, Math.ceil(metadata.size_bytes / PART_SIZE));
   for (let i = 0; i < count; i++) {
+    signal?.throwIfAborted();
     const size = Math.min(PART_SIZE, metadata.size_bytes - i * PART_SIZE);
     digests.push(createHash('md5').update(readPart(fd, size, i * PART_SIZE)).digest());
+    // Let local deadlines and Ctrl-C run between the existing multipart parts.
+    await yieldToEvents(undefined, {signal});
   }
   if (!isDeepStrictEqual(fileSnapshot(fd, metadata.path), metadata)) throw new Error('Local input changed while preparing the upload.');
   return {parts:digests.map(value => value.toString('base64')),
     checksum:`${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${count}`};
 }
 
-async function putPart(grant, body, md5) {
+async function putPart(grant, body, md5, signal) {
   const url = validateTransferUrl(grant.upload_url, 'Upload');
   if (grant.upload_method !== 'PUT' || !grant.upload_headers
       || grant.upload_headers['Content-Length'] !== String(body.length)
@@ -92,6 +91,9 @@ async function putPart(grant, body, md5) {
     throw new Error('Forge returned an invalid upload grant.');
   }
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, {once:true});
+  if (signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), 900000);
   try {
     const response = await fetch(url, {method:'PUT',headers:grant.upload_headers,body,redirect:'error',signal:controller.signal});
@@ -100,7 +102,7 @@ async function putPart(grant, body, md5) {
   } catch (error) {
     // fetch errors can carry a credentialed URL through their nested cause.
     throw new NetworkError(controller.signal.aborted ? 'Upload exceeded its 900 second limit; retry with the same input ID.' : 'Upload did not complete; retry with the same input ID.');
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 
 function projectInputResult(record, operation, applied = false) {
@@ -125,13 +127,13 @@ function writeInputRecord(file, record) {
   atomicWrite(file, JSON.stringify(record, null, 2) + '\n');
 }
 
-async function projectInputStatus(ctx, record, knownAccount) {
-  const account = knownAccount ?? await accountIdentity(ctx);
+async function projectInputStatus(ctx, record, knownAccount, signal) {
+  const account = knownAccount ?? await accountIdentity(ctx, {signal});
   if (Object.keys(account).some(field => record[field] !== account[field])) {
     throw new ApiError({status:404,code:'not_found',message:'Forge input not found.'});
   }
   let operation;
-  try { operation = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/operations/${record.id}`)).data; }
+  try { operation = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/operations/${record.id}`, {signal})).data; }
   catch (error) { if (error.status !== 404) throw error; }
   if (operation && (operation.operation_id !== record.id || operation.session_id !== record.request.session_id
       || !['open', 'published', 'expired'].includes(operation.state)
@@ -143,7 +145,7 @@ async function projectInputStatus(ctx, record, knownAccount) {
   let applied = false;
   if (operation?.state === 'published' && operation.source === 'host' && operation.local_state === 'ready'
       && Number.isSafeInteger(operation.version) && operation.version > 0) {
-    const context = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/status`)).data;
+    const context = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/status`, {signal})).data;
     applied = context.session_id === record.request.session_id && context.writer_session_id === record.request.session_id
       && context.writer_epoch === record.request.body.writer_epoch && context.control_revision === record.request.body.control_revision
       && context.session_state === 'available' && context.hydration_state === 'ready';
@@ -151,11 +153,11 @@ async function projectInputStatus(ctx, record, knownAccount) {
   return projectInputResult(record, operation, applied);
 }
 
-async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile) {
+async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal) {
   const fd = fs.openSync(localFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   try {
     const metadata = fileSnapshot(fd, localFile);
-    const digests = checksums(fd, metadata);
+    const digests = await checksums(fd, metadata, signal);
     const prior = readRecord(recordPath(ctx, id));
     let request;
     if (prior) {
@@ -169,17 +171,17 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
         throw new ApiError({status:409,code:'request_conflict',message:`Forge request ${id} differs from its saved input. Use the original request to retry.`});
       }
     } else {
-      const session = (await ctx.client.get(sessionPath)).data;
+      const session = (await ctx.client.get(sessionPath, {signal})).data;
       const projectId = uuid(session.project_id, 'project ID');
       const base = `${API}/projects/${projectId}/files`;
-      const context = (await ctx.client.get(`${base}/status`)).data;
+      const context = (await ctx.client.get(`${base}/status`, {signal})).data;
       if (context.session_id !== sessionId || context.writer_session_id !== sessionId
           || context.session_state !== 'available' || context.hydration_state !== 'ready'
           || !Number.isSafeInteger(context.control_revision) || context.control_revision < 0
           || !Number.isSafeInteger(context.writer_epoch) || context.writer_epoch < 0) {
         throw new ApiError({status:409,code:'session_unready',message:'The original project workspace is not ready for input installation.'});
       }
-      const remote = (await ctx.client.get(`${base}/metadata`,{query:{path:`/inputs/${target}`}})).data;
+      const remote = (await ctx.client.get(`${base}/metadata`,{query:{path:`/inputs/${target}`},signal})).data;
       if (remote.kind !== 'absent' || remote.version !== 0 || !Number.isSafeInteger(remote.mutation_revision) || remote.mutation_revision < 0) {
         throw new ApiError({status:409,code:'input_exists',message:'This project input path already exists; choose a new path.'});
       }
@@ -189,14 +191,14 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
           expected_project_revision:remote.mutation_revision,size_bytes:metadata.size_bytes,part_size:PART_SIZE,
           checksum:digests.checksum,mode:0o644},local_file:metadata};
     }
-    const {file,record} = await fileRecord(ctx,id,request,'input_id');
+    const {file,record} = await fileRecord(ctx,id,request,'input_id',signal);
     const base = request.path;
-    let result = await ctx.client.post(base,{body:request.body});
+    let result = await ctx.client.post(base,{body:request.body,signal});
     if (!['open','published'].includes(result.data?.state)) throw new Error('Project input intent returned an incompatible state.');
     if (result.data.state === 'open') {
       let attemptId = record.attempt_id ? uuid(record.attempt_id, 'upload attempt ID') : undefined;
       if (record.upload_stage !== 'completing' || !attemptId) {
-        const attempt = await ctx.client.post(`${base}/${id}/attempts`);
+        const attempt = await ctx.client.post(`${base}/${id}/attempts`,{signal});
         if (attempt.data?.state === 'published') result = attempt;
         else {
           attemptId = uuid(attempt.data?.attempt_id, 'upload attempt ID');
@@ -217,16 +219,16 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
             if (!isDeepStrictEqual(fileSnapshot(fd,localFile),metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
             const bytes = readPart(fd,Math.min(PART_SIZE,metadata.size_bytes-index*PART_SIZE),index*PART_SIZE);
             if (createHash('md5').update(bytes).digest('base64') !== digests.parts[index]) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
-            const grant = await ctx.client.post(`${base}/${id}/attempts/${attemptId}/parts`,{body:{number:index+1,md5:digests.parts[index]}});
+            const grant = await ctx.client.post(`${base}/${id}/attempts/${attemptId}/parts`,{body:{number:index+1,md5:digests.parts[index]},signal});
             if (grant.data?.state === 'published') { result = grant; break; }
-            await putPart(grant.data,bytes,digests.parts[index]);
+            await putPart(grant.data,bytes,digests.parts[index],signal);
           }
         }
         if (result.data.state !== 'published') {
           if (!isDeepStrictEqual(fileSnapshot(fd,localFile),metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
           record.upload_stage = 'completing';
           writeInputRecord(file,record);
-          try { result = await ctx.client.post(`${base}/${id}/attempts/${attemptId}/complete`); }
+          try { result = await ctx.client.post(`${base}/${id}/attempts/${attemptId}/complete`,{signal}); }
           catch (error) {
             // The backend decides when an uncertain completion is old enough
             // to abandon. A later retry asks for the current attempt again.
@@ -240,13 +242,128 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
         }
       }
     }
-    const data = await projectInputStatus(ctx,record);
+    const data = await projectInputStatus(ctx,record,undefined,signal);
     saveResult(file,record,data);
     return {...result,data};
   } catch (error) {
     error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id}, the original source, account and root directory.`;
     throw error;
   } finally { fs.closeSync(fd); }
+}
+
+// Use the same installation confirmation as `inputs status`, including the
+// project workspace writer and hydration checks for local uploads.
+export async function inputStatus(ctx, sessionId, id, {signal, account} = {}) {
+  const file = recordPath(ctx,id), record = readRecord(file);
+  if (record?.request?.type === PROJECT_INPUT) {
+    if (record.id !== id || record.request.session_id !== sessionId) {
+      throw new ApiError({status:404,code:'not_found',message:'Forge input not found in this session.'});
+    }
+    return {data:await projectInputStatus(ctx,record,account,signal)};
+  }
+  return forgeRequest(ctx,sessionId,'GET',`/v1/inputs/${id}`,{signal});
+}
+
+async function observeInput(ctx, session, id, record, signal) {
+  let directError;
+  try {
+    const identity = await forgeAccountIdentity(ctx,session,{signal});
+    if (Object.keys(identity).some(field => record[field] !== identity[field])) {
+      throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
+    }
+    return await forgeRequest(ctx,session,'GET',`/v1/inputs/${id}`,{signal});
+  } catch (error) {
+    if (error.status !== 404 && error.code !== 'session_unready' && !transient(error)) throw error;
+    directError = error;
+  }
+  let retained;
+  try { retained = await ctx.client.get(`${API}/sessions/${session}/inputs/${id}`,{signal}); }
+  catch (error) { if (error.status !== 404) throw error; }
+  if (retained) return { ...retained, meta:{...retained.meta,source:'retained'}, retained:true };
+  if (directError.status !== 404) throw directError;
+  return null;
+}
+
+// The URL itself is deliberately not journaled. A same-process retry can use
+// the original in-memory URL; a later recovery may only observe its outcome.
+export async function recoverFile(ctx, id, record, {signal, account, body} = {}) {
+  const request = record.request, session = uuid(request?.session_id,'session ID');
+  const file = recordPath(ctx,id);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      let result;
+      if (request.type !== PROJECT_INPUT && request.path !== '/v1/inputs') {
+        const identity = await forgeAccountIdentity(ctx,session,{signal});
+        if (Object.keys(identity).some(field => record[field] !== identity[field])) {
+          throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
+        }
+      }
+      if (request.type === PROJECT_INPUT) {
+        const project = uuid(request.project_id,'project ID');
+        const target = safePath(request.body?.path?.replace(/^\/inputs\//,''));
+        if (request.method !== 'POST' || request.path !== `${API}/projects/${project}/files/intents`
+            || request.body?.operation_id !== id || request.body?.session_id !== session
+            || request.body?.path !== `/inputs/${target}`
+            || typeof request.local_file?.path !== 'string' || !path.isAbsolute(request.local_file.path)) {
+          throw usageError(`Saved Forge input ${id} is malformed; no request was sent.`);
+        }
+        result = await inputStatus(ctx,session,id,{signal,account});
+        if (result.data.storage_state === 'unconfirmed' && record.result) {
+          throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from project history. Inspect the project before another upload.`});
+        }
+        if (result.data.storage_state === 'open' || result.data.storage_state === 'unconfirmed') {
+          try { result = await addProjectInput(ctx,session,`${API}/sessions/${session}`,id,target,request.local_file.path,signal); }
+          catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+            throw usageError(`Input ${id} is not yet published. Restore its original unchanged source file before recovery.`);
+          }
+        }
+      } else if (request.path === '/v1/sync' && request.body?.sync_id === id) {
+        try { result = await readSync(ctx,session,id,{signal}); }
+        catch (error) { if (error.status !== 404) throw error; }
+        if (!result && record.result) throw new ApiError({status:409,code:'sync_unconfirmed',message:`Previously observed sync ${id} is absent from session history. Inspect saved files before another flush.`});
+        if (!result) result = await startSync(ctx,session,id,{signal});
+      } else if (request.path === '/v1/inputs' && request.body?.input_id === id) {
+        result = await observeInput(ctx,session,id,record,signal);
+        if (result && (result.data?.input_id !== id || result.data?.path !== request.body.path)) {
+          throw new ApiError({status:409,code:'request_conflict',message:`Forge input ${id} does not match its saved path.`});
+        }
+        if (result && (!record.result || body)) {
+          // The public input record omits its source. An existing ID can have
+          // the right path but different bytes; let the server compare the
+          // original source before attributing it to this saved request.
+          if (result.retained || (request.body.source?.kind === 'url' && !body)) {
+            const error = new ApiError({status:409,code:'input_unconfirmed',message:`Input ${id} exists, but its original source cannot be confirmed from this saved record.`});
+            error.action = request.body.source?.kind === 'url'
+              ? `Repeat the original inputs add with its URL and --input-id ${id} while the session is active, or inspect retained history.`
+              : `Inspect input ${id} and its retained history before another action.`;
+            throw error;
+          }
+          result = await forgeRequest(ctx,session,'POST','/v1/inputs',{body:body ?? request.body,signal});
+        }
+        if (!result) {
+          if (record.result) throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from session history. Inspect the project before another import.`});
+          if (request.body.source?.kind === 'url' && !body) {
+            const error = usageError(`The original URL for input ${id} was not saved. Repeat inputs add with the original URL and --input-id ${id}.`);
+            error.action = `Use the original URL, root directory, account and API origin for input ${id}.`;
+            throw error;
+          }
+          const source = body ?? request.body;
+          if (!['artifact','url'].includes(source.source?.kind)) throw usageError(`Saved Forge input ${id} cannot be replayed.`);
+          result = await forgeRequest(ctx,session,'POST','/v1/inputs',{body:source,signal});
+        }
+      } else throw usageError(`Saved Forge operation ${id} cannot be recovered as a file operation.`);
+      if (request.path === '/v1/inputs' && (result.data?.input_id !== id || result.data?.path !== request.body.path)) {
+        throw new ApiError({status:409,code:'request_conflict',message:`Forge input ${id} does not match its saved path.`});
+      }
+      saveResult(file,readRecord(file) ?? record,result.data);
+      return result;
+    } catch (error) {
+      if (signal?.aborted || !transient(error) || attempt >= 2) throw error;
+      printProgress(`Temporary error; reconciling saved operation ${id} (retry ${attempt + 1}/2).`);
+      await delay(error.retryAfterMs ?? backoffDelay(attempt,500,3000),undefined,{signal});
+    }
+  }
 }
 
 async function download(grant, destination) {
@@ -318,7 +435,17 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
       const localFile = path.resolve(required(flags.file,'file'));
       const info = fs.lstatSync(localFile);
       if (!info.isFile() || info.isSymbolicLink() || info.size > 20*1024**3) throw usageError('Forge upload requires a regular file up to 20 GiB.');
-      return report(ctx,await addProjectInput(ctx,sessionId,sessionPath,id,target,localFile));
+      try { return report(ctx,await addProjectInput(ctx,sessionId,sessionPath,id,target,localFile)); }
+      catch (error) {
+        const record = readRecord(recordPath(ctx,id));
+        if (!record || !transient(error)) throw error;
+        printProgress(`Temporary error; reconciling saved operation ${id}.`);
+        try { return report(ctx,await recoverFile(ctx,id,record,{account:await accountIdentity(ctx)})); }
+        catch (recoveryError) {
+          recoveryError.action ||= `Recover input ${id} with ariax forge recover ${id} using the original root, account and API origin.`;
+          throw recoveryError;
+        }
+      }
     } else if (flags.artifact !== undefined) {
       const value = required(flags.artifact,'artifact');
       const colon = value.indexOf(':');
@@ -336,14 +463,9 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     const body = {input_id:id,path:target,source};
     const safe = {...body,source:source.kind === 'url' ? {kind:'url'} : source};
     const request = {method:'POST',session_id:sessionId,path:`${direct}/inputs`,body:safe};
-    const {file,record} = await fileRecord(ctx,id,request,'input_id');
-    const resource = `${direct}/inputs/${id}`;
+    const {record} = await fileRecord(ctx,id,request,'input_id');
     try {
-      const accepted = await observe(ctx,resource,sessionId);
-      if (accepted) { saveResult(file,record,accepted.data); return report(ctx,accepted); }
-      const result = await forgeRequest(ctx,sessionId,'POST',`${direct}/inputs`,{body});
-      saveResult(file,record,result.data);
-      return report(ctx,result);
+      return report(ctx,await recoverFile(ctx,id,record,{body}));
     } catch (error) { error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id} and the original source if no accepted operation exists.`; throw error; }
   }
   if (action === 'inputs list') {
@@ -383,15 +505,12 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   if (action === 'sync') {
     const id = flags['sync-id'] === undefined ? randomUUID() : uuid(flags['sync-id'], 'sync ID');
     const request = { method:'POST', session_id:sessionId, path:`${direct}/sync`, body:{sync_id:id} };
-    const {file,record} = await fileRecord(ctx,id,request,'sync_id');
+    const {record} = await fileRecord(ctx,id,request,'sync_id');
     const resource = `${direct}/sync/${id}`;
     const resume = `ariax forge sync ${sessionId} --sync-id ${id} --wait`;
     let result;
     try {
-      try { result = await readSync(ctx,sessionId,id); }
-      catch (error) { if (error.status !== 404) throw error; }
-      if (!result) result = await startSync(ctx,sessionId,id);
-      saveResult(file,record,result.data);
+      result = await recoverFile(ctx,id,record);
     } catch (error) {
       error.action = `Inspect or retry the same flush with ${resume}, using the original account, API origin and root directory. The server and session must support the current project workspace.`;
       throw error;

@@ -7,15 +7,15 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
 import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
-import { ApiError } from '../http.js';
+import { ApiError, NetworkError, backoffDelay } from '../http.js';
 import { EXIT } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
-import { redactForgeOutput, redactForgeText } from '../lib/forge-workspace-client.js';
+import { readSync, redactForgeOutput, redactForgeText } from '../lib/forge-workspace-client.js';
 
-import { runFiles } from './forge-files.js';
+import { runFiles, inputStatus, recoverFile } from './forge-files.js';
 
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
@@ -30,12 +30,13 @@ const OPTIONS = {
   catalog: [['details', 'task', 'tool', 'compact', 'model', 'mode'], 1],
   list: [[], 1], status: [[], 2], tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
-  'tools wait': [['timeout'], 4],
-  run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id'], 2],
-  commands: [['retained'], 2], command: [['retained'], 3], watch: [['timeout'], 3],
+  'tools wait': [['timeout', 'wait-timeout'], 4],
+  run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout'], 2],
+  operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
+  commands: [['retained'], 2], command: [['retained'], 3], watch: [['timeout', 'wait-timeout'], 3],
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
-  sync: [['wait', 'sync-id', 'timeout'], 2],
+  sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
   files: [['path'], 2], download: [['dest'], 3], link: [[], 3],
   logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [[], 2],
 };
@@ -51,11 +52,13 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge status SESSION
   ariax forge tools SESSION [--details]
   ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
-  ariax forge tools wait SESSION TOOL [--timeout SECONDS]
-  ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds 3600] [--command-id UUID] -- COMMAND ARG...
+  ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS]
+  ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] -- COMMAND ARG...
+  ariax forge operations
+  ariax forge recover OPERATION_ID [--wait] [--wait-timeout SECONDS]
   ariax forge commands SESSION [--retained]
   ariax forge command SESSION COMMAND_ID [--retained]
-  ariax forge watch SESSION COMMAND_ID [--timeout SECONDS]
+  ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS]
   ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]
   ariax forge cancel SESSION COMMAND_ID
   ariax forge close SESSION
@@ -64,13 +67,17 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID]
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
-  ariax forge sync SESSION [--wait] [--sync-id UUID] [--timeout SECONDS]
+  ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
   ariax forge files PROJECT [--path /workspace]
   ariax forge download PROJECT PATH --dest LOCAL
   ariax forge link PROJECT PATH
   Files and links refer to the current project workspace, not a historical version.
   Sync flushes changed files on an active session; it is not an atomic multi-file snapshot.
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
+  --wait-ready waits for the session, tool, listed inputs and command capacity before dispatch.
+  --wait-timeout bounds local waiting in seconds (run default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
+  For tools wait, watch and sync, --wait-timeout is in seconds; omission or 0 waits indefinitely. Their older --timeout option also uses seconds.
+  Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40, L40S, or RTX6000PRO.
   Use catalog --compact to find tools; --model/--mode select exact IDs and their requirements.
   --model/--mode require --tool and cannot combine with --compact/--details. Omit them for the full tool record.`;
@@ -92,6 +99,9 @@ export function validateArguments({ positionals, flags, passthrough, globals }) 
   const [allowed, operands] = OPTIONS[action];
   for (const name of Object.keys(flags)) {
     if (!allowed.includes(name)) throw usageError(`forge ${action}: unsupported flag --${name}.`);
+  }
+  if (flags.timeout !== undefined && flags['wait-timeout'] !== undefined) {
+    throw usageError('forge: use only --wait-timeout for the local wait.');
   }
   const count = positionals.length - (action === 'run' ? (passthrough?.length ?? 0) : 0);
   if (count > operands) throw usageError(`forge ${action}: unexpected positional arguments; expected at most ${operands}.`);
@@ -205,14 +215,217 @@ export function saveResult(file, record, result) {
   atomicWrite(file, JSON.stringify(next, null, 2) + '\n');
 }
 
-export async function submit(ctx, id, request, label, recovery) {
-  const account = request.session_id
-    ? await forgeAccountIdentity(ctx, request.session_id)
-    : await accountIdentity(ctx);
+function localWaitSeconds(value, fallback, { allowZero = false } = {}) {
+  const seconds = value === undefined ? fallback : number(value, 'wait-timeout', { zero: allowZero });
+  if (seconds > 86400) throw usageError('forge: --wait-timeout cannot exceed 86400 seconds.');
+  return seconds;
+}
+
+async function controlled(ctx, id, seconds, operation) {
+  const controller = new AbortController();
+  let expired = false;
+  const interrupt = () => controller.abort();
+  const timer = seconds ? setTimeout(() => { expired = true; controller.abort(); }, seconds * 1000) : undefined;
+  process.once('SIGINT', interrupt);
+  try { return await operation(controller.signal); }
+  catch (error) {
+    if (!controller.signal.aborted) throw error;
+    let saved = false;
+    try { saved = !!readRecord(recordPath(ctx,id)); } catch { /* Preserve the interruption. */ }
+    const stopped = new Error(saved
+      ? `${expired ? 'Local wait timed out' : 'Interrupted'}; remote work may continue. Recover the same operation with: ariax forge recover ${id}`
+      : `${expired ? 'Local wait timed out' : 'Interrupted'} before the request was saved; no operation was sent.`);
+    stopped.exitCode = expired ? EXIT.NETWORK : EXIT.INTERRUPTED;
+    if (saved) stopped.action = `Use ariax forge recover ${id} with the original root directory, account and API origin. Local interruption does not cancel remote work.`;
+    throw stopped;
+  } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
+}
+
+function savedKind(id, request) {
+  if (request?.method !== 'POST' || !request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return null;
+  if (!request.session_id && request.body.session_id === id && (request.path === `${API}/sessions`
+      || new RegExp(`^${API}/projects/[0-9a-f-]{36}/sessions$`).test(request.path))) return 'session';
+  const control = new RegExp(`^${API}/sessions/([0-9a-f-]{36})/(close|limit)$`).exec(request.path ?? '');
+  if (!request.session_id && control && isUUID(control[1])) {
+    if (control[2] === 'close' && !Object.keys(request.body).length) return 'close';
+    if (control[2] === 'limit' && Object.keys(request.body).length === 2
+        && (request.body.max_gpu_hours === null || (typeof request.body.max_gpu_hours === 'number' && request.body.max_gpu_hours > 0))
+        && Number.isSafeInteger(request.body.expected_limit_revision) && request.body.expected_limit_revision >= 0) return 'limit';
+  }
+  if (!isUUID(request.session_id)) return null;
+  if (request.path === '/v1/commands' && request.body.command_id === id) return 'command';
+  if (request.path === '/v1/tools' && request.body.selection_id === id) return 'selection';
+  if (request.path === '/v1/sync' && request.body.sync_id === id) return 'sync';
+  if (request.path === '/v1/inputs' && request.body.input_id === id) return 'input';
+  if (request.type === 'project-file-input-v2' && request.body.operation_id === id) return 'input';
+  if (new RegExp(`^/v1/commands/[0-9a-f-]{36}/cancel$`).test(request.path) && !Object.keys(request.body).length) return 'cancel';
+  return null;
+}
+
+export function transient(error) {
+  return error instanceof NetworkError || (error instanceof ApiError
+    && ([429, 502, 503, 504].includes(error.status) || (error.status >= 500 && error.retryable === true)));
+}
+
+function checkIdentity(record, account, id) {
+  if (Object.keys(account).some(field => record[field] !== account[field])) {
+    throw usageError(`Forge request ${id} belongs to a different account or API origin. Restore the original account and origin to recover it.`);
+  }
+}
+
+function checkCommand(record, result) {
+  const body = record.request.body, data = result.data;
+  if (data?.command_id !== record.id || data.tool !== body.tool || !isDeepStrictEqual(data.argv, body.argv)
+      || data.cwd !== body.cwd || data.timeout_seconds !== body.timeout_seconds
+      || (body.gpu_ids !== undefined && !isDeepStrictEqual(data.gpu_ids, body.gpu_ids))) {
+    throw new ApiError({ status: 409, code: 'command_conflict', message: `Command ${record.id} does not match its saved request.` });
+  }
+}
+
+async function optionalRead(read) {
+  try { return await read(); }
+  catch (error) { if (error.status === 404) return null; throw error; }
+}
+
+// A retained admission can outlive a host journal. If the live record is
+// absent, inspect retained history before deciding that an ID can be submitted.
+async function observeCommand(ctx, record, signal) {
+  const { id, request } = record, session = request.session_id;
+  let live, unavailable;
+  try {
+    checkIdentity(record, await forgeAccountIdentity(ctx, session, {signal}), id);
+    live = await forgeRequest(ctx, session, 'GET', `/v1/commands/${id}`, { signal });
+  } catch (error) {
+    if (error.status !== 404 && error.code !== 'session_unready' && !transient(error)) throw error;
+    if (error.status !== 404) unavailable = error;
+  }
+  if (live) {
+    checkCommand(record, live);
+    return { result: live, live: true };
+  }
+  const retained = await optionalRead(() => ctx.client.get(`${API}/sessions/${session}/commands/${id}`, { signal }));
+  if (retained) {
+    checkCommand(record, retained);
+    return { result: { ...retained, meta: { ...retained.meta, source: 'retained' }, retained: true }, live: false };
+  }
+  if (unavailable) throw unavailable;
+  return null;
+}
+
+async function waitReady(ctx, record, account, signal) {
+  const { session_id: session, body } = record.request;
+  let last;
+  for (;;) {
+    const lifecycle = await ctx.client.get(`${API}/sessions/${session}`, { signal });
+    if (['closing', 'closed', 'failed'].includes(lifecycle.data.state)) {
+      failed('session_unavailable', `Session ${session} is ${lifecycle.data.state}`, lifecycle.data.error);
+    }
+    let state = `session ${lifecycle.data.state}`;
+    if (lifecycle.data.state === 'available') {
+      checkIdentity(record, await forgeAccountIdentity(ctx, session, {signal}), record.id);
+      const current = await forgeRequest(ctx, session, 'GET', '/v1/session', { signal });
+      if (['closing', 'closed', 'failed'].includes(current.data.state)) {
+        failed('session_unavailable', `Session ${session} is ${current.data.state}`, current.data.error);
+      }
+      const tool = current.data.tools?.find(item => item.tool === body.tool);
+      if (!tool) throw usageError(`Tool ${body.tool} is not selected. Inspect ariax forge tools ${session}.`);
+      if (tool.state === 'failed') failed('tool_failed', `Tool ${body.tool} failed`, tool.error);
+      state = `tool ${body.tool}: ${tool.state}`;
+      if (current.data.state === 'available' && tool.state === 'ready') {
+        let pending;
+        for (const id of record.readiness?.input_ids ?? []) {
+          const input = await inputStatus(ctx, session, id, { signal, account });
+          if (input.data?.state === 'failed') failed('input_failed', `Input ${id} failed`, input.data.error,
+            `Inspect ariax forge inputs status ${session} ${id}.`);
+          if (input.data?.state !== 'ready') { pending = id; break; }
+        }
+        if (!pending) return;
+        state = `input ${pending}: pending`;
+      }
+    }
+    if (state !== last) { printProgress(`Waiting for ${state}`); last = state; }
+    await delay(3000, undefined, { signal });
+  }
+}
+
+async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
+  const { id, request } = record, kind = savedKind(id, request);
+  const retrySafe = ['session', 'command', 'selection', 'cancel', 'close', 'limit'].includes(kind);
+  let failures = 0;
+  for (;;) {
+    try {
+      // Session and tool-selection POSTs compare the complete saved fields on
+      // the server; a session status projection cannot prove that match.
+      if (kind === 'command') {
+        // While provisioning there is no direct endpoint to inspect yet.
+        if (record.readiness) {
+          const lifecycle = await ctx.client.get(`${API}/sessions/${request.session_id}`, { signal });
+          if (lifecycle.data.state !== 'available') {
+            if (previous) {
+              const retained = await optionalRead(() => ctx.client.get(`${API}/sessions/${request.session_id}/commands/${id}`, {signal}));
+              if (retained) {
+                checkCommand(record, retained);
+                saveResult(file, record, retained.data);
+                return { ...retained, meta: { ...retained.meta, source: 'retained' }, retained: true };
+              }
+            }
+            await waitReady(ctx, record, account, signal);
+          }
+        }
+        const found = await observeCommand(ctx, record, signal);
+        if (found && (!found.live || found.result.data.state !== 'pending' || found.result.data.cancel_requested !== false)) {
+          saveResult(file, record, found.result.data);
+          return found.result;
+        }
+        if (!found && record.result) {
+          const error = new ApiError({status:409,code:'command_unconfirmed',message:`Command ${id} was previously observed but is absent from live and retained history.`});
+          error.action = `Inspect session ${request.session_id} and retained command history. Keep command ID ${id}; do not start it again while its outcome is uncertain.`;
+          throw error;
+        }
+      }
+      if (kind === 'command' && record.readiness) await waitReady(ctx, record, account, signal);
+      if (request.session_id) {
+        const directAccount = await forgeAccountIdentity(ctx, request.session_id, { signal });
+        checkIdentity(record, directAccount, id);
+      }
+      const res = request.session_id
+        ? await forgeRequest(ctx, request.session_id, 'POST', request.path, { body: request.body, signal })
+        : await ctx.client.post(request.path, { body: request.body, signal });
+      const label = { session: 'session_id', command: 'command_id', selection: 'selection_id' }[kind];
+      if (label && res.data?.[label] !== id) throw new NetworkError(`Forge response has no matching ${label}.`);
+      if (kind === 'command') checkCommand(record, res);
+      saveResult(file, record, res.data);
+      return res;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const capacity = kind === 'command' && record.readiness &&
+        ['gpu_busy', 'cpu_busy', 'command_capacity', 'tool_unready', 'session_unready', 'hydration_pending', 'file_mutation_pending'].includes(error.code);
+      if (capacity) {
+        printProgress(`Waiting for command readiness: ${error.code}`);
+        previous = true;
+        await delay(3000, undefined, { signal });
+        continue;
+      }
+      if (!retrySafe || !transient(error) || failures >= 2) throw error;
+      const ms = error.retryAfterMs ?? backoffDelay(failures, 500, 3000);
+      failures++;
+      previous = true;
+      printProgress(`Temporary error; reconciling saved operation ${id} (retry ${failures}/2).`);
+      await delay(ms, undefined, { signal });
+    }
+  }
+}
+
+export async function submit(ctx, id, request, label, recovery, options = {}) {
+  if (!options.signal) return controlled(ctx, id, 60, signal => submit(ctx, id, request, label, recovery, { ...options, signal }));
+  const account = request.session_id && !options.readiness && request.path !== '/v1/commands'
+    ? await forgeAccountIdentity(ctx, request.session_id, { signal: options.signal })
+    : await accountIdentity(ctx, { signal: options.signal });
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
   const file = recordPath(ctx, id, true);
-  const candidate = { id, ...account, request, result: null };
+  const candidate = { id, ...account, request, result: null, ...(options.readiness ? { readiness: options.readiness } : {}) };
   let record = readRecord(file);
+  let previous = !!record;
   if (!record) {
     // New-admission policy must not block authenticated, identical recovery of
     // a request saved before this policy existed. The checks below still bind
@@ -221,7 +434,7 @@ export async function submit(ctx, id, request, label, recovery) {
       await checkGpuPolicy(ctx, { protocol: 'forge', allowed_gpus: request.body.allowed_gpus ?? [request.body.gpu_type] }, { source: 'Forge session' });
     }
     try { atomicWrite(file, JSON.stringify(candidate, null, 2) + '\n', true); record = candidate; }
-    catch (error) { if (error.code !== 'EEXIST') throw error; record = readRecord(file); }
+    catch (error) { if (error.code !== 'EEXIST') throw error; record = readRecord(file); previous = true; }
   }
   if (label === 'session_id' && record?.id === id && record.request?.body?.files_contract !== 2) {
     throw new ApiError({ status: 409, code: 'upgrade_required', message: `Saved session request ${id} uses the legacy file contract. Inspect the original session; it cannot be replayed as a current-workspace request.` });
@@ -229,21 +442,19 @@ export async function submit(ctx, id, request, label, recovery) {
   if (record?.id !== id || !isDeepStrictEqual(record.request, request)) {
     throw new ApiError({ status: 409, code: 'request_conflict', message: `Forge request ${id} differs from its saved request. Use the original fields to retry.` });
   }
-  for (const field of Object.keys(account)) {
-    if (record[field] !== account[field]) throw usageError(`Forge request ${id} belongs to a different account or API origin. Restore the original account and origin to retry.`);
+  checkIdentity(record, account, id);
+  if (options.readiness && record.readiness && !isDeepStrictEqual(record.readiness, options.readiness)) {
+    throw new ApiError({ status: 409, code: 'request_conflict', message: `Forge request ${id} has different saved readiness inputs.` });
+  }
+  if (options.readiness && !record.readiness) {
+    record = { ...record, readiness: options.readiness };
+    atomicWrite(file, JSON.stringify(record, null, 2) + '\n');
   }
   printProgress(`${label}: ${id}`);
   try {
-    const res = request.session_id
-      ? await forgeRequest(ctx, request.session_id, 'POST', request.path, { body: record.request.body })
-      : await ctx.client.post(request.path, { body: record.request.body });
-    if (['session_id', 'command_id', 'selection_id'].includes(label) && res.data?.[label] !== id) {
-      throw new Error(`Forge response has no matching ${label}; inspect or retry the saved request.`);
-    }
-    saveResult(file, record, res.data);
-    return res;
+    return await dispatchSaved(ctx, file, record, account, { previous, signal: options.signal });
   } catch (error) {
-    error.action = recovery;
+    error.action = `Recover the saved request with ariax forge recover ${id}, using the same --root-dir, account and API origin. ${recovery || ''}`.trim();
     throw error;
   }
 }
@@ -270,6 +481,12 @@ export function report(ctx, res, kind) {
     printProgress(`Limit revision ${data.limit_revision} is saved; host application is pending. The host retains its previous deadline until delivery. Inspect ariax forge status ${data.session_id} for applied_limit_revision.`);
   }
   if (kind === 'sessions') printTable(['session_id', 'name', 'state', 'gpu', 'gpu_count'], data.sessions.map(s => [s.session_id, s.name, s.state, s.gpu_type, s.gpu_count]));
+  else if (kind === 'operations') {
+    printTable(['operation_id', 'kind', 'session_id', 'last_observed_state'], data.operations.map(item =>
+      [item.operation_id, item.kind, item.session_id, item.last_observed_state]));
+    if (data.truncated) printProgress('More local records exist; this listing is limited to 10000 filenames.');
+    if (data.unreadable) printProgress(`${data.unreadable} local records could not be read.`);
+  }
   else if (kind === 'commands') printTable(['command_id', 'tool', 'gpu_ids', 'state', 'exit_code'], data.commands.map(c => [c.command_id, c.tool, c.gpu_ids?.join(','), c.state, c.exit_code]));
   else if (kind === 'tools' || kind === 'catalog') {
     if (ctx.flags.details || (kind === 'catalog' && (ctx.flags.compact || ctx.flags.tool !== undefined))) {
@@ -352,7 +569,8 @@ function selectedCatalogTool(tool, model, mode) {
 }
 
 export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, readResult) {
-  const timeoutMs = ctx.flags.timeout === undefined ? 0 : number(ctx.flags.timeout, 'timeout', { zero: true }) * 1000;
+  const waitTimeout = ctx.flags['wait-timeout'] ?? ctx.flags.timeout;
+  const timeoutMs = waitTimeout === undefined ? 0 : localWaitSeconds(waitTimeout, 0, { allowZero: true }) * 1000;
   const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   const controller = new AbortController();
   let timedOut = false, timer, lastState;
@@ -406,19 +624,21 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, re
   } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
 }
 
-async function watchCommand(ctx, sessionId, commandId) {
-  const timeout = ctx.flags.timeout === undefined ? 0 : number(ctx.flags.timeout, 'timeout', { zero: true }) * 1000;
-  const controller = new AbortController();
+async function watchCommand(ctx, sessionId, commandId, options = {}) {
+  const waitTimeout = ctx.flags['wait-timeout'] ?? ctx.flags.timeout;
+  const timeout = options.signal || waitTimeout === undefined ? 0 : localWaitSeconds(waitTimeout, 0, { allowZero: true }) * 1000;
+  const controller = options.signal ? null : new AbortController();
+  const signal = options.signal ?? controller.signal;
   let interrupted = false;
-  const interrupt = () => { if (!controller.signal.aborted) { interrupted = true; controller.abort(); } };
-  const timer = timeout ? setTimeout(() => controller.abort(), Math.min(timeout, 2_147_483_647)) : undefined;
-  process.once('SIGINT', interrupt);
+  const interrupt = () => { if (!signal.aborted) { interrupted = true; controller.abort(); } };
+  const timer = timeout ? setTimeout(() => controller.abort(), timeout) : undefined;
+  if (controller) process.once('SIGINT', interrupt);
   let cursor;
   printProgress(`Waiting. Resume with: ariax forge watch ${sessionId} ${commandId}`);
   try {
     for (;;) {
       const result = await forgeRequest(ctx, sessionId, 'GET', `/v1/commands/${commandId}/logs`, {
-        query: { wait_seconds: 25, ...(cursor ? { cursor } : {}) }, signal: controller.signal,
+        query: { wait_seconds: 25, ...(cursor ? { cursor } : {}) }, signal,
       });
       cursor = result.data.next_cursor;
       if (result.data.gap) printProgress('An output interval is unavailable; the retained tail follows.');
@@ -429,12 +649,66 @@ async function watchCommand(ctx, sessionId, commandId) {
       if (TERMINAL_COMMANDS.has(command.state)) return { ...result, data: command };
     }
   } catch (error) {
-    if (controller.signal.aborted) {
+    if (controller?.signal.aborted) {
       error = new Error(`${interrupted ? 'Interrupted' : 'Wait timed out'}; remote work continues. Resume with: ariax forge watch ${sessionId} ${commandId}`);
       error.exitCode = interrupted ? EXIT.INTERRUPTED : EXIT.NETWORK;
     }
+    error.action ||= `Inspect or watch the same command with ariax forge watch ${sessionId} ${commandId}. Do not start a new command while its outcome is uncertain.`;
     throw error;
-  } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
+  } finally { clearTimeout(timer); if (controller) process.removeListener('SIGINT', interrupt); }
+}
+
+async function waitCommandResult(ctx, session, id, signal, current) {
+  if (current?.retained && !TERMINAL_COMMANDS.has(current.data?.state)) {
+    const error = new ApiError({status:409,code:'command_unavailable',message:`Command ${id} has only a retained ${current.data?.state ?? 'unknown'} outcome.`});
+    error.action = `Inspect ariax forge command ${session} ${id} --retained. Keep the same ID while the outcome is uncertain.`;
+    throw error;
+  }
+  const result = current && TERMINAL_COMMANDS.has(current.data?.state) ? current
+    : await watchCommand(ctx, session, id, {signal});
+  if (['failed', 'interrupted'].includes(result.data.state)) failed('command_failed', `Command ${id} is ${result.data.state}`, result.data.error,
+    `Inspect ariax forge command ${session} ${id} and ariax forge logs ${session} ${id}.`);
+  if (result.data.state === 'cancelled') failed('command_cancelled', `Command ${id} was cancelled`, result.data.error,
+    `Inspect ariax forge command ${session} ${id} and its logs before deciding whether to run new work.`);
+  return result;
+}
+
+async function waitRecovered(ctx, record, result, kind, account, signal) {
+  const id = record.id, session = record.request.session_id;
+  if (kind === 'command') return waitCommandResult(ctx, session, id, signal, result);
+  if (kind === 'cancel') return watchCommand(ctx, session, record.request.path.split('/')[3], {signal});
+  if (kind === 'input' && result.retained) {
+    const error = new ApiError({status:409,code:'input_unavailable',message:`Input ${id} has only a retained observation.`});
+    error.action = `Inspect ariax forge inputs status ${session} ${id} --retained. Retained history does not confirm installation in an active workspace.`;
+    throw error;
+  }
+  for (;;) {
+    const data = result.data;
+    if (kind === 'session') {
+      if (data.state === 'available') return result;
+      if (['closing','closed','failed'].includes(data.state)) failed('session_unavailable', `Session ${id} is ${data.state}`, data.error);
+    } else if (kind === 'close') {
+      if (data.state === 'closed') return result;
+      if (data.state === 'failed') failed('session_unavailable', `Session closure failed`, data.error);
+    } else if (kind === 'selection') {
+      const tools = record.request.body.tools.map(name => data.tools?.find(tool => tool.tool === name));
+      const failure = tools.find(tool => tool?.state === 'failed');
+      if (failure) failed('tool_failed', `Tool ${failure.tool} failed`, failure.error);
+      if (tools.every(tool => tool?.state === 'ready')) return result;
+    } else if (kind === 'sync' || kind === 'input') {
+      if (data.state === 'failed') failed(`${kind}_failed`, `${kind === 'sync' ? 'Sync' : 'Input'} ${id} failed`, data.error,
+        `Inspect the same ${kind} ID before starting a new operation.`);
+      if (data.state === (kind === 'sync' ? 'saved' : 'ready')) return result;
+    } else throw usageError(`Waiting is not supported for saved operation ${id}.`);
+    printProgress(`Waiting for saved operation ${id}: ${data.state ?? 'pending'}`);
+    await delay(3000, undefined, {signal});
+    if (kind === 'session') result = await ctx.client.get(`${API}/sessions/${id}`, {signal});
+    else if (kind === 'close') result = await ctx.client.get(record.request.path.slice(0,-'/close'.length), {signal});
+    else if (kind === 'selection') result = await forgeRequest(ctx,session,'GET','/v1/session',{signal});
+    else if (kind === 'input') result = await inputStatus(ctx,session,id,{signal,account});
+    else result = await readSync(ctx,session,id,{signal});
+    saveResult(recordPath(ctx,id), readRecord(recordPath(ctx,id)) ?? record, result.data);
+  }
 }
 
 export function failed(code, message, error, recovery) {
@@ -492,12 +766,70 @@ async function runAction(ctx) {
       : report(ctx, { ...res, data: { ...res.data, project_url: projectUrl(ctx, id) } });
   }
   if (action === 'list') return report(ctx, await ctx.client.get(`${API}/sessions`), 'sessions');
+  if (action === 'operations') {
+    const account = await accountIdentity(ctx);
+    const sample = recordPath(ctx,'00000000-0000-4000-8000-000000000000');
+    const names = sample ? fs.readdirSync(path.dirname(sample))
+      .filter(name => name.endsWith('.json') && isUUID(name.slice(0,-5))).sort() : [];
+    let unreadable = 0;
+    const operations = [];
+    for (const name of names.slice(0,10000)) {
+      try {
+        const record = readRecord(path.join(path.dirname(sample),name));
+        const id = name.slice(0,-5), kind = savedKind(id,record?.request);
+        if (record?.id !== id || !kind || Object.keys(account).some(field => record[field] !== account[field])) continue;
+        const session = kind === 'session' ? id : record.request.session_id
+          ?? new RegExp(`^${API}/sessions/([0-9a-f-]{36})/`).exec(record.request.path)?.[1];
+        operations.push({ operation_id:id, kind, session_id:session ?? null,
+          last_observed_state:typeof record.result?.state === 'string' ? record.result.state : record.result ? 'recorded' : 'unconfirmed' });
+      } catch { unreadable++; }
+    }
+    return report(ctx,{data:{operations,truncated:names.length > 10000,unreadable}},'operations');
+  }
+  if (action === 'recover') {
+    const id = uuid(ctx.positionals[1], 'operation ID');
+    const file = recordPath(ctx,id), record = readRecord(file);
+    if (!record || record.id !== id) throw usageError(`No saved Forge operation ${id} was found in this root directory.`);
+    const kind = savedKind(id,record.request);
+    if (!kind) throw usageError(`Forge operation ${id} has no supported idempotent recovery. Inspect the session and saved request before another action.`);
+    if (kind === 'limit' && flags.wait) throw usageError('forge recover: limit edits do not support --wait; inspect session status after recovery.');
+    if (kind === 'session' && record.request.body.files_contract !== 2) {
+      throw new ApiError({ status: 409, code: 'upgrade_required', message: `Saved session request ${id} uses the legacy file contract and cannot be replayed.` });
+    }
+    if (record.readiness && (kind !== 'command' || !Array.isArray(record.readiness.input_ids)
+        || record.readiness.input_ids.length > 100 || record.readiness.input_ids.some(value => !isUUID(value))
+        || new Set(record.readiness.input_ids).size !== record.readiness.input_ids.length)) {
+      throw usageError(`Saved readiness for Forge operation ${id} is malformed; no request was sent.`);
+    }
+    const seconds = localWaitSeconds(flags['wait-timeout'],60);
+    return controlled(ctx,id,seconds,async signal => {
+      const account = await accountIdentity(ctx,{signal});
+      checkIdentity(record,account,id);
+      printProgress(`Recovering saved operation: ${id}`);
+      try {
+        let result = ['sync','input'].includes(kind)
+          ? await recoverFile(ctx,id,record,{signal,account})
+          : await dispatchSaved(ctx,file,record,account,{previous:true,signal});
+        if (flags.wait) result = await waitRecovered(ctx,record,result,kind,account,signal);
+        return report(ctx,result);
+      } catch (error) {
+        error.action ||= `Inspect or recover the same operation ${id} using the original root directory, account and API origin.`;
+        throw error;
+      }
+    });
+  }
   if (['files', 'download', 'link'].includes(action)) {
     const projectId = uuid(ctx.positionals[1], 'project ID');
     return runFiles(ctx, action, undefined, undefined, projectId);
   }
   const sessionId = uuid(ctx.positionals[(action.startsWith('tools ') || action.startsWith('inputs ')) ? 2 : 1], 'session ID');
   const sessionPath = `${API}/sessions/${sessionId}`;
+  if (action === 'sync') {
+    if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge sync: --wait-timeout requires --wait.');
+    if (flags.wait && (flags['wait-timeout'] ?? flags.timeout) !== undefined) {
+      localWaitSeconds(flags['wait-timeout'] ?? flags.timeout, 0, {allowZero:true});
+    }
+  }
   if (action.startsWith('inputs ') || action === 'sync') return runFiles(ctx, action, sessionId, sessionPath);
   if (action === 'limit') {
     if ((flags['gpu-hours'] === undefined) === (flags.clear === undefined) || (flags.clear !== undefined && flags.clear !== true)) {
@@ -543,8 +875,20 @@ async function runAction(ctx) {
     const body = { command_id: commandId, tool: required(flags.tool, 'tool'), argv: ctx.passthrough,
       ...(flags.gpus === undefined ? {} : { gpu_ids: gpuSelection(flags.gpus) }),
       cwd: path.posix.normalize(cwd), timeout_seconds: flags['timeout-seconds'] === undefined ? 86400 : number(flags['timeout-seconds'], 'timeout-seconds', { integer: true }) };
-    return report(ctx, await submit(ctx, commandId, { method: 'POST', session_id: sessionId, path: '/v1/commands', body }, 'command_id',
-      `Inspect ariax forge command ${sessionId} ${commandId} first. Recover the saved run request with --command-id ${commandId}, identical fields, and the same --root-dir, account, and API origin. Keep this ID while the outcome is uncertain; a fresh command could duplicate execution.`));
+    if (flags['input-ids'] !== undefined && !flags['wait-ready']) throw usageError('forge run: --input-ids requires --wait-ready.');
+    if (flags['wait-timeout'] !== undefined && !flags['wait-ready'] && !flags.wait) throw usageError('forge run: --wait-timeout requires --wait-ready or --wait.');
+    const ids = flags['input-ids'] === undefined ? [] : csv(flags['input-ids'],'input-ids').map(value => uuid(value,'input ID'));
+    if (ids.length > 100 || new Set(ids).size !== ids.length) throw usageError('forge run: --input-ids must contain at most 100 distinct input IDs.');
+    const readiness = flags['wait-ready'] ? {input_ids:ids} : undefined;
+    const request = { method: 'POST', session_id: sessionId, path: '/v1/commands', body };
+    const recovery = `Inspect ariax forge command ${sessionId} ${commandId}. Keep this ID while its outcome is uncertain; a fresh command could duplicate execution.`;
+    if (!flags.wait && !readiness) return report(ctx,await submit(ctx,commandId,request,'command_id',recovery));
+    const seconds = localWaitSeconds(flags['wait-timeout'],1800);
+    return controlled(ctx,commandId,seconds,async signal => {
+      let result = await submit(ctx,commandId,request,'command_id',recovery,{signal,readiness});
+      if (flags.wait) result = await waitCommandResult(ctx,sessionId,commandId,signal,result);
+      return report(ctx,result);
+    });
   }
   if (action === 'close') {
     const res = await submit(ctx, randomUUID(), { method: 'POST', path: `${sessionPath}/close`, body: {} }, 'request_id',
@@ -583,14 +927,21 @@ async function runAction(ctx) {
 export async function run(ctx) {
   try { return await runAction(ctx); }
   catch (error) {
+    const action = actionOf(ctx.positionals);
+    let recovered;
+    try {
+      if (action === 'recover' && isUUID(ctx.positionals[1])) recovered = readRecord(recordPath(ctx,ctx.positionals[1]));
+    } catch { /* Keep the original error. */ }
+    const recoveredSession = recovered?.request?.session_id
+      ?? new RegExp(`^${API}/sessions/([0-9a-f-]{36})/`).exec(recovered?.request?.path ?? '')?.[1];
     if (error.code === 'human_resume_required' || error.code === 'control_revision_conflict') {
-      const action = actionOf(ctx.positionals);
       let projectId = isUUID(error.details?.project_id) ? uuid(error.details.project_id, 'project ID') : undefined;
       try {
         if (!projectId && ['resume', 'project'].includes(action)) projectId = uuid(ctx.positionals[1], 'project ID');
+        else if (!projectId && action === 'recover' && isUUID(recovered?.request?.project_id)) projectId = recovered.request.project_id;
         else if (!projectId && action === 'inputs add' && ctx.flags.artifact !== undefined) projectId = uuid(ctx.flags.artifact.split(':')[0], 'project ID');
         else if (!projectId) {
-          const sessionId = action === 'create' ? undefined
+          const sessionId = action === 'recover' ? recoveredSession : action === 'create' ? undefined
             : ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
           if (isUUID(sessionId)) projectId = (await ctx.client.get(`${API}/sessions/${uuid(sessionId, 'session ID')}`)).data.project_id;
         }
@@ -603,12 +954,13 @@ export async function run(ctx) {
     } else if (['checkpoint_required', 'checkpoint_unready'].includes(error.code)) {
       error.action = 'This server requires the removed Forge checkpoint contract. Upgrade the CLI and server together before using the current project workspace.';
     } else if (['limit_revision_conflict', 'session_closing'].includes(error.code)) {
-      error.action = `Inspect ariax forge status ${ctx.positionals[1]} for the current state, max_gpu_hours, limit_revision, applied_limit_revision and expires_at before another edit. Closing compute must finish cleanup.`;
+      const session = action === 'recover' ? recoveredSession : ctx.positionals[1];
+      error.action = `Inspect ${session ? `ariax forge status ${session}` : 'the session status'} for the current state, max_gpu_hours, limit_revision, applied_limit_revision and expires_at before another edit. A revision conflict does not establish whether the earlier edit was applied. Closing compute must finish cleanup.`;
     } else if (['session_cleanup_pending', 'project_session_active'].includes(error.code)) {
       error.action = `Inspect the project history and active session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
     } else if (error.code === 'session_unready') {
-      const action = actionOf(ctx.positionals);
-      const sessionId = ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
+      const sessionId = action === 'recover' ? recoveredSession
+        : ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
       error.action = `Inspect ariax forge status ${sessionId}. If provisioning or starting, run ariax forge tools wait ${sessionId} base --timeout 1800, then retry the original operation with the same IDs. A closing, closed or failed session requires inspection of its project controls and retained history. ${error.action || ''}`.trim();
     } else if (['request_conflict', 'idempotency_conflict', 'command_conflict'].includes(error.code)) {
       error.action = 'Inspect the saved request and existing session or command. Recover its original fields and caller ID; resolve the existing outcome before choosing any new operation.';

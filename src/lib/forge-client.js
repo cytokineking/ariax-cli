@@ -217,7 +217,8 @@ export async function forgeRequest(ctx, sessionId, method, routePath, options = 
   for (let attempt = 0; attempt < 2; attempt++) {
     const { file, connection } = await sessionConnection(ctx, sessionId, options, attempt > 0);
     checkAbort(options.signal);
-    const client = createClient({ baseUrl: connection.endpoint, apiKey: connection.access_token });
+    const client = createClient({ baseUrl: connection.endpoint, apiKey: connection.access_token,
+      timeoutMs: ctx.timeoutMs, fetchImpl: ctx.fetchImpl });
     try {
       const result = method === 'GET' ? await client.get(routePath, { ...options, attempts: 2 })
         : await client.post(routePath, options);
@@ -228,7 +229,9 @@ export async function forgeRequest(ctx, sessionId, method, routePath, options = 
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         fs.rmSync(file, { force: true });
-        if (method === 'GET' && attempt === 0) continue;
+        // A rejected bearer token cannot authorize the request. Refresh once;
+        // callers still reconcile any ambiguous transport failure themselves.
+        if (attempt === 0) continue;
       }
       throw error;
     }

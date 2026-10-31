@@ -160,9 +160,9 @@ export async function readSync(ctx, sessionId, syncId, options = {}) {
   catch (error) { throw cleanError(error, 'Sync inspection'); }
 }
 
-export async function startSync(ctx, sessionId, syncId) {
+export async function startSync(ctx, sessionId, syncId, options = {}) {
   try {
     return syncResult(await forgeRequest(ctx,sessionId,'POST','/v1/sync',
-      {body:{sync_id:syncId},idempotencyKey:syncId}),syncId);
+      {...options,body:{sync_id:syncId},idempotencyKey:syncId}),syncId);
   } catch (error) { throw cleanError(error, 'Sync'); }
 }

@@ -44,7 +44,7 @@ ariax forge inputs add SESSION --url 'https://example.org/target.fasta' --path t
 ariax forge inputs list SESSION --json
 ariax forge inputs status SESSION INPUT_ID --json
 ariax forge run SESSION --tool base -- python3 -c 'from pathlib import Path; Path("result.txt").write_text(Path("/inputs/target.fasta").read_text())'
-ariax forge sync SESSION --wait --timeout 900 --json
+ariax forge sync SESSION --wait --wait-timeout 900 --json
 ariax forge files PROJECT --path /workspace --json
 ariax forge download PROJECT /workspace/result.txt --dest ./result.txt --json
 ariax forge link PROJECT /workspace/result.txt --json
@@ -59,13 +59,16 @@ Completed input paths remain immutable. Inputs support regular files up to
 redirect checks. Artifact imports require access to the source project.
 
 The CLI prints and saves `input_id` or `sync_id` before mutation. After a lost
-reply, use inputs status for the input, or retry `forge sync SESSION --sync-id
-ID --wait` for the same flush. Use the original fields, root directory, account
-and API origin. Accepted syncs are observed before submission. URL imports
-require the original URL again if the server has no accepted operation. Request
-records exclude signed URLs and transfer grants.
+reply, use `ariax forge recover ID` with the original root directory, account
+and API origin. Accepted inputs and syncs are observed before submission. A
+local upload can resume from its unchanged source; an already published input
+does not require that source. When only retained input history is available,
+`recover` identifies its source in the response metadata; that history does not
+confirm installation in an active workspace. When an import has no saved
+successful result, repeat a URL input with its original URL and ID so the server
+can compare the source. Request records exclude URLs and transfer grants.
 
-`sync --wait` waits locally; `--timeout SECONDS` or Ctrl-C leaves an accepted
+`sync --wait` waits locally; `--wait-timeout SECONDS` or Ctrl-C leaves an accepted
 flush running. Inspect its returned state: `pending` or `queued` means
 unfinished, `saved` means the flush completed, and `failed` is terminal for that
 sync ID. After resolving a terminal failure, start a new flush with a new ID;

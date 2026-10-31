@@ -57,6 +57,8 @@ async function boundary(root) {
   const toolState = (tool, state) => ({ ...catalog.find(item => item.tool === tool), tool, state, error: null });
   const state = { sessions, projects, allocations: 0, executions: 0, releases: 0, posts: 0, preparations: 0,
     drop: 'create', holdReads: false, unknown: false, cleanupBlocked: false, fault: null,
+    connects: 0, rejectPost401: 0, rejectedPost401: 0, liveCommandMissing: false, liveInputMissing: false,
+    pendingAdmission: false, commandFailures: 0, rejectedCommands: 0, inputAdmissions: 0,
     syncMode: 'saved', syncPosts: 0, fileError: false, fileBadPath: false, fileBadGrant: false, fileCursorCycle: false, legacyResume: false };
   const reply = (res, status, data) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data })); };
   const error = (res, status, code, message, details) => {
@@ -70,7 +72,7 @@ async function boundary(root) {
     state.allocations++;
     const allocatedAt = new Date().toISOString();
     assert.equal(body.files_contract, 2);
-    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), inputs: new Map(), data: {
+    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), inputs: new Map(), inputRequests: new Map(), data: {
       session_id: body.session_id, project_id: project.id, name: project.name,
       state: 'starting', gpu_type: body.gpu_type, gpu_count: body.gpu_count,
       tools: [toolState('base', 'queued'), ...body.tools.map(tool => toolState(tool, 'queued'))],
@@ -124,6 +126,7 @@ async function boundary(root) {
       if (connect && req.method === 'POST') {
         const session = sessions.get(connect[1]);
         if (!session || session.owner !== user) return error(res, 404, 'not_found', 'Session not found');
+        state.connects++;
         const access = issue(session, user);
         return reply(res, 200, { session_id:connect[1], project_id:session.data.project_id,
           endpoint:`https://${connect[1].replaceAll('-', '')}.forge.test`, access_token:access.token,
@@ -133,6 +136,11 @@ async function boundary(root) {
         return reply(res, 200, { actor: { user_id: user }, billing: { account_type: 'user', account_id: user } });
       }
       if (req.method === 'GET' && url.pathname === '/api/v1/forge/catalog') return reply(res, 200, { tools: catalog });
+      if (direct && req.method === 'POST' && state.rejectPost401 > 0) {
+        state.rejectPost401--;
+        state.rejectedPost401++;
+        return error(res,401,'unauthorized','Session authentication required');
+      }
       let body;
       if (req.method === 'POST') {
         state.posts++;
@@ -191,6 +199,7 @@ async function boundary(root) {
           if (req.method === 'GET' && parts[6] === 'operations') {
             const operation = project.fileOperations.get(parts[7]);
             if (!operation) return error(res,404,'not_found','File operation not found');
+            if (state.confirmAfterReads > 0 && --state.confirmAfterReads === 0) state.confirmInstall = true;
             if (state.confirmInstall && operation.state === 'published') {
               const installed = path.join(root,'inputs',operation.body.path.slice('/inputs/'.length));
               await fs.mkdir(path.dirname(installed),{recursive:true});
@@ -317,11 +326,20 @@ async function boundary(root) {
       if (parts[5] === 'inputs') {
         if (req.method === 'GET' && parts.length === 6) return reply(res,200,{inputs:[...session.inputs.values()]});
         if (req.method === 'GET') {
+          if (direct && state.liveInputMissing) return error(res,404,'not_found','Input not found');
           const input = session.inputs.get(parts[6]);
           return input ? reply(res,200,input) : error(res,404,'not_found','Input not found');
         }
-        const input = {input_id:body.input_id,path:body.path,state:'ready',size_bytes:0};
-        session.inputs.set(body.input_id,input);
+        const prior = session.inputRequests.get(body.input_id);
+        if (prior && !isDeepStrictEqual(prior,body)) return error(res,409,'idempotency_conflict','Input request differs');
+        let input = session.inputs.get(body.input_id);
+        if (!prior) {
+          input = {input_id:body.input_id,path:body.path,state:'ready',size_bytes:0};
+          session.inputRequests.set(body.input_id,body);
+          session.inputs.set(body.input_id,input);
+          state.inputAdmissions++;
+        }
+        if (state.drop === 'direct-input') { state.drop = null; req.socket.destroy(); return; }
         return reply(res,202,input);
       }
       if (parts[5] === 'uploads') return error(res,426,'upgrade_required','Legacy uploads are unsupported');
@@ -393,8 +411,23 @@ async function boundary(root) {
       if (parts.length === 6) {
         if (req.method === 'GET') return reply(res, 200, { commands: [...session.commands.values()].map(c => c.data) });
         assert.equal(req.method, 'POST');
+        if (state.commandFailures > 0) {
+          state.commandFailures--;
+          state.rejectedCommands++;
+          return error(res,503,'runtime_unavailable','Temporarily unavailable');
+        }
         let command = session.commands.get(body.command_id);
         if (command && !isDeepStrictEqual(command.request, body)) return error(res, 409, 'request_conflict', 'Command request differs');
+        if (!command && state.pendingAdmission) {
+          state.pendingAdmission = false;
+          session.commands.set(body.command_id,{request:body,text:'',data:{...body,gpu_ids:body.gpu_ids ?? [],
+            state:'pending',cancel_requested:false,exit_code:null,error:null}});
+          return error(res,503,'admission_unconfirmed','Admission needs reconciliation');
+        }
+        if (command?.data.state === 'pending' && command.data.cancel_requested === false) {
+          session.commands.delete(body.command_id);
+          command = undefined;
+        }
         if (!command) {
           if (project.control.human_resume_required) return held(res, project);
           if (session.data.state !== 'available') return error(res, 409, 'session_unavailable', 'Session is not available');
@@ -424,6 +457,7 @@ async function boundary(root) {
       if (!command) return error(res, 404, 'not_found', 'Command not found');
       if (parts.length === 7) {
         assert.equal(req.method, 'GET');
+        if (direct && state.liveCommandMissing) return error(res,404,'command_not_found','Command not found');
         if (state.holdReads) { heldResponses.add(res); res.once('close', () => heldResponses.delete(res)); return; }
         return reply(res, 200, state.unknown ? { ...command.data, state: 'unknown' } : command.data);
       }
@@ -487,7 +521,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
         env: { ...env, ARIAX_API_KEY: actorKey }, timeout: 60_000,
       });
       if (interrupt) pending.child.stderr.on('data', chunk => {
-        if (String(chunk).includes('Waiting. Resume with:')) pending.child.kill('SIGINT');
+        if (/Waiting\. Resume with:|Waiting for /.test(String(chunk))) pending.child.kill('SIGINT');
       });
       out = { code: 0, ...await pending };
     } catch (error) {
@@ -508,11 +542,11 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(alias.payload.data.content, guide.payload.data.content);
 
     const createArgs = ['forge', 'create', '--name', 'Recovery experiment', '--gpu', 'RTX5090', '--allowed-gpus', 'RTX5090,L40S', '--tools', 'boltz2,bindcraft2', '--priority', 'bindcraft2', '--max-gpu-hours', '2'];
-    const lostCreate = await invoke(createArgs, { code: 9 });
+    const lostCreate = await invoke(createArgs);
     const sessionId = lostCreate.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
     assert.equal(state.allocations, 1);
-    assert.equal(state.posts, 1, 'POST was automatically retried');
-    assert.equal((await record(sessionId)).result, null);
+    assert.equal(state.posts, 2, 'same-ID session admission was not retried');
+    assert.equal((await record(sessionId)).result.session_id, sessionId);
     const retryCreate = [...createArgs, '--session-id', sessionId];
     const accepted = await invoke(retryCreate);
     assert.equal(accepted.payload.data.session_id, sessionId);
@@ -525,22 +559,31 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(state.sessions.get(sessionId).request.max_gpu_hours, 2);
     assert.equal(state.allocations, 1, 'retry allocated another VM');
     assert.equal((await record(sessionId)).project_id, accepted.payload.data.project_id);
+    const listedOperations = (await invoke(['forge','operations'])).payload.data;
+    assert.ok(listedOperations.operations.some(item => item.operation_id === sessionId && item.kind === 'session'));
+    assert.equal((await invoke(['forge','operations'],{actorKey:'arx_forge_othercredential'})).payload.data.operations.length,0);
+    assert.equal((await invoke(['forge','recover',sessionId])).payload.data.session_id, sessionId);
+    assert.equal(state.allocations, 1, 'saved recovery allocated another VM');
+    await invoke(['forge','recover',sessionId], {code:1, actorKey:'arx_forge_othercredential'});
+    await invoke(['forge','recover',randomUUID()], {code:1});
     await invoke([...retryCreate, '--gpu', 'A100'], { code: 7 });
     await invoke(retryCreate, { code: 1, actorKey: 'arx_forge_othercredential' });
     // A second origin must not receive a mutation for a saved identity.
     const alternate = await boundary(root);
     try {
       await invoke(retryCreate, { code: 1, origin: alternate.origin });
+      await invoke(['forge','recover',sessionId], {code:1, origin:alternate.origin});
+      assert.equal((await invoke(['forge','operations'],{origin:alternate.origin})).payload.data.operations.length,0);
       assert.equal(alternate.state.posts, 0);
     } finally { await alternate.close(); }
-    assert.equal(state.posts, 2);
+    const postsBeforeWait = state.posts;
     await invoke(['forge', 'status', sessionId], { code: 4, actorKey: 'arx_forge_othercredential' });
     assert.equal((await invoke(['forge', 'list'])).payload.data.sessions.length, 1);
     assert.equal((await invoke(['forge', 'status', sessionId])).payload.data.state, 'starting');
     assert.equal((await invoke(['forge', 'tools', sessionId])).payload.data.tools[0].state, 'queued');
     const waiting = await invoke(['forge', 'tools', 'wait', sessionId, 'base', '--timeout', '0.05'], { code: 9 });
     assert.match(waiting.payload.error.message, /remote work continues/);
-    assert.equal(state.posts, 2, 'tool wait performed a mutation');
+    assert.equal(state.posts, postsBeforeWait, 'tool wait performed a mutation');
     const session = state.sessions.get(sessionId);
     session.data.state = 'available';
     session.data.tools[0].state = 'ready';
@@ -549,13 +592,17 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     session.data.tools[1].error = { code: 'install_failed', message: 'Model download failed' };
     assert.equal((await invoke(['forge', 'tools', 'wait', sessionId, 'boltz2'], { code: 10 })).payload.error.code, 'tool_failed');
     assert.equal((await invoke(['forge', 'run', sessionId, '--tool', 'boltz2', '--', process.execPath, '-e', 'process.exit(0)'], { code: 7 })).payload.error.code, 'tool_unready');
+    const failedReadiness = await invoke(['forge','run',sessionId,'--tool','boltz2','--wait-ready',
+      '--wait-timeout','15','--',process.execPath,'-e','process.exit(0)'], {code:10});
+    assert.equal(failedReadiness.payload.error.code,'tool_failed');
+    assert.equal(state.executions,0,'failed tool readiness dispatched science');
 
     state.drop = 'tools';
     const selectionArgs = ['forge', 'tools', 'add', sessionId, '--tools', 'boltz2', '--priority', 'boltz2'];
-    const lostSelection = await invoke(selectionArgs, { code: 9 });
+    const lostSelection = await invoke(selectionArgs);
     const selectionId = lostSelection.stderr.match(/selection_id: ([0-9a-f-]{36})/)[1];
     const retrySelection = [...selectionArgs, '--selection-id', selectionId];
-    assert.equal((await record(selectionId)).result, null);
+    assert.equal((await record(selectionId)).result.selection_id, selectionId);
     assert.equal(state.preparations, 1);
     const boltz = session.data.tools.find(item => item.tool === 'boltz2');
     boltz.state = 'failed';
@@ -584,7 +631,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const nativeArgs = ['--json', '--cwd', '/somewhere', '; touch injected', 'two words', ''];
     const runArgs = ['forge', 'run', sessionId, '--tool', 'base', '--cwd', '/workspace/results', '--timeout-seconds', '60', '--', process.execPath,
       '-e', 'console.log(JSON.stringify(process.argv.slice(1)))', '--', ...nativeArgs];
-    const lostRun = await invoke(runArgs, { code: 9 });
+    const lostRun = await invoke(runArgs);
     const commandId = lostRun.stderr.match(/command_id: ([0-9a-f-]{36})/)[1];
     assert.equal(state.executions, 1);
     assert.equal((await record(commandId)).request.body.argv.at(-1), '');
@@ -607,12 +654,21 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const deadlineWait = await invoke(['forge', 'watch', sessionId, longId, '--timeout', '0.05'], { code: 9 });
     assert.match(deadlineWait.payload.error.message, /Wait timed out; remote work continues/);
     assert.equal(state.posts, beforeDeadlineWait, 'a local deadline mutated remote work');
+    const directTimeout = await invoke(['forge','command',sessionId,longId,'--timeout','50'], {code:9});
+    assert.match(directTimeout.payload.error.message,/50ms/);
     state.holdReads = false;
     assert.equal((await invoke(['forge', 'command', sessionId, longId])).payload.data.state, 'running');
     state.unknown = true;
     const uncertain = await invoke(['forge', 'command', sessionId, longId]);
     assert.equal(uncertain.payload.data.state, 'unknown');
     assert.match(uncertain.stderr, /same command ID.*outcome is known/);
+    const beforeUncertainRecovery = state.posts;
+    assert.equal((await invoke(['forge','recover',longId])).payload.data.state,'unknown');
+    state.liveCommandMissing = true;
+    assert.equal((await invoke(['forge','recover',longId])).payload.data.command_id,longId);
+    state.liveCommandMissing = false;
+    await invoke(['forge','recover',longId,'--wait','--wait-timeout','0.05'], {code:9});
+    assert.equal(state.posts,beforeUncertainRecovery,'recovery replayed an uncertain accepted command');
     await invoke(['forge', 'watch', sessionId, longId, '--timeout', '0.05'], { code: 9 });
     state.unknown = false;
     const beforeWatch = state.posts;
@@ -630,12 +686,56 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const failure = await invoke(['forge', 'watch', sessionId, failedId, '--timeout', '30'], { code: 10 });
     assert.match(failure.payload.error.action, new RegExp(`forge logs ${sessionId} ${failedId}`));
     assert.equal((await invoke(['forge', 'command', sessionId, failedId])).payload.data.exit_code, 2);
+    const beforeFailedRecovery = state.posts;
+    const failedRecovery = await invoke(['forge','recover',failedId,'--wait'], {code:10});
+    assert.equal(failedRecovery.payload.error.code,'command_failed');
+    assert.equal(state.posts,beforeFailedRecovery,'failed science was replayed');
+
+    const connectionsBeforeRefresh = state.connects;
+    state.rejectPost401 = 1;
+    const refreshed = await invoke(['forge','run',sessionId,'--tool','base','--wait','--wait-timeout','15',
+      '--',process.execPath,'-e','process.exit(0)']);
+    assert.equal(refreshed.payload.data.state,'succeeded');
+    assert.equal(state.rejectedPost401,1);
+    assert.equal(state.connects,connectionsBeforeRefresh + 1,'a rejected session connection was not refreshed');
+
+    const beforePendingAdmission = state.executions;
+    state.pendingAdmission = true;
+    const admitted = await invoke(['forge','run',sessionId,'--tool','base','--wait','--wait-timeout','15',
+      '--',process.execPath,'-e','process.exit(0)']);
+    assert.equal(admitted.payload.data.state,'succeeded');
+    assert.equal(state.executions,beforePendingAdmission + 1,'pending admission did not start exactly once');
+    const vanishedId = admitted.payload.data.command_id, beforeVanished = state.posts;
+    session.commands.delete(vanishedId);
+    assert.equal((await invoke(['forge','recover',vanishedId],{code:7})).payload.error.code,'command_unconfirmed');
+    assert.equal(state.posts,beforeVanished,'a previously observed command was restarted after history disappeared');
+
+    const beforeExhaustion = state.executions;
+    state.commandFailures = 3;
+    const exhausted = await invoke(['forge','run',sessionId,'--tool','base','--',process.execPath,'-e','process.exit(0)'],{code:10});
+    const exhaustedId = exhausted.stderr.match(/command_id: ([0-9a-f-]{36})/)[1];
+    assert.equal(state.rejectedCommands,3,'automatic transient retries were not bounded');
+    assert.equal(state.executions,beforeExhaustion);
+    assert.equal((await invoke(['forge','recover',exhaustedId,'--wait','--wait-timeout','15'])).payload.data.state,'succeeded');
+    assert.equal(state.executions,beforeExhaustion + 1,'saved request was not recovered exactly once');
+
+    const interruptedId = randomUUID();
+    session.data.tools[0].state = 'queued';
+    const beforeInterrupt = state.executions;
+    await invoke(['forge','run',sessionId,'--tool','base','--command-id',interruptedId,'--wait-ready',
+      '--wait-timeout','15','--',process.execPath,'-e','process.exit(0)'], {code:130,interrupt:true});
+    assert.equal(state.executions,beforeInterrupt,'interrupting a readiness wait dispatched work');
+    assert.deepEqual((await record(interruptedId)).readiness,{input_ids:[]});
+    session.data.tools[0].state = 'ready';
 
     state.cleanupBlocked = true;
-    assert.equal((await invoke(['forge', 'close', sessionId])).payload.data.state, 'closing');
+    const closing = await invoke(['forge', 'close', sessionId]);
+    assert.equal(closing.payload.data.state, 'closing');
+    const closeId = closing.stderr.match(/request_id: ([0-9a-f-]{36})/)[1];
+    await invoke(['forge','recover',closeId,'--wait','--wait-timeout','1'],{code:9});
     assert.equal(state.releases, 0);
     state.cleanupBlocked = false;
-    await invoke(['forge', 'close', sessionId]);
+    assert.equal((await invoke(['forge','recover',closeId,'--wait'])).payload.data.state,'closed');
     await invoke(['forge', 'close', sessionId]);
     assert.equal((await invoke(['forge', 'status', sessionId])).payload.data.state, 'closed');
     assert.equal(state.releases, 1, 'repeated close released the allocation twice');
@@ -752,16 +852,63 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
     state.fileWriterEpoch = 1;
     state.confirmInstall = false;
+    const collisionId = randomUUID();
+    session.inputs.set(collisionId,{input_id:collisionId,path:'collision.txt',state:'ready',size_bytes:0});
+    session.inputRequests.set(collisionId,{input_id:collisionId,path:'collision.txt',source:{kind:'artifact',project_id:pid,path:'different.txt'}});
+    const conflictingInput = await invoke(['forge','inputs','add',sid,'--artifact',`${pid}:artifact.txt`,
+      '--path','collision.txt','--input-id',collisionId],7);
+    assert.equal(conflictingInput.payload.error.code,'idempotency_conflict');
+    state.drop = 'direct-input';
+    const beforeArtifact = state.inputAdmissions;
     const artifact = await invoke(['forge','inputs','add',sid,'--artifact',`${pid}:artifact.txt`,'--path','artifact.txt']);
     assert.equal(artifact.payload.data.state,'ready');
+    assert.equal(state.inputAdmissions,beforeArtifact + 1,'lost input response caused a duplicate import');
     assert.equal((await invoke(['forge','inputs','status',sid,artifact.payload.data.input_id])).payload.data.state,'ready');
+    const artifactPosts = state.posts;
+    assert.equal((await invoke(['forge','recover',artifact.payload.data.input_id])).payload.data.state,'ready');
+    assert.equal(state.posts,artifactPosts,'an accepted input import was repeated');
+    state.liveInputMissing = true;
+    assert.equal((await invoke(['forge','recover',artifact.payload.data.input_id])).payload.meta.source,'retained');
+    assert.equal((await invoke(['forge','recover',artifact.payload.data.input_id,'--wait'],7)).payload.error.code,'input_unavailable');
+    assert.equal(state.posts,artifactPosts,'retained input was imported again');
+    state.liveInputMissing = false;
+    const artifactRecord = session.inputs.get(artifact.payload.data.input_id);
+    artifactRecord.path = 'other.txt';
+    assert.equal((await invoke(['forge','recover',artifact.payload.data.input_id],7)).payload.error.code,'request_conflict');
+    artifactRecord.path = 'artifact.txt';
     const remote = await invoke(['forge','inputs','add',sid,'--url','https://example.org/input.dat','--path','remote.dat']);
     assert.equal(remote.payload.data.state,'ready');
+    const urlId = remote.payload.data.input_id;
+    assert.doesNotMatch(JSON.stringify(await record(urlId)),/example\.org/);
+    session.inputs.delete(urlId);
+    const urlPosts = state.posts;
+    assert.equal((await invoke(['forge','recover',urlId],7)).payload.error.code,'input_unconfirmed');
+    const unacceptedUrl = await record(urlId), unacceptedUrlId = randomUUID();
+    unacceptedUrl.id = unacceptedUrlId;
+    unacceptedUrl.request.body.input_id = unacceptedUrlId;
+    unacceptedUrl.result = null;
+    await fs.writeFile(path.join(root,'.ariax/forge',`${unacceptedUrlId}.json`),JSON.stringify(unacceptedUrl),{mode:0o600});
+    assert.match((await invoke(['forge','recover',unacceptedUrlId],1)).payload.error.message,/original URL.*not saved/);
+    assert.equal(state.posts,urlPosts,'recovery invented an unavailable URL');
+    await invoke(['forge','recover',emptyId],1,false,'arx_forge_othercredential');
+    const publishedPosts = state.posts;
+    await fs.rename(emptyPath,`${emptyPath}.moved`);
+    assert.equal((await invoke(['forge','recover',emptyId])).payload.data.storage_state,'published');
+    await fs.rename(`${emptyPath}.moved`,emptyPath);
+    assert.equal(state.posts,publishedPosts,'published input required a source or repeated an upload');
+    const emptyOperation = project.fileOperations.get(emptyId);
+    emptyOperation.state = 'open';
+    await fs.writeFile(emptyPath,'changed');
+    const beforeChangedSource = state.posts;
+    assert.equal((await invoke(['forge','recover',emptyId],7)).payload.error.code,'request_conflict');
+    assert.equal(state.posts,beforeChangedSource,'changed input bytes were uploaded under the old ID');
+    await fs.writeFile(emptyPath,Buffer.alloc(0));
+    emptyOperation.state = 'published';
     for (const loss of ['input-intent','input-attempt','input-put','input-complete']) {
       const id = randomUUID(), target = `harness/${loss}`;
       const args = ['forge','inputs','add',sid,'--file',multiPath,'--path',target,'--input-id',id];
       state.drop = loss;
-      const lost = await invoke(args,9);
+      const lost = await invoke(args);
       assert.doesNotMatch(lost.stdout+lost.stderr,/private-transfer-grant|signature=/);
       const retried = await invoke(args);
       assert.equal(retried.payload.data.state,'pending');
@@ -821,7 +968,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
 
     state.drop = 'run';
     const request = [...base, '--gpus', '0', '--', ...native];
-    const lost = await invoke(request, 9), cid = lost.stderr.match(/command_id: ([0-9a-f-]{36})/)[1];
+    const lost = await invoke(request), cid = lost.stderr.match(/command_id: ([0-9a-f-]{36})/)[1];
     const retry = [...base, '--gpus', '0', '--command-id', cid, '--', ...native];
     await invoke(retry);
     assert.equal(state.executions, 1);
@@ -831,16 +978,45 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(occupied.payload.error.code, 'gpu_busy');
     const parallel = await invoke([...base, '--gpus', '1', '--', ...native]);
     assert.equal(state.executions, 2);
+    const capacityId = randomUUID();
+    const capacity = await invoke([...base,'--gpus','0','--command-id',capacityId,'--wait-ready','--wait-timeout','1',
+      '--',process.execPath,'-e','process.exit(0)'],9);
+    assert.match(capacity.payload.error.message,/Local wait timed out/);
+    assert.match(capacity.stderr,/Waiting for command readiness: gpu_busy/);
+    assert.equal(state.executions,2,'busy GPU readiness launched another command');
     await invoke(['forge', 'cancel', sid, cid]);
     await invoke(['forge', 'watch', sid, cid, '--timeout', '30']);
     await invoke(['forge', 'cancel', sid, parallel.payload.data.command_id]);
     await invoke(['forge', 'watch', sid, parallel.payload.data.command_id, '--timeout', '30']);
+    const capacityRecovery = await invoke(['forge','recover',capacityId,'--wait','--wait-timeout','15']);
+    assert.equal(capacityRecovery.payload.data.state,'succeeded');
+    assert.equal(state.executions,3,'saved capacity wait did not dispatch exactly once');
     const savedName = 'control result ?+.txt';
     const multiple = await invoke([...base, '--gpus', '1,0', '--', process.execPath, '-e',
       'require("node:fs").writeFileSync(process.argv[1], "saved command output"); console.log("explicit devices")', savedName]);
     assert.deepEqual(multiple.payload.data.gpu_ids, [1, 0]);
     await invoke(['forge', 'watch', sid, multiple.payload.data.command_id, '--timeout', '30']);
+    const inputWaitId = randomUUID(), beforeInputWait = state.executions;
+    const inputWait = await invoke(['forge','run',sid,'--tool','base','--command-id',inputWaitId,'--wait-ready',
+      '--input-ids',emptyId,'--wait-timeout','1','--',process.execPath,'-e',
+      'if (require("node:fs").readFileSync(process.argv[1]).length !== 0) process.exit(23)',
+      path.join(root,'inputs/harness/empty')],9);
+    assert.match(inputWait.payload.error.message,/Local wait timed out/);
+    assert.match(inputWait.stderr,/Waiting for input/);
+    assert.deepEqual((await record(inputWaitId)).readiness,{input_ids:[emptyId]});
+    assert.equal(state.executions,beforeInputWait,'unconfirmed input dispatched a command');
     state.confirmInstall = true;
+    const inputRecovered = await invoke(['forge','recover',inputWaitId,'--wait','--wait-timeout','15']);
+    assert.equal(inputRecovered.payload.data.state,'succeeded');
+    const beforeRepeatRecovery = state.executions;
+    assert.equal((await invoke(['forge','recover',inputWaitId,'--wait'])).payload.data.state,'succeeded');
+    assert.equal(state.executions,beforeRepeatRecovery,'completed science was replayed');
+    state.confirmInstall = false;
+    state.confirmAfterReads = 2;
+    const singleWait = await invoke(['forge','run',sid,'--tool','base','--wait-ready','--input-ids',emptyId,
+      '--wait','--wait-timeout','15','--',process.execPath,'-e','process.exit(0)']);
+    assert.match(singleWait.stderr,/Waiting for input/);
+    assert.equal(singleWait.payload.data.state,'succeeded');
     assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'ready');
     const inputConsumer = await invoke(['forge','run',sid,'--tool','base','--',process.execPath,'-e',
       'if (require("node:fs").readFileSync(process.argv[1]).length !== 0) process.exit(23)',
@@ -850,8 +1026,13 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
 
     state.drop = 'limit';
     const edit = ['forge', 'limit', sid, '--gpu-hours', '12', '--limit-revision', '0'];
-    const lostLimit = await invoke(edit, 9);
+    const lostLimit = await invoke(edit, 7);
+    assert.equal(lostLimit.payload.error.code, 'limit_revision_conflict');
     assert.match(lostLimit.payload.error.action, /limit_revision/);
+    const limitId = lostLimit.stderr.match(/request_id: ([0-9a-f-]{36})/)[1];
+    const limitRecovery = await invoke(['forge','recover',limitId],7);
+    assert.match(limitRecovery.payload.error.action,new RegExp(`forge status ${sid}`));
+    assert.match(limitRecovery.payload.error.action,/does not establish/);
     const capped = (await invoke(['forge', 'status', sid])).payload.data;
     assert.equal(capped.limit_revision, 1);
     assert.equal(capped.control.revision, 0);
@@ -892,6 +1073,9 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const syncFailure = await invoke(['forge','sync',sid,'--wait','--timeout','30'],10);
     assert.equal(syncFailure.payload.error.code,'sync_failed');
     assert.doesNotMatch(syncFailure.stdout + syncFailure.stderr,/private-transfer-grant|signature=/);
+    const failedSyncId = syncFailure.stderr.match(/sync_id: ([0-9a-f-]{36})/)[1], failedSyncPosts = state.syncPosts;
+    assert.equal((await invoke(['forge','recover',failedSyncId,'--wait'],10)).payload.error.code,'sync_failed');
+    assert.equal(state.syncPosts,failedSyncPosts,'a failed flush was restarted');
     state.syncMode = 'pending';
     const pendingSync = await invoke(['forge','sync',sid]);
     assert.equal(pendingSync.payload.data.state,'pending');
@@ -902,9 +1086,12 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     session.syncs.get(syncId).state = 'saved';
     assert.equal((await invoke(['forge','sync',sid,'--sync-id',syncId,'--wait'])).payload.data.state,'saved');
     assert.equal(state.syncPosts,beforeSyncWait,'sync recovery resubmitted an accepted flush');
+    session.syncs.delete(syncId);
+    assert.equal((await invoke(['forge','recover',syncId],7)).payload.error.code,'sync_unconfirmed');
+    assert.equal(state.syncPosts,beforeSyncWait,'a previously observed flush was restarted after history disappeared');
     state.syncMode = 'saved';
     state.drop = 'sync';
-    const lostSync = await invoke(['forge','sync',sid],9);
+    const lostSync = await invoke(['forge','sync',sid]);
     const lostSyncId = lostSync.stderr.match(/sync_id: ([0-9a-f-]{36})/)[1];
     const afterLostSync = state.syncPosts;
     assert.equal((await invoke(['forge','sync',sid,'--sync-id',lostSyncId,'--wait'])).payload.data.state,'saved');
@@ -928,6 +1115,15 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.match(heldRun.payload.error.action, /ask your user.*Allow agent to resume/);
     assert.match(heldRun.payload.error.action, /replacement project/);
     assert.equal(state.executions, executions);
+    const heldOperation = randomUUID();
+    session.data.tools[0].state = 'queued';
+    await invoke(['forge','run',sid,'--tool','base','--command-id',heldOperation,'--wait-ready',
+      '--wait-timeout','1','--',process.execPath,'-e','process.exit(0)'],9);
+    session.data.tools[0].state = 'ready';
+    const heldRecovery = await invoke(['forge','recover',heldOperation],7);
+    assert.equal(heldRecovery.payload.error.code,'human_resume_required');
+    assert.match(heldRecovery.payload.error.action,/Allow agent to resume/);
+    assert.equal(state.executions,executions,'recovery bypassed the human stop');
     await invoke(['forge', 'close', sid]);
     const savedPath = `/workspace/${savedName}`;
     project.files.set(savedPath,await fs.readFile(path.join(root,savedName)));
@@ -1015,8 +1211,8 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     state.legacyResume = false;
     assert.equal(state.allocations,allocations,'legacy-server rejection allocated compute');
     state.drop = 'resume';
-    const lostResume = await invoke(approved, 9), resumedId = lostResume.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
-    assert.equal((await record(resumedId)).result, null);
+    const lostResume = await invoke(approved), resumedId = lostResume.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
+    assert.equal((await record(resumedId)).result.session_id, resumedId);
     const retryResume = [...approved, '--session-id', resumedId];
     const resumed = await invoke(retryResume);
     assert.equal(resumed.payload.data.project_id, pid);

@@ -77,16 +77,15 @@ list permits only `--gpu`, which must then be a core GPU. Fallbacks preserve
 the requested device count and resource minima. Inspect returned `hardware`
 for the selected resources.
 
-If a tool-selection response is uncertain, retry with the saved
-`--selection-id`, identical tool/priority fields, and the same root directory,
-account and API origin. After a confirmed preparation failure, submit a new
-selection; omitting `--selection-id` generates one. Use status and wait to
-observe preparation.
+If a tool-selection response is uncertain, use `ariax forge recover ID` with
+the original root directory, account and API origin. After a confirmed
+preparation failure, submit a new selection; omitting `--selection-id`
+generates one. Use status and wait to observe preparation.
 
 ## Execute and observe
 
 ```sh
-ariax forge run SESSION --tool TOOL -- NATIVE_EXECUTABLE NATIVE_ARGUMENTS
+ariax forge run SESSION --tool TOOL --wait-ready --input-ids INPUT_ID --wait --wait-timeout 1800 -- NATIVE_EXECUTABLE NATIVE_ARGUMENTS
 ariax forge commands SESSION --json
 ariax forge command SESSION COMMAND_ID --json
 ariax forge watch SESSION COMMAND_ID --timeout 600 --json
@@ -113,7 +112,13 @@ Check its help with, for example, `ariax forge run SESSION --tool boltz2
 
 `--cwd` defaults to `/workspace` and must stay under it.
 `--timeout-seconds` limits remote execution (default 86400 seconds).
-Read both command status and native output to determine the result.
+`--wait-ready` waits locally for the session, selected tool and available
+command resources. List the input IDs the command needs with `--input-ids`
+(comma-separated); omit that option when none are required. Local file inputs
+must have confirmed installation in the active workspace. `--wait` follows the
+command and returns an error for failed, interrupted or cancelled work. It
+does not inspect the scientific meaning of a successful result: read native
+output and check the files as well.
 
 GPU commands reserve their selected devices; overlapping requests receive
 `gpu_busy`. The installed CLI supports `--gpu-count` at creation and `--gpus`
@@ -137,27 +142,43 @@ may omit earlier output; save fuller logs in workspace files and flush them.
 ## Recover a lost response
 
 Create prints `session_id` and run prints `command_id` before the POST. Each
-request is saved under `.ariax/forge/ID.json` in the chosen `--root-dir`. Retain
-the ID, original request fields, root directory, account, and API origin.
+request is saved under `.ariax/forge/ID.json` in the chosen `--root-dir`.
+Retain the ID, root directory, account, and API origin. Transient failures are
+retried a bounded number of times using that request and identity. Ordinary
+session, command and control submissions have a 60-second local retry deadline.
 
-After a lost acknowledgment, inspect the printed identity:
+After a lost acknowledgment, recover the printed identity:
 
 ```sh
-ariax forge status SESSION --json
-ariax forge command SESSION COMMAND_ID --json
+ariax forge operations --json
+ariax forge recover OPERATION_ID --json
+ariax forge recover COMMAND_ID --wait --wait-timeout 1800 --json
 ```
 
-Retry the original create or resume with `--session-id SESSION`, or the original run with
-`--command-id COMMAND_ID`, using identical fields and the same account and root
-directory. The CLI compares fields directly with the saved request. The server
-returns accepted work for a duplicate ID. Changing an ID can allocate another
-VM or execute another command. Do not automatically rerun scientific commands
-under a new ID after a timeout, failure, or uncertain acknowledgment.
+`operations` lists this root's account-bound records and their last locally
+observed states; it is not a live inventory.
+Recovery supports session admission, tool selection, commands, inputs, sync,
+cancellation, closure, and limit edits. It checks live and retained command
+records before any retry. A pending, unstarted command can continue with its
+same ID; an uncertain, failed, interrupted or cancelled command is not started
+again. If a previously observed operation is absent from current history,
+recovery stops and reports the uncertainty instead of submitting it again.
+A limit-revision conflict requires inspection: it does not establish
+whether an earlier edit took effect. URL imports keep the URL out of the saved
+record. If there is no saved successful result, repeat the original input
+request with its URL and ID so the server can compare the source. A local upload
+can resume only with the unchanged source file;
+a published input can be inspected without that file. Changing an ID can
+allocate another VM or execute another command. A new science run after a
+confirmed failure or interruption requires an explicit new action.
 
-`tools wait` and `watch` use `--timeout SECONDS` to limit local polling; zero or
-omission waits without a local deadline. A local timeout or Ctrl-C leaves remote
-work running. Resume with the same wait/watch operands. For other commands,
-the usual global `--timeout` remains a per-request limit in milliseconds.
+`run --wait-ready` and `run --wait` use `--wait-timeout SECONDS` for the whole
+local operation (default 1800, maximum 86400); `recover` defaults to 60 seconds.
+`tools wait`, `watch` and `sync --wait` accept `--wait-timeout SECONDS`, with
+zero or omission meaning no local deadline. Their older `--timeout` spelling
+also means seconds; elsewhere global `--timeout` is a per-request limit in
+milliseconds. A local timeout or Ctrl-C does not cancel remote work. Use
+`recover` with the same ID, or resume a wait/watch with the same operands.
 
 ## Project controls and resume
 

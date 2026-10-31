@@ -272,7 +272,7 @@ capabilities and input rules.
 | Local input inspection/preparation | `ariax inputs inspect --input FILE`, `ariax inputs prepare --input FILE -f job.json --output DIR` |
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
-| Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `tools`, `run`, `watch`, `close`; read `ariax skills forge --read` |
+| Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `run --wait-ready --wait`, `recover`, `close`; read `ariax skills forge --read` |
 | Forge inputs and durable outputs | `ariax forge inputs add`, `inputs list`, `inputs status`, `sync`, `files`, `download`, `link`; read `ariax skills forge --reference outputs --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
@@ -296,6 +296,29 @@ rows or status fields and null resources mean unknown. Filters do not establish
 support beyond the returned scope. Omit these filters for the full tool record;
 `--json` and `--compact` keep their existing output formats. Model/mode filters
 cannot be combined with `--compact` or `--details`.
+
+Forge saves each supported request under `.ariax/forge/` in `--root-dir` and
+prints its ID before sending it. Temporary failures are retried a bounded number
+of times using the same request; if the outcome is still uncertain, use
+`ariax forge operations` to find the ID, then `ariax forge recover OPERATION_ID`
+with the same root, account, and API origin. Operation listings report the
+last locally observed state; inspect or recover an ID for its current outcome.
+For commands it checks live and retained records first. A failed or interrupted
+command is never rerun under a new ID. URL inputs are not saved in the journal:
+when their source cannot be confirmed from the saved result, provide the
+original URL again with the same input ID.
+
+Use the following to wait for the selected tool, explicitly listed inputs, and
+available command resources, then follow the result:
+
+```sh
+ariax forge run SESSION --tool TOOL --wait-ready --input-ids ID,... --wait -- COMMAND ARG...
+```
+
+Omit `--input-ids` when no staged inputs are needed. `--wait-timeout SECONDS`
+limits this local operation (default 1800); `--timeout-seconds` limits remote
+execution (default 86400). Ctrl-C or a local timeout leaves accepted remote work
+running; recover the same ID rather than starting another command.
 
 The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents a
 native joint sequence and structure design workflow. Its checks are bounded;

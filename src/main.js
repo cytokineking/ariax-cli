@@ -208,7 +208,7 @@ function printHelp(topic) {
     printData(`usage: ${HELP_TOPICS[topic]}`);
     printData('');
     printData('Global flags: --json, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --timeout <ms>');
-    if (topic === 'forge') printData('Forge tools wait/watch: --timeout SECONDS limits local polling; remote work continues.');
+    if (topic === 'forge') printData('Forge local waits use --wait-timeout SECONDS; --timeout-seconds limits remote execution. For legacy tools wait/watch/sync, --timeout also means local seconds.');
     return;
   }
   printData('usage: ariax <command> [options]');

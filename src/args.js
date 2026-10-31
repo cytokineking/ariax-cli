@@ -37,6 +37,7 @@ const BOOLEAN_FLAGS = new Set([
   'help',
   'version',
   'wait',
+  'wait-ready',
   'clear',
   'retained',
   'resume',
