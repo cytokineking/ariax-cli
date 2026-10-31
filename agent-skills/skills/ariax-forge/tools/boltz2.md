@@ -131,18 +131,29 @@ Require the flush state `saved`, then confirm source `closed`. Listing and
 download read the current saved project files. Creating or
 resuming a session allocates paid resources; preparation and idle time count
 toward its GPU-hour limit, and a successful command does not close it. Continue
-that same `PROJECT` with `REVISION` from its current `control.revision`. If held,
-wait for authenticated web approval and user direction, then read the new
-revision. Approval itself leaves compute unallocated:
+that same `PROJECT`. If the user clears a human hold with **Resume workspace**,
+inspect the project and set `RESTORED_SESSION` to its `active_session_id`;
+continue there without starting another session or automatically replaying
+science. **Allow agent to resume later** leaves compute stopped; await the user's
+direction. For a new CLI resume, confirm no session is active, no hold blocks it
+and cleanup has completed. Set `REVISION` from the current `control.revision`
+and explicitly resume. Recover an uncertain earlier request using its original
+ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
 ariax forge resume "$PROJECT" --gpu L40 --tools boltz2 --control-revision "$REVISION" --max-gpu-hours 1 --json
+```
+
+For the CLI path, set `RESTORED_SESSION` from the response. After either path,
+inspect the session and existing commands:
+
+```sh
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" boltz2 --timeout 1800 --json
 ```
 
-Use the new session ID and require host/tool readiness. Verify restored
+Require host/tool readiness. Verify restored
 input/result identities before reuse. Restore recovers inputs/workspace without replaying
 prediction or restoring model caches. The new session prepares named assets
 normally. Read the [outputs reference](../outputs.md) with

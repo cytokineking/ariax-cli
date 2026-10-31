@@ -20,5 +20,7 @@ new output. Stage the original composition files under
 `/inputs/custom-code/example` for these two fixture commands.
 
 Use the current [custom-code recipe](../../../../references/custom-code.md)
-+to save source and explicitly recreate its scratch environment after
-+`ariax forge resume`. Restoration does not rerun inference.
+to save source and explicitly recreate its scratch environment in the
+same-project session after either resume path. If the user chose
+**Resume workspace**, inspect and use its active session without allocating
+another. Restoration does not rerun inference.

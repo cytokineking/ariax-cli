@@ -233,14 +233,24 @@ NativeMPNN and original decisions in Files. Saved project files remain
 available after close. Public `closed` confirms allocation release; inspect
 synchronization errors separately.
 
-Set `PROJECT` from the session and `REVISION` from its current `control.revision`.
-If held, wait for authenticated web approval and user direction, then read the
-new revision. Approval itself leaves compute unallocated. Continue the same
-project only within the authorized budget:
+Set `PROJECT` from the session. If the user clears a human hold with
+**Resume workspace**, inspect the project and set `RESTORED_SESSION` to its
+`active_session_id`; continue there without starting another session or
+automatically replaying science. **Allow agent to resume later** leaves compute
+stopped; await the user's direction. For a new CLI resume, confirm no session
+is active, no hold blocks it and cleanup has completed. Set `REVISION` from the
+current `control.revision` and explicitly resume within the authorized budget.
+Recover an uncertain earlier request using its original ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
 ariax forge resume "$PROJECT" --gpu L40 --tools freebindcraft --control-revision "$REVISION" --max-gpu-hours 1 --json
+```
+
+For the CLI path, set `RESTORED_SESSION` from the response. After either path,
+inspect the session and existing commands before running a new authorized check:
+
+```sh
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" freebindcraft --timeout 1800 --json
 ariax forge run "$RESTORED_SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 120 --json -- freebindcraft-check "$RUN_DIR"
@@ -249,9 +259,8 @@ ariax forge close "$RESTORED_SESSION" --json
 ariax forge status "$RESTORED_SESSION" --json
 ```
 
-Restore from a terminal source, use the new session ID, require host/tool
-readiness and watch the explicit checker command before closure. Use the
-checker appropriate to the saved layout. Restoration recovers workspace and
+Require host/tool readiness and watch the explicit checker command before
+closure. Use the checker appropriate to the saved layout. Restoration recovers workspace and
 ready staged inputs without replaying design. Each new session uses normal
 allocation and billing. Read the [outputs reference](../outputs.md) for
 project-file and recovery semantics.

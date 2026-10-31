@@ -445,11 +445,15 @@ atomically after the complete byte count.
 
 Set `PROJECT` from the session's actual `project_id`. Human pause on the
 project page establishes `human_resume_required`. Stop this project's work,
-provide its page link and explain that **Allow agent to resume** is required.
-API-key CLI requests cannot clear it. Wait for web approval and direction;
-approval itself leaves compute unallocated. Agent-requested
-`ariax pause "$PROJECT" --json` is a distinct control. Do not bypass a hold
-with a replacement project. Abort/delete is terminal.
+provide its page link and explain both actions. **Resume workspace** shows the
+saved hardware and budget, then clears the hold and allocates a same-project
+session. Inspect the project's `active_session_id`, set `RESUMED` to it and
+continue in that session without creating another or automatically replaying
+science. **Allow agent to resume later** in the dropdown clears the hold with
+compute stopped; await the user's direction before an authorized explicit agent
+resume. API-key CLI requests cannot clear the hold. The agent-requested control
+`ariax pause "$PROJECT" --json` is distinct. Do not bypass a hold with a
+replacement project. Abort/delete is terminal.
 
 ```sh
 ariax forge project "$PROJECT" --json
@@ -463,20 +467,30 @@ and `output_error` together. A captured empty tail is available; complete
 terminal output can still omit its prefix. Activity saves command/control
 events, not private agent conversations.
 
-After source resource release and any required web approval, read
-`control.revision` into `REVISION`. Choose hardware, tools and renewed
-allowance explicitly. The joined protein example is:
+Only when no session is active and no hold blocks a new CLI resume, confirm
+source resource release and read `control.revision` into `REVISION`. After
+**Allow agent to resume later**, first await the user's direction. Choose
+hardware, tools and renewed allowance within the authorized scope. Set
+`NEW_SESSION_ID` to a fresh UUID and use this explicit agent resume; do not run
+it after **Resume workspace**:
 
 ```sh
-ariax forge resume "$PROJECT" --control-revision "$REVISION" --gpu "$GPU" --gpu-count 1 --min-ram-gib 100 --min-cpu-count 8 --min-disk-gib 250 --tools boltzgen,protenix-models,interface-scores --priority boltzgen --max-gpu-hours "$RESUME_GPU_HOURS" --json
+ariax forge resume "$PROJECT" --session-id "$NEW_SESSION_ID" --control-revision "$REVISION" --gpu "$GPU" --gpu-count 1 --min-ram-gib 100 --min-cpu-count 8 --min-disk-gib 250 --tools boltzgen,protenix-models,interface-scores --priority boltzgen --max-gpu-hours "$RESUME_GPU_HOURS" --json
+```
+
+For the CLI path, set `RESUMED` from the response. After either path, inspect the
+session and its existing command states before continuing the joined protein
+example:
+
+```sh
 ariax forge status "$RESUMED" --json
 ariax forge tools wait "$RESUMED" base --timeout 600 --json
 ariax forge tools wait "$RESUMED" boltzgen --timeout 1800 --json
 ariax forge run "$RESUMED" --tool base --timeout-seconds 60 --json -- python3 -c 'import json; from pathlib import Path; p=Path("/workspace/campaigns/protein-review/review.json"); r=json.loads(p.read_text()); print(json.dumps({"saved_review":str(p),"accepted_count":r["accepted_count"],"selected_ids":r["selected_ids"]}))'
 ```
 
-Set `RESUMED` from the actual resume response; inspect the saved-file command
-before new work. For RFantibody choose its tool, floors and review path.
+Inspect the saved-file command before new work. For RFantibody choose its tool,
+floors and review path.
 Inputs/workspace return; scratch environments and model mounts need normal
 preparation. [Custom code](custom-code.md) needs saved source/bootstrap and
 explicit remote scratch recreation. Resume never replays scientific commands.

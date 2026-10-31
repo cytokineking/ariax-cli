@@ -32,5 +32,7 @@ Require ready tools and inputs, inspect native output and rejection records,
 then use the [project file and resume flow](../outputs.md) before closing compute.
 After a lost acknowledgment, reconcile the original command/session ID through
 the [Forge lifecycle](../SKILL.md#recover-a-lost-response). For a human pause,
-follow [project controls](../SKILL.md#project-controls-and-resume); approval
-clears the hold and an explicit subsequent command resumes work.
+follow [project controls](../SKILL.md#project-controls-and-resume).
+**Resume workspace** starts a same-project session to inspect and use, while
+**Allow agent to resume later** leaves compute stopped until an authorized agent
+resume. Do not automatically replay science.

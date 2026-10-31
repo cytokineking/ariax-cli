@@ -188,6 +188,10 @@ milliseconds. A local timeout or Ctrl-C does not cancel remote work. Use
 
 ## Project controls and resume
 
+The CLI resume example creates an allocation only when no session is active
+and no human hold blocks it. After **Resume workspace**, use the session the
+page started instead.
+
 ```sh
 ariax forge project PROJECT --limit 50 --json
 ariax forge status SESSION --json
@@ -205,23 +209,31 @@ limit request. Recovery retains that original revision and ID; a later pause or
 edit is a conflict, not permission to refresh the request or clear a human hold.
 
 A human pause sets `human_resume_required`. Stop the project's work and ask
-the user to open the supplied project page and choose **Allow agent to resume**.
-Approval requires authenticated web use and keeps compute stopped. Await the
-user's direction, inspect the new control revision, then explicitly resume
-that same project. API-key requests cannot approve the hold. Preserve the
-held project's identity when its files or outputs are needed.
+the user to open the supplied project page. **Resume workspace** shows the
+saved hardware and budget, then clears the hold and allocates a same-project
+session atomically. After the user resumes there, inspect `project` for its
+`active_session_id` and inspect that session; continue there without creating
+another session or automatically replaying scientific work. If it is not yet
+visible, inspect for a failure or wait and check again. Alternatively,
+**Allow agent to resume later** in the dropdown clears the hold and leaves
+compute stopped.
+Await the user's direction, inspect cleanup and the current control revision,
+then explicitly resume that same project if authorized. API-key requests cannot
+clear the hold. Do not bypass it with a replacement project.
 
-Resume loads the current saved files of the same project. Wait for confirmed
-prior-session cleanup and inspect `project` if another session is active. A
-newer pause invalidates an observed control revision.
+An explicit CLI resume loads the current saved files of the same project. Wait
+for confirmed prior-session cleanup and inspect `project` for an active session.
+A newer pause invalidates an observed control revision.
 A stale-revision rejection permits a new explicit request with the newly
 observed revision and a fresh session ID once any human hold has been cleared
-through the authenticated web flow. A lost acknowledgment
-requires the original ID and fields. Local saved requests remain immutable.
+through the authenticated web flow and inspection confirms no session is active.
+A lost acknowledgment requires the original ID and fields. Local saved requests
+remain immutable.
 
-Resume starts a new allocation in the same project and loads its current
-saved files. Choose hardware, tools, priority and an optional new cap; the old
-session's allowance is separate. Run the next scientific command explicitly.
+An explicit CLI resume starts a new allocation in the same project and loads
+its current saved files. Choose hardware, tools, priority and an optional new
+cap; the old session's allowance is separate. Run the next scientific command
+explicitly.
 
 Limits count preparation and idle time. Eight GPU-hours on four GPUs allow
 two wall-clock hours. An edit replaces the total allowance from the original

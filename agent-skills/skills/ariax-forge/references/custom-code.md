@@ -119,12 +119,19 @@ release. The saved source, bootstrap and outputs remain available through the
 
 ## Continue saved code when needed
 
-Resume only when the user's task calls for more work. Set `PROJECT` from the
+Continue only when the user's task calls for more work. Set `PROJECT` from the
 source session and follow [project controls](../SKILL.md#project-controls-and-resume)
-to inspect any human hold and obtain the current `control.revision`. Human web
-approval leaves compute stopped; await the user's direction before resuming
-that project. Resume starts a new paid allocation and does not replay commands
-or reinstall dependencies.
+to inspect any human hold. If the user chose **Resume workspace**, inspect the
+project's `active_session_id`, set `RESTORED_SESSION` to it and continue in that
+session; do not allocate another session or automatically replay science.
+**Allow agent to resume later** leaves compute stopped; await the user's
+direction before an authorized agent resume. Either resume starts a paid
+allocation and does not replay commands or reinstall dependencies.
+
+When no session is active and no hold blocks a new CLI resume, inspect cleanup
+and the current `control.revision`, then use the example below. After the user
+chooses **Allow agent to resume later**, first await their direction. Do not use
+this command after **Resume workspace**:
 
 ```sh
 ariax forge project "$PROJECT" --json
@@ -136,13 +143,15 @@ Omitting tools suffices for this composition example. Scientific work must
 explicitly select its compatible tools. Choose hardware and the new allowance
 within the authorized scope. After an uncertain reply, use the saved request
 ID and fields as described in [request recovery](../SKILL.md#recover-a-lost-response).
-Wait for the new session and its selected tools to be ready before execution.
+For the CLI path, set `RESTORED_SESSION` to the returned new session UUID.
+After either resume path, wait for the selected session and its tools to be ready
+before execution.
 
-Set `RESTORED_SESSION` to the returned new session UUID. Restore completes
-before command admission; it reconstructs saved workspace/input files and
-does not replay commands or reinstall dependencies. Inspect the saved source
-record and bootstrap before explicitly unpacking, reinstalling and running
-with a fresh output path:
+Restore completes before command admission; it reconstructs saved workspace
+and input files and does not replay commands or reinstall dependencies. Inspect
+the saved source record, command states, outputs and bootstrap before explicitly
+unpacking, reinstalling and running authorized unfinished work with a fresh
+output path:
 
 ```sh
 ariax forge run "$RESTORED_SESSION" --tool base --json -- python3 /inputs/custom-code/source_bundle.py unpack /workspace/custom/source.tar /scratch/custom-source

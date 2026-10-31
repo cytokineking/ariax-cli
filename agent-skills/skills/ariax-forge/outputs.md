@@ -101,7 +101,6 @@ active; neither a listing nor a link pins a historical version.
 ariax forge finish SESSION --wait --json
 ariax forge status SESSION --json
 ariax forge project PROJECT --json
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40 --control-revision N --max-gpu-hours 2 --json
 ```
 
 Finish waits for accepted commands and a pre-stop flush within its fixed
@@ -113,12 +112,25 @@ outcomes: inspect synchronization errors and confirm `closed`. Abrupt VM loss
 can leave unsaved changes unavailable. Saved project files remain available
 after closure.
 
-Resume needs the observed control revision and confirmed prior-session cleanup.
-It loads the same project's current saved inputs and workspace files before
-commands are admitted. Human-hold approval belongs to the authenticated web
-flow and leaves compute stopped until explicitly resumed. Restored custom
-source/bootstrap files require explicit environment recreation and a new
-command; resume never replays scientific commands.
+An explicit CLI resume needs the observed control revision and confirmed
+prior-session cleanup. It loads the same project's current saved inputs and
+workspace files before commands are admitted. For a human hold, the project
+page's **Resume workspace** clears the hold and starts a same-project session;
+inspect and continue in that active session without allocating another or
+automatically replaying science. **Allow agent to resume later** clears the
+hold with compute stopped; await the user's direction before an authorized
+explicit resume. Restored custom source/bootstrap files require explicit
+environment recreation and a new command; resume never replays scientific
+commands.
+
+When no session is active and no hold blocks a new explicit CLI resume, use the
+current revision. After **Allow agent to resume later**, first await the user's
+direction. For an uncertain earlier request, recover its original ID, fields
+and revision instead of replacing it:
+
+```sh
+ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40 --control-revision N --max-gpu-hours 2 --json
+```
 
 `link` authorizes the current regular file and returns a project-page URL with
 its encoded path. The link can show newer bytes if that path changes; it is not

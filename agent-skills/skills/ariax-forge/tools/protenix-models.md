@@ -172,8 +172,9 @@ and substructure geometry remains a soft prior; preserve the reported deviations
 
 Use [saved results](../outputs.md) for current project `forge link` paths,
 and [project controls](../SKILL.md#project-controls-and-resume) for human
-pause and same-project resume. Web approval clears a hold without allocating
-compute; restoration leaves the next scientific command explicit.
+pause and same-project resume. **Resume workspace** starts a same-project
+session; inspect and use it. **Allow agent to resume later** leaves compute
+stopped until an authorized agent resume. Never automatically replay science.
 
 ## V2 standalone example
 

@@ -207,15 +207,26 @@ for downloads and storage limits. Keep bulk scientific outputs on remote
 storage under the applicable workstation policy. Public `closed` confirms
 allocation release; inspect synchronization errors separately.
 
-Set `PROJECT` from the session and `REVISION` from its current `control.revision`.
-If held, wait for authenticated web approval and user direction, then read the
-new revision. Approval itself leaves compute unallocated. Continue that project.
-The saved-output checker below applies to the unchanged PD-L1 example; replace
-it with an appropriate check for other results:
+Set `PROJECT` from the session. If the user clears a human hold with
+**Resume workspace**, inspect the project and set `RESTORED_SESSION` to its
+`active_session_id`; continue there without starting another session or
+automatically replaying science. **Allow agent to resume later** leaves compute
+stopped; await the user's direction. For a new CLI resume, confirm no session
+is active, no hold blocks it and cleanup has completed. Set `REVISION` from the
+current `control.revision` and explicitly resume. Recover an uncertain earlier
+request using its original ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
 ariax forge resume "$PROJECT" --gpu L40 --tools bindcraft2 --control-revision "$REVISION" --max-gpu-hours 1 --json
+```
+
+For the CLI path, set `RESTORED_SESSION` from the response. After either path,
+inspect the session and existing commands. The saved-output checker below
+applies to the unchanged PD-L1 example; replace it with an appropriate check for
+other results:
+
+```sh
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge tools wait "$RESTORED_SESSION" bindcraft2 --timeout 1800 --json
 ariax forge run "$RESTORED_SESSION" --tool bindcraft2 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"
@@ -224,7 +235,6 @@ ariax forge close "$RESTORED_SESSION" --json
 ariax forge status "$RESTORED_SESSION" --json
 ```
 
-Restore from a closed or failed source and use the returned new session ID.
 Require host/tool readiness, then inspect the saved results and run an
 appropriate saved-output check before closure; record and watch that explicit
 command. Restore recovers workspace and ready staged inputs without replaying

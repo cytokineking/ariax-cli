@@ -68,19 +68,29 @@ command alone does not make
 workspace bytes durable. Read the [outputs reference](../outputs.md) with
 `ariax skills forge --reference outputs --read --json` for storage behavior.
 
-Continue the same project after prior-session cleanup and a successful flush.
-Set `PROJECT` from the session and `REVISION` from `control.revision`. If held,
-stop and wait for authenticated web approval and user direction, then read the
-new revision. Approval itself leaves compute unallocated:
+Continue the same project after a successful flush. If the user clears a human
+hold with **Resume workspace**, inspect the project and set `RESTORED_SESSION`
+to its `active_session_id`; continue there without starting another session or
+automatically replaying science. **Allow agent to resume later** leaves compute
+stopped; await the user's direction. For a new CLI resume, confirm no session
+is active, no hold blocks it and prior-session cleanup has completed. Set
+`REVISION` from the current `control.revision` and explicitly resume. Recover
+an uncertain earlier request using its original ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
 ariax forge resume "$PROJECT" --gpu L40 --control-revision "$REVISION" --max-gpu-hours 1 --json
+```
+
+For the CLI path, set `RESTORED_SESSION` from the response. After either path,
+inspect the session and existing commands before running a new authorized check:
+
+```sh
 ariax forge status "$RESTORED_SESSION" --json
 ariax forge run "$RESTORED_SESSION" --tool base --timeout-seconds 60 --json -- python3 /inputs/base/check.py /workspace/base-demo/result.json
 ```
 
-Use the new session UUID and wait for host/base readiness before the checker.
+Wait for host/base readiness before the checker.
 Watch the new check command to completion. Resume loads current project files
 and staged inputs without replaying commands. Close the new session and
 confirm resource release when finished.

@@ -132,16 +132,31 @@ ariax --root-dir "$CLI_ROOT" forge status "$PARTIAL_SESSION" --json
 ```
 
 Require the flush state `saved` and confirm resource release. Follow
-[same-project resume](../../../SKILL.md#project-controls-and-resume): resolve
-any human hold, read the current control revision and choose an authorized new
-session and allocation limit. Set `RESUME_REVISION` from `control.revision`.
-Approval itself starts no compute.
+[same-project resume](../../../SKILL.md#project-controls-and-resume). If the
+user clears a human hold with **Resume workspace**, inspect the project and set
+`RESUMED_SESSION` to its `active_session_id`; continue there without allocating
+another session or automatically replaying science. **Allow agent to resume later**
+leaves compute stopped; await the user's direction. For a new CLI resume, confirm
+no session is active, no hold blocks it and cleanup has completed. Inspect the
+current control revision, choose an allocation within the authorized scope, and
+use the explicit CLI resume below. Set `RESUME_REVISION` from `control.revision`
+and `RESUMED_SESSION` to a fresh UUID. Recover any uncertain earlier request
+using its original ID, fields and revision:
 
 ```sh
 ariax --root-dir "$CLI_ROOT" forge project "$PARTIAL_PROJECT" --json
 ariax --root-dir "$CLI_ROOT" forge resume "$PARTIAL_PROJECT" \
   --session-id "$RESUMED_SESSION" --gpu "$SELECTED_GPU" --tools opendde-harness \
   --control-revision "$RESUME_REVISION" --max-gpu-hours "$APPROVED_HOURS" --json
+```
+
+After either path, inspect the active session and the project's current
+`control.revision`; set `RESUME_REVISION` to that revision. Continue the
+authorized workflow only after inspecting its retained command and result state;
+do not replace an uncertain retained request with this new revision:
+
+```sh
+ariax --root-dir "$CLI_ROOT" forge status "$RESUMED_SESSION" --json
 ariax --root-dir "$CLI_ROOT" forge tools wait "$RESUMED_SESSION" opendde-harness --timeout 1800 --json
 "$HARNESS_PYTHON" "$HARNESS_ADAPTER/controller.py" continue --resume \
   --workflow /srv/harness/partial/workflow.json --state-dir /srv/harness/partial/state \

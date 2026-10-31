@@ -1259,7 +1259,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(heldRun.payload.error.details.control_revision, 1);
     assert.equal(heldRun.payload.error.details.approval_url, `${api.origin}/projects/forge/${pid}`);
     assert.match(heldRun.payload.error.action, new RegExp(`/projects/forge/${pid}`));
-    assert.match(heldRun.payload.error.action, /ask your user.*Allow agent to resume/);
+    assert.match(heldRun.payload.error.action, /ask your user.*Resume workspace.*inspect the active session and continue there.*do not create another session or automatically replay science.*Allow agent to resume later.*leaves compute stopped/);
     assert.match(heldRun.payload.error.action, /replacement project/);
     assert.equal(state.executions, executions);
     const heldOperation = randomUUID();
@@ -1269,7 +1269,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     session.data.tools[0].state = 'ready';
     const heldRecovery = await invoke(['forge','recover',heldOperation],7);
     assert.equal(heldRecovery.payload.error.code,'human_resume_required');
-    assert.match(heldRecovery.payload.error.action,/Allow agent to resume/);
+    assert.match(heldRecovery.payload.error.action,/Resume workspace.*Allow agent to resume later/);
     assert.equal(state.executions,executions,'recovery bypassed the human stop');
     await invoke(['forge', 'close', sid]);
     const beforeOfflineCopy = state.copyPosts;

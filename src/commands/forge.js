@@ -1087,7 +1087,7 @@ export async function run(ctx) {
       const link = isUUID(projectId) ? projectUrl(ctx, projectId) : 'the same project page';
       if (isUUID(projectId)) error.details = { ...error.details, project_id: projectId, approval_url: link };
       error.action = error.code === 'human_resume_required'
-        ? `Stop this project's work and ask your user to open ${link} and choose "Allow agent to resume". Await their direction, inspect the project control revision, then explicitly resume the same project. Do not continue held work through a replacement project.`
+        ? `Stop this project's work and ask your user to open ${link}. "Resume workspace" shows the saved hardware and budget, then clears the hold and allocates a session in the same project atomically. After they use it, inspect the active session and continue there; do not create another session or automatically replay science. Alternatively, "Allow agent to resume later" in the dropdown clears the hold and leaves compute stopped. Await their direction, inspect cleanup and the current control revision, then explicitly resume the same project if authorized. Retain original IDs and revisions for uncertain requests. Do not continue held work through a replacement project.`
         : `Project control changed. Inspect ${isUUID(projectId) ? `ariax forge project ${projectId}` : 'the project'} before continuing; a newer pause may require human approval.`;
     } else if (['checkpoint_required', 'checkpoint_unready'].includes(error.code)) {
       error.action = 'This server requires the removed Forge checkpoint contract. Upgrade the CLI and server together before using the current project workspace.';
