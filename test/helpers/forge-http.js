@@ -1020,6 +1020,11 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     }
     project.files.set('/workspace/source.dat',Buffer.from('original'));
     const copyId = randomUUID();
+    const beforeVersion = state.posts;
+    assert.equal(typeof (await invoke(['forge','files','recover',pid,'--version'])).payload.data.version,'string');
+    assert.equal(state.posts,beforeVersion,'the global version switch sent a mutation');
+    await invoke(['forge','files','recover',pid,'--path','/workspace/invalid.dat',
+      '--catalog',`${pid}:/workspace/source.dat`,'--version','0'],1);
     state.drop = 'file-copy';
     const copy = await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat',
       '--catalog',`${pid}:/workspace/source.dat`,'--version','1','--operation-id',copyId]);
@@ -1035,7 +1040,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(state.copyPosts,copyPosts,'changed source reused a file recovery ID');
     await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat','--catalog',`${pid}:/workspace/source.dat`,'--version','1'],1);
     const overwritten = await invoke(['forge','files','recover',pid,'--path','/workspace/copied.dat',
-      '--catalog',`${pid}:/workspace/source.dat`,'--version','1','--overwrite']);
+      '--catalog',`${pid}:/workspace/source.dat`,'--version=1','--overwrite']);
     assert.equal(overwritten.payload.data.state,'ready');
     state.copyConflict = true;
     assert.equal((await invoke(['forge','recover',copyId],10)).payload.error.code,'file_recovery_failed');

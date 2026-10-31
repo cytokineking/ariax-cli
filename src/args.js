@@ -69,6 +69,7 @@ export function parseArgv(argv) {
   const globals = Object.create(null);
   let command;
   let passthrough;
+  let fileVersionOption = false;
 
   const takeValue = (i, name, raw) => {
     const next = argv[i + 1];
@@ -98,8 +99,14 @@ export function parseArgv(argv) {
         name = tok.slice(2);
       }
       if (!name) throw usageError(`Bad flag "${tok}".`);
-      const target = GLOBAL_FLAG_NAMES.has(name) ? globals : flags;
-      if (BOOLEAN_FLAGS.has(name)) {
+      // `forge files recover --version N` selects a catalog file version;
+      // standalone `--version` remains the global CLI-version switch.
+      const fileVersion = name === 'version' && command === 'forge'
+        && positionals[0] === 'files' && positionals[1] === 'recover'
+        && (inlineValue !== undefined || (argv[i + 1] !== undefined && !argv[i + 1].startsWith('-')));
+      if (fileVersion) fileVersionOption = true;
+      const target = !fileVersion && GLOBAL_FLAG_NAMES.has(name) ? globals : flags;
+      if (!fileVersion && BOOLEAN_FLAGS.has(name)) {
         if (inlineValue !== undefined) {
           throw usageError(`Flag --${name} takes no value (got "${tok}").`);
         }
@@ -147,6 +154,7 @@ export function parseArgv(argv) {
 
   // Allow globals after the command too: promote known names from flags.
   for (const name of [...GLOBAL_FLAG_NAMES]) {
+    if (name === 'version' && fileVersionOption) continue;
     if (flags[name] !== undefined && globals[name] === undefined) {
       globals[name] = flags[name];
       delete flags[name];
