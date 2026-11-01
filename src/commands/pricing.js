@@ -4,15 +4,30 @@ import { EXIT } from '../exit-codes.js';
 
 export async function run(ctx) {
   const res = await ctx.client.get('/api/v1/pricing', { signal: ctx.signal, query: { channel: 'cli' } });
-  const data = res.data;
-  if (data?.billing_unit !== 'allocation_hour' || typeof data.source !== 'string'
-      || !Array.isArray(data.rates) || data.rates.length === 0
-      || data.rates.some(rate => !rate || typeof rate.gpu_id !== 'string'
+  const raw = res.data;
+  if (raw?.billing_unit !== 'allocation_hour' || typeof raw.source !== 'string'
+      || !Array.isArray(raw.rates) || raw.rates.length === 0
+      || raw.rates.some(rate => !rate || typeof rate.gpu_id !== 'string'
         || ![1, 2, 4, 8].includes(rate.gpu_count) || rate.currency !== 'USD'
         || typeof rate.hourly_rate !== 'string' || !/^\d+(?:\.\d{1,6})?$/.test(rate.hourly_rate)
         || !Number.isFinite(Number(rate.hourly_rate)) || Number(rate.hourly_rate) <= 0)) {
     throw Object.assign(new Error('Pricing endpoint returned invalid hourly rates.'), { exitCode: EXIT.SERVER });
   }
+  // Older servers may return both names. Keep the existing L40S rate-card
+  // row when present; do not alter or combine other GPU rates.
+  const collapse = rows => {
+    const preferred = new Set(rows.filter(row => row?.gpu_id === 'L40S').map(row => row.gpu_count));
+    const seen = new Set();
+    return rows.flatMap(row => {
+      if (!['L40', 'L40S'].includes(row?.gpu_id)) return [row];
+      if ((row.gpu_id === 'L40' && preferred.has(row.gpu_count)) || seen.has(row.gpu_count)) return [];
+      seen.add(row.gpu_count);
+      return [{ ...row, gpu_id: 'L40S' }];
+    });
+  };
+  const data = { ...raw, rates: collapse(raw.rates),
+    ...(Array.isArray(raw.promotion?.rates) ? { promotion: { ...raw.promotion, rates: collapse(raw.promotion.rates) } } : {}),
+  };
   if (ctx.json) {
     printJson({ data, meta: res.meta, request_id: res.requestId });
     return;

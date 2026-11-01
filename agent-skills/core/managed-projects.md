@@ -85,8 +85,8 @@ Every effective policy must include at least one compatible core GPU:
 
 | Protocol | Core GPU identifiers |
 | --- | --- |
-| BindCraft / FreeBindCraft, BindCraft2, BoltzGen | `H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO` |
-| PXDesign | `H100`, `A100_80GB`, `L40`, `L40S` |
+| BindCraft / FreeBindCraft, BindCraft2, BoltzGen | `H100`, `A100_80GB`, `L40S`, `RTX6000PRO` |
+| PXDesign | `H100`, `A100_80GB`, `L40S` |
 | ESMFold2-pipeline | `H100`, `A100_80GB`, `RTX6000PRO` |
 
 `A100_40GB`, `A6000`, `H200`, `B200`, and other supported classes may be

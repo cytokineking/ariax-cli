@@ -135,7 +135,7 @@ this command after **Resume workspace**:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --session-id "$NEW_SESSION_ID" --control-revision "$REVISION" --gpu L40 --gpu-count 1 --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --session-id "$NEW_SESSION_ID" --control-revision "$REVISION" --gpu L40S --gpu-count 1 --max-gpu-hours 1 --json
 ```
 
 Set `REVISION` from `control.revision` and use a fresh UUID for `NEW_SESSION_ID`.

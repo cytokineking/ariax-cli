@@ -71,7 +71,7 @@ availability. Ready tools remain usable while preparation runs in the background
 `--min-ram-gib`, `--min-cpu-count` and `--min-disk-gib` request hardware minima.
 Ariax tries `--gpu` first. Use `--allowed-gpus RTX5090,L40S` to permit
 fallbacks; the list must include the preferred GPU and at least one core GPU
-(H100, A100_80GB, L40, L40S, or RTX6000PRO). An omitted
+(H100, A100_80GB, L40S, or RTX6000PRO). An omitted
 list permits only `--gpu`, which must then be a core GPU. Fallbacks preserve
 the requested device count and resource minima. Inspect returned `hardware`
 for the selected resources.
@@ -195,7 +195,7 @@ page started instead.
 ```sh
 ariax forge project PROJECT --limit 50 --json
 ariax forge status SESSION --json
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40 --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
+ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
 ariax forge limit SESSION --gpu-hours 12 --json
 ariax forge limit SESSION --clear --json
 ```

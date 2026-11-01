@@ -4,11 +4,11 @@ import { printProgress } from './output.js';
 import { protocolId } from './structure-input.js';
 
 const CORE = Object.freeze({
-  forge: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
-  bindcraft: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
-  bindcraft2: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
-  boltzgen: ['H100', 'A100_80GB', 'L40', 'L40S', 'RTX6000PRO'],
-  pxdesign: ['H100', 'A100_80GB', 'L40', 'L40S'],
+  forge: ['H100', 'A100_80GB', 'L40S', 'RTX6000PRO'],
+  bindcraft: ['H100', 'A100_80GB', 'L40S', 'RTX6000PRO'],
+  bindcraft2: ['H100', 'A100_80GB', 'L40S', 'RTX6000PRO'],
+  boltzgen: ['H100', 'A100_80GB', 'L40S', 'RTX6000PRO'],
+  pxdesign: ['H100', 'A100_80GB', 'L40S'],
   'esmfold2-pipeline': ['H100', 'A100_80GB', 'RTX6000PRO'],
 });
 
@@ -17,6 +17,7 @@ export function canonicalGpu(value) {
   if (typeof value !== 'string') return null;
   const name = value.trim().toUpperCase().replaceAll('-', '_');
   const aliases = {
+    L40: 'L40S',
     A100: 'A100_80GB', A10080GB: 'A100_80GB', A100_80G: 'A100_80GB',
     A10040GB: 'A100_40GB', A100_40G: 'A100_40GB',
     RTXPRO6000: 'RTX6000PRO', RTX_PRO6000: 'RTX6000PRO',

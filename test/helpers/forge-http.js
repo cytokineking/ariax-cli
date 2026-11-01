@@ -136,6 +136,13 @@ async function boundary(root) {
       if (req.method === 'GET' && url.pathname === '/api/v1/me') {
         return reply(res, 200, { actor: { user_id: user }, billing: { account_type: 'user', account_id: user } });
       }
+      if (req.method === 'GET' && url.pathname === '/api/v1/pricing') return reply(res, 200, {
+        source: 'database', billing_unit: 'allocation_hour', rates: [
+          { gpu_id: 'L40', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
+          { gpu_id: 'L40S', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
+          { gpu_id: 'RTX6000ADA', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
+        ],
+      });
       if (req.method === 'GET' && url.pathname === '/api/v1/forge/catalog') return reply(res, 200, { tools: catalog });
       if (direct && req.method === 'POST' && state.rejectPost401 > 0) {
         state.rejectPost401--;
@@ -598,8 +605,11 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.ok(guide.payload.data.content.length > 0);
     const alias = await invoke(['skills', 'ariax-forge', '--read']);
     assert.equal(alias.payload.data.content, guide.payload.data.content);
+    const pricing = (await invoke(['pricing'])).payload.data.rates;
+    assert.deepEqual(pricing.map(row => row.gpu_id), ['L40S', 'RTX6000ADA']);
+    assert.equal(pricing[0].hourly_rate, '2.500000');
 
-    const createArgs = ['forge', 'create', '--name', 'Recovery experiment', '--gpu', 'RTX5090', '--allowed-gpus', 'RTX5090,L40S', '--tools', 'boltz2,bindcraft2', '--priority', 'bindcraft2', '--max-gpu-hours', '2'];
+    const createArgs = ['forge', 'create', '--name', 'Recovery experiment', '--gpu', 'RTX5090', '--allowed-gpus', 'RTX5090,L40,L40S', '--tools', 'boltz2,bindcraft2', '--priority', 'bindcraft2', '--max-gpu-hours', '2'];
     const lostCreate = await invoke(createArgs);
     const sessionId = lostCreate.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
     assert.equal(state.allocations, 1);
@@ -616,6 +626,15 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(state.sessions.get(sessionId).request.gpu_count, 1);
     assert.equal(state.sessions.get(sessionId).request.max_gpu_hours, 2);
     assert.equal(state.allocations, 1, 'retry allocated another VM');
+    // A previously journaled physical name is replayed byte-for-byte while
+    // either family alias still identifies the same session request.
+    const legacyRecord = await record(sessionId);
+    legacyRecord.request.body.allowed_gpus = ['RTX5090', 'L40'];
+    await fs.writeFile(path.join(root, '.ariax/forge', `${sessionId}.json`), JSON.stringify(legacyRecord));
+    state.sessions.get(sessionId).request.allowed_gpus = ['RTX5090', 'L40'];
+    await invoke(retryCreate);
+    assert.deepEqual((await record(sessionId)).request.body.allowed_gpus, ['RTX5090', 'L40']);
+    assert.equal(state.allocations, 1, 'legacy retry allocated another VM');
     assert.equal((await record(sessionId)).project_id, accepted.payload.data.project_id);
     const listedOperations = (await invoke(['forge','operations'])).payload.data;
     assert.ok(listedOperations.operations.some(item => item.operation_id === sessionId && item.kind === 'session'));

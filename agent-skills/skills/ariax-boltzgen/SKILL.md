@@ -46,7 +46,7 @@ Check `ariax pricing --json` for current hourly rates. Pick a range of compatibl
 GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
 guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
-Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
+Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40S`,
 `RTX6000PRO`. Add every compatible class within the memory and authorized hourly
 budget limits; one core choice is allowed but reduces availability. Supplemental
 classes alone do not qualify, and `allowed_gpus` alternatives do not enable Turbo.

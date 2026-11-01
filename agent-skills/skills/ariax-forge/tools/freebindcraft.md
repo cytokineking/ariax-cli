@@ -244,7 +244,7 @@ Recover an uncertain earlier request using its original ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40 --tools freebindcraft --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40S --tools freebindcraft --control-revision "$REVISION" --max-gpu-hours 1 --json
 ```
 
 For the CLI path, set `RESTORED_SESSION` from the response. After either path,

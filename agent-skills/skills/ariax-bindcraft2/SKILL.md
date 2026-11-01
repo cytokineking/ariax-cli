@@ -153,7 +153,7 @@ workers. More GPUs increase combined hourly cost and do not pool memory for one
 worker. Preserve the user's compute and spending authorization, and do not
 relaunch an exhausted pilot automatically.
 
-Include at least one compatible primary/core GPU from `H100`, `A100_80GB`, `L40`, `L40S`,
+Include at least one compatible primary/core GPU from `H100`, `A100_80GB`, `L40S`,
 or `RTX6000PRO`. Select as many compatible options as memory
 and the authorized hourly budget allow; one core choice is valid but reduces availability.
 Supplemental classes alone are insufficient. `RTX6000PRO` differs from

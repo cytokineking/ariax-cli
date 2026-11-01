@@ -83,7 +83,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   Finish uses --timeout-seconds for its fixed remote deadline (default 3600); its --wait-timeout defaults to 7200 seconds.
   For tools wait, watch and sync, --wait-timeout is in seconds; omission or 0 waits indefinitely. Their older --timeout option also uses seconds.
   Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
-  --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40, L40S, or RTX6000PRO.
+  --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40S, or RTX6000PRO.
   Use catalog --compact to find tools; --model/--mode select exact IDs and their requirements.
   --model/--mode require --tool and cannot combine with --compact/--details. Omit them for the full tool record.`;
 
@@ -438,6 +438,23 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
   }
 }
 
+// Canonicalize only the L40 family. Saved session requests are replayed as
+// recorded; equivalent aliases may identify the same original intent.
+function sessionGpuIntent(request) {
+  if (!request?.body || typeof request.body !== 'object') return request;
+  const canonical = value => typeof value === 'string' && /^(L40|L40S)$/i.test(value.trim()) ? 'L40S' : value;
+  const body = { ...request.body, gpu_type: canonical(request.body.gpu_type) };
+  if (Array.isArray(body.allowed_gpus)) {
+    const values = [];
+    for (const raw of body.allowed_gpus) {
+      const gpu = canonical(raw);
+      if (gpu !== 'L40S' || !values.includes(gpu)) values.push(gpu);
+    }
+    body.allowed_gpus = values;
+  }
+  return { ...request, body };
+}
+
 export async function submit(ctx, id, request, label, recovery, options = {}) {
   if (!options.signal) return controlled(ctx, id, 60, signal => submit(ctx, id, request, label, recovery, { ...options, signal }));
   const account = request.session_id && !options.readiness && request.path !== '/v1/commands'
@@ -445,6 +462,7 @@ export async function submit(ctx, id, request, label, recovery, options = {}) {
     : await accountIdentity(ctx, { signal: options.signal });
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
   const file = recordPath(ctx, id, true);
+  if (label === 'session_id') request = sessionGpuIntent(request);
   const candidate = { id, ...account, request, result: null, ...(options.readiness ? { readiness: options.readiness } : {}) };
   let record = readRecord(file);
   let previous = !!record;
@@ -461,7 +479,8 @@ export async function submit(ctx, id, request, label, recovery, options = {}) {
   if (label === 'session_id' && record?.id === id && record.request?.body?.files_contract !== 2) {
     throw new ApiError({ status: 409, code: 'upgrade_required', message: `Saved session request ${id} uses the legacy file contract. Inspect the original session; it cannot be replayed as a current-workspace request.` });
   }
-  if (record?.id !== id || !isDeepStrictEqual(record.request, request)) {
+  const savedRequest = label === 'session_id' ? sessionGpuIntent(record?.request) : record?.request;
+  if (record?.id !== id || !isDeepStrictEqual(savedRequest, request)) {
     throw new ApiError({ status: 409, code: 'request_conflict', message: `Forge request ${id} differs from its saved request. Use the original fields to retry.` });
   }
   checkIdentity(record, account, id);

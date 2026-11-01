@@ -129,7 +129,7 @@ direction. For an uncertain earlier request, recover its original ID, fields
 and revision instead of replacing it:
 
 ```sh
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40 --control-revision N --max-gpu-hours 2 --json
+ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --control-revision N --max-gpu-hours 2 --json
 ```
 
 `link` authorizes the current regular file and returns a project-page URL with

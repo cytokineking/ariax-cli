@@ -38,7 +38,7 @@ GPU models within the user's hourly price preferences to maximize availability,
 while meeting the memory requirements below. Follow the [shared pricing
 guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
 For BindCraft and FreeBindCraft, include at least one compatible core class from
-`H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO`. Add as many compatible choices as
+`H100`, `A100_80GB`, `L40S`, `RTX6000PRO`. Add as many compatible choices as
 memory and the authorized hourly budget allow. `H200` and `B200` can supplement
 this set but cannot be the only choices. One core choice is valid with reduced
 availability. Keep a supplied policy intact unless replacement is authorized.

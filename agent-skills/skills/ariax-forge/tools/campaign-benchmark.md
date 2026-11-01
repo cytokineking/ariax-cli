@@ -44,7 +44,7 @@ Candidates outside the selected three remain in the exclusions table.
 
 Prepare `base`, `design-qc` and `mmseqs2-uniref90`. The search helper requires
 MMseqs2 18-8cc5c and the complete named database at
-`/models/mmseqs2-uniref90-2026-03`. Its supplied profile selects two L40 GPUs;
+`/models/mmseqs2-uniref90-2026-03`. Its supplied profile selects two L40S GPUs;
 observed devices exposed 46,068–49,140 MiB each. The profile calls for 110 GiB
 usable RAM, eight CPUs, 256 GiB tool disk and 512 GiB usable staging space.
 Use the current catalog for asset preparation and search resource requirements.

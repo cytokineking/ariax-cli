@@ -113,7 +113,7 @@
   "hardware_profile": {
     "selected_gpu_count": 2,
     "minimum_gpu_memory_mib_each": 32768,
-    "selected_gpu_model": "L40",
+    "selected_gpu_model": "L40S",
     "observed_gpu_memory_mib_each": [
       46068,
       46068

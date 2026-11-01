@@ -393,7 +393,7 @@ change eligibility.
 Choose as many compatible GPUs as the user's memory and hourly budget limits
 allow to improve availability. A single compatible core GPU is accepted with an
 availability advisory; limited-only selections are rejected. Core choices are
-`H100`, `A100_80GB`, `L40`, `L40S`, `RTX6000PRO` for BindCraft, BindCraft2, and
+`H100`, `A100_80GB`, `L40S`, `RTX6000PRO` for BindCraft, BindCraft2, and
 BoltzGen; PXDesign excludes `RTX6000PRO`; ESMFold2-pipeline permits `H100`,
 `A100_80GB`, `RTX6000PRO` as core. `A100_40GB`, `A6000`, `H200`, and `B200` are
 supplemental, not core. The live schema defines full compatibility and defaults;
