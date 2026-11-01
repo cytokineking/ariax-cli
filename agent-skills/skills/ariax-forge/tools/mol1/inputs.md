@@ -49,10 +49,14 @@ file's presence alone does not prove biologically appropriate chain pairing.
 `--msa_pair_as_unpair` defaults to `true`: paired rows also enter unpaired
 features. Keep this setting with the run record.
 
-Do not substitute `mol pred`: with its default MSA flag, absent paths can cause
-public ColabFold requests. Do not use `mol msa`, `mol prep`, or a download script
-as an input repair. Report missing/incompatible supplied files and prepare a new
-explicit input instead. Avoid the deprecated dictionary-valued `msa` form;
+Without explicit user authorization for public ColabFold, do not substitute
+`mol pred`, `mol msa` or `mol prep` to repair missing alignments. When authorized,
+native `mol pred --use_msa true` performs protein MSA preprocessing; the direct
+runner flag only loads prepared alignments. Preprocess a copy of the JSON under
+`/workspace`, retaining `input-update-msa.json` and its referenced MSAs. A failed
+archive transfer can leave completed searches/alignments: inspect and reuse
+validated native files before repeating requests; the pinned native cache can
+return `None` when `out.tar.gz` already exists. Avoid the deprecated dictionary-valued `msa` form;
 conversion in the high-level preprocessing path can write a new JSON beside its
 source, which is incompatible with read-only `/inputs`.
 

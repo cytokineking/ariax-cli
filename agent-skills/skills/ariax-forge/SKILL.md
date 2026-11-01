@@ -10,6 +10,16 @@ inputs, run commands, save outputs and close the session. If a managed project
 fits the goal, compare it with [engine choice](../../core/engine-choice.md).
 Managed and native settings can differ for the same engine.
 
+Keep one scientific campaign in one Forge project. Request multiple GPUs with
+`--gpu-count N` in one session and assign workers with `--gpus`. Do not silently
+replace an unavailable multi-GPU allocation with separate `forge create` calls;
+resolve allocation or discuss the topology change with the user first. Separate
+projects have independent storage and checkpoint histories, so staged inputs,
+restored files and results can be duplicated. If cross-project execution is
+explicitly chosen, define the canonical project, replication limits, verified
+consolidation and cleanup before allocating. Reuse the active session, or
+`resume` its existing project after closure.
+
 ## Discover, plan, run and close
 
 1. Find the tool with [capability discovery](tools/capabilities.md), inspect

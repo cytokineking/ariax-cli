@@ -62,7 +62,9 @@ Use `atom_to_token_idx` and `token_asym_id`, plus the CIF atom/chain identities,
 to map axes. Array indices start at zero and must not be treated as one-based
 sequence positions. `token_has_frame` records local-frame availability. Native
 JSON serialization rounds values; keep those original files and do not invent
-extra precision.
+extra precision. Full-data `atom_plddt` rounds to 0.01 on its 0–1 scale, while
+CIF pLDDT rounds on the 0–100 scale. They can differ by up to 0.505 points after
+scaling; an exact atom-confidence equality check is inappropriate.
 
 ## Required inspection
 

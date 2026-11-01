@@ -42,6 +42,13 @@ or the `mol msa`/`mol prep` search commands. Keep templates and RNA MSA search
 disabled. Supplied protein MSAs and explicit no-MSA inference are separate
 experiments; see [input rules](mol1/inputs.md).
 
+For project-specific batching, `mol pred --input DIRECTORY` (or
+`python -m mol.runner.batch_inference --input DIRECTORY`, with no `pred`
+subcommand) initializes one runner for the directory. Use one complex per JSON
+file to reset the configured seed for each complex. Supply valid MSA paths
+first and validate every requested complex; batch size does not multiply the
+native inference GPU batch size.
+
 The package separates two read-only named assets:
 
 | Asset | Mount and content |
@@ -77,10 +84,13 @@ bonds, chirality or charge, or establish predictive accuracy.
 
 Broader multimers, other ligands/ions, nucleic acids, modifications, covalent
 conditioning, supplied MSAs, templates and batches remain outside this recipe's
-validated scope. Training and fine-tuning are outside this recipe. Hardware
-coverage is limited to a single L40; larger systems and other GPUs remain
-untested. No minimum VRAM, RAM, CPU or disk requirement or runtime guarantee is
-established here; use live resource guidance and a bounded representative pilot.
+validated scope. Training and fine-tuning are outside this recipe. Bundled
+hardware checks cover a single L40. A separate project pilot exercised
+524–531-residue four-protein pMHC–VHH complexes with native protein MSAs on
+RTX 5090: 20 recycles, 200 steps and five samples used 22.7–26.4 GiB sampled
+peak GPU memory, with warm runs around 217–223 seconds. This is workload-specific execution evidence, without
+binding/accuracy validation. No general minimum or runtime guarantee follows;
+use live resource guidance and a bounded representative pilot.
 
 ## Runner settings
 
