@@ -87,31 +87,22 @@ function entryForDirectory(entry, directory) {
   return { path:entry.path, kind:entry.kind, size_bytes:entry.size_bytes, version:entry.version, mode:entry.mode };
 }
 
-export async function listProjectFiles(ctx, projectId, target) {
-  let cursor, result, firstRevision, revisionChanged = false;
-  const entries = [], seen = new Set();
-  for (let page = 0; page < 1000; page++) {
-    try {
-      result = await ctx.client.get(`${API}/projects/${projectId}/files`, { query:{path:target, ...(cursor ? {cursor} : {})} });
-    } catch (error) { throw cleanError(error, 'Project file listing'); }
-    const data = dataEnvelope(result);
-    if (!Array.isArray(data.entries) || !(data.next_cursor === null || typeof data.next_cursor === 'string')
-        || !Number.isSafeInteger(data.mutation_revision) || data.mutation_revision < 0
-        || !['saved', 'pending', 'failed'].includes(data.sync_state)
-        || !(data.last_synced_at === null || (typeof data.last_synced_at === 'string' && Number.isFinite(Date.parse(data.last_synced_at))))
-        || typeof data.durability_gap !== 'boolean') throw invalidResponse();
-    if (firstRevision === undefined) firstRevision = data.mutation_revision;
-    else if (firstRevision !== data.mutation_revision) revisionChanged = true;
-    entries.push(...data.entries.map(entry => entryForDirectory(entry,target)));
-    if (entries.length > 100000) throw new NetworkError('File listing exceeded its entry limit.');
-    cursor = data.next_cursor;
-    if (cursor === null) return publicResult(result,{project_id:projectId,path:target,entries,next_cursor:null,
-      mutation_revision:data.mutation_revision, sync_state:data.sync_state, last_synced_at:data.last_synced_at,
-      durability_gap:data.durability_gap, pagination_changed:revisionChanged});
-    if (!cursor || cursor.length > 4096 || seen.has(cursor)) throw invalidResponse();
-    seen.add(cursor);
-  }
-  throw new NetworkError('File listing exceeded its page limit.');
+export async function listProjectFiles(ctx, projectId, target, cursor) {
+  if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || cursor.length > 4096)) throw usageError('Invalid file page cursor.');
+  let result;
+  try {
+    result = await ctx.client.get(`${API}/projects/${projectId}/files`, { query:{path:target, ...(cursor ? {cursor} : {})} });
+  } catch (error) { throw cleanError(error, 'Project file listing'); }
+  const data = dataEnvelope(result);
+  if (!Array.isArray(data.entries) || data.entries.length > 200
+      || !(data.next_cursor === null || (typeof data.next_cursor === 'string' && data.next_cursor && data.next_cursor.length <= 4096 && data.next_cursor !== cursor))
+      || !Number.isSafeInteger(data.mutation_revision) || data.mutation_revision < 0
+      || !['saved', 'pending', 'failed'].includes(data.sync_state)
+      || !(data.last_synced_at === null || (typeof data.last_synced_at === 'string' && Number.isFinite(Date.parse(data.last_synced_at))))
+      || typeof data.durability_gap !== 'boolean') throw invalidResponse();
+  return publicResult(result,{project_id:projectId,path:target,entries:data.entries.map(entry => entryForDirectory(entry,target)),
+    next_cursor:data.next_cursor,mutation_revision:data.mutation_revision,sync_state:data.sync_state,
+    last_synced_at:data.last_synced_at,durability_gap:data.durability_gap});
 }
 
 export async function projectFileGrant(ctx, projectId, target) {

@@ -109,6 +109,13 @@ async function boundary(root) {
         res.end(file);
         return;
       }
+      if (req.method === 'GET' && url.pathname === '/api/v1/pricing') return reply(res, 200, {
+        source: 'database', billing_unit: 'allocation_hour', rates: [
+          { gpu_id: 'L40', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
+          { gpu_id: 'L40S', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
+          { gpu_id: 'RTX6000ADA', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
+        ],
+      });
       const direct = /^\/__direct\/([0-9a-f-]{36})(\/v1\/.*)$/.exec(url.pathname);
       let user;
       const rawToken = (req.headers.authorization || '').replace(/^Bearer /, '');
@@ -136,13 +143,6 @@ async function boundary(root) {
       if (req.method === 'GET' && url.pathname === '/api/v1/me') {
         return reply(res, 200, { actor: { user_id: user }, billing: { account_type: 'user', account_id: user } });
       }
-      if (req.method === 'GET' && url.pathname === '/api/v1/pricing') return reply(res, 200, {
-        source: 'database', billing_unit: 'allocation_hour', rates: [
-          { gpu_id: 'L40', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
-          { gpu_id: 'L40S', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
-          { gpu_id: 'RTX6000ADA', gpu_count: 1, currency: 'USD', hourly_rate: '2.500000' },
-        ],
-      });
       if (req.method === 'GET' && url.pathname === '/api/v1/forge/catalog') return reply(res, 200, { tools: catalog });
       if (direct && req.method === 'POST' && state.rejectPost401 > 0) {
         state.rejectPost401--;
@@ -167,6 +167,12 @@ async function boundary(root) {
         } else if (url.pathname.endsWith('/files/recover')) {
           assert.ok(records.some(record => record.actor_user_id === user && record.id === body.operation_id
             && record.request.type === 'project-file-copy-v1' && isDeepStrictEqual(record.request.body,body)), 'file recovery has no durable request');
+        } else if (url.pathname.endsWith('/files/delete')) {
+          assert.ok(records.some(record => record.actor_user_id === user && record.id === body.operation_id
+            && record.request.type === 'project-file-delete-v1' && isDeepStrictEqual(record.request.body,body)), 'file deletion has no durable request');
+        } else if (url.pathname.endsWith('/files/delete-batch')) {
+          assert.ok(records.some(record => record.actor_user_id === user && record.request.type === 'project-file-delete-tree-v1'
+            && isDeepStrictEqual(record.pending,body.items)), 'directory deletion has no durable batch');
         } else if (direct && direct[2] === '/v1/inputs') {
           assert.ok(records.some(record => record.actor_user_id === user && record.id === body.input_id
             && record.request.body?.source?.kind === body.source.kind), 'input import has no durable request');
@@ -205,11 +211,17 @@ async function boundary(root) {
           if (req.method === 'GET' && parts[6] === 'metadata') {
             const name = url.searchParams.get('path'), file = project.files.get(name);
             return reply(res,200,file ? {kind:'file',version:1,mutation_revision:project.fileRevision,size_bytes:file.length}
-              : {kind:'absent',version:0,mutation_revision:project.fileRevision});
+              : [...project.files.keys()].some(path => path.startsWith(name + '/'))
+                ? {kind:'directory',version:1,mutation_revision:project.fileRevision,descendants:1}
+                : {kind:'absent',version:0,mutation_revision:project.fileRevision});
           }
+          if (req.method === 'GET' && parts[6] === 'cleanup') return reply(res,200,{pending:0,attention:0});
           if (req.method === 'GET' && parts[6] === 'operations') {
             const operation = project.fileOperations.get(parts[7]);
             if (!operation) return error(res,404,'not_found','File operation not found');
+            if (operation.deletion) return reply(res,200,{operation_id:parts[7],session_id:operation.body.session_id,
+              source:operation.source,state:'deleted',version:operation.version,cleanup_state:'complete',
+              local_state:operation.source === 'offline' ? 'not_applicable' : 'ready'});
             if (state.confirmAfterReads > 0 && --state.confirmAfterReads === 0) state.confirmInstall = true;
             if (!operation.copy && state.confirmInstall && operation.state === 'published') {
               const installed = path.join(root,'inputs',operation.body.path.slice('/inputs/'.length));
@@ -223,6 +235,25 @@ async function boundary(root) {
                 : operation.copy ? (state.copyConflict ? 'conflict' : state.copyInstall ? 'ready' : 'pending')
                 : state.conflictInstall ? 'conflict' : state.confirmInstall ? 'ready'
                 : state.pendingInstall ? 'pending' : 'unknown'});
+          }
+          if (req.method === 'POST' && ['delete','delete-batch'].includes(parts[6])) {
+            if (parts[6] === 'delete-batch') state.deleteBatches = (state.deleteBatches ?? 0) + 1;
+            const items = parts[6] === 'delete' ? [body] : body.items;
+            const results = items.map(item => {
+              let operation = project.fileOperations.get(item.operation_id);
+              if (operation && (!operation.deletion || !isDeepStrictEqual(operation.body,item))) {
+                return {operation_id:item.operation_id,error:{code:'idempotency_conflict'}};
+              }
+              if (!operation) {
+                const exists = project.files.has(item.path);
+                if ((exists ? 1 : 0) !== item.expected_version) return {operation_id:item.operation_id,error:{code:'file_revision_conflict'}};
+                project.files.delete(item.path);
+                operation = {body:item,deletion:true,source:active ? 'host' : 'offline',version:++project.fileRevision};
+                project.fileOperations.set(item.operation_id,operation);
+              }
+              return {operation_id:item.operation_id,state:'deleted',version:operation.version};
+            });
+            return reply(res,200,parts[6] === 'delete' ? results[0] : {items:results});
           }
           if (req.method === 'POST' && parts[6] === 'recover') {
             state.copyPosts++;
@@ -246,7 +277,7 @@ async function boundary(root) {
           if (req.method === 'GET' && parts.length === 6) {
             const pageState = {mutation_revision:project.fileRevision,sync_state:'saved',last_synced_at:null,durability_gap:false};
             if (state.fileCursorCycle) return reply(res,200,{entries:[],next_cursor:'repeated-cursor',...pageState});
-            const directory = url.searchParams.get('path'), cursor = Number(url.searchParams.get('cursor') || 0);
+            const directory = url.searchParams.get('path'), cursor = url.searchParams.get('cursor');
             const byName = new Map();
             for (const [name, bytes] of project.files) {
               if (!name.startsWith(directory + '/')) continue;
@@ -255,10 +286,11 @@ async function boundary(root) {
               byName.set(entryPath,slash < 0 ? {path:entryPath,kind:'file',size_bytes:bytes.length,version:1,mode:0o644}
                 : {path:entryPath,kind:'directory',size_bytes:null,version:1,mode:null});
             }
-            const entries = [...byName.values()].sort((a,b) => a.path.localeCompare(b.path));
+            const entries = [...byName.values()].sort((a,b) => a.path.localeCompare(b.path))
+              .filter(entry => !cursor || entry.path.localeCompare(cursor) > 0);
             if (state.fileBadPath) entries[0] = {path:'/workspace/../escape',kind:'file',size_bytes:1,version:1,mode:0o644};
             if (state.fileBadSize) entries[0].size_bytes = null;
-            return reply(res, 200, {entries:entries.slice(cursor,cursor+1),next_cursor:cursor+1<entries.length?String(cursor+1):null,...pageState});
+            return reply(res, 200, {entries:entries.slice(0,1),next_cursor:entries.length>1?entries[0].path:null,...pageState});
           }
           if (req.method === 'POST' && parts[6] === 'intents') {
             if (parts.length === 7) {
@@ -356,6 +388,19 @@ async function boundary(root) {
         return reply(res, 200, session.data);
       }
       const project = projects.get(session.data.project_id);
+      if (direct && parts[5] === 'files' && parts[6] === 'hydrate') {
+        session.hydrations ??= new Map();
+        if (req.method === 'GET') {
+          const operation = session.hydrations.get(parts[7]);
+          return operation ? reply(res,200,operation) : error(res,404,'not_found','Hydration not found');
+        }
+        const previous = session.hydrations.get(body.operation_id);
+        if (previous && previous.path !== body.path) return error(res,409,'idempotency_conflict','Hydration differs');
+        if (!project.files.has(body.path)) return error(res,404,'not_found','Saved file not found');
+        const operation = previous || {operation_id:body.operation_id,path:body.path,state:'ready',version:1};
+        session.hydrations.set(body.operation_id,operation);
+        return reply(res,202,operation);
+      }
       if (parts[5] === 'finish') {
         if (req.method === 'GET') {
           if (!session.finish) return error(res,404,'finish_not_found','Finish not found');
@@ -1304,7 +1349,10 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     project.files.set('/workspace/another.txt',Buffer.from('another'));
     project.files.set('/inputs/source.txt',Buffer.from('input'));
     const inputListing = (await invoke(['forge','files',pid,'--path','/inputs'])).payload.data;
-    assert.deepEqual(inputListing.entries.map(e => e.path),['/inputs/harness','/inputs/source.txt']);
+    assert.deepEqual(inputListing.entries.map(e => e.path),['/inputs/harness']);
+    const nextInputs = (await invoke(['forge','files',pid,'--path','/inputs','--cursor',inputListing.next_cursor])).payload.data;
+    assert.deepEqual(nextInputs.entries.map(e => e.path),['/inputs/source.txt']);
+    assert.equal(nextInputs.next_cursor,null);
     assert.equal(inputListing.entries[0].kind,'directory');
     assert.equal(inputListing.entries[0].size_bytes,null);
     assert.equal(inputListing.entries[0].mode,null);
@@ -1312,8 +1360,46 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(inputListing.sync_state,'saved');
     assert.equal(inputListing.durability_gap,false);
     const listed = (await invoke(['forge','files',pid,'--path','/workspace'])).payload.data;
-    assert.equal(listed.entries.length,2, 'all pages were not fetched');
-    assert.deepEqual(listed.entries.map(entry => entry.path).sort(), ['/workspace/another.txt',savedPath].sort());
+    const nextFiles = (await invoke(['forge','files',pid,'--path','/workspace','--cursor',listed.next_cursor])).payload.data;
+    assert.deepEqual([...listed.entries,...nextFiles.entries].map(entry => entry.path).sort(), ['/workspace/another.txt',savedPath].sort());
+    assert.equal(nextFiles.next_cursor,null);
+    project.files.set('/workspace/discard.txt',Buffer.from('discard'));
+    const singleId = randomUUID();
+    const single = await invoke(['forge','files','delete',pid,'--path','/workspace/discard.txt','--operation-id',singleId,'--wait']);
+    assert.equal(single.payload.data.state,'deleted');
+    assert.equal(project.files.has('/workspace/discard.txt'),false);
+    assert.equal((await invoke(['forge','recover',singleId,'--wait'])).payload.data.state,'deleted');
+    project.files.set('/workspace/discard/a.txt',Buffer.from('one'));
+    project.files.set('/workspace/discard/nested/b.txt',Buffer.from('two'));
+    const deleteId = randomUUID();
+    const deletion = await invoke(['forge','files','delete',pid,'--path','/workspace/discard','--recursive',
+      '--operation-id',deleteId,'--wait','--wait-timeout','30']);
+    assert.equal(deletion.payload.data.state,'deleted');
+    assert.equal(project.files.has('/workspace/discard/a.txt'),false);
+    assert.equal(project.files.has('/workspace/discard/nested/b.txt'),false);
+    const revisionAfterDeletion = project.fileRevision;
+    assert.equal((await invoke(['forge','recover',deleteId,'--wait'])).payload.data.state,'deleted');
+    assert.equal(project.fileRevision,revisionAfterDeletion,'recovery repeated a completed deletion');
+    // A lost final batch reply leaves the exact root request in the journal.
+    // Recover it without creating a new request for the now-absent directory.
+    const completedDeletion = await record(deleteId);
+    const rootDelete = [...project.fileOperations.values()].find(item => item.deletion && item.body.path === '/workspace/discard');
+    assert.ok(rootDelete);
+    const recordFile = path.join(root,'.ariax/forge',`${deleteId}.json`);
+    await fs.writeFile(recordFile,JSON.stringify({...completedDeletion,pending:[rootDelete.body],
+      result:{state:'pending',deleted_count:completedDeletion.result.deleted_count-1}}));
+    assert.equal((await invoke(['forge','recover',deleteId,'--wait'])).payload.data.state,'deleted');
+    assert.equal(project.fileRevision,revisionAfterDeletion,'recovery repeated the final batch');
+    assert.equal((await record(deleteId)).result.state,'deleted');
+    for (let index = 0; index < 130; index++) {
+      project.files.set(`/workspace/wide/dir${String(index).padStart(3,'0')}/file.txt`,Buffer.from('x'));
+    }
+    const batchesBeforeWideDelete = state.deleteBatches ?? 0;
+    const wide = await invoke(['forge','files','delete',pid,'--path','/workspace/wide','--recursive',
+      '--operation-id',randomUUID(),'--wait','--wait-timeout','30']);
+    assert.equal(wide.payload.data.state,'deleted');
+    assert.equal([...project.files.keys()].some(name => name.startsWith('/workspace/wide/')),false);
+    assert.ok(state.deleteBatches - batchesBeforeWideDelete <= 4,'nested files were not removed in batches');
     const destination = path.join(root,'downloaded-result.txt');
     const downloaded = await invoke(['forge','download',pid,savedPath,'--dest',destination]);
     assert.equal(await fs.readFile(destination,'utf8'),'saved command output');
@@ -1345,7 +1431,8 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     await invoke(['forge','files',pid],9);
     state.fileBadSize = false;
     state.fileCursorCycle = true;
-    await invoke(['forge','files',pid],9);
+    const cyclic = (await invoke(['forge','files',pid])).payload.data;
+    await invoke(['forge','files',pid,'--cursor',cyclic.next_cursor],9);
     state.fileCursorCycle = false;
     state.fileBadGrant = true;
     await invoke(['forge','link',pid,savedPath],9);
@@ -1390,7 +1477,8 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     project.control.revision = 4;
     assert.equal((await invoke(['forge','recover',raceId],7)).payload.error.code,'control_revision_conflict');
     assert.equal((await record(raceId)).request.body.expected_control_revision,2,'recovery refreshed a fenced revision');
-    const approved = ['forge','resume',pid,'--gpu','L40','--gpu-count','2','--tools','boltz2'];
+    const approved = ['forge','resume',pid,'--gpu','L40','--gpu-count','2','--tools','boltz2',
+      '--hydrate','/workspace/another.txt','--hydrate','/inputs/source.txt'];
     state.legacyResume = true;
     const legacyServer = await invoke(approved,7);
     assert.match(legacyServer.payload.error.action,/removed Forge checkpoint contract.*Upgrade/);
@@ -1405,6 +1493,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(resumed.payload.data.name, 'Device experiment');
     assert.equal(resumed.payload.data.max_gpu_hours, null, 'resume inherited an old session cap');
     assert.equal((await record(resumedId)).request.body.expected_control_revision, 4);
+    assert.deepEqual((await record(resumedId)).request.body.hydrate_paths,['/inputs/source.txt','/workspace/another.txt']);
     assert.equal((await record(resumedId)).request.body.name, undefined);
     assert.equal(Object.hasOwn((await record(resumedId)).request.body,'restore'),false);
     assert.equal(state.allocations, allocations + 1);
@@ -1419,6 +1508,13 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     await invoke(['forge', 'project', pid, '--limit', '101'], 1);
     await invoke(['forge', 'status', resumedId]);
     assert.equal((await record(resumedId)).result.state, 'starting', 'status did not refresh a resumed session record');
+    const resumedSession = state.sessions.get(resumedId);
+    resumedSession.data.state = 'available';
+    const hydrateId = randomUUID();
+    const hydrated = await invoke(['forge','files','hydrate',resumedId,'--path',savedPath,'--operation-id',hydrateId,'--wait']);
+    assert.equal(hydrated.payload.data.state,'ready');
+    assert.equal(resumedSession.hydrations.get(hydrateId).path,savedPath);
+    assert.equal((await invoke(['forge','recover',hydrateId,'--wait'])).payload.data.state,'ready');
     await invoke(['forge', 'close', resumedId]);
     assert.equal((await invoke(['forge', 'limit', resumedId, '--gpu-hours', '4', '--limit-revision', '0'], 7)).payload.error.code, 'session_closing');
     assert.equal(state.releases, state.allocations);

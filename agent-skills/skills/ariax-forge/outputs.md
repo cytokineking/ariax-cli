@@ -46,6 +46,9 @@ ariax forge inputs status SESSION INPUT_ID --json
 ariax forge run SESSION --tool base -- python3 -c 'from pathlib import Path; Path("result.txt").write_text(Path("/inputs/target.fasta").read_text())'
 ariax forge sync SESSION --wait --wait-timeout 900 --json
 ariax forge files PROJECT --path /workspace --json
+ariax forge files PROJECT --path /workspace --cursor NEXT_CURSOR --json
+ariax forge files hydrate SESSION --path /workspace/result.txt --wait --json
+ariax forge files delete PROJECT --path /workspace/unneeded --recursive --wait --json
 ariax forge files recover PROJECT --path /workspace/copied.cif --catalog SOURCE_PROJECT:/workspace/original.cif --version VERSION --wait --json
 ariax forge files recover PROJECT --path /workspace/old.cif --archive SOURCE_PROJECT:CHECKPOINT_ID:/workspace/old.cif --wait --json
 ariax forge files recover PROJECT --path /workspace/artifact.cif --artifact SOURCE_PROJECT:output/result.cif --wait --json
@@ -57,8 +60,10 @@ Choose exactly one input source. Input `--path` is a relative POSIX file path;
 file operations use absolute `/workspace` or `/inputs` paths. Empty components,
 dot segments, traversal, control characters and backslashes are rejected. An
 input publishes after transfer completes and Ariax retains a durable copy.
-Completed input paths remain immutable. Inputs support regular files up to
-20 GiB and transfers have a 900-second limit. Public URLs undergo network and
+Completed input paths are immutable until explicitly deleted. Saved files are
+limited to 20 GiB each, with 1 TiB and one million file and directory entries
+per project. These limits include files omitted from a selective restore.
+Input transfers have a 900-second limit. Public URLs undergo network and
 redirect checks. Artifact imports require access to the source project.
 
 The CLI prints and saves `input_id` or `sync_id` before mutation. After a lost
@@ -91,11 +96,32 @@ snapshot; later changes can remain pending. Stop writers when a coherent set
 is required, and inspect synchronization failures. A successful scientific
 command alone does not prove its output is durable.
 
-Files lists immediate children of the current saved project namespace, fetching
-all bounded pages. Downloads require project access, stream through a private
+Files lists one bounded page of immediate children of the current saved project
+namespace. Pass `next_cursor` as `--cursor` until it is absent; do not treat one
+page as a complete listing. The listing includes saved files omitted from a
+selective restore. Downloads require project access, stream through a private
 temporary file, and publish only after the declared byte count and multipart checksum match. Use a
 fresh destination path. Pages and file bytes can change while the project is
 active; neither a listing nor a link pins a historical version.
+
+`files delete` permanently removes the selected saved path and, with
+`--recursive`, its saved descendants; it does not create an archive or trash
+copy. It frees catalog file and byte capacity when the deletion is committed,
+while object cleanup proceeds separately. `--wait` also observes cleanup.
+Inspect `cleanup_state` for `complete`, `pending`, `attention`, or `unknown`.
+An accepted request can remain pending during session startup or shutdown.
+Recursive deletion is driven by the CLI: after an interruption, submitted
+batches may finish, but remaining paths require `ariax forge recover ID --wait`
+with the original operation ID, CLI root, account, and API origin. Recovery
+continues the deletion; it does not restore deleted files.
+
+A saved file changed locally before deletion reports a conflict and stays in
+place. If a running command replaces a file during removal, the replacement may
+be preserved at the reported `ariax-recovered-...` workspace path. Running
+commands can lose access to deleted files; pending input deletion can block new
+commands. Local directory removal waits for running commands to stop. Unsaved
+local entries can prevent recursive removal; delete those entries, then start a
+new deletion with a new operation ID.
 
 ```sh
 ariax forge finish SESSION --wait --json
@@ -113,8 +139,15 @@ can leave unsaved changes unavailable. Saved project files remain available
 after closure.
 
 An explicit CLI resume needs the observed control revision and confirmed
-prior-session cleanup. It loads the same project's current saved inputs and
-workspace files before commands are admitted. For a human hold, the project
+prior-session cleanup. By default it loads the same project's current saved
+inputs and workspace files before commands are admitted. Repeat `--hydrate`
+with up to 64 absolute file or directory paths to load only those paths and
+their required parent directories. Omitted files remain saved and count toward
+the project limit. The selected files determine the restore's storage requirement.
+During a running session, `files hydrate SESSION --path PATH --wait` loads one
+additional saved file; it refuses to replace different local bytes. Retain its
+operation ID and use `ariax forge recover ID --wait` after an interruption.
+For a human hold, the project
 page's **Resume workspace** clears the hold and starts a same-project session;
 inspect and continue in that active session without allocating another or
 automatically replaying science. **Allow agent to resume later** clears the
@@ -130,6 +163,7 @@ and revision instead of replacing it:
 
 ```sh
 ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --control-revision N --max-gpu-hours 2 --json
+ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --control-revision N --max-gpu-hours 2 --hydrate /inputs/target.yaml --hydrate /workspace/results --json
 ```
 
 `link` authorizes the current regular file and returns a project-page URL with

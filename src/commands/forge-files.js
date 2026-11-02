@@ -26,7 +26,7 @@ function safePath(value, absolute = false) {
 }
 
 async function fileRecord(ctx, id, request, label, signal) {
-  const account = request.session_id && request.type !== 'project-file-copy-v1'
+  const account = request.session_id && !['project-file-copy-v1','project-file-delete-v1','project-file-delete-tree-v1'].includes(request.type)
     ? await forgeAccountIdentity(ctx, request.session_id, {signal})
     : await accountIdentity(ctx, {signal});
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
@@ -50,6 +50,8 @@ async function fileRecord(ctx, id, request, label, signal) {
 const PART_SIZE = 16 * 1024 * 1024;
 const PROJECT_INPUT = 'project-file-input-v2';
 const FILE_COPY = 'project-file-copy-v1';
+const FILE_DELETE = 'project-file-delete-v1';
+const FILE_DELETE_TREE = 'project-file-delete-tree-v1';
 const API = '/api/v1/forge';
 
 function fileSnapshot(fd, file) {
@@ -107,17 +109,18 @@ async function putPart(grant, body, md5, signal) {
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 
-function projectInputResult(record, operation, applied = false) {
+function projectInputResult(record, operation, applied = false, removed = false) {
   const storage = operation?.state ?? 'unconfirmed';
   const conflict = storage === 'published' && operation?.local_state === 'conflict';
   const installing = storage === 'published' && operation?.local_state === 'pending';
   return {input_id:record.id,path:record.request.body.path.slice('/inputs/'.length),
     size_bytes:record.request.body.size_bytes,project_id:record.request.project_id,
-    state:applied ? 'ready' : storage === 'expired' || conflict ? 'failed' : 'pending',storage_state:storage,
+    state:applied ? 'ready' : removed || storage === 'expired' || conflict ? 'failed' : 'pending',storage_state:storage,
     installation_status:applied ? 'applied' : conflict ? 'conflict' : installing ? 'pending'
       : storage === 'published' ? 'unconfirmed' : 'pending',
     ...(operation?.version !== undefined && operation.version !== null ? {version:operation.version} : {}),
-    ...(!applied ? {action:conflict ? 'The project file could not be installed in the active workspace. Inspect the operation before continuing.'
+    ...(!applied ? {action:removed ? 'The input was deleted or replaced. Add a new input before using this path.'
+      : conflict ? 'The project file could not be installed in the active workspace. Inspect the operation before continuing.'
       : installing ? 'The file is saved and workspace installation is still pending. Inspect the same input ID.'
       : storage === 'published'
       ? 'Project storage is saved, but this server does not confirm installation in the running workspace. Do not dispatch a command until the server exposes that confirmation.'
@@ -144,15 +147,21 @@ async function projectInputStatus(ctx, record, knownAccount, signal) {
   }
   // A host-backed local_state is an installation observation, not merely the
   // SQL publication receipt. Older servers omit it and remain unconfirmed.
-  let applied = false;
+  let applied = false, removed = false;
   if (operation?.state === 'published' && operation.source === 'host' && operation.local_state === 'ready'
       && Number.isSafeInteger(operation.version) && operation.version > 0) {
     const context = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/status`, {signal})).data;
     applied = context.session_id === record.request.session_id && context.writer_session_id === record.request.session_id
       && context.writer_epoch === record.request.body.writer_epoch && context.control_revision === record.request.body.control_revision
       && context.session_state === 'available' && context.hydration_state === 'ready';
+    if (applied) {
+      const saved = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/metadata`,
+        {query:{path:record.request.body.path},signal})).data;
+      removed = saved.kind !== 'file' || saved.version !== operation.version;
+      applied = !removed;
+    }
   }
-  return projectInputResult(record, operation, applied);
+  return projectInputResult(record, operation, applied, removed);
 }
 
 async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal) {
@@ -338,13 +347,17 @@ export async function recoverFile(ctx, id, record, {signal, account, body, retry
   for (let attempt = 0; ; attempt++) {
     try {
       let result;
-      if (request.type !== PROJECT_INPUT && request.type !== FILE_COPY && request.path !== '/v1/inputs') {
+      if (request.type !== PROJECT_INPUT && request.type !== FILE_COPY && request.type !== FILE_DELETE && request.type !== FILE_DELETE_TREE && request.path !== '/v1/inputs') {
         const identity = await forgeAccountIdentity(ctx,session,{signal});
         if (Object.keys(identity).some(field => record[field] !== identity[field])) {
           throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
         }
       }
-      if (request.type === FILE_COPY) {
+      if (request.type === FILE_DELETE || request.type === FILE_DELETE_TREE) {
+        const identity = account ?? await accountIdentity(ctx,{signal});
+        if (Object.keys(identity).some(field => record[field] !== identity[field])) throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
+        result = request.type === FILE_DELETE_TREE ? await recoverDeleteTree(ctx,record,signal) : await recoverDelete(ctx,record,signal);
+      } else if (request.type === FILE_COPY) {
         const identity = account ?? await accountIdentity(ctx,{signal});
         if (Object.keys(identity).some(field => record[field] !== identity[field])) throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
         result = await recoverCopy(ctx,record,signal);
@@ -507,6 +520,224 @@ function copySource(flags) {
     ...(checkpoint_id === undefined ? {} : {checkpoint_id})};
 }
 
+async function deleteStatus(ctx, record, signal) {
+  const {id,request} = record, base = `${API}/projects/${request.project_id}/files`;
+  let result;
+  try { result = await ctx.client.get(`${base}/operations/${id}`,{signal}); }
+  catch (error) { if (error.status === 404) return null; throw error; }
+  const value = result.data;
+  if (value?.operation_id !== id || value.session_id !== request.session_id
+      || !['pending','deleted','failed','expired'].includes(value.state)
+      || !['host','offline'].includes(value.source)
+      || !['ready','pending','conflict','unknown','not_applicable'].includes(value.local_state)
+      || (value.cleanup_state !== undefined && !['pending','complete','attention','unknown'].includes(value.cleanup_state))) {
+    throw new NetworkError('File deletion response does not match the saved operation.');
+  }
+  const state = ['failed','expired'].includes(value.state) || value.local_state === 'conflict' ? 'failed'
+    : value.state === 'deleted' && ['ready','not_applicable'].includes(value.local_state) ? 'deleted' : 'pending';
+  return {...result,data:{operation_id:id,project_id:request.project_id,session_id:request.session_id,
+    path:request.body.path,state,local_state:value.local_state,cleanup_state:value.cleanup_state ?? 'pending',
+    ...(value.recovery_path ? {recovery_path:value.recovery_path} : {}),
+    ...(value.version == null ? {} : {version:value.version})}};
+}
+
+async function recoverDelete(ctx, record, signal) {
+  const {id,request} = record, project = uuid(request.project_id,'project ID');
+  if (request.method !== 'POST' || request.path !== `${API}/projects/${project}/files/delete`
+      || request.body?.operation_id !== id || request.body?.session_id !== request.session_id) {
+    throw usageError(`Saved file deletion ${id} is malformed.`);
+  }
+  let current = await deleteStatus(ctx,record,signal);
+  if (!current) {
+    const started = await ctx.client.post(request.path,{body:request.body,signal});
+    if (!['pending','deleted'].includes(started.data?.state)) throw new NetworkError('File deletion returned an invalid receipt.');
+    current = await deleteStatus(ctx,record,signal);
+    if (!current) return {...started,data:{operation_id:id,project_id:project,session_id:request.session_id,
+      path:request.body.path,state:'pending',local_state:'pending',cleanup_state:'pending'}};
+  }
+  return current;
+}
+
+function treeChildId(rootId, target) {
+  const bytes = createHash('sha256').update(rootId).update('\0').update(target).digest().subarray(0,16);
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+// One durable root record retains a bounded batch of exact child requests.
+// After interruption the next invocation reconciles that batch before listing
+// the remaining paths again. A new file version is never selected implicitly.
+async function recoverDeleteTree(ctx, record, signal) {
+  const {id,request} = record, project = uuid(request.project_id,'project ID');
+  const base = `${API}/projects/${project}/files`, file = recordPath(ctx,id);
+  const root = workspacePath(request.body.path);
+  if (request.path !== `${base}/delete` || request.body.operation_id !== id || request.body.session_id !== request.session_id
+      || (request.group_id !== undefined && request.group_id !== id)
+      || !Number.isSafeInteger(request.body.expected_project_revision) || request.body.expected_project_revision < 0) {
+    throw usageError(`Saved directory deletion ${id} is malformed.`);
+  }
+  const revision = request.body.expected_project_revision;
+  const write = value => atomicWrite(file, JSON.stringify(value, null, 2)+'\n');
+  async function cleanupStatus(data) {
+    const cleanup = (await ctx.client.get(`${base}/cleanup`,{query:{path:root,started_at:request.body.operation_started_at,
+      ...(request.group_id ? {group_id:request.group_id} : {})},signal})).data;
+    if (!Number.isSafeInteger(cleanup?.pending) || !Number.isSafeInteger(cleanup?.attention)
+        || cleanup.pending < 0 || cleanup.attention < 0 || cleanup.attention > cleanup.pending) {
+      throw new NetworkError('Directory cleanup status is invalid.');
+    }
+    return {...data,cleanup_state:cleanup.attention ? 'attention' : cleanup.pending ? 'pending' : 'complete',
+      cleanup_remaining:cleanup.pending};
+  }
+  if (record.result?.state === 'deleted') return {data:await cleanupStatus(record.result)};
+  async function settlePending() {
+    for (;;) {
+      const saved = readRecord(file), pending = saved.pending ?? [];
+      if (!Array.isArray(pending) || pending.length > 128) throw usageError(`Saved directory deletion ${id} has invalid pending work.`);
+      if (!pending.length) return;
+      let response;
+      try { response = await ctx.client.post(`${base}/delete-batch`,{body:{items:pending},signal}); }
+      catch (error) {
+        if (error.status !== 429) throw error;
+        await delay(error.retryAfterMs ?? 3000,undefined,{signal});
+        continue;
+      }
+      const results = response.data?.items;
+      if (!Array.isArray(results) || results.length !== pending.length
+          || results.some((value,index) => value.operation_id !== pending[index].operation_id
+            || (!['deleted','pending'].includes(value.state) && !value.error))) {
+        throw new NetworkError('Directory deletion returned an invalid batch receipt.');
+      }
+      const failed = results.find(value => value.error && !['transfer_busy','sync_busy'].includes(value.error.code));
+      if (failed) throw new ApiError({status:409,code:failed.error.code ?? 'file_revision_conflict',
+        message:failed.error.code === 'local_state_unknown' ? 'The workspace stopped before deletion was confirmed; inspect the saved files.'
+          : failed.error.recovery_path ? `A replacement was preserved at ${failed.error.recovery_path}.`
+          : 'A file changed or could not be removed while deleting this directory.'});
+      if (results.some(value => value.state !== 'deleted')) {
+        printProgress(`Directory deletion ${id}: waiting for ${results.filter(value => value.state !== 'deleted').length} files`);
+        await delay(3000,undefined,{signal});
+        continue;
+      }
+      const deleted_count = (saved.result?.deleted_count ?? 0) + pending.length;
+      const result = pending.some(item => item.path === root)
+        ? {operation_id:id,project_id:project,session_id:request.session_id,path:root,state:'deleted',deleted_count}
+        : {state:'pending',deleted_count};
+      write({...saved,pending:[],result});
+    }
+  }
+
+  async function removeBatch(items) {
+    for (let offset = 0; offset < items.length; offset += 128) {
+      const started = request.group_id ? new Date().toISOString() : request.body.operation_started_at;
+      const batch = items.slice(offset,offset+128).map(item => ({
+        operation_id:treeChildId(id,item.path),session_id:request.session_id,operation_started_at:started,
+        path:item.path,control_revision:request.body.control_revision,writer_epoch:request.body.writer_epoch,
+        expected_version:item.version,expected_project_revision:item.mutation_revision,
+        ...(request.group_id ? {group_id:request.group_id,recursive_root:root} : {}),
+      }));
+      const saved = readRecord(file);
+      write({...saved,pending:batch});
+      await settlePending();
+    }
+  }
+
+  let files = [], directories = [];
+  async function flushFiles() { const batch = files; files = []; await removeBatch(batch); }
+  async function flushDirectories() { const batch = directories; directories = []; await removeBatch(batch); }
+  async function visit(directory, phase) {
+    let cursor;
+    do {
+      let page;
+      try { page = (await listProjectFiles(ctx,project,directory,cursor)).data; }
+      catch (error) { if (error.status === 404) break; throw error; }
+      const items = page.entries;
+      if (items.some(item => item.version > revision)) throw new ApiError({status:409,code:'file_revision_conflict',
+        message:'A file or directory changed after recursive deletion started.'});
+      for (const item of items.filter(item => item.kind === 'directory')) await visit(item.path,phase);
+      for (const item of items.filter(item => item.kind === 'file')) {
+        if (phase !== 'files') throw new ApiError({status:409,code:'file_revision_conflict',
+          message:'A file changed after recursive deletion started.'});
+        files.push({...item,mutation_revision:page.mutation_revision});
+        if (files.length === 128) await flushFiles();
+      }
+      cursor = page.next_cursor;
+    } while (cursor);
+    if (phase === 'files') return;
+    if (directories.some(item => item.path.startsWith(directory + '/'))) await flushDirectories();
+    const metadata = (await ctx.client.get(`${base}/metadata`,{query:{path:directory},signal})).data;
+    if (metadata.kind === 'file' || (metadata.kind === 'directory' && metadata.version > revision)) {
+      throw new ApiError({status:409,code:'file_revision_conflict',message:'A directory changed after recursive deletion started.'});
+    }
+    if (!['directory','absent','tombstone'].includes(metadata.kind)
+        || !Number.isSafeInteger(metadata.version) || !Number.isSafeInteger(metadata.mutation_revision)) {
+      throw new NetworkError('Directory metadata is invalid.');
+    }
+    directories.push({path:directory,version:metadata.version,mutation_revision:metadata.mutation_revision});
+    if (directories.length === 128) await flushDirectories();
+  }
+
+  await settlePending();
+  const settled = readRecord(file);
+  if (settled.result?.state === 'deleted') return {data:await cleanupStatus(settled.result)};
+  await visit(root,'files');
+  await flushFiles();
+  await visit(root,'directories');
+  await flushDirectories();
+  const saved = readRecord(file), data = {operation_id:id,project_id:project,session_id:request.session_id,
+    path:root,state:'deleted',deleted_count:saved.result?.deleted_count ?? 0};
+  write({...saved,pending:[],result:data});
+  return {data:await cleanupStatus(data)};
+}
+
+async function runDelete(ctx, projectId) {
+  const flags = ctx.flags, target = workspacePath(required(flags.path,'path'));
+  if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge files delete: --wait-timeout requires --wait.');
+  const id = flags['operation-id'] === undefined ? randomUUID() : uuid(flags['operation-id'],'operation ID');
+  return controlled(ctx,id,flags.recursive ? localWaitSeconds(flags['wait-timeout'],0,{allowZero:true}) : flags.wait ? localWaitSeconds(flags['wait-timeout'],1800) : 60,async signal => {
+    const prior = readRecord(recordPath(ctx,id));
+    let request;
+    if (prior) {
+      request = prior.request;
+      if (![FILE_DELETE,FILE_DELETE_TREE].includes(request?.type) || request.project_id !== projectId || request.body?.path !== target
+          || (request.type === FILE_DELETE_TREE) !== !!flags.recursive) {
+        throw new ApiError({status:409,code:'request_conflict',message:`File deletion ${id} differs from its saved request.`});
+      }
+    } else {
+      const base = `${API}/projects/${projectId}/files`;
+      const context = (await ctx.client.get(`${base}/status`,{signal})).data;
+      const metadata = (await ctx.client.get(`${base}/metadata`,{query:{path:target},signal})).data;
+      if (!isUUID(context.session_id) || !Number.isSafeInteger(context.control_revision) || context.control_revision < 0
+          || !Number.isSafeInteger(context.writer_epoch) || context.writer_epoch < 0
+          || !Number.isSafeInteger(metadata.version) || metadata.version < 0
+          || !Number.isSafeInteger(metadata.mutation_revision) || metadata.mutation_revision < 0) {
+        throw new NetworkError('Project file context is unavailable.');
+      }
+      if (metadata.kind === 'directory' && !flags.recursive) throw usageError('This path is a directory; use --recursive to delete it and its contents.');
+      if (!['file','directory','absent','tombstone'].includes(metadata.kind)) throw new NetworkError('File metadata is invalid.');
+      request = {type:flags.recursive ? FILE_DELETE_TREE : FILE_DELETE,method:'POST',session_id:context.session_id,project_id:projectId,path:`${base}/delete`,
+        ...(flags.recursive ? {group_id:id} : {}),
+        body:{operation_id:id,session_id:context.session_id,operation_started_at:new Date().toISOString(),path:target,
+          control_revision:context.control_revision,writer_epoch:context.writer_epoch,
+          expected_version:metadata.version,expected_project_revision:metadata.mutation_revision}};
+    }
+    const {file,record} = await fileRecord(ctx,id,request,'operation_id',signal);
+    let result = request.type === FILE_DELETE_TREE ? await recoverDeleteTree(ctx,record,signal) : await recoverDelete(ctx,record,signal);
+    saveResult(file,readRecord(file) ?? record,result.data);
+    while (flags.wait && result.data.state !== 'failed' && result.data.cleanup_state !== 'attention'
+        && (result.data.state !== 'deleted' || result.data.cleanup_state === 'pending')) {
+      printProgress(`Deletion ${id}: ${result.data.state}, storage cleanup ${result.data.cleanup_state}`);
+      await delay(3000,undefined,{signal});
+      result = request.type === FILE_DELETE_TREE ? await recoverDeleteTree(ctx,readRecord(file),signal) : await recoverDelete(ctx,readRecord(file),signal);
+      saveResult(file,readRecord(file),result.data);
+    }
+    if (result.data.state === 'failed' || result.data.cleanup_state === 'attention') failed('file_delete_failed',
+      result.data.recovery_path ? `A replacement was preserved at ${result.data.recovery_path}.` : `File deletion ${id} needs attention`,undefined,
+      'Inspect the file and cleanup status before another action.');
+    return report(ctx,result);
+  });
+}
+
 async function runCopy(ctx, projectId) {
   const flags = ctx.flags, target = workspacePath(required(flags.path,'path'));
   const source = copySource(flags);
@@ -554,6 +785,7 @@ async function runCopy(ctx, projectId) {
 export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   const flags = ctx.flags;
   if (action === 'files recover') return runCopy(ctx,projectId);
+  if (action === 'files delete') return runDelete(ctx,projectId);
   const direct = '/v1';
   const read = (resource) => flags.retained
     ? ctx.client.get(`${sessionPath}${resource.slice(3)}`)
@@ -662,7 +894,7 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   }
   if (action === 'files') {
     const target = workspacePath(flags.path === undefined ? '/workspace' : flags.path, true);
-    const result = await listProjectFiles(ctx,projectId,target);
+    const result = await listProjectFiles(ctx,projectId,target,flags.cursor === undefined ? undefined : required(flags.cursor,'cursor'));
     return report(ctx,result,'files');
   }
   if (action === 'download' || action === 'link') {

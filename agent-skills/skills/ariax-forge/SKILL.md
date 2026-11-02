@@ -231,7 +231,10 @@ Await the user's direction, inspect cleanup and the current control revision,
 then explicitly resume that same project if authorized. API-key requests cannot
 clear the hold. Do not bypass it with a replacement project.
 
-An explicit CLI resume loads the current saved files of the same project. Wait
+An explicit CLI resume loads the current saved files of the same project by
+default. Repeat `--hydrate PATH` to load selected saved files or directories;
+omitted paths remain saved and count toward the project's 1 TiB and
+one-million-entry limits. Wait
 for confirmed prior-session cleanup and inspect `project` for an active session.
 A newer pause invalidates an observed control revision.
 A stale-revision rejection permits a new explicit request with the newly
@@ -287,7 +290,14 @@ Stage a local file, an authorized Ariax artifact, or an individual public HTTPS 
 
 Run `ariax forge sync SESSION --wait` to flush changed files, then use
 `ariax forge files PROJECT`, `download PROJECT PATH`, or `link PROJECT PATH`
-with the session's `project_id`. Sync reports saved, pending or failed work;
+with the session's `project_id`. `files` returns one page; follow `next_cursor`
+with `--cursor` to see the rest. Use `ariax forge files hydrate SESSION --path
+PATH --wait` for an additional saved file, or `ariax forge files delete PROJECT
+--path PATH [--recursive] --wait` to permanently delete a saved path. Preserve
+the deletion operation ID for recovery: interrupted recursive deletion must be
+continued with `ariax forge recover ID --wait`. Input deletion can temporarily
+block new commands, and local directory removal waits for running commands to stop.
+Sync reports saved, pending or failed work;
 it is not an atomic multi-file snapshot. Files changed after the flush can remain
 pending. Inspect synchronization and errors after close or expiry; abrupt loss
 can leave unsaved changes unavailable. Links identify the current path and do

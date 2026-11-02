@@ -42,6 +42,7 @@ const BOOLEAN_FLAGS = new Set([
   'retained',
   'resume',
   'overwrite',
+  'recursive',
   'full',
   'list',
   'raw',
@@ -112,6 +113,10 @@ export function parseArgv(argv) {
         }
         target[name] = true;
         i += 1;
+      } else if (name === 'hydrate' && command === 'forge') {
+        const value = inlineValue === undefined ? takeValue(i, name, tok) : inlineValue;
+        target[name] = [...(target[name] || []), value];
+        i += inlineValue === undefined ? 2 : 1;
       } else if (inlineValue !== undefined) {
         target[name] = inlineValue;
         i += 1;

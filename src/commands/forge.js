@@ -13,7 +13,7 @@ import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
-import { readSync, redactForgeOutput, redactForgeText } from '../lib/forge-workspace-client.js';
+import { readSync, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
 
 import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js';
 
@@ -23,7 +23,7 @@ const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority'
   'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id'];
 const OPTIONS = {
   create: [['name', ...SESSION_OPTIONS], 1],
-  resume: [['control-revision', ...SESSION_OPTIONS], 2],
+  resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS], 2],
   project: [['limit', 'cursor'], 2],
   activity: [['limit', 'cursor'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
@@ -38,13 +38,13 @@ const OPTIONS = {
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
-  files: [['path'], 2], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
+  files: [['path', 'cursor'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
   download: [['dest'], 3], link: [[], 3],
   logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [[], 2],
 };
 
 export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
-  ariax forge resume PROJECT [--control-revision N] --gpu GPU [usual hardware/tool options] [--session-id UUID]
+  ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
   ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
@@ -71,7 +71,9 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
   ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
-  ariax forge files PROJECT [--path /workspace]
+  ariax forge files PROJECT [--path /workspace] [--cursor CURSOR]
+  ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax forge files hydrate SESSION --path PATH [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge download PROJECT PATH --dest LOCAL
   ariax forge link PROJECT PATH
@@ -90,7 +92,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
 function actionOf(positionals) {
   if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
   if (positionals[0] === 'tools' && ['add', 'wait'].includes(positionals[1])) return `tools ${positionals[1]}`;
-  if (positionals[0] === 'files' && positionals[1] === 'recover') return 'files recover';
+  if (positionals[0] === 'files' && ['recover', 'hydrate', 'delete'].includes(positionals[1])) return `files ${positionals[1]}`;
   return positionals[0];
 }
 
@@ -276,9 +278,11 @@ function savedKind(id, request) {
   if (request.path === '/v1/commands' && request.body.command_id === id) return 'command';
   if (request.path === '/v1/tools' && request.body.selection_id === id) return 'selection';
   if (request.path === '/v1/sync' && request.body.sync_id === id) return 'sync';
+  if (request.path === '/v1/files/hydrate' && request.body.operation_id === id) return 'file-hydration';
   if (request.path === '/v1/inputs' && request.body.input_id === id) return 'input';
   if (request.type === 'project-file-input-v2' && request.body.operation_id === id) return 'input';
   if (request.type === 'project-file-copy-v1' && request.body.operation_id === id) return 'file-recovery';
+  if (['project-file-delete-v1','project-file-delete-tree-v1'].includes(request.type) && request.body.operation_id === id) return 'file-deletion';
   if (new RegExp(`^/v1/commands/[0-9a-f-]{36}/cancel$`).test(request.path) && !Object.keys(request.body).length) return 'cancel';
   return null;
 }
@@ -371,7 +375,7 @@ async function waitReady(ctx, record, account, signal) {
 
 async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
   const { id, request } = record, kind = savedKind(id, request);
-  const retrySafe = ['session', 'command', 'selection', 'cancel', 'close', 'limit', 'finish'].includes(kind);
+  const retrySafe = ['session', 'command', 'selection', 'cancel', 'close', 'limit', 'finish', 'file-hydration'].includes(kind);
   let failures = 0;
   for (;;) {
     try {
@@ -537,7 +541,10 @@ export function report(ctx, res, kind) {
     else printTable(['tool', 'state', 'error'], data.tools.map(t => [t.tool, t.state, t.error?.message]));
   }
   else if (kind === 'inputs') printTable(['input_id', 'path', 'state', 'size_bytes'], data.inputs.map(i => [i.input_id, i.path, i.state, i.size_bytes]));
-  else if (kind === 'files') printTable(['path', 'kind', 'size_bytes'], data.entries.map(e => [e.path, e.kind, e.size_bytes]));
+  else if (kind === 'files') {
+    printTable(['path', 'kind', 'size_bytes'], data.entries.map(e => [e.path, e.kind, e.size_bytes]));
+    if (data.next_cursor) printKv({ next_cursor: data.next_cursor });
+  }
   else if (kind === 'activity') {
     printTable(['created_at', 'kind', 'id', 'session_id', 'state/action', 'origin'], data.events.map(e =>
       [e.created_at, e.kind, e.id, e.session_id, e.record.state ?? e.record.action, e.record.origin]));
@@ -775,6 +782,12 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
       const failure = tools.find(tool => tool?.state === 'failed');
       if (failure) failed('tool_failed', `Tool ${failure.tool} failed`, failure.error);
       if (tools.every(tool => tool?.state === 'ready')) return result;
+    } else if (kind === 'file-deletion') {
+      if (data.state === 'failed' || data.cleanup_state === 'attention') failed('file_delete_failed', `File deletion ${id} needs attention`, undefined, 'Inspect the file and cleanup status before another action.');
+      if (data.state === 'deleted' && ['complete','unknown'].includes(data.cleanup_state)) return result;
+    } else if (kind === 'file-hydration') {
+      if (data.state === 'failed') failed('file_hydration_failed', `File hydration ${id} failed`, data.error, 'Inspect the local path and saved file before retrying.');
+      if (data.state === 'ready') return result;
     } else if (kind === 'file-recovery') {
       if (data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
         `Inspect the destination and operation ${id} before another action.`);
@@ -791,7 +804,8 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
     else if (kind === 'close') result = await ctx.client.get(record.request.path.slice(0,-'/close'.length), {signal});
     else if (kind === 'selection') result = await forgeRequest(ctx,session,'GET','/v1/session',{signal});
     else if (kind === 'input') result = await inputStatus(ctx,session,id,{signal,account});
-    else if (kind === 'file-recovery') result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal,account});
+    else if (kind === 'file-recovery' || kind === 'file-deletion') result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal,account});
+    else if (kind === 'file-hydration') result = await forgeRequest(ctx,session,'GET',`/v1/files/hydrate/${id}`,{signal});
     else result = await readSync(ctx,session,id,{signal});
     saveResult(recordPath(ctx,id), readRecord(recordPath(ctx,id)) ?? record, result.data);
   }
@@ -829,8 +843,14 @@ async function runAction(ctx) {
         }
       }
     }
+    let hydratePaths;
+    if (flags.hydrate !== undefined) {
+      const paths = [...new Set((Array.isArray(flags.hydrate) ? flags.hydrate : [flags.hydrate]).map(value => workspacePath(value, true)))].sort();
+      hydratePaths = paths.filter((value, index) => !paths.slice(0,index).some(parent => value.startsWith(parent + '/')));
+      if (!hydratePaths.length || hydratePaths.length > 64) throw usageError('forge resume: select at most 64 distinct paths.');
+    }
     const body = { session_id: sessionId, files_contract: 2, ...sessionOptions(flags),
-      ...(resuming ? { expected_control_revision: revision }
+      ...(resuming ? { expected_control_revision: revision, ...(hydratePaths ? { hydrate_paths: hydratePaths } : {}) }
         : { name: required(flags.name, 'name') }) };
     const destination = resuming ? `${API}/projects/${projectId}/sessions` : `${API}/sessions`;
     return report(ctx, await submit(ctx, sessionId, { method: 'POST', path: destination, body }, 'session_id',
@@ -907,13 +927,14 @@ async function runAction(ctx) {
         || new Set(record.readiness.input_ids).size !== record.readiness.input_ids.length)) {
       throw usageError(`Saved readiness for Forge operation ${id} is malformed; no request was sent.`);
     }
-    const seconds = localWaitSeconds(flags['wait-timeout'],60);
+    const tree = record.request.type === 'project-file-delete-tree-v1';
+    const seconds = localWaitSeconds(flags['wait-timeout'],tree ? 0 : 60,{allowZero:tree});
     return controlled(ctx,id,seconds,async signal => {
       const account = await accountIdentity(ctx,{signal});
       checkIdentity(record,account,id);
       printProgress(`Recovering saved operation: ${id}`);
       try {
-        let result = ['sync','input','file-recovery'].includes(kind)
+        let result = ['sync','input','file-recovery','file-deletion'].includes(kind)
           ? await recoverFile(ctx,id,record,{signal,account,retryFailedSync:kind === 'sync'})
           : await dispatchSaved(ctx,file,record,account,{previous:true,signal});
         if (kind === 'sync' && result.data?.state === 'failed') failedSync(id,record.request.session_id,result.data);
@@ -928,12 +949,24 @@ async function runAction(ctx) {
       }
     });
   }
-  if (['files', 'files recover', 'download', 'link'].includes(action)) {
-    const projectId = uuid(ctx.positionals[action === 'files recover' ? 2 : 1], 'project ID');
+  if (['files', 'files recover', 'files delete', 'download', 'link'].includes(action)) {
+    const projectId = uuid(ctx.positionals[action === 'files recover' || action === 'files delete' ? 2 : 1], 'project ID');
     return runFiles(ctx, action, undefined, undefined, projectId);
   }
-  const sessionId = uuid(ctx.positionals[(action.startsWith('tools ') || action.startsWith('inputs ')) ? 2 : 1], 'session ID');
+  const sessionId = uuid(ctx.positionals[(action.startsWith('tools ') || action.startsWith('inputs ') || action === 'files hydrate') ? 2 : 1], 'session ID');
   const sessionPath = `${API}/sessions/${sessionId}`;
+  if (action === 'files hydrate') {
+    if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge files hydrate: --wait-timeout requires --wait.');
+    const id = flags['operation-id'] === undefined ? randomUUID() : uuid(flags['operation-id'], 'operation ID');
+    const target = workspacePath(required(flags.path, 'path'));
+    const request = {method:'POST', path:'/v1/files/hydrate', session_id:sessionId, body:{operation_id:id,path:target}};
+    return controlled(ctx,id,flags.wait ? localWaitSeconds(flags['wait-timeout'],1800) : 60,async signal => {
+      let result = await submit(ctx,id,request,'operation_id',`Inspect or retry hydration ${id} with the same ID.`,{signal});
+      if (flags.wait) result = await waitRecovered(ctx,readRecord(recordPath(ctx,id)),result,'file-hydration',null,signal);
+      if (result.data?.state === 'failed') failed('file_hydration_failed',`File hydration ${id} failed`,result.data.error);
+      return report(ctx,result);
+    });
+  }
   if (action === 'sync') {
     if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge sync: --wait-timeout requires --wait.');
     if (flags.wait && (flags['wait-timeout'] ?? flags.timeout) !== undefined) {

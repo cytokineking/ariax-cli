@@ -273,7 +273,7 @@ capabilities and input rules.
 | Connect or disconnect | `ariax login`, `ariax logout` |
 | Account and discovery | `ariax me`, `ariax protocols`, `ariax schema <PROTOCOL>`, `ariax skills [PROTOCOL] [--reference ID] --read` |
 | Forge discovery and sessions | `ariax forge catalog --compact`, then `ariax forge catalog --tool TOOL --model MODEL --mode MODE --json`; `ariax forge create`, `status`, `run --wait-ready --wait`, `recover`, `finish --wait`; read `ariax skills forge --read` |
-| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs status`, `sync`, `files`, `files recover`, `download`, `link`; read `ariax skills forge --reference outputs --read` |
+| Forge inputs and durable outputs | `ariax forge inputs add`, `inputs status`, `sync`, `files`, `files hydrate`, `files delete`, `files recover`, `download`, `link`; read `ariax skills forge --reference outputs --read` |
 | Current GPU hourly prices | `ariax pricing`, `ariax pricing --json` |
 | Validate | `ariax validate -f job.json [--input target.pdb]` |
 | Launch | `ariax submit -f job.json --name NAME [--input target.pdb] [--wait]` |
@@ -330,6 +330,16 @@ archived file, or managed artifact into the current project workspace; the
 server performs the copy and enforces the destination's writer and version.
 `forge resume` and `forge limit` fetch their current revision when omitted and
 retain it in the saved request. A later control change remains a conflict.
+Resume loads all saved files by default. Repeat `--hydrate /workspace/path` or
+`--hydrate /inputs/path` to load only selected files and directories, and use
+`ariax forge files hydrate SESSION --path PATH --wait` to load another saved
+file into a running session. Omitted files remain saved and count toward the
+project's 1 TiB and one-million-entry limits. `ariax forge files PROJECT` returns one page;
+pass its `next_cursor` to `--cursor` for the next page. `ariax forge files
+delete PROJECT --path PATH [--recursive] --wait` permanently deletes a saved
+file or directory and frees its project quota. Recursive deletion is driven by
+the CLI; if interrupted, use `ariax forge recover ID --wait` to continue with
+the saved operation ID. Storage cleanup is reported separately.
 
 The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents a
 native joint sequence and structure design workflow. Its checks are bounded;
