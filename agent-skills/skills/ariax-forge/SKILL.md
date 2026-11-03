@@ -39,6 +39,12 @@ interruption leaves remote work running. After an uncertain response, inspect
 the same session or command ID and reconcile its saved request before retrying;
 a fresh ID can duplicate work or allocate another session.
 
+If a read returns `network_error`, check the client's network connection and
+retry the same read after connectivity returns. Remote jobs may still be
+running; their status is unknown until observed again. Keep the original IDs
+when reconciling admitted work. A connectivity error does not by itself call
+for cancellation, restart, reauthentication, or a new submission.
+
 ```sh
 ariax forge catalog --task binder-design --compact --json
 ariax forge catalog --tool TOOL --model MODEL --json

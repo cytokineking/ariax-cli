@@ -12,7 +12,7 @@ import {
   supportsStoredCredentials,
 } from './config.js';
 import { createCredentialStore } from './credentials.js';
-import { createClient } from './http.js';
+import { ConnectivityError, createClient } from './http.js';
 import { printData, printJson, printProgress } from './output.js';
 import { EXIT } from './exit-codes.js';
 import {
@@ -141,6 +141,15 @@ function rejectedApiKeyAction({ command, apiKeySource } = {}) {
   return `Create or copy a new key at ${keyUrl}, run \`ariax login\` in your terminal to replace the saved key, then rerun the command.`;
 }
 
+function isForgeRead({ command, positionals = [] } = {}) {
+  if (command !== 'forge') return false;
+  const [action, subaction] = positionals;
+  return ['catalog', 'list', 'status', 'project', 'activity', 'operations', 'commands', 'command', 'watch', 'logs'].includes(action)
+    || (action === 'tools' && subaction !== 'add')
+    || (action === 'inputs' && ['list', 'status'].includes(subaction))
+    || (action === 'files' && !['delete', 'hydrate', 'recover'].includes(subaction));
+}
+
 function reportError(err, jsonMode, authContext) {
   const code = exitCodeFor(err);
   const rejectedApiKey = err?.status === 401;
@@ -150,7 +159,16 @@ function reportError(err, jsonMode, authContext) {
   const requestId = err?.requestId;
   const apiCode = typeof err?.code === 'string' ? err.code
     : (rejectedApiKey ? 'invalid_api_key' : undefined);
-  const action = err?.action ?? (rejectedApiKey ? rejectedApiKeyAction(authContext) : undefined);
+  let action = err?.action ?? (rejectedApiKey ? rejectedApiKeyAction(authContext) : undefined);
+  if (err instanceof ConnectivityError) {
+    const guidance = err.method === 'GET' || isForgeRead(authContext)
+      ? "Check this client's network connection and retry the same read after connectivity returns."
+      : "Check this client's network connection. After connectivity returns, inspect the outcome before retrying; keep the original operation ID if work may have been submitted.";
+    const forgeGuidance = authContext?.command === 'forge'
+      ? 'Remote Forge jobs may still be running; their status is currently unknown. Preserve original operation IDs when reconciling admitted work.'
+      : undefined;
+    action = [guidance, forgeGuidance, action].filter(Boolean).join(' ');
+  }
   if (jsonMode) {
     printJson({
       error: {
@@ -416,6 +434,6 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     if (notice) printProgress(formatUpdateNotice(notice));
     return EXIT.OK;
   } catch (err) {
-    return reportError(err, jsonMode, { command, apiKeySource: config.apiKeySource });
+    return reportError(err, jsonMode, { command, positionals, apiKeySource: config.apiKeySource });
   }
 }

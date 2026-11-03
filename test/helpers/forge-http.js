@@ -60,7 +60,8 @@ async function boundary(root) {
     connects: 0, rejectPost401: 0, rejectedPost401: 0, liveCommandMissing: false, liveInputMissing: false,
     pendingAdmission: false, commandFailures: 0, rejectedCommands: 0, inputAdmissions: 0,
     copyPosts: 0, finishPosts: 0, finishAutoComplete: false, finishFailure: false, bumpResume: false,
-    syncMode: 'saved', syncPosts: 0, fileError: false, fileBadPath: false, fileBadGrant: false, fileCursorCycle: false, legacyResume: false };
+    syncMode: 'saved', syncPosts: 0, fileError: false, fileBadPath: false, fileBadGrant: false, fileCursorCycle: false, legacyResume: false,
+    meFault: null, sessionReadDisconnected: false, connectDisconnected: false, connectInvalid: false };
   const reply = (res, status, data) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data })); };
   const error = (res, status, code, message, details) => {
     res.writeHead(status, { 'content-type': 'application/json', 'x-request-id': 'request-fixture-1' });
@@ -134,6 +135,8 @@ async function boundary(root) {
       if (connect && req.method === 'POST') {
         const session = sessions.get(connect[1]);
         if (!session || session.owner !== user) return error(res, 404, 'not_found', 'Session not found');
+        if (state.connectDisconnected) { req.socket.destroy(); return; }
+        if (state.connectInvalid) return reply(res, 200, { session_id: connect[1] });
         state.connects++;
         const access = issue(session, user);
         return reply(res, 200, { session_id:connect[1], project_id:session.data.project_id,
@@ -141,6 +144,11 @@ async function boundary(root) {
           expires_at:new Date(access.exp*1000).toISOString(), api_version:1 });
       }
       if (req.method === 'GET' && url.pathname === '/api/v1/me') {
+        if (state.meFault === 'disconnect') { req.socket.destroy(); return; }
+        if (state.meFault === 'timeout') { heldResponses.add(res); res.once('close', () => heldResponses.delete(res)); return; }
+        if (state.meFault === 'forbidden') return error(res, 403, 'forbidden', 'Access denied');
+        if (state.meFault === 'server') return error(res, 500, 'internal_error', 'Account service failed');
+        if (state.meFault === 'gateway') return error(res, 504, 'gateway_timeout', 'Gateway timed out');
         return reply(res, 200, { actor: { user_id: user }, billing: { account_type: 'user', account_id: user } });
       }
       if (req.method === 'GET' && url.pathname === '/api/v1/forge/catalog') return reply(res, 200, { tools: catalog });
@@ -192,7 +200,10 @@ async function boundary(root) {
           projects.set(project.id, project);
           session = makeSession(body, user, project);
         }
-        if (state.drop === 'create') { state.drop = null; req.socket.destroy(); return; }
+        if (state.drop === 'create' || state.drop === 'create-persistent') {
+          if (state.drop === 'create') state.drop = null;
+          req.socket.destroy(); return;
+        }
         return reply(res, 202, session.data);
       }
       const parts = url.pathname.split('/').filter(Boolean);
@@ -384,6 +395,7 @@ async function boundary(root) {
       if (!session || session.owner !== user) return error(res, 404, 'not_found', 'Session not found');
       if (parts.length === 5) {
         assert.equal(req.method, 'GET');
+        if (state.sessionReadDisconnected) { req.socket.destroy(); return; }
         if (state.sessionReadsUnavailable) return error(res, 503, 'runtime_unavailable', 'Session inspection unavailable');
         return reply(res, 200, session.data);
       }
@@ -602,9 +614,11 @@ async function boundary(root) {
 }
 
 export async function tunnelEnvironment(root, origin, baseEnv) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-forge-private-'));
+  const directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-forge-private-')));
   const preload = path.join(directory, 'tunnel.cjs');
-  await fs.writeFile(preload, `const original=globalThis.fetch;
+  await fs.writeFile(preload, `// macOS uses os.homedir() instead of XDG_CONFIG_HOME for CLI credentials.
+if(process.platform==='darwin') require('node:os').homedir=()=>process.env.ARIAX_FIXTURE_USER_DIR;
+const original=globalThis.fetch;
 globalThis.fetch=function(input,options){
  const url=new URL(typeof input==='string'||input instanceof URL?input:input.url);
  if(url.protocol==='https:'&&/^[0-9a-f]{32}\\.forge\\.test$/.test(url.hostname)){
@@ -614,8 +628,128 @@ globalThis.fetch=function(input,options){
  return original(input,options);
 };
 `);
-  return { directory, env:{...baseEnv, XDG_CONFIG_HOME:path.join(directory,'config'),
+  return { directory, env:{...baseEnv, XDG_CONFIG_HOME:path.join(directory,'config'), ARIAX_FIXTURE_USER_DIR:directory,
     ARIAX_FIXTURE_TUNNEL:origin, NODE_OPTIONS:((baseEnv.NODE_OPTIONS || '')+' --require='+preload).trim()} };
+}
+
+/** Connectivity regression through the real CLI and an isolated loopback API. */
+export async function exerciseConnectivityCli(script, baseEnv = process.env) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-connectivity-'));
+  const api = await boundary(root), { state } = api;
+  const privateClient = await tunnelEnvironment(root, api.origin, baseEnv);
+  const env = { ...privateClient.env, ARIAX_API_KEY: key, NO_UPDATE_NOTIFIER: '1' };
+  async function invoke(args, { code = 0, actorKey = key, human = false } = {}) {
+    let out;
+    try { out = { code: 0, ...await execute(process.execPath, [script, human ? '--no-json' : '--json',
+      '--root-dir', root, '--base-url', api.origin, ...args], { env:{...env, ARIAX_API_KEY:actorKey}, timeout:60_000 }) }; }
+    catch (error) { if (typeof error.code !== 'number') throw error; out = error; }
+    assert.equal(out.code, code, `${args}: ${out.stdout}\n${out.stderr}`);
+    assert.doesNotMatch(out.stdout + out.stderr, new RegExp(key));
+    return human ? out : { ...out, payload: JSON.parse(out.stdout) };
+  }
+  try {
+    state.drop = null;
+    state.meFault = 'disconnect';
+    const offlineMe = await invoke(['me'], { code: 9 });
+    assert.equal(offlineMe.payload.error.code, 'network_error');
+    assert.equal(offlineMe.payload.error.retryable, true);
+    assert.match(offlineMe.payload.error.message, /Unable to reach Ariax from this client\..*GET \/api\/v1\/me: fetch failed/);
+    assert.match(offlineMe.payload.error.action, /Check this client's network connection.*retry the same read after connectivity returns/);
+    const offlineOperations = await invoke(['forge', 'operations'], { code: 9 });
+    assert.equal(offlineOperations.payload.error.code, 'network_error');
+    assert.equal(offlineOperations.payload.error.retryable, true);
+    assert.match(offlineOperations.payload.error.message, /GET \/api\/v1\/me/);
+    assert.match(offlineOperations.payload.error.action, /retry the same read after connectivity returns/);
+    assert.match(offlineOperations.payload.error.action, /Remote Forge jobs may still be running; their status is currently unknown/);
+    assert.match(offlineOperations.payload.error.action, /Preserve original operation IDs/);
+    const offlineHuman = await invoke(['forge', 'operations'], { code: 9, human: true });
+    assert.match(offlineHuman.stderr, /Unable to reach Ariax from this client\..*GET \/api\/v1\/me/);
+    assert.match(offlineHuman.stderr, /code: network_error/);
+    assert.match(offlineHuman.stderr, /Check this client's network connection.*retry the same read after connectivity returns/);
+    assert.match(offlineHuman.stderr, /Remote Forge jobs may still be running; their status is currently unknown/);
+    assert.equal(state.posts, 0, 'failed reads sent a mutation');
+
+    state.meFault = 'timeout';
+    const timedOut = await invoke(['me', '--timeout', '50'], { code: 9 });
+    assert.equal(timedOut.payload.error.code, 'network_error');
+    assert.equal(timedOut.payload.error.retryable, true);
+    assert.match(timedOut.payload.error.message, /timed out after 50ms: GET \/api\/v1\/me/);
+    assert.match(timedOut.payload.error.action, /retry the same read after connectivity returns/);
+    state.meFault = null;
+    assert.equal((await invoke(['forge', 'operations'])).payload.data.operations.length, 0);
+
+    // HTTP and invalid-response failures keep their existing classifications.
+    const denied = await invoke(['me'], { code: 2, actorKey: 'arx_forge_invalidcredential' });
+    assert.equal(denied.payload.error.code, 'invalid_api_key');
+    assert.equal(denied.payload.error.retryable, false);
+    assert.doesNotMatch(denied.payload.error.action, /network connection/);
+    state.meFault = 'forbidden';
+    assert.equal((await invoke(['me'], { code: 3 })).payload.error.code, 'forbidden');
+    state.meFault = 'server';
+    const serverError = await invoke(['me'], { code: 10 });
+    assert.equal(serverError.payload.error.code, 'internal_error');
+    assert.equal(serverError.payload.error.retryable, false);
+    assert.doesNotMatch(serverError.payload.error.message, /Unable to reach Ariax/);
+    assert.equal(serverError.payload.error.action, undefined);
+    state.meFault = 'gateway';
+    const gateway = await invoke(['me'], { code: 9 });
+    assert.equal(gateway.payload.error.code, 'gateway_timeout');
+    assert.doesNotMatch(gateway.payload.error.message, /Unable to reach Ariax/);
+    assert.equal(gateway.payload.error.action, undefined);
+    state.meFault = null;
+
+    // These sessions and requests exist only in the loopback fixture.
+    const created = await invoke(['forge', 'create', '--name', 'Connectivity fixture', '--gpu', 'L40']);
+    const sessionId = created.payload.data.session_id;
+    const postsBeforeReads = state.posts, allocationsBeforeReads = state.allocations;
+    state.sessionReadDisconnected = true;
+    const offlineStatus = await invoke(['forge', 'status', sessionId], { code: 9 });
+    assert.equal(offlineStatus.payload.error.code, 'network_error');
+    assert.equal(offlineStatus.payload.error.retryable, true);
+    assert.match(offlineStatus.payload.error.message, new RegExp(`GET /api/v1/forge/sessions/${sessionId}`));
+    assert.match(offlineStatus.payload.error.action, /retry the same read after connectivity returns/);
+    assert.match(offlineStatus.payload.error.action, /Remote Forge jobs may still be running; their status is currently unknown/);
+    state.sessionReadDisconnected = false;
+    assert.equal((await invoke(['forge', 'status', sessionId])).payload.data.session_id, sessionId);
+    state.connectDisconnected = true;
+    const offlineConnect = await invoke(['forge', 'tools', sessionId], { code: 9 });
+    assert.equal(offlineConnect.payload.error.code, 'network_error');
+    assert.match(offlineConnect.payload.error.message, new RegExp(`POST /api/v1/forge/sessions/${sessionId}/connect`));
+    assert.match(offlineConnect.payload.error.action, /retry the same read after connectivity returns/);
+    assert.match(offlineConnect.payload.error.action, /Remote Forge jobs may still be running; their status is currently unknown/);
+    state.connectDisconnected = false;
+    state.connectInvalid = true;
+    const invalidConnection = await invoke(['forge', 'tools', sessionId], { code: 9 });
+    assert.equal(invalidConnection.payload.error.code, 'error');
+    assert.match(invalidConnection.payload.error.message, /Session connection response is invalid/);
+    assert.doesNotMatch(invalidConnection.payload.error.message, /Unable to reach Ariax/);
+    state.connectInvalid = false;
+    assert.equal((await invoke(['forge', 'tools', sessionId])).payload.data.tools[0].state, 'queued');
+    assert.equal(state.posts, postsBeforeReads, 'read recovery sent a work mutation');
+    assert.equal(state.allocations, allocationsBeforeReads, 'read recovery allocated another session');
+
+    // A lost POST response preserves the existing saved ID and recovery action.
+    state.drop = 'create-persistent';
+    const allocationCount = state.allocations, postsBeforeCreate = state.posts;
+    const ambiguous = await invoke(['forge', 'create', '--name', 'Ambiguous connectivity', '--gpu', 'L40'], { code: 9 });
+    const ambiguousId = ambiguous.stderr.match(/session_id: ([0-9a-f-]{36})/)[1];
+    assert.equal(ambiguous.payload.error.code, 'network_error');
+    assert.equal(ambiguous.payload.error.retryable, true);
+    assert.match(ambiguous.payload.error.message, /POST \/api\/v1\/forge\/sessions/);
+    assert.match(ambiguous.payload.error.action, /Check this client's network connection/);
+    assert.match(ambiguous.payload.error.action, /inspect the outcome before retrying/);
+    assert.match(ambiguous.payload.error.action, new RegExp(`forge recover ${ambiguousId}`));
+    assert.equal(state.posts - postsBeforeCreate, 3, 'connectivity handling changed the existing bounded replay');
+    assert.equal(state.allocations - allocationCount, 1, 'uncertain request allocated multiple sessions');
+    state.drop = null;
+    assert.equal((await invoke(['forge', 'recover', ambiguousId])).payload.data.session_id, ambiguousId);
+    assert.equal(state.allocations - allocationCount, 1, 'recovery allocated a replacement session');
+    assert.equal(state.fault, null, state.fault?.stack);
+  } finally {
+    await api.close();
+    await fs.rm(root, { recursive:true, force:true });
+    await fs.rm(privateClient.directory, { recursive:true, force:true });
+  }
 }
 
 export async function exerciseForgeCli(script, baseEnv = process.env) {
@@ -806,6 +940,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const failedRun = await invoke(['forge', 'run', sessionId, '--tool', 'base', '--', process.execPath, '-e', 'process.exit(2)']);
     const failedId = failedRun.payload.data.command_id;
     const failure = await invoke(['forge', 'watch', sessionId, failedId, '--timeout', '30'], { code: 10 });
+    assert.equal(failure.payload.error.code, 'command_failed');
     assert.match(failure.payload.error.action, new RegExp(`forge logs ${sessionId} ${failedId}`));
     assert.equal((await invoke(['forge', 'command', sessionId, failedId])).payload.data.exit_code, 2);
     const beforeFailedRecovery = state.posts;
@@ -942,6 +1077,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(afterConflict,beforeWebFinish+1);
     state.finishAutoComplete = true;
     assert.equal((await invoke(['forge','finish',webSession,'--wait'])).payload.data.release,'released');
+
     for (const name of await fs.readdir(path.join(root, '.ariax/forge'))) {
       const bytes = await fs.readFile(path.join(root, '.ariax/forge', name), 'utf8');
       assert.doesNotMatch(bytes, new RegExp(key));
@@ -1425,7 +1561,10 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.doesNotMatch(fileFailure.stdout + fileFailure.stderr,/private-transfer-grant|signature=|https:\/\/example.org/);
     state.fileError = false;
     state.fileBadPath = true;
-    await invoke(['forge','files',pid],9);
+    const invalidWorkspace = await invoke(['forge','files',pid],9);
+    assert.equal(invalidWorkspace.payload.error.code, 'error');
+    assert.match(invalidWorkspace.payload.error.message, /workspace response is invalid or incompatible/);
+    assert.doesNotMatch(invalidWorkspace.payload.error.message, /Unable to reach Ariax/);
     state.fileBadPath = false;
     state.fileBadSize = true;
     await invoke(['forge','files',pid],9);

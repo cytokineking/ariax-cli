@@ -100,7 +100,7 @@ function sanitizeErrorDetails(details) {
   return Object.keys(result).length ? result : undefined;
 }
 
-/** Local network/timeout failure (no HTTP response). */
+/** Network-related failure, including invalid or unconfirmed remote responses. */
 export class NetworkError extends Error {
   constructor(message, { cause } = {}) {
     super(sanitize(message));
@@ -108,6 +108,16 @@ export class NetworkError extends Error {
     this.exitCode = EXIT.NETWORK;
     this.retryable = true;
     if (cause !== undefined) this.cause = cause;
+  }
+}
+
+/** An API request failed at the client transport boundary or timed out. */
+export class ConnectivityError extends NetworkError {
+  constructor(message, { cause, method } = {}) {
+    super(`Unable to reach Ariax from this client. ${message}`, { cause });
+    this.name = 'ConnectivityError';
+    this.code = 'network_error';
+    this.method = method;
   }
 }
 
@@ -231,26 +241,31 @@ export function createClient({
     signal?.addEventListener('abort', abort, { once: true });
     const ms = timeout ?? timeoutMs;
     const timer = setTimeout(() => controller.abort(), ms);
-    let res;
+    let responseReceived = false;
     try {
-      res = await fetchImpl(url, {
+      const res = await fetchImpl(url, {
         method,
         headers,
         body: payload,
         signal: controller.signal,
         redirect: 'error',
       });
+      responseReceived = true;
       const result = await parseResponse(res, { method, path });
       if (signal?.aborted) throw interrupted(signal);
-      if (controller.signal.aborted) throw new NetworkError(`Request timed out after ${ms}ms: ${method} ${path}`);
+      if (controller.signal.aborted) throw new ConnectivityError(`Request timed out after ${ms}ms: ${method} ${path}`, { method });
       return result;
     } catch (err) {
       if (signal?.aborted) throw interrupted(signal);
       if (err instanceof ApiError || err instanceof NetworkError) throw err;
       if (err && err.name === 'AbortError') {
-        throw new NetworkError(`Request timed out after ${ms}ms: ${method} ${path}`);
+        const message = `Request timed out after ${ms}ms: ${method} ${path}`;
+        if (responseReceived) throw new NetworkError(message);
+        throw new ConnectivityError(message, { method, cause: err });
       }
-      throw new NetworkError(`Network failure: ${method} ${path}: ${err?.message || err}`, { cause: err });
+      const message = `${method} ${path}: ${err?.message || err}`;
+      if (responseReceived) throw new NetworkError(`Network failure: ${message}`, { cause: err });
+      throw new ConnectivityError(message, { method, cause: err });
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);

@@ -308,6 +308,14 @@ command is never rerun under a new ID. URL inputs are not saved in the journal:
 when their source cannot be confirmed from the saved result, provide the
 original URL again with the same input ID.
 
+An Ariax API transport failure reports JSON `error.code: "network_error"`,
+`retryable: true`, and exit code 9. Exit code 9 also covers other conditions,
+including HTTP 504, so inspect the error code and action for context.
+Check the client's network connection and retry the same read when connectivity
+returns. A disconnected client cannot determine whether remote work is still
+running; retain the original IDs and reconcile uncertain submissions before
+taking further action.
+
 Use the following to wait for the selected tool, explicitly listed inputs, and
 available command resources, then follow the result:
 
