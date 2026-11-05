@@ -789,7 +789,7 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
       if (data.state === 'failed') failed('file_hydration_failed', `File hydration ${id} failed`, data.error, 'Inspect the local path and saved file before retrying.');
       if (data.state === 'ready') return result;
     } else if (kind === 'file-recovery') {
-      if (data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
+      if (data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,data.error,
         `Inspect the destination and operation ${id} before another action.`);
       if (['ready','saved'].includes(data.state)) return result;
     } else if (kind === 'sync' || kind === 'input') {
@@ -938,7 +938,7 @@ async function runAction(ctx) {
           ? await recoverFile(ctx,id,record,{signal,account,retryFailedSync:kind === 'sync'})
           : await dispatchSaved(ctx,file,record,account,{previous:true,signal});
         if (kind === 'sync' && result.data?.state === 'failed') failedSync(id,record.request.session_id,result.data);
-        if (kind === 'file-recovery' && result.data?.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
+        if (kind === 'file-recovery' && result.data?.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,result.data.error,
           `Inspect the destination and operation ${id} before another action.`);
         if (flags.wait) result = await waitRecovered(ctx,record,result,kind,account,signal);
         if (kind === 'finish') finishOutcome(result.data);

@@ -302,18 +302,19 @@ async function copyStatus(ctx, record, signal) {
   catch (error) { if (error.status === 404) return null; throw error; }
   const value = result.data;
   if (value?.operation_id !== id || value.session_id !== request.session_id
-      || !['open','published','expired'].includes(value.state) || !['host','offline'].includes(value.source)
+      || !['open','published','expired','pending','failed'].includes(value.state) || !['host','offline'].includes(value.source)
       || !['ready','pending','conflict','unknown','not_applicable'].includes(value.local_state)
       || (value.state === 'published' && (!Number.isSafeInteger(value.version) || value.version <= 0))) {
     throw new NetworkError('File recovery response does not match the saved operation.');
   }
-  const state = value.state === 'expired' || value.local_state === 'conflict' ? 'failed'
+  const state = value.state === 'expired' || value.state === 'failed' || value.local_state === 'conflict' ? 'failed'
     : value.state !== 'published' ? 'pending' : value.local_state === 'ready' ? 'ready'
     : value.local_state === 'not_applicable' ? 'saved' : 'pending';
   return {...result,data:{operation_id:id,project_id:request.project_id,session_id:request.session_id,
     path:request.body.path,source:request.body.source,state,storage_state:value.state,
     installation_status:value.local_state,...(value.version == null ? {} : {version:value.version}),
-    copy_origin:value.source}};
+    copy_origin:value.source,...(value.error && typeof value.error.code === 'string' && typeof value.error.message === 'string'
+      ? {error:{code:value.error.code,message:value.error.message}} : {})}};
 }
 
 async function recoverCopy(ctx, record, signal) {
@@ -776,7 +777,7 @@ async function runCopy(ctx, projectId) {
       await delay(Math.max(1000,(result.data.retry_after ?? 3)*1000),undefined,{signal});
       result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal});
     }
-    if (result.data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,undefined,
+    if (result.data.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,result.data.error,
       `Inspect the destination and operation ${id}; resolve any writer or file conflict before a new action.`);
     return report(ctx,result);
   });

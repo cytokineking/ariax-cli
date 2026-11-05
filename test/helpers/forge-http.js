@@ -230,6 +230,10 @@ async function boundary(root) {
           if (req.method === 'GET' && parts[6] === 'operations') {
             const operation = project.fileOperations.get(parts[7]);
             if (!operation) return error(res,404,'not_found','File operation not found');
+            if (operation.copy && state.copyObservation) return reply(res,200,{
+              operation_id:parts[7],session_id:operation.body.session_id,source:'host',version:null,
+              ...state.copyObservation });
+
             if (operation.deletion) return reply(res,200,{operation_id:parts[7],session_id:operation.body.session_id,
               source:operation.source,state:'deleted',version:operation.version,cleanup_state:'complete',
               local_state:operation.source === 'offline' ? 'not_applicable' : 'ready'});
@@ -1245,6 +1249,26 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     state.copyConflict = true;
     assert.equal((await invoke(['forge','recover',copyId],10)).payload.error.code,'file_recovery_failed');
     state.copyConflict = false;
+    const immutableCopy = (await record(copyId)).request;
+    const beforeReservedReads = state.copyPosts;
+    state.copyObservation = {state:'pending',local_state:'pending'};
+    assert.equal((await invoke(['forge','recover',copyId])).payload.data.state,'pending');
+    state.copyObservation = {state:'failed',local_state:'conflict',
+      error:{code:'file_revision_conflict',message:'The saved file changed; refresh before retrying'}};
+    const terminal = await invoke(['forge','recover',copyId,'--wait'],10);
+    assert.equal(terminal.payload.error.code,'file_recovery_failed');
+    assert.equal(terminal.payload.error.retryable,false);
+    assert.match(terminal.payload.error.message,/The saved file changed/);
+    assert.equal((await record(copyId)).result.error.code,'file_revision_conflict');
+    assert.equal((await record(copyId)).result.storage_state,'failed');
+    assert.equal(state.copyPosts,beforeReservedReads,'reserved failure was resubmitted');
+    assert.deepEqual((await record(copyId)).request,immutableCopy,'recovery rebound the immutable request');
+    for (const wrong of [{operation_id:randomUUID()},{session_id:randomUUID()},{version:0,state:'published',local_state:'ready'}]) {
+      state.copyObservation = {state:'published',local_state:'ready',version:1,...wrong};
+      assert.match((await invoke(['forge','recover',copyId],9)).payload.error.message,/does not match/);
+      assert.equal(state.copyPosts,beforeReservedReads,'mismatched status sent a mutation');
+    }
+    state.copyObservation = null;
     const archiveId = randomUUID();
     const archive = await invoke(['forge','files','recover',pid,'--path','/workspace/archive.dat',
       '--archive',`${pid}:${archiveId}:/workspace/old.dat`,'--wait']);
