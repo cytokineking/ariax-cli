@@ -316,6 +316,13 @@ partial failure; a batch is not an atomic transaction. `--wait-timeout SECONDS`
 bounds the whole local operation. The final JSON lists all input IDs and one
 readiness summary; only `state: ready` confirms every input is installed.
 
+An API rate limit pauses the whole batch for `Retry-After`, then reconciles all
+saved child IDs before continuing. A genuine partial failure includes safe
+per-file states and ready/pending/failed/unknown counts in the public error JSON,
+plus one batch recovery command. Unknown means publication has not been confirmed;
+retain that ID. Manifests and reopened sources must be regular files; FIFOs and
+symlinks are rejected, and manifests are limited to 1 MiB.
+
 The protected session connection cache is an optimization. Valid reads do not
 modify it. If sandbox permissions prevent saving/refreshing it, a fresh
 authenticated connection is retained only in process memory; the next CLI

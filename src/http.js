@@ -49,7 +49,7 @@ export class ApiError extends Error {
 }
 
 /** Keep bounded public validation, payment and project-control details. */
-function sanitizeErrorDetails(details) {
+export function sanitizeErrorDetails(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
   const result = {};
   if (Array.isArray(details.issues)) {
@@ -82,6 +82,24 @@ function sanitizeErrorDetails(details) {
     result.allowed_statuses = [...new Set(details.allowed_statuses)];
   }
   if (isUUID(details.project_id)) result.project_id = details.project_id.trim().toLowerCase();
+  if (isUUID(details.batch_id) && isUUID(details.session_id) && Array.isArray(details.files) && details.files.length <= 100) {
+    result.batch_id = details.batch_id;
+    result.session_id = details.session_id;
+    if (['ready','pending','partial','failed'].includes(details.state)) result.state = details.state;
+    for (const key of ['ready_count','pending_count','failed_count','unknown_count','total_bytes']) {
+      if (Number.isSafeInteger(details[key]) && details[key] >= 0) result[key] = details[key];
+    }
+    if (Array.isArray(details.input_ids) && details.input_ids.length <= 100 && details.input_ids.every(isUUID)) result.input_ids = details.input_ids;
+    result.files = details.files.flatMap(file => {
+      if (!file || !isUUID(file.input_id) || !['ready','pending','failed','unknown'].includes(file.state)
+          || !Number.isSafeInteger(file.size_bytes) || file.size_bytes < 0 || typeof file.path !== 'string'
+          || Buffer.byteLength(file.path) > 1024 || /[\\\x00-\x1f\x7f]/.test(file.path)
+          || file.path.split('/').some(part => !part || part === '.' || part === '..')) return [];
+      return [{input_id:file.input_id,path:file.path,size_bytes:file.size_bytes,state:file.state,
+        ...(file.error ? {error:{code:['rate_limited','input_unconfirmed'].includes(file.error.code) ? file.error.code : 'input_staging_failed',
+          message:'Inspect this input ID and recover the same batch.'}} : {})}];
+    });
+  }
   if (Number.isSafeInteger(details.control_revision) && details.control_revision >= 0) result.control_revision = details.control_revision;
   if (typeof details.human_resume_required === 'boolean') result.human_resume_required = details.human_resume_required;
   // Approval points at an ordinary project page. Never retain a grant, query,

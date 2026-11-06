@@ -61,6 +61,14 @@ function fileSnapshot(fd, file) {
   return {path:file,size_bytes:info.size,mtime_ms:info.mtimeMs,ctime_ms:info.ctimeMs,dev:info.dev,ino:info.ino};
 }
 
+function openRegularFile(file) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    if (!fs.fstatSync(fd).isFile()) throw usageError('Forge inputs require regular files.');
+    return fd;
+  } catch (error) { fs.closeSync(fd); throw error; }
+}
+
 function readPart(fd, size, position) {
   const bytes = Buffer.alloc(size);
   let done = 0;
@@ -166,7 +174,7 @@ async function projectInputStatus(ctx, record, knownAccount, signal) {
 }
 
 async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal, source) {
-  const fd = fs.openSync(localFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  const fd = openRegularFile(localFile);
   try {
     const metadata = fileSnapshot(fd, localFile);
     const digests = await checksums(fd, metadata, signal);
@@ -292,7 +300,13 @@ function batchPaths(files) {
 async function batchManifest(filename, signal) {
   const manifest = path.resolve(filename);
   let value;
-  try { value = JSON.parse(fs.readFileSync(manifest, 'utf8')); }
+  try {
+    const fd = openRegularFile(manifest);
+    try {
+      if (fs.fstatSync(fd).size > 1024 * 1024) throw usageError('Input manifest must be at most 1 MiB.');
+      value = JSON.parse(fs.readFileSync(fd, 'utf8'));
+    } finally { fs.closeSync(fd); }
+  }
   catch { throw usageError('Input manifest must be a readable JSON object with a files array.'); }
   if (!value || !Array.isArray(value.files) || !value.files.length || value.files.length > 100) {
     throw usageError('Input manifest requires 1–100 explicitly listed local files.');
@@ -304,7 +318,7 @@ async function batchManifest(filename, signal) {
       throw usageError('Each manifest entry requires file and path strings, with an optional purpose string.');
     }
     const local = path.resolve(path.dirname(manifest), entry.file);
-    const fd = fs.openSync(local, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    const fd = openRegularFile(local);
     try {
       const metadata = fileSnapshot(fd,local), digests = await checksums(fd,metadata,signal);
       files.push({path:entry.path,local_file:metadata,checksum:digests.checksum,...(entry.purpose === undefined ? {} : {purpose:entry.purpose})});
@@ -329,13 +343,70 @@ async function recoverInputBatch(ctx, record, {signal, account, wait = false, co
   }
   account ??= await accountIdentity(ctx,{signal});
   if (Object.keys(account).some(field => record[field] !== account[field])) throw usageError('Input batch belongs to another account or API origin.');
-  const failure = file => ({input_id:file.input_id,path:file.path,size_bytes:file.local_file.size_bytes,state:'failed',
-    error:{code:'input_staging_failed',message:'Inspect this input ID and recover the same batch.'}});
-  let result;
-  do {
-    // Reconcile every child before sending any bytes. A published input only
-    // needs installation observation, including after a lost completion reply.
-    const observed = await parallelFiles(files,concurrency,async file => {
+  let paused, retryAt = 0;
+  const throttle = error => {
+    if (error === paused) return;
+    retryAt = Math.max(retryAt,Date.now()+Math.max(1,error.retryAfterMs ?? 1000));
+    paused ??= Object.assign(new Error('Input batch is waiting for the API rate limit.'),{status:429});
+  };
+  // Stop the whole batch at the first 429. This transport never replays a POST.
+  const original = ctx.client;
+  const batchRequest = method => async (route,options = {}) => {
+    signal?.throwIfAborted();
+    if (paused) throw paused;
+    try { return await original[method](route,{...options,...(method === 'get' ? {attempts:1} : {})}); }
+    catch (error) { if (error.status === 429) { throttle(error); throw paused; } throw error; }
+  };
+  ctx = {...ctx,client:{...original,get:batchRequest('get'),post:batchRequest('post')}};
+  const failure = (file,error) => {
+    const limited = error.status === 429;
+    if (limited) throttle(error);
+    const uncertain = !limited && transient(error);
+    return {input_id:file.input_id,path:file.path,size_bytes:file.local_file.size_bytes,
+      state:limited ? 'pending' : uncertain ? 'unknown' : 'failed',
+      error:{code:limited ? 'rate_limited' : uncertain ? 'input_unconfirmed' : 'input_staging_failed',
+        message:'Inspect this input ID and recover the same batch.'}};
+  };
+  const rows = files.map(file => ({input_id:file.input_id,path:file.path,size_bytes:file.local_file.size_bytes,state:'pending'}));
+  const summary = () => {
+    const ready = rows.filter(row => row.state === 'ready').length, failedCount = rows.filter(row => row.state === 'failed').length;
+    const unknown = rows.filter(row => row.state === 'unknown').length;
+    const result = {data:{batch_id:id,session_id:session,project_id:project,state:failedCount === files.length ? 'failed' : failedCount || unknown ? 'partial' : ready === files.length ? 'ready' : 'pending',
+      total_bytes:files.reduce((sum,file) => sum+file.local_file.size_bytes,0),ready_count:ready,pending_count:files.length-ready-failedCount-unknown,
+      failed_count:failedCount,unknown_count:unknown,input_ids:files.map(file => file.input_id),files:rows}};
+    saveResult(recordPath(ctx,id),record,result.data);
+    return result;
+  };
+  const outcome = () => {
+    const result = summary();
+    if (result.data.failed_count || result.data.unknown_count) {
+      const error = new ApiError({status:409,code:'input_batch_failed',message:'Some batch inputs did not finish; successful inputs were preserved.',details:result.data});
+      error.action = `Recover with ariax forge recover ${id} --wait using the original root, account and source files.`;
+      throw error;
+    }
+    return result;
+  };
+  // Preserve completed work within a phase across read or mutation cooldowns.
+  // Otherwise a large reconciliation can spend every window rereading its prefix.
+  const phase = async work => {
+    const done = new Set(), values = new Array(files.length);
+    do {
+      await parallelFiles(files,concurrency,async (file,index) => {
+        if (done.has(index)) return;
+        try { values[index] = await work(file,index); done.add(index); }
+        catch (error) {
+          if (signal?.aborted || error.status !== 429) throw error;
+          throttle(error);
+        }
+      });
+      summary();
+      if (!paused) return values;
+      printProgress('API rate limit reached; waiting before reconciling unfinished inputs.');
+      await delay(Math.max(1,retryAt-Date.now()),undefined,{signal});
+      paused = undefined;
+    } while (true);
+  };
+  const observe = async file => {
       signal?.throwIfAborted();
       const child = readRecord(recordPath(ctx,file.input_id));
       if (child) {
@@ -345,42 +416,54 @@ async function recoverInputBatch(ctx, record, {signal, account, wait = false, co
             || Object.keys(account).some(field => child[field] !== account[field])) {
           throw usageError('Batch child differs from its saved source or account; no upload was sent.');
         }
-        return {child,current:await inputStatus(ctx,session,file.input_id,{signal,account})};
+        try { return {child,current:await inputStatus(ctx,session,file.input_id,{signal,account})}; }
+        catch (error) { if (error.status === 429) throw error; return {child,error}; }
       }
       try {
         await ctx.client.get(`${API}/projects/${project}/files/operations/${file.input_id}`,{signal});
-        throw usageError('A batch input exists without its original child journal; restore the journal before recovery.');
-      } catch (error) { if (error.status !== 404) throw error; }
-      return {};
-    });
-    const rows = await parallelFiles(files,concurrency,async (file,index) => {
-      signal?.throwIfAborted();
-      const {child,current} = observed[index];
-      try {
-        if (current?.data.storage_state === 'published' || current?.data.state === 'failed') {
-          saveResult(recordPath(ctx,file.input_id),child,current.data);
-          return current.data;
-        }
-        if (child) return (await recoverFile(ctx,file.input_id,child,{signal,account})).data;
-        return (await addProjectInput(ctx,session,`${API}/sessions/${session}`,file.input_id,file.path,file.local_file.path,signal,file)).data;
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        printProgress(`input ${file.input_id}: ${error.code ?? 'upload_failed'}`);
-        return failure(file);
+      } catch (error) { if (error.status === 429) throw error; return error.status === 404 ? {} : {error}; }
+      throw usageError('A batch input exists without its original child journal; restore the journal before recovery.');
+  };
+  // Reconcile all IDs once before staging. A retry observes its unfinished ID
+  // again, so a lost publication reply can never cause another object transfer.
+  const observed = await phase(async (file,index) => {
+    const value = await observe(file);
+    if (value.current) rows[index] = value.current.data;
+    return value;
+  });
+  await phase(async (file,index) => {
+    const previous = observed[index];
+    observed[index] = undefined;
+    const {child,current,error} = previous ?? await observe(file);
+    try {
+      if (error) throw error;
+      if (current?.data.storage_state === 'published' || current?.data.state === 'failed') {
+        saveResult(recordPath(ctx,file.input_id),child,current.data);
+        rows[index] = current.data;
+      } else {
+        rows[index] = (child ? await recoverFile(ctx,file.input_id,child,{signal,account})
+          : await addProjectInput(ctx,session,`${API}/sessions/${session}`,file.input_id,file.path,file.local_file.path,signal,file)).data;
+      }
+    } catch (error) {
+      if (signal?.aborted || error.status === 429) throw error;
+      printProgress(`input ${file.input_id}: ${error.code ?? 'upload_failed'}`);
+      rows[index] = failure(file,error);
+    }
+  });
+  outcome();
+  do {
+    // Do not substitute cached readiness for the final native writer/version
+    // and installation checks. This verification also resumes across GET 429s.
+    await phase(async (file,index) => {
+      try { rows[index] = (await inputStatus(ctx,session,file.input_id,{signal,account})).data; }
+      catch (error) {
+        if (signal?.aborted || error.status === 429) throw error;
+        rows[index] = failure(file,error);
       }
     });
-    const ready = rows.filter(row => row.state === 'ready').length, failedCount = rows.filter(row => row.state === 'failed').length;
-    result = {data:{batch_id:id,session_id:session,project_id:project,state:failedCount ? (ready ? 'partial' : 'failed') : ready === files.length ? 'ready' : 'pending',
-      total_bytes:files.reduce((sum,file) => sum+file.local_file.size_bytes,0),ready_count:ready,pending_count:files.length-ready-failedCount,
-      failed_count:failedCount,input_ids:files.map(file => file.input_id),files:rows}};
-    saveResult(recordPath(ctx,id),record,result.data);
-    if (failedCount) {
-      const error = new ApiError({status:409,code:'input_batch_failed',message:'Some batch inputs did not finish; successful inputs were preserved.',details:result.data});
-      error.action = `Recover with ariax forge recover ${id} --wait using the original root, account and source files.`;
-      throw error;
-    }
+    const result = outcome();
     if (!wait || result.data.state === 'ready') return result;
-    printProgress(`Inputs ready: ${ready}/${files.length}`);
+    printProgress(`Inputs ready: ${result.data.ready_count}/${files.length}`);
     await delay(1000,undefined,{signal});
   } while (true);
 }

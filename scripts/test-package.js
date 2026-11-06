@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { buildInfo, PACKAGE_ROOT } from '../src/build-info.js';
 import { installGitHub, verifyInstallation } from '../src/installation.js';
 import { releaseUpdateAvailable } from '../src/update-check.js';
-import { exerciseConnectivityCli, exerciseForgeCli, exerciseForgeControls } from '../test/helpers/forge-http.js';
+import { exerciseConnectivityCli, exerciseForgeCli, exerciseForgeControls, exerciseForgeBatch } from '../test/helpers/forge-http.js';
 import { exerciseAcceptedForgeDiscovery } from '../test/helpers/forge-discovery.js';
 
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-package-smoke-'));
@@ -81,6 +81,7 @@ globalThis.fetch = async (url) => {
       await exerciseConnectivityCli(script, env);
       await exerciseForgeCli(script, env);
       await exerciseForgeControls(script, env);
+      await exerciseForgeBatch(script, env);
       console.log(`Installed ${channel} Forge recovery, devices, caps and hold/resume controls verified at the local boundary.`);
     }
     assert.match(execute(process.execPath, [script, 'help']), /ariax skills/);

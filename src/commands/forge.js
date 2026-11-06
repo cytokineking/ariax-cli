@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
 import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
-import { ApiError, NetworkError, backoffDelay } from '../http.js';
+import { ApiError, NetworkError, backoffDelay, sanitizeErrorDetails } from '../http.js';
 import { EXIT } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
@@ -257,6 +257,7 @@ export async function controlled(ctx, id, seconds, operation, {resume} = {}) {
       stopped.details = {finish:redactForgeOutput(saved.result)};
       printProgress(`Last observed finish: execution ${saved.result.execution}; drain ${saved.result.drain}; durability ${saved.result.durability}; release ${saved.result.release}.`);
     }
+    if (saved && savedKind(id,saved.request) === 'input-batch' && saved.result) stopped.details = sanitizeErrorDetails(saved.result);
     throw stopped;
   } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
 }
