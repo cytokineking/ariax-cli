@@ -61,6 +61,7 @@ function cleanError(error, label) {
   if (error.status === 404) result.action = label.startsWith('Project')
     ? 'File commands require an authorized PROJECT ID; the former SESSION form is unsupported. Check access and upgrade the CLI and API together for the current project workspace.'
     : 'Check the active SESSION ID and access. The CLI, API and daemon must all support the current project workspace; upgrade them together.';
+  if (error.status === 422 && label === 'Project file download request') result.action = 'The API rejected the file request format. Check the request path and CLI/API compatibility; this is not an authentication failure.';
   return result;
 }
 
@@ -109,7 +110,7 @@ export async function projectFileGrant(ctx, projectId, target) {
   let result;
   try {
     result = await ctx.client.post(`${API}/projects/${projectId}/files/presign`, {body:{path:target}});
-  } catch (error) { throw cleanError(error, 'Project file authorization'); }
+  } catch (error) { throw cleanError(error, 'Project file download request'); }
   const data = dataEnvelope(result);
   if (data.path !== target || !Number.isSafeInteger(data.size_bytes) || data.size_bytes < 0
       || !Number.isSafeInteger(data.version) || data.version <= 0

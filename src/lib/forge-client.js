@@ -12,6 +12,7 @@ import { usageError } from '../args.js';
 
 const accounts = new WeakMap();
 const connections = new Map();
+const currentConnections = new Map();
 const REFRESH_MARGIN_MS = 10_000;
 
 function checkAbort(signal) {
@@ -45,7 +46,7 @@ async function identity(ctx, signal) {
   } finally { if (abort) signal.removeEventListener('abort', abort); }
 }
 
-function cacheFile(ctx, account, sessionId) {
+function cacheFile(ctx, account, sessionId, prepare = false) {
   const parent = path.dirname(credentialFilePath());
   const directory = path.join(parent, 'forge-connections');
   const project = path.resolve(ctx.config.rootDir);
@@ -58,12 +59,18 @@ function cacheFile(ctx, account, sessionId) {
   let current = path.parse(directory).root;
   for (const component of directory.slice(current.length).split(path.sep)) {
     current = path.join(current, component);
-    try { fs.mkdirSync(current, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw error; }
-    const info = fs.lstatSync(current);
+    let info;
+    try { info = fs.lstatSync(current); }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      if (!prepare) return null;
+      try { fs.mkdirSync(current, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw error; }
+      info = fs.lstatSync(current);
+    }
     if (!info.isDirectory() || info.isSymbolicLink()) throw usageError('Session credential storage must use real directories.');
     if (current === parent || current === directory) {
       if (process.getuid && info.uid !== process.getuid()) throw usageError('Session credential directory has another owner.');
-      fs.chmodSync(current, 0o700);
+      if (info.mode & 0o077) throw usageError('Session credential directory must be private; set its permissions to 700.');
     }
   }
   // An auth-secret fingerprint prevents a second API key for the same account
@@ -114,6 +121,7 @@ function cachedConnection(ctx, sessionId) {
   // account from its original connect. Reuse does not call /me per observer.
   const origin = new URL(ctx.config.baseUrl).origin;
   const probe = cacheFile(ctx, { actor_user_id: '', api_origin: origin }, sessionId);
+  if (!probe) return null;
   const suffix = path.basename(probe);
   const candidates = fs.readdirSync(path.dirname(probe)).filter(name =>
     name.endsWith(suffix) && isUUID(name.slice(0, -suffix.length)));
@@ -126,7 +134,8 @@ function cachedConnection(ctx, sessionId) {
 }
 
 export function hasCachedForgeConnection(ctx, sessionId) {
-  return cachedConnection(ctx, sessionId) !== null;
+  try { return cachedConnection(ctx, sessionId) !== null; }
+  catch (error) { if (!cacheUnavailable(error)) throw error; return false; }
 }
 
 function saveConnection(file, account, connection) {
@@ -141,23 +150,34 @@ function saveConnection(file, account, connection) {
   } finally { fs.rmSync(temporary, { force: true }); }
 }
 
-async function connect(ctx, file, account, sessionId, signal, refresh = false) {
+function cacheUnavailable(error) {
+  return ['EACCES', 'EPERM', 'EROFS', 'ENOENT'].includes(error?.code);
+}
+
+async function connect(ctx, key, file, account, sessionId, signal, refresh = false) {
   checkAbort(signal);
-  if (!refresh) {
-    const cached = readConnection(file, account, sessionId)?.connection;
-    if (cached && Date.parse(cached.expires_at) - Date.now() > REFRESH_MARGIN_MS) return cached;
+  if (!refresh && file) {
+    try {
+      const cached = readConnection(file, account, sessionId)?.connection;
+      if (cached && Date.parse(cached.expires_at) - Date.now() > REFRESH_MARGIN_MS) return cached;
+    } catch (error) { if (!cacheUnavailable(error)) throw error; }
   }
-  let pending = connections.get(file);
+  let pending = connections.get(key);
   if (!pending) {
     pending = (async () => {
       const response = await ctx.client.post(`/api/v1/forge/sessions/${sessionId}/connect`, { signal });
       const value = validateConnection(response.data, sessionId);
       if (Date.parse(value.expires_at) - Date.now() <= REFRESH_MARGIN_MS) throw new NetworkError('Session connection has expired.');
-      saveConnection(file, account, value);
+      if (file) {
+        try {
+          cacheFile(ctx, account, sessionId, true);
+          saveConnection(file, account, value);
+        } catch (error) { if (!cacheUnavailable(error)) throw error; }
+      }
       return value;
     })();
-    connections.set(file, pending);
-    const settled = () => { if (connections.get(file) === pending) connections.delete(file); };
+    connections.set(key, pending);
+    const settled = () => { if (connections.get(key) === pending) connections.delete(key); };
     pending.then(settled, settled);
   }
   let abort;
@@ -181,15 +201,30 @@ function sessionIdentifier(value) {
 
 async function sessionConnection(ctx, sessionId, options, refresh = false) {
   checkAbort(options.signal);
+  const key = createHash('sha256').update(ctx.config.apiKey).update('\0').update(new URL(ctx.config.baseUrl).origin).update('\0').update(sessionId).digest('hex');
+  const current = currentConnections.get(key);
+  if (!refresh && current && Date.parse(current.connection.expires_at) - Date.now() > REFRESH_MARGIN_MS) return current;
+  if (refresh) currentConnections.delete(key);
   if (!refresh) {
-    const cached = cachedConnection(ctx, sessionId);
-    if (cached) return cached;
+    try {
+      const cached = cachedConnection(ctx, sessionId);
+      if (cached) { const value = {key, ...cached}; currentConnections.set(key, value); return value; }
+    } catch (error) { if (!cacheUnavailable(error)) throw error; }
   }
   const account = await identity(ctx, options.signal);
-  const file = cacheFile(ctx, account, sessionId);
-  const connection = await connect(ctx, file, account, sessionId, options.signal, refresh);
+  let file;
+  try {
+    file = cacheFile(ctx, account, sessionId);
+    if (!file) {
+      // Construct the location only when writing a fresh connection is useful.
+      file = cacheFile(ctx, account, sessionId, true);
+    }
+  } catch (error) { if (!cacheUnavailable(error)) throw error; }
+  const connection = await connect(ctx, key, file, account, sessionId, options.signal, refresh);
   checkAbort(options.signal);
-  return { file, account, connection };
+  const value = {key, file, account, connection};
+  currentConnections.set(key, value);
+  return value;
 }
 
 /** The existing saved-request identity, bound to a usable protected connection. */
@@ -215,7 +250,7 @@ export async function forgeRequest(ctx, sessionId, method, routePath, options = 
     throw usageError('Forge request path is invalid.');
   }
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { file, connection } = await sessionConnection(ctx, sessionId, options, attempt > 0);
+    const { key, file, connection } = await sessionConnection(ctx, sessionId, options, attempt > 0);
     checkAbort(options.signal);
     const client = createClient({ baseUrl: connection.endpoint, apiKey: connection.access_token,
       timeoutMs: ctx.timeoutMs, fetchImpl: ctx.fetchImpl });
@@ -228,7 +263,11 @@ export async function forgeRequest(ctx, sessionId, method, routePath, options = 
       return result;
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        fs.rmSync(file, { force: true });
+        currentConnections.delete(key);
+        if (file) {
+          try { fs.rmSync(file, { force: true }); }
+          catch (removeError) { if (!cacheUnavailable(removeError)) throw removeError; }
+        }
         // A rejected bearer token cannot authorize the request. Refresh once;
         // callers still reconcile any ambiguous transport failure themselves.
         if (attempt === 0) continue;

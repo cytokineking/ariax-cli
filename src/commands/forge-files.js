@@ -49,6 +49,7 @@ async function fileRecord(ctx, id, request, label, signal) {
 
 const PART_SIZE = 16 * 1024 * 1024;
 const PROJECT_INPUT = 'project-file-input-v2';
+const INPUT_BATCH = 'project-input-batch-v1';
 const FILE_COPY = 'project-file-copy-v1';
 const FILE_DELETE = 'project-file-delete-v1';
 const FILE_DELETE_TREE = 'project-file-delete-tree-v1';
@@ -164,11 +165,14 @@ async function projectInputStatus(ctx, record, knownAccount, signal) {
   return projectInputResult(record, operation, applied, removed);
 }
 
-async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal) {
+async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal, source) {
   const fd = fs.openSync(localFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   try {
     const metadata = fileSnapshot(fd, localFile);
     const digests = await checksums(fd, metadata, signal);
+    if (source && (!isDeepStrictEqual(source.local_file, metadata) || source.checksum !== digests.checksum)) {
+      throw usageError('Batch source changed; recover the original unchanged file or start a new batch.');
+    }
     const prior = readRecord(recordPath(ctx, id));
     let request;
     if (prior) {
@@ -262,6 +266,155 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
   } finally { fs.closeSync(fd); }
 }
 
+async function parallelFiles(files, concurrency, work) {
+  const results = new Array(files.length);
+  let next = 0;
+  await Promise.all(Array.from({length:Math.min(concurrency,files.length)}, async () => {
+    while (next < files.length) {
+      const index = next++;
+      results[index] = await work(files[index], index);
+    }
+  }));
+  return results;
+}
+
+function batchPaths(files) {
+  const paths = files.map(file => safePath(file?.path)), destinations = new Set(paths);
+  if (destinations.size !== paths.length) throw usageError('Batch destinations must be unique.');
+  for (const target of paths) {
+    const parts = target.split('/');
+    if (parts.slice(0,-1).some((_,index) => destinations.has(parts.slice(0,index+1).join('/')))) {
+      throw usageError('Batch destinations must be unique and cannot contain file/directory collisions.');
+    }
+  }
+}
+
+async function batchManifest(filename, signal) {
+  const manifest = path.resolve(filename);
+  let value;
+  try { value = JSON.parse(fs.readFileSync(manifest, 'utf8')); }
+  catch { throw usageError('Input manifest must be a readable JSON object with a files array.'); }
+  if (!value || !Array.isArray(value.files) || !value.files.length || value.files.length > 100) {
+    throw usageError('Input manifest requires 1–100 explicitly listed local files.');
+  }
+  batchPaths(value.files);
+  const files = [];
+  for (const entry of value.files) {
+    if (typeof entry.file !== 'string' || !entry.file || (entry.purpose !== undefined && typeof entry.purpose !== 'string')) {
+      throw usageError('Each manifest entry requires file and path strings, with an optional purpose string.');
+    }
+    const local = path.resolve(path.dirname(manifest), entry.file);
+    const fd = fs.openSync(local, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try {
+      const metadata = fileSnapshot(fd,local), digests = await checksums(fd,metadata,signal);
+      files.push({path:entry.path,local_file:metadata,checksum:digests.checksum,...(entry.purpose === undefined ? {} : {purpose:entry.purpose})});
+    } finally { fs.closeSync(fd); }
+  }
+  return files;
+}
+
+async function recoverInputBatch(ctx, record, {signal, account, wait = false, concurrency = 4} = {}) {
+  const {request,id} = record, files = request.body.files;
+  const session = uuid(request.session_id,'session ID'), project = uuid(request.project_id,'project ID');
+  if (request.path !== '/v1/input-batches' || request.body.batch_id !== id || !Array.isArray(files)
+      || !files.length || files.length > 100 || new Set(files.map(file => file.input_id)).size !== files.length) {
+    throw usageError('Saved input batch is malformed; no upload was sent.');
+  }
+  batchPaths(files);
+  for (const file of files) {
+    uuid(file.input_id,'input ID');
+    if (!file.local_file || !path.isAbsolute(file.local_file.path) || typeof file.checksum !== 'string') {
+      throw usageError('Saved batch source is malformed; no upload was sent.');
+    }
+  }
+  account ??= await accountIdentity(ctx,{signal});
+  if (Object.keys(account).some(field => record[field] !== account[field])) throw usageError('Input batch belongs to another account or API origin.');
+  const failure = file => ({input_id:file.input_id,path:file.path,size_bytes:file.local_file.size_bytes,state:'failed',
+    error:{code:'input_staging_failed',message:'Inspect this input ID and recover the same batch.'}});
+  let result;
+  do {
+    // Reconcile every child before sending any bytes. A published input only
+    // needs installation observation, including after a lost completion reply.
+    const observed = await parallelFiles(files,concurrency,async file => {
+      signal?.throwIfAborted();
+      const child = readRecord(recordPath(ctx,file.input_id));
+      if (child) {
+        if (child.id !== file.input_id || child.request.type !== PROJECT_INPUT || child.request.session_id !== session
+            || child.request.project_id !== project || child.request.body.path !== `/inputs/${file.path}`
+            || child.request.body.checksum !== file.checksum || !isDeepStrictEqual(child.request.local_file,file.local_file)
+            || Object.keys(account).some(field => child[field] !== account[field])) {
+          throw usageError('Batch child differs from its saved source or account; no upload was sent.');
+        }
+        return {child,current:await inputStatus(ctx,session,file.input_id,{signal,account})};
+      }
+      try {
+        await ctx.client.get(`${API}/projects/${project}/files/operations/${file.input_id}`,{signal});
+        throw usageError('A batch input exists without its original child journal; restore the journal before recovery.');
+      } catch (error) { if (error.status !== 404) throw error; }
+      return {};
+    });
+    const rows = await parallelFiles(files,concurrency,async (file,index) => {
+      signal?.throwIfAborted();
+      const {child,current} = observed[index];
+      try {
+        if (current?.data.storage_state === 'published' || current?.data.state === 'failed') {
+          saveResult(recordPath(ctx,file.input_id),child,current.data);
+          return current.data;
+        }
+        if (child) return (await recoverFile(ctx,file.input_id,child,{signal,account})).data;
+        return (await addProjectInput(ctx,session,`${API}/sessions/${session}`,file.input_id,file.path,file.local_file.path,signal,file)).data;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        printProgress(`input ${file.input_id}: ${error.code ?? 'upload_failed'}`);
+        return failure(file);
+      }
+    });
+    const ready = rows.filter(row => row.state === 'ready').length, failedCount = rows.filter(row => row.state === 'failed').length;
+    result = {data:{batch_id:id,session_id:session,project_id:project,state:failedCount ? (ready ? 'partial' : 'failed') : ready === files.length ? 'ready' : 'pending',
+      total_bytes:files.reduce((sum,file) => sum+file.local_file.size_bytes,0),ready_count:ready,pending_count:files.length-ready-failedCount,
+      failed_count:failedCount,input_ids:files.map(file => file.input_id),files:rows}};
+    saveResult(recordPath(ctx,id),record,result.data);
+    if (failedCount) {
+      const error = new ApiError({status:409,code:'input_batch_failed',message:'Some batch inputs did not finish; successful inputs were preserved.',details:result.data});
+      error.action = `Recover with ariax forge recover ${id} --wait using the original root, account and source files.`;
+      throw error;
+    }
+    if (!wait || result.data.state === 'ready') return result;
+    printProgress(`Inputs ready: ${ready}/${files.length}`);
+    await delay(1000,undefined,{signal});
+  } while (true);
+}
+
+async function addInputBatch(ctx, session, sessionPath) {
+  const flags = ctx.flags;
+  if (['file','artifact','url','path','input-id'].some(name => flags[name] !== undefined)
+      || (flags['dry-run'] && flags.wait)) throw usageError('Manifest staging cannot combine with single-file options or --dry-run with --wait.');
+  const id = flags['batch-id'] === undefined ? randomUUID() : uuid(flags['batch-id'],'batch ID');
+  const concurrency = flags.concurrency === undefined ? 4 : Number(flags.concurrency);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) throw usageError('--concurrency must be 1–4.');
+  const seconds = localWaitSeconds(flags['wait-timeout'],1800);
+  return controlled(ctx,id,seconds,async signal => {
+    const files = await batchManifest(required(flags.manifest,'manifest'),signal);
+    const preview = {files:files.map(file => ({file:file.local_file.path,path:file.path,size_bytes:file.local_file.size_bytes,...(file.purpose === undefined ? {} : {purpose:file.purpose})})),total_bytes:files.reduce((sum,file) => sum+file.local_file.size_bytes,0)};
+    if (flags['dry-run']) return report(ctx,{data:{state:'dry_run',...preview}});
+    const prior = readRecord(recordPath(ctx,id));
+    let record;
+    if (prior) {
+      if (prior.request?.type !== INPUT_BATCH || prior.request.session_id !== session
+          || !isDeepStrictEqual(prior.request.body.files.map(({input_id,...file}) => file),files)) {
+        throw usageError('Batch differs from its original immutable manifest; use the original batch or a new ID.');
+      }
+      record = prior;
+    } else {
+      const project = uuid((await ctx.client.get(sessionPath,{signal})).data.project_id,'project ID');
+      const request = {type:INPUT_BATCH,method:'POST',path:'/v1/input-batches',session_id:session,project_id:project,
+        body:{batch_id:id,files:files.map(file => ({input_id:randomUUID(),...file}))}};
+      record = (await fileRecord(ctx,id,request,'batch_id',signal)).record;
+    }
+    return report(ctx,await recoverInputBatch(ctx,record,{signal,wait:!!flags.wait,concurrency}));
+  });
+}
+
 // Use the same installation confirmation as `inputs status`, including the
 // project workspace writer and hydration checks for local uploads.
 export async function inputStatus(ctx, sessionId, id, {signal, account} = {}) {
@@ -344,6 +497,7 @@ async function recoverCopy(ctx, record, signal) {
 // the original in-memory URL; a later recovery may only observe its outcome.
 export async function recoverFile(ctx, id, record, {signal, account, body, retryFailedSync = false} = {}) {
   const request = record.request, session = uuid(request?.session_id,'session ID');
+  if (request.type === INPUT_BATCH) return recoverInputBatch(ctx,record,{signal,account,wait:!!ctx.flags.wait});
   const file = recordPath(ctx,id);
   for (let attempt = 0; ; attempt++) {
     try {
@@ -792,6 +946,10 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     ? ctx.client.get(`${sessionPath}${resource.slice(3)}`)
     : forgeRequest(ctx, sessionId, 'GET', resource);
   if (action === 'inputs add') {
+    if (flags.manifest !== undefined || flags['batch-id'] !== undefined || flags['dry-run'] !== undefined || flags.concurrency !== undefined) {
+      return addInputBatch(ctx,sessionId,sessionPath);
+    }
+    if (flags.wait || flags['wait-timeout'] !== undefined) throw usageError('--wait and --wait-timeout require --manifest for input staging.');
     const id = flags['input-id'] === undefined ? randomUUID() : uuid(flags['input-id'],'input ID');
     const target = safePath(required(flags.path,'path'));
     if (['file','artifact','url'].filter(key => flags[key] !== undefined).length !== 1) {

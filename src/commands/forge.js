@@ -35,7 +35,7 @@ const OPTIONS = {
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
   finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
   commands: [['retained'], 2], command: [['retained'], 3], watch: [['timeout', 'wait-timeout'], 3],
-  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
+  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id', 'manifest', 'batch-id', 'concurrency', 'dry-run', 'wait', 'wait-timeout'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
   files: [['path', 'cursor'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
@@ -68,6 +68,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs add SESSION --file FILE --path PATH [--input-id UUID]
   ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path PATH [--input-id UUID]
   ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID]
+  ariax forge inputs add SESSION --manifest FILE [--batch-id UUID] [--concurrency 1..4] [--dry-run | --wait [--wait-timeout SECONDS]]
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
   ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
@@ -281,6 +282,7 @@ function savedKind(id, request) {
   if (request.path === '/v1/files/hydrate' && request.body.operation_id === id) return 'file-hydration';
   if (request.path === '/v1/inputs' && request.body.input_id === id) return 'input';
   if (request.type === 'project-file-input-v2' && request.body.operation_id === id) return 'input';
+  if (request.type === 'project-input-batch-v1' && request.body.batch_id === id) return 'input-batch';
   if (request.type === 'project-file-copy-v1' && request.body.operation_id === id) return 'file-recovery';
   if (['project-file-delete-v1','project-file-delete-tree-v1'].includes(request.type) && request.body.operation_id === id) return 'file-deletion';
   if (new RegExp(`^/v1/commands/[0-9a-f-]{36}/cancel$`).test(request.path) && !Object.keys(request.body).length) return 'cancel';
@@ -934,13 +936,13 @@ async function runAction(ctx) {
       checkIdentity(record,account,id);
       printProgress(`Recovering saved operation: ${id}`);
       try {
-        let result = ['sync','input','file-recovery','file-deletion'].includes(kind)
+        let result = ['sync','input','input-batch','file-recovery','file-deletion'].includes(kind)
           ? await recoverFile(ctx,id,record,{signal,account,retryFailedSync:kind === 'sync'})
           : await dispatchSaved(ctx,file,record,account,{previous:true,signal});
         if (kind === 'sync' && result.data?.state === 'failed') failedSync(id,record.request.session_id,result.data);
         if (kind === 'file-recovery' && result.data?.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,result.data.error,
           `Inspect the destination and operation ${id} before another action.`);
-        if (flags.wait) result = await waitRecovered(ctx,record,result,kind,account,signal);
+        if (flags.wait && kind !== 'input-batch') result = await waitRecovered(ctx,record,result,kind,account,signal);
         if (kind === 'finish') finishOutcome(result.data);
         return report(ctx,result);
       } catch (error) {

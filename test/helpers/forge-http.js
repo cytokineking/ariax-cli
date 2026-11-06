@@ -12,6 +12,7 @@ const execute = promisify(execFile);
 const actor = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const otherActor = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const key = 'arx_forge_testcredential';
+const sameAccountKey = 'arx_forge_sameaccountcredential';
 const partSize = 16 * 1024 * 1024;
 const digest = bytes => createHash('md5').update(bytes).digest();
 function fileChecksum(bytes) {
@@ -26,13 +27,13 @@ async function boundary(root) {
   // This fixture is the CLI's external API/tunnel boundary. Joined tests use
   // the real backend issuer and daemon verifier, rather than this server.
   const signing = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const issued = new Map();
+  const issued = new Map(), revoked = new Set();
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   function issue(session, user) {
     const now = Math.floor(Date.now() / 1000);
     const header = encode({ alg:'RS256', typ:'ariax-forge-access+jwt', kid:'fixture' });
     const claims = { iss:'https://cli-fixture.test', aud:`forge:${session.data.session_id}`, iat:now, nbf:now, exp:now+300,
-      session_id:session.data.session_id, project_id:session.data.project_id, actor_id:user, api_key_id:null, scopes:['forge:read','forge:write'] };
+      session_id:session.data.session_id, project_id:session.data.project_id, actor_id:user, api_key_id:null, jti:randomUUID(), scopes:['forge:read','forge:write'] };
     const input = header + '.' + encode(claims);
     const token = input + '.' + sign('RSA-SHA256', Buffer.from(input), signing.privateKey).toString('base64url');
     issued.set(token, claims);
@@ -122,12 +123,12 @@ async function boundary(root) {
       const rawToken = (req.headers.authorization || '').replace(/^Bearer /, '');
       if (direct) {
         const claims = issued.get(rawToken), pieces = rawToken.split('.');
-        if (!claims || pieces.length !== 3 || !verify('RSA-SHA256', Buffer.from(pieces[0]+'.'+pieces[1]), signing.publicKey, Buffer.from(pieces[2], 'base64url'))
+        if (revoked.has(rawToken) || !claims || pieces.length !== 3 || !verify('RSA-SHA256', Buffer.from(pieces[0]+'.'+pieces[1]), signing.publicKey, Buffer.from(pieces[2], 'base64url'))
             || claims.exp <= Date.now()/1000 || claims.session_id !== direct[1]) return error(res, 401, 'unauthorized', 'Session authentication required');
         user = claims.actor_id;
         url.pathname = `/api/v1/forge/sessions/${direct[1]}` + (direct[2] === '/v1/session' ? '' : direct[2].slice(3));
       } else {
-        user = req.headers.authorization === `Bearer ${key}` ? actor
+        user = [key,sameAccountKey].some(key => req.headers.authorization === `Bearer ${key}`) ? actor
           : req.headers.authorization === 'Bearer arx_forge_othercredential' ? otherActor : null;
       }
       if (!user) return error(res, 401, 'invalid_api_key', 'Authentication required');
@@ -155,6 +156,7 @@ async function boundary(root) {
       if (direct && req.method === 'POST' && state.rejectPost401 > 0) {
         state.rejectPost401--;
         state.rejectedPost401++;
+        revoked.add(rawToken);
         return error(res,401,'unauthorized','Session authentication required');
       }
       let body;
@@ -618,7 +620,7 @@ async function boundary(root) {
 }
 
 export async function tunnelEnvironment(root, origin, baseEnv) {
-  const directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-forge-private-')));
+  const directory = await fs.realpath(await fs.mkdtemp(path.join(baseEnv.ARIAX_TEST_PRIVATE_ROOT || os.tmpdir(), 'ariax-forge-private-')));
   const preload = path.join(directory, 'tunnel.cjs');
   await fs.writeFile(preload, `// macOS uses os.homedir() instead of XDG_CONFIG_HOME for CLI credentials.
 if(process.platform==='darwin') require('node:os').homedir=()=>process.env.ARIAX_FIXTURE_USER_DIR;
@@ -953,12 +955,40 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal(state.posts,beforeFailedRecovery,'failed science was replayed');
 
     const connectionsBeforeRefresh = state.connects;
-    state.rejectPost401 = 1;
-    const refreshed = await invoke(['forge','run',sessionId,'--tool','base','--wait','--wait-timeout','15',
-      '--',process.execPath,'-e','process.exit(0)']);
-    assert.equal(refreshed.payload.data.state,'succeeded');
-    assert.equal(state.rejectedPost401,1);
-    assert.equal(state.connects,connectionsBeforeRefresh + 1,'a rejected session connection was not refreshed');
+    const cache = process.platform === 'darwin'
+      ? path.join(privateClient.directory,'Library','Application Support','ariax-cli','forge-connections')
+      : path.join(privateClient.env.XDG_CONFIG_HOME,'ariax-cli','forge-connections');
+    const cachedFile = path.join(cache,(await fs.readdir(cache)).find(name => name.includes(sessionId)));
+    const stale = await fs.readFile(cachedFile,'utf8');
+    const readOnly = process.platform !== 'win32' && process.getuid?.() !== 0;
+    if (readOnly) await fs.chmod(cache,0o500);
+    try {
+      await invoke(['forge','commands',sessionId]);
+      assert.equal(state.connects,connectionsBeforeRefresh,'valid cache read created a new connection');
+      state.rejectPost401 = 1;
+      const refreshed = await invoke(['forge','run',sessionId,'--tool','base','--wait','--wait-timeout','15',
+        '--',process.execPath,'-e','process.exit(0)']);
+      assert.equal(refreshed.payload.data.state,'succeeded');
+      assert.equal(state.rejectedPost401,1);
+      assert.equal(state.connects,connectionsBeforeRefresh + 1,'401 refresh reused a stale token within the process');
+      if (readOnly) assert.equal(await fs.readFile(cachedFile,'utf8'),stale,'read-only cache was modified');
+      await invoke(['forge','commands',sessionId]);
+      assert.equal(state.connects,connectionsBeforeRefresh + (readOnly ? 2 : 1),'a later process did not use a valid connection');
+    } finally { await fs.chmod(cache,0o700); await fs.rm(cachedFile,{force:true}); }
+
+    await invoke(['forge','commands',sessionId]);
+    const beforeSecondKey = state.connects;
+    await invoke(['forge','commands',sessionId],{actorKey:sameAccountKey});
+    assert.equal(state.connects,beforeSecondKey + 1,'another API key reused cached authority for the same account');
+    await invoke(['forge','commands',sessionId]);
+    assert.equal(state.connects,beforeSecondKey + 1,'the original API key lost its own cached connection');
+    if (readOnly) {
+      await fs.chmod(cachedFile,0o000);
+      try {
+        await invoke(['forge','commands',sessionId]);
+        assert.equal(state.connects,beforeSecondKey + 2,'an unreadable cache prevented a fresh connection');
+      } finally { await fs.chmod(cachedFile,0o600); }
+    }
 
     const beforePendingAdmission = state.executions;
     state.pendingAdmission = true;

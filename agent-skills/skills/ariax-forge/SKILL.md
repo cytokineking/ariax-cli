@@ -290,6 +290,39 @@ Repeated close observes the same closure.
 
 ## Inputs and durable outputs
 
+For several small local files, stage an explicit JSON manifest rather than
+invoking the CLI once per file. Paths are relative to the manifest file; remote
+paths are relative to `/inputs`. No directories are scanned implicitly.
+
+```json
+{"files":[{"file":"target.pdb","path":"targets/target.pdb","purpose":"Target coordinates"},{"file":"settings.json","path":"run/settings.json"}]}
+```
+
+```sh
+ariax forge inputs add SESSION --manifest inputs.json --dry-run --json
+ariax forge inputs add SESSION --manifest inputs.json --wait --json
+ariax forge recover BATCH_ID --wait --json
+```
+
+Dry-run validates 1–100 explicitly listed regular files, rejects duplicate or
+file/directory-colliding destinations, and reports purpose/byte sizes without
+network requests. Staging uses at most four concurrent transfers (set
+`--concurrency 1..4`) and one immutable batch request referencing ordinary
+per-file operation IDs and source fingerprints. Keep that root directory.
+After interruption recover the batch ID: published files are reconciled and
+observed until installed, without reuploading their bytes. Unfinished files
+still require their original unchanged sources. Successful inputs survive a
+partial failure; a batch is not an atomic transaction. `--wait-timeout SECONDS`
+bounds the whole local operation. The final JSON lists all input IDs and one
+readiness summary; only `state: ready` confirms every input is installed.
+
+The protected session connection cache is an optimization. Valid reads do not
+modify it. If sandbox permissions prevent saving/refreshing it, a fresh
+authenticated connection is retained only in process memory; the next CLI
+process may need a new connection. Mutation request journals remain mandatory
+and writable under the selected root directory. Never put tokens in project
+files or transfer them into a workload.
+
 Before active file operations, wait for the workspace with `ariax forge tools wait SESSION base --timeout 1800`; `session_unready` means inspect that session's lifecycle and retain the original operation IDs.
 
 Stage a local file, an authorized Ariax artifact, or an individual public HTTPS object with `ariax forge inputs add SESSION --file FILE --path targets/input.yaml`. Use `--artifact PROJECT_ID:PATH` or `--url URL` for the other sources. `--path` is relative to `/inputs` (for example `targets/input.yaml`); commands read the absolute `/inputs/targets/input.yaml`. Inspect readiness with `inputs status SESSION INPUT_ID` before a command reads them. Local files use the project workspace multipart API and keep their input and attempt IDs in the original CLI root for safe recovery. Storage publication alone does not confirm installation in the active workspace: without daemon-backed confirmation the input reports `pending` with `installation_status: unconfirmed`. Wait for `ready` before dispatching a dependent command. Local input entries in `inputs list` come from the current CLI root and are not an account-wide inventory.
