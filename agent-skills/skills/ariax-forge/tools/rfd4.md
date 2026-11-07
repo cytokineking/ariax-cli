@@ -15,6 +15,9 @@ protocol. Compare a requested experiment with the live qualified scope of
 different inputs and scoring, and their scores do not establish a universal best
 choice. Preserve an explicit user choice.
 
+The separate [RFd4 antibody checkpoint](rfd4-antibody.md) uses its own tool
+and model for VHH design. Check its own live qualification.
+
 RFd4's sequence is part of its design. Preserve that exact sequence when
 validating the generated structure. An MPNN redesign changes the candidate and
 is a separate, explicit experiment that needs its own validation.

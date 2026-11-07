@@ -36,6 +36,9 @@ additional tools or a custom sequence of stages. Use
 the exact live tool/model/mode and read its guide. Upstream options may exceed
 the supported managed or native contract.
 
+For native VHH sequence and structure generation, see the
+[RFd4 antibody checkpoint](../skills/ariax-forge/tools/rfd4-antibody.md).
+
 Use [campaign planning](campaigns.md) for pilot sizing, scaling and compute
 tradeoffs. Check `ariax pricing --json`, memory requirements and supported
 parallel execution against the user's budget, deadline and saved preferences.

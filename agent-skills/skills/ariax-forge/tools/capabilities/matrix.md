@@ -14,6 +14,7 @@ The live catalog supplies current workload limits, resources and terms.
 | `boltzgen` | Diffusion binder, peptide and scaffold-conditioned antibody design | [BoltzGen](../boltzgen.md) |
 | `rfd3`, `rfd3na` | Conditioned generation with Foundry's protein or nucleic-acid models | [Foundry](../foundry.md) |
 | `rfd4` | Joint sequence and all-atom design | [RFd4](../rfd4.md) |
+| `rfd4-antibody` | VHH joint sequence and structure generation | [RFd4 antibody](../rfd4-antibody.md) |
 | `rfantibody` | Antibody backbone generation, sequencing and prediction | [RFantibody](../rfantibody.md) |
 | `genie3` | Conditioned design with target evaluation, filtering or search/refinement | [Genie3](../genie3.md) |
 | `proteina-complexa` | Protein design with protein, ligand or motif conditioning | [Proteina-Complexa](../proteina-complexa.md) |

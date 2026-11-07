@@ -59,14 +59,16 @@ INPUT=/inputs/rfd4/partial/resolved_seed.yaml
 TAGS='[design,partial_diffusion]'
 EXTRA=('generation.args.partial_trajectory_fraction_steps=0.3333')
 
-# Cropped MZB1 / VHH with sampled target hotspots
+# Cropped MZB1 / VHH with a target hotspot-sampling transform
 CASE=vhh-001
 INPUT=/inputs/rfd4/antibody/mzb1_7AAH__h-NbBCII10_cdr123.cif.zst
 TAGS='[design,antibody,3d_coordinate_conditioning,internal_coordinate_conditioning,hotspot_conditioning]'
 EXTRA=('recycle_strategy=high/front_loaded' '+generation.dataset.sampling_transforms=[{_target_:rfproteina.transforms.hotspot_sampling.SampleNearbyHotspots,num_hotspots:[2,3],min_distance:5.0,patch_diameter:15.0,min_atom_sasa:1.0}]')
 ```
 
-For authored, fixed `C_HOT` sites, omit the hotspot-sampling transform. The
+The VHH fixture already authors a `C_HOT` site. The transform samples target
+hotspots; inspect the realized conditions rather than assuming the original site
+is retained. For authored, fixed `C_HOT` sites, omit the transform. The
 pinned default config has no `generation.dataset.sampling_transforms` key;
 omit an unnecessary null override, or use Hydra's `+` syntax when adding it.
 
@@ -143,7 +145,7 @@ ariax forge run "$SESSION" --tool rfd4 --timeout-seconds 120 -- \
 
 Choose only the matching checker. The VHH evidence is limited to this example:
 check the conditioned framework, expanded CDRs between mapped flanks, sequence
-freedom and sampled target hotspots. Expanded CDR atoms may lack original source
+freedom and realized target hotspots. Expanded CDR atoms may lack original source
 labels. This does not establish support for every antibody format or binding.
 For a custom spec, export its [input mapping](inputs.md) and inspect its actual
 masks and output; the fixture checker is intentionally not a generic binder test.

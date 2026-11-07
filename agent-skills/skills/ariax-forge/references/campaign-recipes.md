@@ -25,6 +25,7 @@ count, attempt cap, GPU/time allowance and review point before compute.
 | [BoltzGen](../tools/boltzgen.md) | Protein design followed by native inverse folding and complex/binder refolds | Match the protocol/checkpoints, preserve native filters and use saved design masks for chain roles. |
 | [FreeBindCraft](../tools/freebindcraft.md) | Target-conditioned binder optimization with OpenMM or PyRosetta | Use complete settings/filters; PyRosetta requires its separately authorized mount and terms. |
 | [RFantibody](../tools/rfantibody.md) | Paired VH/VL or VHH CDR design, sequence design and RF2 prediction | Use a supported construct/count profile, native HLT annotations and explicit numbering maps. |
+| [RFd4 antibody checkpoint](../tools/rfd4-antibody.md) | VHH sequence and structure generation | Preserve the framework, CDR and hotspot mappings. |
 | [Genie3](../tools/genie3.md) | Scaffold generation with motif or target conditioning, followed by CA-only MPNN and prediction | Preserve fixed residues, sampled scaffold maps and the selected mode's native success criteria. |
 | [Native PXDesign](../tools/pxdesign.md) | A joined design/prediction pipeline with preview or extended settings | Inspect the exact preset, checkpoint, MSA/template requirements and native export conditions. |
 | [Native ESMFold2 pipeline](../tools/esmfold2-pipeline.md) | Experimental design/critic with integrated Protenix validation | Internal-development scope is bounded to at most 318 polymer residues/eight design steps; custom scFv validation needs a supported structural framework. |
@@ -50,8 +51,10 @@ ariax forge catalog --tool interface-scores --json
 ariax pricing --json
 ```
 
-For antibody work use task `antibodies` and tool `rfantibody`; read that tool's
-scoped guide. Read other selected guides in the same way. Set `FORGE_SKILL` to
+For antibody work use task `antibodies` and inspect the selected tool's scoped
+guide. The RFantibody commands below use `rfantibody`; `rfd4-antibody` has a
+separate guide and model. Read other
+selected guides in the same way. Set `FORGE_SKILL` to
 the installed directory containing `SKILL.md`, the parent of scoped discovery's
 `data.skill`. Its `data.examples` gives the selected tool's example paths.
 Campaign helper paths can be derived without loading the entire skill index:
@@ -288,6 +291,9 @@ PyRosetta energies are not experimental binding free energies. Share rejection
 tables and native array/settings files when no accepted structure exists.
 
 ## Antibody or nanobody: design, prediction and export
+
+For VHH generation with RFd4, see its [antibody checkpoint guide](../tools/rfd4-antibody.md).
+The following workflow is specific to RFantibody.
 
 Use RFantibody for CDR design in paired VH/VL or VHH frameworks. Its documented
 profile needs at least 44 GiB reported VRAM, 48 GiB RAM, eight CPUs and 250 GiB

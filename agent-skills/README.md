@@ -25,6 +25,9 @@ Managed protocol guides cover [BindCraft](skills/ariax-bindcraft/SKILL.md),
 [Forge discovery](skills/ariax-forge/tools/capabilities.md) explains how to find
 native tools and their guide IDs.
 
+For VHH generation, `ariax skills forge --tool rfd4-antibody --json` locates the
+[RFd4 antibody guide](skills/ariax-forge/tools/rfd4-antibody.md) and its fixture.
+
 Use [managed lifecycle](core/managed-projects.md) for preparation, pricing,
 recovery and results; [campaign planning](core/campaigns.md) for sizing and
 scaling; and [interpretation](core/interpretation.md) for result metrics.
