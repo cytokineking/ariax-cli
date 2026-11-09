@@ -786,7 +786,9 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
       if (failure) failed('tool_failed', `Tool ${failure.tool} failed`, failure.error);
       if (tools.every(tool => tool?.state === 'ready')) return result;
     } else if (kind === 'file-deletion') {
-      if (data.state === 'failed' || data.cleanup_state === 'attention') failed('file_delete_failed', `File deletion ${id} needs attention`, undefined, 'Inspect the file and cleanup status before another action.');
+      if (data.state === 'failed' || data.cleanup_state === 'attention') failed('file_delete_failed', `File deletion ${id} needs attention`,
+        data.error ?? data.failures?.[0]?.error ?? (data.failure_code ? {message:data.failure_code} : undefined),
+        'Inspect the file and cleanup status before another action.');
       if (data.state === 'deleted' && ['complete','unknown'].includes(data.cleanup_state)) return result;
     } else if (kind === 'file-hydration') {
       if (data.state === 'failed') failed('file_hydration_failed', `File hydration ${id} failed`, data.error, 'Inspect the local path and saved file before retrying.');

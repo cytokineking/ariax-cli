@@ -768,13 +768,19 @@ async function deleteStatus(ctx, record, signal) {
       || !['pending','deleted','failed','expired'].includes(value.state)
       || !['host','offline'].includes(value.source)
       || !['ready','pending','conflict','unknown','not_applicable'].includes(value.local_state)
+      || (value.catalog_state !== undefined && !['pending','deleted'].includes(value.catalog_state))
+      || (value.deletion_phase !== undefined && !['queued','waiting_for_writers','applying','completed','failed'].includes(value.deletion_phase))
       || (value.cleanup_state !== undefined && !['pending','complete','attention','unknown'].includes(value.cleanup_state))) {
     throw new NetworkError('File deletion response does not match the saved operation.');
   }
   const state = ['failed','expired'].includes(value.state) || value.local_state === 'conflict' ? 'failed'
     : value.state === 'deleted' && ['ready','not_applicable'].includes(value.local_state) ? 'deleted' : 'pending';
   return {...result,data:{operation_id:id,project_id:request.project_id,session_id:request.session_id,
-    path:request.body.path,state,local_state:value.local_state,cleanup_state:value.cleanup_state ?? 'pending',
+    path:request.body.path,state,local_state:value.local_state,cleanup_state:value.cleanup_state ?? 'unknown',
+    ...(value.catalog_state ? {catalog_state:value.catalog_state} : {}),
+    ...(value.deletion_phase ? {deletion_phase:value.deletion_phase} : {}),
+    ...(value.error ? {error:value.error} : {}),
+    ...(value.failure_code ? {failure_code:value.failure_code} : {}),
     ...(value.recovery_path ? {recovery_path:value.recovery_path} : {}),
     ...(value.version == null ? {} : {version:value.version})}};
 }
@@ -791,7 +797,7 @@ async function recoverDelete(ctx, record, signal) {
     if (!['pending','deleted'].includes(started.data?.state)) throw new NetworkError('File deletion returned an invalid receipt.');
     current = await deleteStatus(ctx,record,signal);
     if (!current) return {...started,data:{operation_id:id,project_id:project,session_id:request.session_id,
-      path:request.body.path,state:'pending',local_state:'pending',cleanup_state:'pending'}};
+      path:request.body.path,state:'pending',local_state:'pending',cleanup_state:'unknown'}};
   }
   return current;
 }
@@ -818,6 +824,16 @@ async function recoverDeleteTree(ctx, record, signal) {
   }
   const revision = request.body.expected_project_revision;
   const write = value => atomicWrite(file, JSON.stringify(value, null, 2)+'\n');
+  const failedPaths = new Set((record.failures ?? []).map(item => item.path));
+  function recordChanged(path) {
+    if (failedPaths.has(path)) return;
+    const saved = readRecord(file), failures = [...(saved.failures ?? []), {
+      operation_id:treeChildId(id,path),path,
+      error:{code:'file_revision_conflict',message:'The path changed after recursive deletion started.'},
+    }];
+    failedPaths.add(path);
+    write({...saved,failures,result:{...(saved.result ?? {}),state:'pending',failed_count:failures.length}});
+  }
   async function cleanupStatus(data) {
     const cleanup = (await ctx.client.get(`${base}/cleanup`,{query:{path:root,started_at:request.body.operation_started_at,
       ...(request.group_id ? {group_id:request.group_id} : {})},signal})).data;
@@ -825,10 +841,18 @@ async function recoverDeleteTree(ctx, record, signal) {
         || cleanup.pending < 0 || cleanup.attention < 0 || cleanup.attention > cleanup.pending) {
       throw new NetworkError('Directory cleanup status is invalid.');
     }
+    const progress = cleanup.progress;
+    if (progress !== undefined && (!progress || typeof progress !== 'object'
+        || ['accepted','queued_or_applying','catalog_deleted_unconfirmed','completed','failed','catalog_deleted']
+          .some(key => !Number.isSafeInteger(progress[key]) || progress[key] < 0))) {
+      throw new NetworkError('Directory deletion progress is invalid.');
+    }
     return {...data,cleanup_state:cleanup.attention ? 'attention' : cleanup.pending ? 'pending' : 'complete',
-      cleanup_remaining:cleanup.pending};
+      cleanup_remaining:cleanup.pending,...(progress ? {progress} : {})};
   }
-  if (record.result?.state === 'deleted') return {data:await cleanupStatus(record.result)};
+  if (['deleted','failed'].includes(record.result?.state) && !(record.pending ?? []).length) {
+    return {data:await cleanupStatus(record.result)};
+  }
   async function settlePending() {
     for (;;) {
       const saved = readRecord(file), pending = saved.pending ?? [];
@@ -847,21 +871,29 @@ async function recoverDeleteTree(ctx, record, signal) {
             || (!['deleted','pending'].includes(value.state) && !value.error))) {
         throw new NetworkError('Directory deletion returned an invalid batch receipt.');
       }
-      const failed = results.find(value => value.error && !['transfer_busy','sync_busy'].includes(value.error.code));
-      if (failed) throw new ApiError({status:409,code:failed.error.code ?? 'file_revision_conflict',
-        message:failed.error.code === 'local_state_unknown' ? 'The workspace stopped before deletion was confirmed; inspect the saved files.'
-          : failed.error.recovery_path ? `A replacement was preserved at ${failed.error.recovery_path}.`
-          : 'A file changed or could not be removed while deleting this directory.'});
-      if (results.some(value => value.state !== 'deleted')) {
-        printProgress(`Directory deletion ${id}: waiting for ${results.filter(value => value.state !== 'deleted').length} files`);
+      const failures = [...(saved.failures ?? [])];
+      const remaining = [];
+      let completed = 0;
+      for (let index = 0; index < results.length; index++) {
+        const value = results[index], item = pending[index];
+        if (value.state === 'deleted') completed++;
+        else if (value.error && !['transfer_busy','sync_busy'].includes(value.error.code)) {
+          failures.push({operation_id:item.operation_id,path:item.path,error:value.error});
+          failedPaths.add(item.path);
+        } else remaining.push(item);
+      }
+      const deleted_count = (saved.result?.deleted_count ?? 0) + completed;
+      const rootCompleted = results.some((value,index) => value.state === 'deleted' && pending[index].path === root);
+      const result = rootCompleted && !remaining.length && !failures.length
+        ? {operation_id:id,project_id:project,session_id:request.session_id,path:root,state:'deleted',deleted_count}
+        : {state:'pending',deleted_count,failed_count:failures.length};
+      write({...saved,pending:remaining,failures,result});
+      if (remaining.length) {
+        printProgress(`Directory deletion ${id}: ${deleted_count} completed, ${failures.length} failed, ${remaining.length} pending`);
         await delay(3000,undefined,{signal});
         continue;
       }
-      const deleted_count = (saved.result?.deleted_count ?? 0) + pending.length;
-      const result = pending.some(item => item.path === root)
-        ? {operation_id:id,project_id:project,session_id:request.session_id,path:root,state:'deleted',deleted_count}
-        : {state:'pending',deleted_count};
-      write({...saved,pending:[],result});
+      return;
     }
   }
 
@@ -890,22 +922,25 @@ async function recoverDeleteTree(ctx, record, signal) {
       try { page = (await listProjectFiles(ctx,project,directory,cursor)).data; }
       catch (error) { if (error.status === 404) break; throw error; }
       const items = page.entries;
-      if (items.some(item => item.version > revision)) throw new ApiError({status:409,code:'file_revision_conflict',
-        message:'A file or directory changed after recursive deletion started.'});
+      for (const item of items) if (item.version > revision) recordChanged(item.path);
       for (const item of items.filter(item => item.kind === 'directory')) await visit(item.path,phase);
       for (const item of items.filter(item => item.kind === 'file')) {
-        if (phase !== 'files') throw new ApiError({status:409,code:'file_revision_conflict',
-          message:'A file changed after recursive deletion started.'});
+        if (failedPaths.has(item.path)) continue;
+        if (phase !== 'files') { recordChanged(item.path); continue; }
         files.push({...item,mutation_revision:page.mutation_revision});
         if (files.length === 128) await flushFiles();
       }
       cursor = page.next_cursor;
     } while (cursor);
     if (phase === 'files') return;
+    // A failed child cannot make its ancestors empty. Continue through other
+    // branches, but retain those directories for an explicit later decision.
+    if ([...failedPaths].some(path => path === directory || path.startsWith(directory + '/'))) return;
     if (directories.some(item => item.path.startsWith(directory + '/'))) await flushDirectories();
     const metadata = (await ctx.client.get(`${base}/metadata`,{query:{path:directory},signal})).data;
     if (metadata.kind === 'file' || (metadata.kind === 'directory' && metadata.version > revision)) {
-      throw new ApiError({status:409,code:'file_revision_conflict',message:'A directory changed after recursive deletion started.'});
+      recordChanged(directory);
+      return;
     }
     if (!['directory','absent','tombstone'].includes(metadata.kind)
         || !Number.isSafeInteger(metadata.version) || !Number.isSafeInteger(metadata.mutation_revision)) {
@@ -922,8 +957,10 @@ async function recoverDeleteTree(ctx, record, signal) {
   await flushFiles();
   await visit(root,'directories');
   await flushDirectories();
-  const saved = readRecord(file), data = {operation_id:id,project_id:project,session_id:request.session_id,
-    path:root,state:'deleted',deleted_count:saved.result?.deleted_count ?? 0};
+  const saved = readRecord(file), failures = saved.failures ?? [];
+  const data = {operation_id:id,project_id:project,session_id:request.session_id,
+    path:root,state:failures.length ? 'failed' : 'deleted',deleted_count:saved.result?.deleted_count ?? 0,
+    ...(failures.length ? {failed_count:failures.length,failures} : {})};
   write({...saved,pending:[],result:data});
   return {data:await cleanupStatus(data)};
 }
@@ -970,7 +1007,9 @@ async function runDelete(ctx, projectId) {
       saveResult(file,readRecord(file),result.data);
     }
     if (result.data.state === 'failed' || result.data.cleanup_state === 'attention') failed('file_delete_failed',
-      result.data.recovery_path ? `A replacement was preserved at ${result.data.recovery_path}.` : `File deletion ${id} needs attention`,undefined,
+      result.data.recovery_path ? `A replacement was preserved at ${result.data.recovery_path}.` : `File deletion ${id} needs attention`,
+      result.data.error ?? result.data.failures?.[0]?.error ??
+        (result.data.failure_code ? {message:result.data.failure_code} : undefined),
       'Inspect the file and cleanup status before another action.');
     return report(ctx,result);
   });

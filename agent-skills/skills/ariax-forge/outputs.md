@@ -109,17 +109,25 @@ active; neither a listing nor a link pins a historical version.
 copy. It frees catalog file and byte capacity when the deletion is committed,
 while object cleanup proceeds separately. `--wait` also observes cleanup.
 Inspect `cleanup_state` for `complete`, `pending`, `attention`, or `unknown`.
-An accepted request can remain pending during session startup or shutdown.
+An accepted request can remain pending during session startup, shutdown or while
+commands are active. Queued deletion does not block new commands; application
+waits for active writers and fences admission during each bounded turn. An
+uncertain commit keeps that fence until it is reconciled.
+Continuously overlapping commands can defer deletion. The recursive result's
+`progress` counts accepted children, catalog deletions, confirmed local removals
+and failures separately from `cleanup_remaining`; it excludes paths not yet
+discovered by the CLI. A failed child does not stop independent accepted children,
+and its containing directories remain in place. Inspect retained failure details
+before deciding on a new operation.
 Recursive deletion is driven by the CLI: after an interruption, submitted
 batches may finish, but remaining paths require `ariax forge recover ID --wait`
 with the original operation ID, CLI root, account, and API origin. Recovery
 continues the deletion; it does not restore deleted files.
 
 A saved file changed locally before deletion reports a conflict and stays in
-place. If a running command replaces a file during removal, the replacement may
-be preserved at the reported `ariax-recovered-...` workspace path. Running
-commands can lose access to deleted files; pending input deletion can block new
-commands. Local directory removal waits for running commands to stop. Unsaved
+place. If a file is replaced during removal, the replacement may be preserved
+at the reported `ariax-recovered-...` workspace path. An unresolved input
+conflict continues to block commands. Unsaved
 local entries can prevent recursive removal; delete those entries, then start a
 new deletion with a new operation ID.
 
