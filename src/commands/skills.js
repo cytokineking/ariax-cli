@@ -257,6 +257,7 @@ const CORE_REFERENCES = Object.freeze({
   'managed-projects': join(ROOT, 'core', 'managed-projects.md'),
   'raw-curl': join(ROOT, 'core', 'raw-curl.md'),
   'recorded-settings': join(ROOT, 'core', 'recorded-settings.md'),
+  'storage': join(ROOT, 'core', 'storage.md'),
 });
 
 function protocolPaths() {

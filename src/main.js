@@ -33,6 +33,8 @@ import * as logs from './commands/logs.js';
 import * as pause from './commands/pause.js';
 import * as restart from './commands/restart.js';
 import * as abort from './commands/abort.js';
+import * as deleteProject from './commands/delete.js';
+import * as storage from './commands/storage.js';
 import * as results from './commands/results.js';
 import * as upgrade from './commands/upgrade.js';
 import * as login from './commands/login.js';
@@ -52,7 +54,7 @@ const COMMANDS = {
   projects, jobs, status, logs, pause, restart, abort, results, upgrade,
   login, logout,
   skills, operations, recover, inputs, candidates, runs,
-  feedback, forge,
+  feedback, forge, delete: deleteProject, storage,
   'gpu-preferences': gpuPreferences,
 };
 
@@ -73,6 +75,8 @@ const COMMAND_OPTIONS = {
   pause: [[], 1],
   restart: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   abort: [[], 1],
+  delete: [['yes', 'request-id', 'wait', 'poll-interval', 'wait-timeout'], 1],
+  storage: [['wait', 'poll-interval', 'wait-timeout'], 2],
   feedback: [['category', 'message', 'job'], 1],
   operations: [[], 1],
   recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
@@ -212,6 +216,8 @@ const HELP_TOPICS = {
   restart: 'ariax restart <project-id> [--wait]',
   'gpu-preferences': 'ariax gpu-preferences <project-id> -f preferences.json',
   abort: 'ariax abort <project-id>',
+  delete: 'ariax delete <project-id> [--yes] [--request-id UUID] [--wait] [--wait-timeout SECONDS]',
+  storage: 'ariax storage status <project-id> [--wait] [--wait-timeout SECONDS]',
   feedback: 'ariax feedback <project-id-or-exact-name> --category technical-support|feature-request|other --message TEXT [--job JOB_ID]',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',

@@ -239,6 +239,27 @@ ariax validate -f ./prepared/job.json --input ./prepared/input.cif
 ariax submit -f ./prepared/job.json --input ./prepared/input.cif --name prepared-run
 ```
 
+## Delete a project
+
+Deletion permanently removes current saved project files and prevents managed
+resume. Paused and terminal managed projects can be deleted; abort active
+projects first. Native Forge controls and separately retained archives keep
+their existing semantics.
+
+```sh
+ariax storage status PROJECT_ID
+ariax delete PROJECT_ID --yes --wait --wait-timeout 300
+```
+
+Omit `--yes` for an interactive confirmation. The CLI saves the exact request
+before dispatch and reuses an uncertain receipt on retry. Use `--request-id UUID`
+or `ariax recover UUID` for explicit recovery with the original account/origin.
+`ariax storage status PROJECT_ID --wait` only observes; it does not repeat deletion.
+Pending, attention, unknown counts and timestamped verified-empty observations
+remain distinct. Timeout or interruption leaves backend cleanup running. See
+the [storage guide](agent-skills/core/storage.md) for recovery and native Forge
+differences.
+
 ## Use Ariax with a coding agent
 
 The CLI package includes portable Markdown skills for agents. No MCP server is

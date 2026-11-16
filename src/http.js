@@ -52,6 +52,30 @@ export class ApiError extends Error {
 export function sanitizeErrorDetails(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
   const result = {};
+  if (details.reason === 'abort_required') result.reason = 'abort_required';
+  if (['attention', 'timeout', 'interrupted'].includes(details.wait_outcome)) {
+    result.wait_outcome = details.wait_outcome;
+    if (isUUID(details.deletion_request_id)) result.deletion_request_id = details.deletion_request_id;
+    if (details.cleanup && typeof details.cleanup === 'object' && !Array.isArray(details.cleanup)) {
+      const c = details.cleanup;
+      const observation = {};
+      if (['managed', 'forge'].includes(c.kind)) observation.kind = c.kind;
+      if (c.state === null || ['pending', 'verified_empty', 'attention', 'completed'].includes(c.state)) observation.state = c.state;
+      for (const field of ['last_checked_at', 'last_complete_check_at', 'verified_empty_at', 'next_reconcile_at', 'verification_not_before']) {
+        if (c[field] === null) observation[field] = null;
+        else if (typeof c[field] === 'string' && Number.isFinite(Date.parse(c[field]))) observation[field] = new Date(c[field]).toISOString();
+      }
+      for (const field of ['object_count', 'multipart_count']) {
+        if (c[field] === null || Number.isSafeInteger(c[field]) && c[field] >= 0) observation[field] = c[field];
+      }
+      for (const field of ['compute_released', 'artifacts_deleted']) if (typeof c[field] === 'boolean') observation[field] = c[field];
+      if (c.error != null) observation.error = { code: 'storage_cleanup_incomplete', message: 'Project cleanup needs review' };
+      if (['publication_open','write_grants_pending','grant_coverage_unknown','namespace_unverified','storage_list_failed',
+        'storage_delete_failed','multipart_list_failed','multipart_abort_failed','invalid_storage_response','owner_unconfirmed',
+        'staging_pending','staging_attention','cleanup_attention'].includes(c.reason)) observation.reason = c.reason;
+      result.cleanup = observation;
+    }
+  }
   if (Array.isArray(details.issues)) {
     result.issues = details.issues.slice(0, 50).flatMap((issue) => {
       if (!issue || !Array.isArray(issue.field) || typeof issue.rule !== 'string' || typeof issue.message !== 'string') return [];

@@ -50,6 +50,10 @@ the exit code before parsing output; see the [shell example](core/examples.md#sa
 - Forge preparation and idle time are billed. Flush useful files,
   explicitly close the session when done, and check that closure and saving
   completed. See the [Forge lifecycle](skills/ariax-forge/SKILL.md).
+- Delete current project files only with explicit user authorization. Use
+  `ariax delete PROJECT --yes` and [storage status](core/storage.md) for durable
+  request recovery, read-only waiting, unknown counts and timestamped checks.
+  Deletion prevents resume; a timeout does not cancel accepted cleanup.
 
 Read the selected engine's output guide and [metric interpretation](core/interpretation.md)
 when reviewing candidates. Use [campaign planning](core/campaigns.md) to size or

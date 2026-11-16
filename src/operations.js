@@ -89,9 +89,10 @@ export async function accountIdentity(ctx, options = {}) {
     api_origin: new URL(ctx.config.baseUrl ?? 'https://www.ariax.bio').origin };
 }
 
-export function createOperation(ctx, { action, request, account, sources = [], preparedBytes, preparedInputs }) {
+export function createOperation(ctx, { action, request, account, sources = [], preparedBytes, preparedInputs, id = randomUUID() }) {
   rejectCredentials(request.body);
-  const id = randomUUID();
+  if (!isUUID(id)) throw usageError('Operation request ID must be a UUID.');
+  id = id.trim().toLowerCase();
   const file = operationPath(ctx.config.rootDir, id);
   const now = new Date().toISOString();
   if (preparedBytes !== undefined && preparedInputs !== undefined) {
@@ -119,7 +120,7 @@ export function createOperation(ctx, { action, request, account, sources = [], p
   }
   const record = {
     version, id, idempotency_key: id, action, ...account,
-    created_at: now, updated_at: now, replay_not_after: new Date(Date.now() + RETENTION_MS).toISOString(),
+    created_at: now, updated_at: now, replay_not_after: action === 'project:delete' ? null : new Date(Date.now() + RETENTION_MS).toISOString(),
     request, request_sha256: sha256(JSON.stringify(request)), sources,
     ...(version === 1
       ? { prepared_input: preparedBytes === undefined ? null : { filename: `${id}.input`, sha256: sha256(preparedBytes) } }
@@ -146,7 +147,7 @@ export function loadOperation(rootDir, id) {
       && entry.snapshot === `${id}.input.${index}` && /^[a-f0-9]{64}$/.test(entry.sha256)
       && Number.isSafeInteger(entry.bytes) && entry.bytes > 0);
   if ((!legacyEvidence && !bundleEvidence) || record.id !== id || record.idempotency_key !== id
-      || !['project:create', 'project:restart'].includes(record.action)
+      || !['project:create', 'project:restart', 'project:delete'].includes(record.action)
       || !isUUID(record.actor_user_id)
       || !['user', 'team'].includes(record.billing_account_type) || !isUUID(record.billing_account_id)
       || !Array.isArray(record.sources)
@@ -156,6 +157,7 @@ export function loadOperation(rootDir, id) {
       || !record.request.body || typeof record.request.body !== 'object' || Array.isArray(record.request.body)
       || record.request_sha256 !== sha256(JSON.stringify(record.request))
       || (record.action === 'project:create' ? record.request.path !== '/api/v1/projects'
+        : record.action === 'project:delete' ? !/^\/api\/v1\/projects\/[0-9a-f-]{36}\/delete$/i.test(record.request.path)
         : !/^\/api\/v1\/projects\/[0-9a-f-]{36}\/restart$/i.test(record.request.path))) {
     throw usageError(`Operation ${id} is malformed or its request hash changed. No mutation was sent.`);
   }
@@ -186,6 +188,9 @@ export async function verifyAccount(ctx, operation) {
 }
 
 export function verifyReplayInputs(ctx, operation) {
+  // Whole deletion retains project/namespace authority and has no scientific
+  // inputs or expiring launch claim. Its exact revision/key remain safe to retry.
+  if (operation.action === 'project:delete') return;
   // Missing records are safe to replay only within the original seven-day window.
   // Leave a minute for the claim to reach the server before key reuse becomes legal.
   if (!(Date.parse(operation.replay_not_after) > Date.now() + 60_000)) {
@@ -215,6 +220,14 @@ export function verifyReplayInputs(ctx, operation) {
 }
 
 export async function lookupOperation(ctx, operation) {
+  if (operation.action === 'project:delete') {
+    const projectId = operation.request.path.split('/')[4];
+    const response = await ctx.client.get(`/api/v1/projects/${projectId}/storage`, { signal: ctx.signal });
+    if (response.data?.project_id !== projectId) throw new Error('Storage status returned a different project.');
+    if (response.data.status !== 'deleted') return null;
+    updateOperation(ctx, operation, { state: 'completed', project_id: projectId, result: response.data, response_status: 200 });
+    return { state: 'completed', project_id: projectId, result: response.data };
+  }
   try {
     const res = await ctx.client.get(`/api/v1/operations/${operation.idempotency_key}`, { query: { action: operation.action }, signal: ctx.signal });
     const remote = res.data;
@@ -241,7 +254,11 @@ export async function sendOperation(ctx, operation) {
       body: operation.request.body, idempotencyKey: operation.idempotency_key,
     });
     const data = res.data?.project ?? res.data ?? {};
-    const pending = res.status === 202 || data.state === 'in_progress';
+    const deletion = operation.action === 'project:delete';
+    if (deletion && (data.status !== 'deleted' || data.project_id !== operation.request.path.split('/')[4])) {
+      throw new Error('Deletion response is uncertain; preserve this request identity.');
+    }
+    const pending = !deletion && (res.status === 202 || data.state === 'in_progress');
     const projectId = data.project_id ?? data.id ?? null;
     if (!pending && !isUUID(projectId)) throw new Error('Mutation response carried no valid project ID; recover this operation.');
     updateOperation(ctx, operation, {
@@ -252,6 +269,11 @@ export async function sendOperation(ctx, operation) {
     return res;
   } catch (error) {
     // A timeout, interruption, or ambiguous HTTP failure must retain the exact attempt.
+    if (operation.action === 'project:delete' && error instanceof ApiError
+        && (error.code === 'control_revision_conflict' || error.details?.reason === 'abort_required')) {
+      updateOperation(ctx, operation, { state: 'failed', response_status: error.status,
+        error: { code: error.code, message: error.message, details: error.details } });
+    }
     error.message += ` Recover with: ariax recover ${operation.id}`;
     throw error;
   }
@@ -272,6 +294,7 @@ export function operationSummary(operation) {
 
 /** Poll only. Waiting never replays a spending request, even after a lease expires. */
 export async function waitForOperation(ctx, operation) {
+  if (operation.action === 'project:delete') throw usageError('Deletion waiting uses ariax storage status PROJECT --wait; it never replays the request.');
   const interval = Number(ctx.flags['poll-interval'] ?? 3) * 1000;
   const timeout = Number(ctx.flags['wait-timeout'] ?? 0) * 1000;
   if (!Number.isFinite(interval) || interval <= 0 || !Number.isFinite(timeout) || timeout < 0) {
