@@ -239,7 +239,7 @@ ariax validate -f ./prepared/job.json --input ./prepared/input.cif
 ariax submit -f ./prepared/job.json --input ./prepared/input.cif --name prepared-run
 ```
 
-## Delete a project
+## Storage and deletion
 
 Inspect cached storage with `ariax storage usage --json`, or one project with
 `ariax storage usage PROJECT_ID --json`. Use `--refresh` on a live managed project
@@ -269,6 +269,22 @@ Pending, attention, unknown counts and timestamped verified-empty observations
 remain distinct. Timeout or interruption leaves backend cleanup running. See
 the [storage guide](agent-skills/core/storage.md) for recovery and native Forge
 differences.
+
+Select a file or folder on a completed, failed or aborted managed project:
+
+```sh
+ariax storage delete PROJECT_ID --path output/models --recursive --dry-run --json
+ariax storage delete PROJECT_ID --path output/models --recursive --yes --json
+ariax storage status PROJECT_ID --deletion-id REQUEST_UUID --wait --json
+```
+
+Dry-run only reads a bounded preview. Recursive scope includes hidden descendants;
+root deletion requires `ariax delete`. Paused projects must keep files for resume.
+Selected deletion hides matching paths immediately while leaving workflow status
+unchanged; physical cleanup can remain pending. Unselected archives and other
+copies remain readable. Keep the saved UUID and exact target on uncertainty;
+`ariax recover UUID` reconciles the existing receipt. Forge absolute Files paths
+reuse the native deletion engine and its original journal/recovery commands.
 
 ## Use Ariax with a coding agent
 

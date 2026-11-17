@@ -8,6 +8,7 @@ import { isUUID } from './uuid.js';
 import { ApiError } from './http.js';
 import { EXIT } from './exit-codes.js';
 import { printProgress } from './output.js';
+import { deletionOutcome, deletionTarget } from './storage-deletion.js';
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // claim_agent_idempotency retention
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -120,7 +121,7 @@ export function createOperation(ctx, { action, request, account, sources = [], p
   }
   const record = {
     version, id, idempotency_key: id, action, ...account,
-    created_at: now, updated_at: now, replay_not_after: action === 'project:delete' ? null : new Date(Date.now() + RETENTION_MS).toISOString(),
+    created_at: now, updated_at: now, replay_not_after: ['project:delete', 'storage:delete'].includes(action) ? null : new Date(Date.now() + RETENTION_MS).toISOString(),
     request, request_sha256: sha256(JSON.stringify(request)), sources,
     ...(version === 1
       ? { prepared_input: preparedBytes === undefined ? null : { filename: `${id}.input`, sha256: sha256(preparedBytes) } }
@@ -147,7 +148,7 @@ export function loadOperation(rootDir, id) {
       && entry.snapshot === `${id}.input.${index}` && /^[a-f0-9]{64}$/.test(entry.sha256)
       && Number.isSafeInteger(entry.bytes) && entry.bytes > 0);
   if ((!legacyEvidence && !bundleEvidence) || record.id !== id || record.idempotency_key !== id
-      || !['project:create', 'project:restart', 'project:delete'].includes(record.action)
+      || !['project:create', 'project:restart', 'project:delete', 'storage:delete'].includes(record.action)
       || !isUUID(record.actor_user_id)
       || !['user', 'team'].includes(record.billing_account_type) || !isUUID(record.billing_account_id)
       || !Array.isArray(record.sources)
@@ -157,11 +158,17 @@ export function loadOperation(rootDir, id) {
       || !record.request.body || typeof record.request.body !== 'object' || Array.isArray(record.request.body)
       || record.request_sha256 !== sha256(JSON.stringify(record.request))
       || (record.action === 'project:create' ? record.request.path !== '/api/v1/projects'
+        : record.action === 'storage:delete' ? !/^\/api\/v1\/projects\/[0-9a-f-]{36}\/storage\/deletions$/i.test(record.request.path)
         : record.action === 'project:delete' ? !/^\/api\/v1\/projects\/[0-9a-f-]{36}\/delete$/i.test(record.request.path)
         : !/^\/api\/v1\/projects\/[0-9a-f-]{36}\/restart$/i.test(record.request.path))) {
     throw usageError(`Operation ${id} is malformed or its request hash changed. No mutation was sent.`);
   }
   rejectCredentials(record.request.body);
+  if (record.action === 'storage:delete') {
+    deletionTarget(record.request.body.path, record.request.body.recursive);
+    if (!Number.isSafeInteger(record.request.body.expected_control_revision) || record.request.body.expected_control_revision < 0
+        || Object.keys(record.request.body).some(key => !['path', 'recursive', 'expected_control_revision'].includes(key))) throw usageError('Saved storage deletion is malformed.');
+  }
   return record;
 }
 
@@ -190,7 +197,7 @@ export async function verifyAccount(ctx, operation) {
 export function verifyReplayInputs(ctx, operation) {
   // Whole deletion retains project/namespace authority and has no scientific
   // inputs or expiring launch claim. Its exact revision/key remain safe to retry.
-  if (operation.action === 'project:delete') return;
+  if (['project:delete', 'storage:delete'].includes(operation.action)) return;
   // Missing records are safe to replay only within the original seven-day window.
   // Leave a minute for the claim to reach the server before key reuse becomes legal.
   if (!(Date.parse(operation.replay_not_after) > Date.now() + 60_000)) {
@@ -220,6 +227,15 @@ export function verifyReplayInputs(ctx, operation) {
 }
 
 export async function lookupOperation(ctx, operation) {
+  if (operation.action === 'storage:delete') {
+    const projectId = operation.request.path.split('/')[4];
+    try {
+      const response = await ctx.client.get(`/api/v1/projects/${projectId}/storage/deletions/${operation.idempotency_key}`, { signal: ctx.signal });
+      const data = deletionOutcome(response.data, projectId, operation.idempotency_key, operation.request.body);
+      updateOperation(ctx, operation, { state: 'completed', project_id: projectId, result: data, response_status: 200 });
+      return { state: 'completed', project_id: projectId, result: data };
+    } catch (error) { if (error.status === 404 && operation.state !== 'completed') return null; throw error; }
+  }
   if (operation.action === 'project:delete') {
     const projectId = operation.request.path.split('/')[4];
     const response = await ctx.client.get(`/api/v1/projects/${projectId}/storage`, { signal: ctx.signal });
@@ -254,12 +270,14 @@ export async function sendOperation(ctx, operation) {
       body: operation.request.body, idempotencyKey: operation.idempotency_key,
     });
     const data = res.data?.project ?? res.data ?? {};
-    const deletion = operation.action === 'project:delete';
-    if (deletion && (data.status !== 'deleted' || data.project_id !== operation.request.path.split('/')[4])) {
+    const selected = operation.action === 'storage:delete';
+    const deletion = operation.action === 'project:delete' || selected;
+    if (selected) deletionOutcome(data, operation.request.path.split('/')[4], operation.idempotency_key, operation.request.body);
+    if (!selected && deletion && (data.status !== 'deleted' || data.project_id !== operation.request.path.split('/')[4])) {
       throw new Error('Deletion response is uncertain; preserve this request identity.');
     }
     const pending = !deletion && (res.status === 202 || data.state === 'in_progress');
-    const projectId = data.project_id ?? data.id ?? null;
+    const projectId = selected ? operation.request.path.split('/')[4] : data.project_id ?? data.id ?? null;
     if (!pending && !isUUID(projectId)) throw new Error('Mutation response carried no valid project ID; recover this operation.');
     updateOperation(ctx, operation, {
       state: pending ? 'in_progress' : 'completed', operation_id: data.operation_id ?? operation.operation_id,
@@ -269,8 +287,8 @@ export async function sendOperation(ctx, operation) {
     return res;
   } catch (error) {
     // A timeout, interruption, or ambiguous HTTP failure must retain the exact attempt.
-    if (operation.action === 'project:delete' && error instanceof ApiError
-        && (error.code === 'control_revision_conflict' || error.details?.reason === 'abort_required')) {
+    if (['project:delete', 'storage:delete'].includes(operation.action) && error instanceof ApiError
+        && (error.code === 'control_revision_conflict' || ['abort_required', 'terminal_project_required', 'root_delete_requires_project_action'].includes(error.details?.reason))) {
       updateOperation(ctx, operation, { state: 'failed', response_status: error.status,
         error: { code: error.code, message: error.message, details: error.details } });
     }
@@ -294,7 +312,7 @@ export function operationSummary(operation) {
 
 /** Poll only. Waiting never replays a spending request, even after a lease expires. */
 export async function waitForOperation(ctx, operation) {
-  if (operation.action === 'project:delete') throw usageError('Deletion waiting uses ariax storage status PROJECT --wait; it never replays the request.');
+  if (['project:delete', 'storage:delete'].includes(operation.action)) throw usageError('Deletion waiting uses ariax storage status PROJECT --wait; it never replays the request.');
   const interval = Number(ctx.flags['poll-interval'] ?? 3) * 1000;
   const timeout = Number(ctx.flags['wait-timeout'] ?? 0) * 1000;
   if (!Number.isFinite(interval) || interval <= 0 || !Number.isFinite(timeout) || timeout < 0) {

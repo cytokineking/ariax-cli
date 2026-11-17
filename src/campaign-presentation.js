@@ -435,6 +435,8 @@ export function compactCandidateResult(data, meta = {}, filter = null) {
       returned: data.length,
       fetched: count(meta.fetched),
       total: count(meta.total),
+      ...(typeof meta.overall_total === 'number' ? { overall_total: count(meta.overall_total) } : {}),
+      ...(typeof meta.structures_only === 'boolean' ? { structures_only: meta.structures_only } : {}),
       next_cursor: meta.next_cursor ?? null,
       has_more: typeof meta.next_cursor === 'string' && meta.next_cursor.length > 0,
       ...(commonReasons.length ? { notes: commonReasons } : {}),

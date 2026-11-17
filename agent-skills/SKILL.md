@@ -54,6 +54,12 @@ the exit code before parsing output; see the [shell example](core/examples.md#sa
   `ariax delete PROJECT --yes` and [storage status](core/storage.md) for durable
   request recovery, read-only waiting, unknown counts and timestamped checks.
   Deletion prevents resume; a timeout does not cancel accepted cleanup.
+- For a user-authorized file/folder selection on a terminal managed project, use
+  `ariax storage delete PROJECT --path PATH --dry-run` before confirmation.
+  `--recursive` includes hidden descendants. Submit with `--yes` only after
+  authorization, then observe with `storage status --deletion-id UUID`.
+  Keep original receipts on uncertainty. Paused selections are blocked; root
+  deletion uses the whole-project action. Unselected copies/archives remain.
 - Inspect cached usage and one directory page with `ariax storage usage` and
   `ariax storage ls`; use explicit managed `--refresh` for background measurement.
   Keep null/stale quantities and their measurement bases distinct. The

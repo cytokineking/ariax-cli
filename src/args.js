@@ -38,6 +38,7 @@ const BOOLEAN_FLAGS = new Set([
   'version',
   'wait',
   'refresh',
+  'structures-only',
   'dry-run',
   'wait-ready',
   'clear',

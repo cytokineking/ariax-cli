@@ -1,4 +1,4 @@
-# Inspect storage and delete projects
+# Inspect storage and delete saved files
 
 ## Usage, browsing and downloads
 
@@ -50,6 +50,69 @@ authority. Directories, private/operational metadata and staging prefixes stay
 unavailable. No recursive download, archive generation or automatic structure
 regeneration is added. Existing missing-file and transfer errors remain visible;
 checksums are verified only when an expected checksum is available.
+
+## Selected file and folder deletion
+
+Delete selected managed paths only with explicit user authorization. New requests
+are allowed on completed, failed or aborted projects. Paused files must remain
+intact for resume; use the existing whole-project action or abort flow. Selected
+deletion leaves workflow status unchanged and immediately suppresses the selected
+content, including any later reappearance. Physical cleanup waits for publication
+closure and can remain pending after acceptance.
+
+```sh
+ariax storage delete PROJECT --path output/model.cif --dry-run --json
+ariax storage delete PROJECT --path output/models --recursive --dry-run --json
+ariax storage delete PROJECT --path output/models --recursive --yes --json
+ariax storage status PROJECT --deletion-id REQUEST_UUID --json
+ariax storage status PROJECT --deletion-id REQUEST_UUID --wait --wait-timeout 300 --json
+```
+
+Dry-run performs only a read-only bounded preview and creates no operation
+receipt. It requires no confirmation. A directory preview can inspect at most
+four 1000-object pages within a deadline; partial totals remain null. A preview
+is a timestamped estimate, not a frozen plan. `already_absent=true` requires a
+complete zero object-match observation; it does not complete multipart/grant
+verification or terminate a pending wait.
+
+Targets are exact relative paths: at most 512 printable Unicode code points and
+255 per component, without normalization. Refuse empty/root/dot/traversal,
+component-edge whitespace, leading/trailing slash, backslash, percent, colon,
+star and question mark. Root deletion requires `ariax delete PROJECT`.
+`--recursive` includes the target object and every descendant, including hidden
+files and multipart uploads. `output/run` excludes sibling `output/runner`.
+An exact object marker for `output/run` leaves its virtual folder and surviving
+children accessible. Known safe cache/intermediate targets can be deleted without
+becoming browsable or downloadable. Hidden descendant names are never disclosed.
+
+Deletion is path-scoped. Unselected independent archives and other copies remain
+readable under existing access policies, even if they contain a copy. Select
+each copy's own path to remove it; archives are not rewritten. Whole-project
+deletion takes precedence and may return its retained outcome without creating
+a selected child.
+
+Mutation requires interactive confirmation or `--yes`. The existing operation
+journal saves exact target, recursive flag, revision, UUID and account/origin
+before dispatch. The UUID is the public deletion status ID. Keep
+`.ariax/operations/` on uncertainty. Repeating the command reconciles a matching
+receipt by GET first; only an unacknowledged request with status 404 can replay
+the original body/key. Use `--request-id UUID` for a specific receipt, or
+`ariax recover UUID` for explicit reconciliation/replay. Never change the target
+under that identity or create a new request after a lost reply. Acknowledged 404s
+and dependency failures preserve uncertainty without replay.
+
+Known-ID status works from another device on the same account and API origin;
+there is no remote receipt enumeration. Saved accepted status/recovery remains
+available when new-selection exposure is withdrawn. Waits only GET status and
+retain the durable ID on timeout, interruption or attention. Verified-empty is
+a timestamped observation; backend reconciliation continues afterward.
+
+For Forge, `storage delete` with an absolute `/workspace/...` or `/inputs/...`
+path delegates to the existing versioned Files engine. Dry-run only reads native
+metadata; native folder aggregates stay unknown. Retain `.ariax/forge/` and use
+`ariax forge recover UUID` for explicit native recovery. `storage status PROJECT
+--deletion-id UUID` can observe a locally retained native receipt without
+advancing recursive work. Separately retained archives are excluded.
 
 ## Whole-project deletion and cleanup
 

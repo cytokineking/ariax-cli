@@ -52,7 +52,7 @@ export class ApiError extends Error {
 export function sanitizeErrorDetails(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
   const result = {};
-  if (details.reason === 'abort_required') result.reason = 'abort_required';
+  if (['abort_required', 'terminal_project_required', 'root_delete_requires_project_action'].includes(details.reason)) result.reason = details.reason;
   if (['attention', 'timeout', 'interrupted'].includes(details.wait_outcome)) {
     result.wait_outcome = details.wait_outcome;
     if (isUUID(details.deletion_request_id)) result.deletion_request_id = details.deletion_request_id;

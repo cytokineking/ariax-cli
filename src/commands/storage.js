@@ -3,6 +3,7 @@ import { resolveProjectId } from '../resolve.js';
 import { storageStatus, reportStorage, waitForStorage, storageWaitOptions } from '../storage.js';
 import { printJson, printKv, printTable } from '../output.js';
 import { listProjectFiles, workspacePath } from '../lib/forge-workspace-client.js';
+import { run as deleteSelection, status as selectedStatus } from './storage-delete.js';
 
 const nullableNumber = value => value === null || Number.isSafeInteger(value) && value >= 0;
 function usage(data, project) {
@@ -86,11 +87,13 @@ async function runList(ctx) {
 }
 
 export async function run(ctx) {
+  if (ctx.positionals[0] === 'delete') return deleteSelection(ctx);
   if (ctx.positionals[0] === 'usage') return runUsage(ctx);
   if (ctx.positionals[0] === 'ls') return runList(ctx);
   if (ctx.flags.wait) storageWaitOptions(ctx);
   if (ctx.positionals[0] !== 'status' || !ctx.positionals[1]) throw usageError('storage: use ariax storage status <project-id> [--wait].');
   const projectId = (await resolveProjectId(ctx.client, ctx.positionals[1])).toLowerCase();
+  if (ctx.flags['deletion-id'] !== undefined) return selectedStatus(ctx, projectId, ctx.flags['deletion-id']);
   const response = await ctx.client.get(`/api/v1/projects/${projectId}/storage`);
   let data = storageStatus(response.data, projectId);
   if (ctx.flags.wait) data = await waitForStorage(ctx, projectId, { initial: data });

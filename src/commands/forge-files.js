@@ -785,6 +785,26 @@ async function deleteStatus(ctx, record, signal) {
     ...(value.version == null ? {} : {version:value.version})}};
 }
 
+/** Observe the existing native receipt without advancing recursive work. */
+export async function observeFileDeletion(ctx, projectId, id, signal) {
+  const record = readRecord(recordPath(ctx, id));
+  if (!record || record.request?.project_id !== projectId || ![FILE_DELETE, FILE_DELETE_TREE].includes(record.request.type)) {
+    throw usageError('Restore the original Forge deletion journal before observing this native operation. Use ariax forge recover for explicit recovery.');
+  }
+  const account = await accountIdentity(ctx, { signal });
+  if (Object.keys(account).some(key => record[key] !== account[key])) throw usageError('Forge deletion belongs to another account or API origin.');
+  if (record.request.type === FILE_DELETE) return await deleteStatus(ctx, record, signal) ?? { data: { operation_id: id, project_id: projectId,
+    path: record.request.body.path, state: 'unconfirmed', cleanup_state: 'unknown' } };
+  const request = record.request;
+  const cleanup = (await ctx.client.get(`${API}/projects/${projectId}/files/cleanup`, { query: {
+    path: request.body.path, started_at: request.body.operation_started_at, group_id: id,
+  }, signal })).data;
+  if (!Number.isSafeInteger(cleanup?.pending) || cleanup.pending < 0 || !Number.isSafeInteger(cleanup.attention)
+      || cleanup.attention < 0 || cleanup.attention > cleanup.pending) throw new NetworkError('Directory cleanup status is invalid.');
+  return { data: { ...(record.result ?? { state: 'unconfirmed' }), operation_id: id, project_id: projectId, path: request.body.path,
+    cleanup_state: cleanup.attention ? 'attention' : cleanup.pending ? 'pending' : 'complete', cleanup_remaining: cleanup.pending } };
+}
+
 async function recoverDelete(ctx, record, signal) {
   const {id,request} = record, project = uuid(request.project_id,'project ID');
   if (request.method !== 'POST' || request.path !== `${API}/projects/${project}/files/delete`

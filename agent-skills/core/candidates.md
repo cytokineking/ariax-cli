@@ -9,6 +9,7 @@ choosing a shortlist.
 ariax candidates PROJECT --view final --json
 ariax candidates PROJECT --view all --all --output candidates.json --json
 ariax candidates PROJECT --view diagnostics --all --output diagnostics.json --json
+ariax candidates PROJECT --view diagnostics --structures-only --limit 10 --json
 ```
 
 ## Choose a view
@@ -37,6 +38,15 @@ not establish that a model was never produced. Use `ariax results PROJECT`
 to find other artifacts. Missing/nonfinite metrics stay null;
 `producer_scaled_pae` is not in angstroms.
 
+Deleted or physically missing structures become unavailable while surviving
+metrics, sequences and scientific provenance remain. BindCraft2 and ESMFold2
+links are checked without regenerating files. For BindCraft2 diagnostics,
+`--structures-only` filters rows without surviving structures in each bounded
+source-row window. Its `meta.total`
+is null; `overall_total` remains the scientific source count. An empty visible
+page can still carry `next_cursor`; advance it explicitly or use `--all`.
+Never show zero or a page denominator for an unknown filtered total.
+
 ## Export and paginate
 
 `--limit` sets page size (1–50; default 25). Use `--all` to retrieve every page,
@@ -59,3 +69,9 @@ reranking. If retrieval returns `cursor_stale` (HTTP 409, CLI exit 7), restart
 without the cursor. For an oversized table (HTTP 413), download the CSV with
 `ariax results` and analyze it locally. An invalid source schema (HTTP 422)
 requires correction; it is not an empty result.
+
+Availability or deletion-marker changes alone do not repeatedly invalidate
+continuations; scientific source content changes still do. Structure verification
+checks at most 1024 unique objects per request. A dense window can return 413;
+retry with a smaller `--limit` instead of skipping source rows. Analyze downloaded
+scientific data only on a host permitted by the user's compute/storage policy.
