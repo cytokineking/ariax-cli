@@ -10,11 +10,12 @@ ariax storage ls PROJECT --path output --limit 50 --json
 ariax results PROJECT --source storage --path pdbs/input.cif --download ./inputs --json
 ```
 
-Usage reads retained measurements; they never initiate a scan. Managed refresh
-explicitly requests deduplicated background work and returns pending/running.
-Forge reads its catalog and has no separate refresh engine. Keep the old complete
-observation visibly stale if refresh fails. Null bytes/counts mean unknown,
-including Forge projects without catalog counters.
+Usage reads retained measurements without initiating a scan. Managed refresh
+returns a current complete observation when available, or pending/running
+background work. A matching complete observation can be reused for five minutes.
+After a failed attempt, read usage to see the failure and any earlier stale result.
+Retries may be delayed briefly. Forge reads its file catalog. Null bytes/counts
+mean unknown, including Forge projects without catalog counters.
 
 Overview filters are `--q`, `--protocol`, `--status`; `--sort` is `updated_at`,
 `name` or `bytes_desc`. Sorting covers the full authorized filtered result with
@@ -53,9 +54,9 @@ checksums are verified only when an expected checksum is available.
 
 ## Selected file and folder deletion
 
-Delete selected managed paths only with explicit user authorization. New requests
-are allowed on completed, failed or aborted projects. Paused files must remain
-intact for resume; use the existing whole-project action or abort flow. Selected
+Delete selected managed paths only with explicit user authorization. When
+selected deletion is enabled, completed, failed and aborted projects can accept
+new requests. Paused projects may use the whole-project action or abort. Selected
 deletion leaves workflow status unchanged and immediately suppresses the selected
 content, including any later reappearance. Physical cleanup waits for publication
 closure and can remain pending after acceptance.
@@ -76,7 +77,9 @@ no objects were found at that preview's timestamp. Empty object listings alone
 do not complete multipart/grant verification or terminate a pending wait.
 
 Targets are exact relative paths: at most 512 printable Unicode code points and
-255 per component, without normalization. Refuse empty/root/dot/traversal,
+255 per component. Preserve the submitted spelling for transfer and display.
+Managed deletion compares canonically equivalent Unicode spellings as the same
+path. Refuse empty/root/dot/traversal,
 component-edge whitespace, leading/trailing slash, backslash, percent, colon,
 star and question mark. Root deletion requires `ariax delete PROJECT`.
 `--recursive` includes the target object and every descendant, including hidden
@@ -99,13 +102,15 @@ receipt by GET first; only an unacknowledged request with status 404 can replay
 the original body/key. Use `--request-id UUID` for a specific receipt, or
 `ariax recover UUID` for explicit reconciliation/replay. Never change the target
 under that identity or create a new request after a lost reply. Acknowledged 404s
-and dependency failures preserve uncertainty without replay.
+and dependency failures preserve uncertainty without replay. If the project has
+reached its 4,096 effective scope limit, a new distinct scope returns
+`deletion_scope_limit`. A covering folder may combine existing scopes.
 
 Known-ID status works from another device on the same account and API origin;
 there is no remote receipt enumeration. Saved accepted status/recovery remains
 available when new-selection exposure is withdrawn. Waits only GET status and
-retain the durable ID on timeout, interruption or attention. Verified-empty is
-a timestamped observation; backend reconciliation continues afterward.
+retain the durable ID on timeout, interruption or attention. Verified-empty
+records a completed check at its timestamp.
 
 For Forge, `storage delete` with an absolute `/workspace/...` or `/inputs/...`
 path delegates to the existing versioned Files engine. Dry-run only reads native
@@ -155,8 +160,8 @@ promise. Unknown historical authority remains unknown and can require attention.
 
 `ariax storage status PROJECT --wait` only reads. It never resubmits deletion,
 scans storage or controls compute. Waiting stops at verified_empty and reports
-its timestamp; infrequent backend reconciliation continues afterward. The
-default local wait is 300 seconds; `--wait-timeout 0` waits until interrupted.
+its timestamp. The default local wait is 300 seconds. Set `--wait-timeout 0`
+to wait until interrupted.
 Timeout, interruption or attention includes the project and any deletion request
 identity in the error details. Deletion remains accepted; use the status command
 to observe it, and do not create a new request merely to continue waiting.

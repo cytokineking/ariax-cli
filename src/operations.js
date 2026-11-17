@@ -264,13 +264,13 @@ export async function lookupOperation(ctx, operation) {
 export async function sendOperation(ctx, operation) {
   // The durable record already exists when this spending POST starts.
   verifyReplayInputs(ctx, operation);
-  printProgress(`operation_id: ${operation.id} (recover with: ariax recover ${operation.id})`);
+  const selected = operation.action === 'storage:delete';
+  printProgress(selected ? `operation_id: ${operation.id}` : `operation_id: ${operation.id} (recover with: ariax recover ${operation.id})`);
   try {
     const res = await ctx.client.post(operation.request.path, {
       body: operation.request.body, idempotencyKey: operation.idempotency_key,
     });
     const data = res.data?.project ?? res.data ?? {};
-    const selected = operation.action === 'storage:delete';
     const deletion = operation.action === 'project:delete' || selected;
     if (selected) deletionOutcome(data, operation.request.path.split('/')[4], operation.idempotency_key, operation.request.body);
     if (!selected && deletion && (data.status !== 'deleted' || data.project_id !== operation.request.path.split('/')[4])) {
@@ -287,12 +287,14 @@ export async function sendOperation(ctx, operation) {
     return res;
   } catch (error) {
     // A timeout, interruption, or ambiguous HTTP failure must retain the exact attempt.
-    if (['project:delete', 'storage:delete'].includes(operation.action) && error instanceof ApiError
-        && (error.code === 'control_revision_conflict' || ['abort_required', 'terminal_project_required', 'root_delete_requires_project_action'].includes(error.details?.reason))) {
+    const scopeLimit = selected && error instanceof ApiError
+      && error.status === 409 && error.code === 'deletion_scope_limit';
+    if (scopeLimit || (['project:delete', 'storage:delete'].includes(operation.action) && error instanceof ApiError
+        && (error.code === 'control_revision_conflict' || ['abort_required', 'terminal_project_required', 'root_delete_requires_project_action'].includes(error.details?.reason)))) {
       updateOperation(ctx, operation, { state: 'failed', response_status: error.status,
         error: { code: error.code, message: error.message, details: error.details } });
     }
-    error.message += ` Recover with: ariax recover ${operation.id}`;
+    if (!scopeLimit) error.message += ` Recover with: ariax recover ${operation.id}`;
     throw error;
   }
 }

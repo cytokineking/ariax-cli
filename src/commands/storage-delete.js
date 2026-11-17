@@ -5,7 +5,7 @@ import { resolveProjectId } from '../resolve.js';
 import { promptConfirm } from '../prompt.js';
 import { printJson, printKv } from '../output.js';
 import { accountIdentity, createOperation, listOperations, loadOperation, lookupOperation, operationFailure, operationPath, sendOperation, verifyAccount } from '../operations.js';
-import { deletionTarget, deletionOutcome, reportDeletion, waitForDeletion } from '../storage-deletion.js';
+import { deletionTarget, deletionOutcome, reportDeletion, sameDeletionTarget, waitForDeletion } from '../storage-deletion.js';
 import { storageStatus, storageWaitOptions } from '../storage.js';
 import { runFiles, observeFileDeletion } from './forge-files.js';
 import { workspacePath, redactForgeOutput } from '../lib/forge-workspace-client.js';
@@ -60,7 +60,7 @@ export async function run(ctx) {
   if (target && id && fs.existsSync(operationPath(ctx.config.rootDir, id))) operation = loadOperation(ctx.config.rootDir, id);
   if (target && !id) {
     const matching = listOperations(ctx.config.rootDir).filter(item => item.action === 'storage:delete' && item.request.path === route
-      && item.state !== 'failed' && item.request.body.path === target.path && item.request.body.recursive === target.recursive
+      && item.state !== 'failed' && sameDeletionTarget(item.request.body, target)
       && item.actor_user_id === account.actor_user_id && item.api_origin === account.api_origin
       && item.billing_account_type === account.billing_account_type && item.billing_account_id === account.billing_account_id);
     if (matching.length > 1) throw usageError('Multiple saved deletions match this target. Select the original --request-id UUID.');
@@ -68,8 +68,8 @@ export async function run(ctx) {
   }
   let data;
   if (operation) {
-    if (operation.action !== 'storage:delete' || operation.request.path !== route || operation.request.body.path !== target.path
-        || operation.request.body.recursive !== target.recursive) throw usageError('The saved identity belongs to a different target or action.');
+    if (operation.action !== 'storage:delete' || operation.request.path !== route
+        || !sameDeletionTarget(operation.request.body, target)) throw usageError('The saved identity belongs to a different target or action.');
     await verifyAccount(ctx, operation);
     if (operation.state === 'failed') throw operationFailure(operation);
     const remote = await lookupOperation(ctx, operation);

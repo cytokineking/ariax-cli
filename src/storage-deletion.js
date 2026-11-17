@@ -15,6 +15,11 @@ export function deletionTarget(path, recursive = false) {
   }
   return { path, recursive };
 }
+export function sameDeletionTarget(left, right) {
+  return typeof left?.path === 'string' && typeof right?.path === 'string'
+    && left.recursive === right.recursive && left.path.normalize('NFC') === right.path.normalize('NFC');
+}
+
 export function deletionOutcome(value, project, id, target) {
   if (value?.kind === 'project') {
     storageStatus(value.storage, project);
@@ -26,7 +31,7 @@ export function deletionOutcome(value, project, id, target) {
       || !Number.isSafeInteger(value.control?.revision) || value.control.revision < 0
       || !['pending', 'verified_empty', 'attention'].includes(d.state)
       || (d.state === 'verified_empty' && !Number.isFinite(Date.parse(d.verified_empty_at)))
-      || (target && (d.path !== target.path || d.recursive !== target.recursive))) throw new Error('Storage deletion returned an invalid observation; retain the original request.');
+      || (target && !sameDeletionTarget(d, target))) throw new Error('Storage deletion returned an invalid observation; retain the original request.');
   deletionTarget(d.path, d.recursive);
   const deletion = { ...d };
   delete deletion.already_absent; // Ignore a retired field from an older server.
