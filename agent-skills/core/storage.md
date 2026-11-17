@@ -71,9 +71,9 @@ ariax storage status PROJECT --deletion-id REQUEST_UUID --wait --wait-timeout 30
 Dry-run performs only a read-only bounded preview and creates no operation
 receipt. It requires no confirmation. A directory preview can inspect at most
 four 1000-object pages within a deadline; partial totals remain null. A preview
-is a timestamped estimate, not a frozen plan. `already_absent=true` requires a
-complete zero object-match observation; it does not complete multipart/grant
-verification or terminate a pending wait.
+is a timestamped estimate, not a frozen plan. A complete zero object count means
+no objects were found at that preview's timestamp. Empty object listings alone
+do not complete multipart/grant verification or terminate a pending wait.
 
 Targets are exact relative paths: at most 512 printable Unicode code points and
 255 per component, without normalization. Refuse empty/root/dot/traversal,

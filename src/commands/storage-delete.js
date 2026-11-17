@@ -26,7 +26,9 @@ function preview(value, project, target) {
   if (value?.project_id !== project || value.path !== target.path || value.recursive !== target.recursive
       || !Number.isSafeInteger(value.control?.revision) || value.control.revision < 0 || typeof value.capability?.allowed !== 'boolean'
       || typeof value.observation?.complete !== 'boolean') throw new Error('Storage preview returned an invalid observation.');
-  return value;
+  const observation = { ...value.observation };
+  delete observation.already_absent; // Ignore a retired field from an older server.
+  return { ...value, observation };
 }
 export async function run(ctx) {
   if (!ctx.positionals[1]) throw usageError('storage delete: provide a project UUID or exact unique name.');
@@ -47,7 +49,7 @@ export async function run(ctx) {
     const data = preview((await ctx.client.get(`/api/v1/projects/${project}/storage/deletions/preview`, { query: target })).data, project, target);
     if (ctx.json) printJson({ data }); else printKv({ path: data.path, recursive: data.recursive, allowed: data.capability.allowed,
       reason: data.capability.reason ?? '-', bytes: data.observation.bytes ?? 'unknown', object_count: data.observation.object_count ?? 'unknown',
-      measured_at: data.observation.measured_at ?? 'unknown', complete: data.observation.complete, already_absent: data.observation.already_absent ?? 'unknown' });
+      measured_at: data.observation.measured_at ?? 'unknown', complete: data.observation.complete });
     return;
   }
   const target = typeof ctx.flags.path === 'string' && /^\/(workspace|inputs)\//.test(ctx.flags.path)

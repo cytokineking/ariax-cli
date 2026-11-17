@@ -25,18 +25,19 @@ export function deletionOutcome(value, project, id, target) {
   if (value?.kind !== 'selected' || value.project_id !== project || !isUUID(d?.id) || (id && d.id !== id)
       || !Number.isSafeInteger(value.control?.revision) || value.control.revision < 0
       || !['pending', 'verified_empty', 'attention'].includes(d.state)
-      || !(d.already_absent === null || typeof d.already_absent === 'boolean')
       || (d.state === 'verified_empty' && !Number.isFinite(Date.parse(d.verified_empty_at)))
       || (target && (d.path !== target.path || d.recursive !== target.recursive))) throw new Error('Storage deletion returned an invalid observation; retain the original request.');
   deletionTarget(d.path, d.recursive);
-  return value;
+  const deletion = { ...d };
+  delete deletion.already_absent; // Ignore a retired field from an older server.
+  return { ...value, deletion };
 }
 export function reportDeletion(ctx, value, id, waitOutcome) {
   if (ctx.json) return printJson({ data: value, meta: { deletion_request_id: id, ...(waitOutcome ? { wait_outcome: waitOutcome } : {}) } });
   const d = value.kind === 'selected' ? value.deletion : value.storage.cleanup;
   printKv({ project_id: value.kind === 'selected' ? value.project_id : value.storage.project_id,
     workflow_status: value.kind === 'selected' ? value.status : value.storage.status, deletion_request_id: id,
-    scope: value.kind, ...(value.kind === 'selected' ? { path: d.path, recursive: d.recursive, already_absent: d.already_absent ?? 'unknown' } : {}),
+    scope: value.kind, ...(value.kind === 'selected' ? { path: d.path, recursive: d.recursive } : {}),
     cleanup: d.state, reason: d.reason ?? '-', object_count: d.object_count ?? 'unknown', multipart_count: d.multipart_count ?? 'unknown',
     last_complete_check_at: d.last_complete_check_at ?? 'unknown', verified_empty_at: d.verified_empty_at ?? 'not verified',
     verification_not_before: d.verification_not_before ?? 'unknown', next_reconcile_at: d.next_reconcile_at ?? 'unknown' });
