@@ -7,10 +7,16 @@ import { isUUID } from './uuid.js';
 import { storageStatus, storageWaitOptions } from './storage.js';
 import { printJson, printKv, printProgress } from './output.js';
 
+function isRelativeDeletionPath(path, maxCodePoints) {
+  if (typeof path !== 'string' || !path || path.length > maxCodePoints * 2 || /[\\%*?]/.test(path)) return false;
+  const points = [...path];
+  return points.length <= maxCodePoints && !points.some(char => char !== ' ' && /[\p{C}\p{Z}]/u.test(char))
+    && !path.split('/').some(part => !part || part === '.' || part === '..');
+}
+
 export function deletionTarget(path, recursive = false) {
-  if (typeof path !== 'string' || !path || [...path].length > 512 || typeof recursive !== 'boolean' || /[\\%:*?]/.test(path)
-      || [...path].some(char => char !== ' ' && /[\p{C}\p{Z}]/u.test(char))
-      || path.split('/').some(part => !part || part === '.' || part === '..' || part !== part.trim() || [...part].length > 255)) {
+  if (typeof recursive !== 'boolean' || !isRelativeDeletionPath(path, 512) || path.includes(':')
+      || path.split('/').some(part => part !== part.trim() || [...part].length > 255)) {
     throw usageError('storage delete: use an exact relative file/folder path. Root deletion requires ariax delete PROJECT.');
   }
   return { path, recursive };
@@ -27,12 +33,13 @@ export function deletionOutcome(value, project, id, target) {
     return value;
   }
   const d = value?.deletion;
+  // Existing receipts may retain a path accepted under historical key limits.
   if (value?.kind !== 'selected' || value.project_id !== project || !isUUID(d?.id) || (id && d.id !== id)
       || !Number.isSafeInteger(value.control?.revision) || value.control.revision < 0
       || !['pending', 'verified_empty', 'attention'].includes(d.state)
       || (d.state === 'verified_empty' && !Number.isFinite(Date.parse(d.verified_empty_at)))
+      || typeof d.recursive !== 'boolean' || !isRelativeDeletionPath(d.path, 4096)
       || (target && !sameDeletionTarget(d, target))) throw new Error('Storage deletion returned an invalid observation; retain the original request.');
-  deletionTarget(d.path, d.recursive);
   const deletion = { ...d };
   delete deletion.already_absent; // Ignore a retired field from an older server.
   return { ...value, deletion };
