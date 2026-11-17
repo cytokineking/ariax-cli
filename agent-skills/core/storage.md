@@ -1,4 +1,57 @@
-# Delete projects and observe cleanup
+# Inspect storage and delete projects
+
+## Usage, browsing and downloads
+
+```sh
+ariax storage usage --sort bytes_desc --limit 25 --json
+ariax storage usage PROJECT --json
+ariax storage usage PROJECT --refresh --json
+ariax storage ls PROJECT --path output --limit 50 --json
+ariax results PROJECT --source storage --path pdbs/input.cif --download ./inputs --json
+```
+
+Usage reads retained measurements; they never initiate a scan. Managed refresh
+explicitly requests deduplicated background work and returns pending/running.
+Forge reads its catalog and has no separate refresh engine. Keep the old complete
+observation visibly stale if refresh fails. Null bytes/counts mean unknown,
+including Forge projects without catalog counters.
+
+Overview filters are `--q`, `--protocol`, `--status`; `--sort` is `updated_at`,
+`name` or `bytes_desc`. Sorting covers the full authorized filtered result with
+stable project-ID ties and unknown bytes last. `--limit` is 1–50 (default 25).
+Use the returned `--cursor` unchanged. API keys remain owner-only, including
+keys belonging to administrators. No exact account/bucket total is supplied.
+
+Managed listing reads one directory page with `--limit` 1–100 (default 50).
+Empty visible pages can have a next cursor because hidden entries still bound
+traversal. Do not follow every page automatically. Folder size remains null
+without complete relevant measurement. Forge listing reuses native Files paths
+under `/workspace` or `/inputs` and its existing page size; omit `--limit`.
+Forge downloads retain `ariax forge download` and its existing verified transfer.
+
+Managed namespace bytes include hidden/other objects without exposing names.
+Pending-deletion bytes overlap that total, never add them. Forge catalog bytes,
+physical backlog and retained recovery archives are separate observations;
+do not subtract asynchronous counters to infer overhead. Bound input bytes
+and retained archives have separate timestamps and are excluded from current
+namespace bytes. Shared assets and unbound staging are excluded.
+
+`largest_files` is the global top 20 safe files from a completed full scan,
+not a sorted listing page. Directory summaries cover up to 32 top-level safe
+roots, including hidden descendants; sizes can exceed visible children.
+`summaries_truncated` qualifies coverage/ranking. Deeper folders remain unknown.
+Live multi-page listings are timestamped observations, not atomic snapshots.
+
+`results --source storage` reuses the existing results downloader for one exact
+file, requiring both `--path FILE` and `--download DIR`. Canonical server approval
+precedes the existing HEAD/signing and transfer, including supported project
+inputs, results and approved archives. A listed `downloadable` hint grants no
+authority. Directories, private/operational metadata and staging prefixes stay
+unavailable. No recursive download, archive generation or automatic structure
+regeneration is added. Existing missing-file and transfer errors remain visible;
+checksums are verified only when an expected checksum is available.
+
+## Whole-project deletion and cleanup
 
 `ariax delete PROJECT` permanently deletes a whole project's current saved files.
 Confirm the exact project UUID and the user's deletion authorization first.

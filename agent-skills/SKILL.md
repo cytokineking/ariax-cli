@@ -54,6 +54,11 @@ the exit code before parsing output; see the [shell example](core/examples.md#sa
   `ariax delete PROJECT --yes` and [storage status](core/storage.md) for durable
   request recovery, read-only waiting, unknown counts and timestamped checks.
   Deletion prevents resume; a timeout does not cancel accepted cleanup.
+- Inspect cached usage and one directory page with `ariax storage usage` and
+  `ariax storage ls`; use explicit managed `--refresh` for background measurement.
+  Keep null/stale quantities and their measurement bases distinct. The
+  [storage guide](core/storage.md) covers safe metadata, bounded pagination,
+  supported input/result downloads and native Forge reuse.
 
 Read the selected engine's output guide and [metric interpretation](core/interpretation.md)
 when reviewing candidates. Use [campaign planning](core/campaigns.md) to size or

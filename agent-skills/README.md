@@ -32,8 +32,9 @@ Use [managed lifecycle](core/managed-projects.md) for preparation, pricing,
 recovery and results; [campaign planning](core/campaigns.md) for sizing and
 scaling; and [interpretation](core/interpretation.md) for result metrics.
 [Raw REST examples](core/raw-curl.md) are available when the CLI cannot be used.
-[Storage deletion and status](core/storage.md) covers authorized whole-project
-deletion, exact-request recovery and read-only cleanup waiting.
+[Storage usage, browsing and deletion](core/storage.md) covers cached measurements,
+bounded safe pages, supported downloads, authorized whole-project deletion,
+exact-request recovery and read-only cleanup waiting.
 Starter files in `examples/` must be validated against the live protocol schema
 before submission.
 

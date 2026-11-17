@@ -241,6 +241,16 @@ ariax submit -f ./prepared/job.json --input ./prepared/input.cif --name prepared
 
 ## Delete a project
 
+Inspect cached storage with `ariax storage usage --json`, or one project with
+`ariax storage usage PROJECT_ID --json`. Use `--refresh` on a live managed project
+to request background measurement; ordinary reads never scan. Browse one bounded
+directory page with `ariax storage ls PROJECT_ID --path output --json`; pass the
+returned `--cursor` explicitly for another page, including after an empty visible
+page. Unknown/stale observations and independently measured quantities remain
+explicit. See the [storage guide](agent-skills/core/storage.md) for filters,
+server-wide sorting, native Forge Files and supported input/result downloads
+through `ariax results PROJECT_ID --source storage --path FILE --download DIR`.
+
 Deletion permanently removes current saved project files and prevents managed
 resume. Paused and terminal managed projects can be deleted; abort active
 projects first. Native Forge controls and separately retained archives keep

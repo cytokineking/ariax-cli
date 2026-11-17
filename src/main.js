@@ -76,14 +76,14 @@ const COMMAND_OPTIONS = {
   restart: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   abort: [[], 1],
   delete: [['yes', 'request-id', 'wait', 'poll-interval', 'wait-timeout'], 1],
-  storage: [['wait', 'poll-interval', 'wait-timeout'], 2],
+  storage: [['wait', 'poll-interval', 'wait-timeout', 'refresh', 'path', 'limit', 'cursor', 'q', 'protocol', 'status', 'sort'], 2],
   feedback: [['category', 'message', 'job'], 1],
   operations: [[], 1],
   recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   'gpu-preferences': [['file'], 1],
   runs: [['job', 'limit', 'cursor', 'all'], 1],
   candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
-  results: [['path', 'download', 'overwrite', 'limit', 'details'], 1],
+  results: [['path', 'download', 'overwrite', 'limit', 'details', 'source'], 1],
   upgrade: [['check', 'yes', 'channel'], 0],
   login: [['with-token', 'insecure-storage'], 0],
   logout: [[], 0],
@@ -97,6 +97,13 @@ function validateCommandArguments({ command, positionals, flags }) {
   if (command === 'projects' && positionals[0] === 'export') {
     options = [['output'], 2];
     label = 'projects export';
+  }
+  if (command === 'storage') {
+    const action = positionals[0];
+    if (!['status', 'usage', 'ls'].includes(action)) throw usageError('storage: expected usage, ls or status.');
+    options = [action === 'status' ? ['wait', 'poll-interval', 'wait-timeout']
+      : action === 'usage' ? ['refresh', 'limit', 'cursor', 'q', 'protocol', 'status', 'sort'] : ['path', 'limit', 'cursor'], 2];
+    label = `storage ${action}`;
   }
   if (command === 'inputs') {
     const action = positionals[0];
@@ -217,11 +224,11 @@ const HELP_TOPICS = {
   'gpu-preferences': 'ariax gpu-preferences <project-id> -f preferences.json',
   abort: 'ariax abort <project-id>',
   delete: 'ariax delete <project-id> [--yes] [--request-id UUID] [--wait] [--wait-timeout SECONDS]',
-  storage: 'ariax storage status <project-id> [--wait] [--wait-timeout SECONDS]',
+  storage: 'ariax storage usage [project-id] [--refresh] [--limit N] [--cursor TOKEN] [--q TEXT] [--protocol ID] [--status STATUS] [--sort updated_at|name|bytes_desc]\n       ariax storage ls <project-id> [--path PATH] [--limit N] [--cursor TOKEN]\n       ariax storage status <project-id> [--wait] [--wait-timeout SECONDS]',
   feedback: 'ariax feedback <project-id-or-exact-name> --category technical-support|feature-request|other --message TEXT [--job JOB_ID]',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
-  results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]',
+  results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]\n       ariax results <project-id> --source storage --path FILE --download DIR [--overwrite]',
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',
   logout: 'ariax logout',
