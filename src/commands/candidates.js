@@ -10,6 +10,10 @@ import { compactCandidateResult, usesCompactCandidatePresentation } from '../cam
 
 function serverError(message) { const error = new Error(message); error.exitCode = EXIT.SERVER; return error; }
 
+function presentCandidateRecord({ provenance_scope, ...record }) {
+  return record;
+}
+
 export async function run(ctx) {
   if (ctx.positionals.length !== 1) throw usageError('candidates: expected one project UUID or exact unique name.');
   const allowed = new Set(['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details', 'structures-only']);
@@ -41,7 +45,7 @@ export async function run(ctx) {
       }, signal });
       signal.throwIfAborted();
       if (!Array.isArray(res.data)) throw serverError('Candidate endpoint returned an invalid page.');
-      meta = res.meta || {};
+      meta = presentCandidateRecord(res.meta || {});
       requestId = res.requestId;
       for (const candidate of res.data) {
         if (!candidate || typeof candidate.id !== 'string' || !candidate.id || seenIds.has(candidate.id)) throw serverError('Candidate page contains missing or repeated IDs; restart retrieval.');
@@ -49,7 +53,7 @@ export async function run(ctx) {
         if (ctx.flags.eligible && candidate.ranking_eligible !== true) {
           if (candidate.ranking_eligible === false) excludedFalse++; else excludedUnknown++;
           for (const reason of candidate.ranking_reasons || []) if (typeof reason === 'string') exclusionReasons.add(reason);
-        } else data.push(candidate);
+        } else data.push(presentCandidateRecord(candidate));
       }
       const next = meta.next_cursor;
       if (next !== undefined && next !== null && (typeof next !== 'string' || !next)) throw serverError('Candidate endpoint returned an invalid cursor.');

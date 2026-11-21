@@ -1,7 +1,7 @@
 /** Read optional recorded run settings without starting compute. */
 import { usageError } from '../args.js';
 import { EXIT } from '../exit-codes.js';
-import { printData, printJson, printProgress, printTable } from '../output.js';
+import { printKv, printJson, printProgress, printTable } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
 import { isUUID } from '../uuid.js';
 
@@ -23,7 +23,7 @@ export async function run(ctx) {
   if (flags.job) {
     const result = await ctx.client.get(`${base}/${encodeURIComponent(flags.job.trim())}`, { signal: ctx.signal });
     if (ctx.json) printJson({ data: presentRun(result.data), request_id: result.requestId });
-    else printData(presentRun(result.data));
+    else printKv(presentRun(result.data));
     return;
   }
   const data = [], seen = new Set(flags.cursor ? [flags.cursor] : []);
