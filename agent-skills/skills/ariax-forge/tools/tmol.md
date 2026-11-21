@@ -7,12 +7,12 @@ minimization are useful. Its energies are model-dependent scores, not measured
 binding affinities, Kd, or calibrated physical energies. A score alone does not
 establish folding, binding, or experimental activity. For predicted-complex
 confidence or other analysis, consider [interface scoring](ipsae.md),
-[structure tools](structure-tools.md), and independently qualified prediction.
+[structure tools](structure-tools.md), and independently verified prediction.
 
 The standalone `tmol` tool uses Tmol 0.2.0 from
 [source commit 33fd3e9eed8b497638d8a7bf32955dcde0c181fd](https://github.com/uw-ipd/tmol/tree/33fd3e9eed8b497638d8a7bf32955dcde0c181fd).
 It uses no model bundle. Score, interface and minimization have separate,
-bounded qualification records. A guide or an image alone does not establish
+supported workload limits. A guide or an image alone does not establish
 readiness. Check the live catalog for actual
 availability, status and measured resource scope; unknown minima are not zero.
 
@@ -30,7 +30,7 @@ identifies its installed path. Upstream also documents
 [FastRelax](https://github.com/uw-ipd/tmol/blob/33fd3e9eed8b497638d8a7bf32955dcde0c181fd/docs/user_guide/optimization.md),
 [ligands](https://github.com/uw-ipd/tmol/blob/33fd3e9eed8b497638d8a7bf32955dcde0c181fd/docs/user_guide/ligands.md),
 and [nucleic acids](https://github.com/uw-ipd/tmol/blob/33fd3e9eed8b497638d8a7bf32955dcde0c181fd/docs/workflows/nucleic_acids.md).
-Those modes are outside this adapter's qualified scope.
+Those modes are outside this adapter's supported scope.
 
 ## Input and preparation
 

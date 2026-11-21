@@ -40,7 +40,7 @@ namespace bytes. Shared assets and unbound staging are excluded.
 `largest_files` is the global top 20 safe files from a completed full scan,
 not a sorted listing page. Directory summaries cover up to 32 top-level safe
 roots, including hidden descendants; sizes can exceed visible children.
-`summaries_truncated` qualifies coverage/ranking. Deeper folders remain unknown.
+`summaries_truncated` limits coverage and ranking. Deeper folders remain unknown.
 Live multi-page listings are timestamped observations, not atomic snapshots.
 
 `results --source storage` reuses the existing results downloader for one exact

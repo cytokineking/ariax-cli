@@ -14,7 +14,7 @@ authorization, durable recovery, and downloads.
 
 The [Forge PXDesign guide](../ariax-forge/tools/pxdesign.md) covers native
 commands under a separate contract. Check the exact live tool, model and mode
-qualification before choosing that path.
+support before choosing that path.
 
 ## Choose PXDesign for the right campaign
 

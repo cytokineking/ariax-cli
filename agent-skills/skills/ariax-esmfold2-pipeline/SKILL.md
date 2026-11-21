@@ -16,7 +16,7 @@ Use the [shared workflow](../../SKILL.md) for account access, existing user
 authorization, durable recovery, and downloads.
 
 The [Forge ESMFold2-pipeline guide](../ariax-forge/tools/esmfold2-pipeline.md)
-covers native commands under a separate contract and qualification. The
+covers native commands and lists the workloads supported by Forge. The
 managed 150-step requirement does not qualify 150-step or multi-GPU execution
 in Forge; inspect the exact live mode before choosing it.
 

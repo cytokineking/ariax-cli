@@ -8,16 +8,11 @@
             "antibodies"
           ],
           "guide": "capabilities",
-          "qualification": [
+          "modes": [
             {
               "model": "example-checkpoint",
               "mode": "sequence-design",
-              "upstream_maturity": "experimental",
-              "native": "passed",
-              "installation": "held",
-              "restoration": "untested",
-              "scope": "Synthetic metadata example; no scientific execution.",
-              "workload": "One chain, two sequences; synthetic example only."
+              "maturity": "experimental"
             }
           ]
         }
@@ -29,7 +24,7 @@
             "molecular-prediction"
           ],
           "guide": "capabilities",
-          "qualification": []
+          "modes": []
         }
       }
     ]

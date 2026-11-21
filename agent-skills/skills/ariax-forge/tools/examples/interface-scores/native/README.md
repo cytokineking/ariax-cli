@@ -16,4 +16,4 @@ ariax forge run "$SESSION" --tool interface-scores --timeout-seconds 120 --json 
 Require the returned exporter command to succeed before submitting the scorer.
 Predictor execution belongs to the selected RF3 tool and explicit checkpoint;
 the CPU scorer imports files and never launches or resumes that prediction.
-Preserve actual supported predictor provenance and matched native files.
+Preserve actual supported predictor source information and matched native files.

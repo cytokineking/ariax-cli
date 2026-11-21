@@ -149,7 +149,7 @@ def consume(root, manifest, out):
                 # The retained run record supplies command, source/model, seed/settings and hardware.
                 provenance = read_json(resolve(root, observation['run_record']))
                 if not all(k in provenance for k in ('command_id', 'sources', 'model', 'settings', 'hardware')):
-                    raise ValueError('Incomplete native command provenance')
+                    raise ValueError('Incomplete native command record')
                 model = provenance['model'].lower()
                 native_family = next((group for prefix, group in [('boltzgen','boltz'), ('boltz2','boltz'), ('rf3','rf3'), ('protenix','protenix'), ('abodybuilder2','immunebuilder'), ('igdesign','igdesign-igmpnn'), ('igmpnn','igdesign-igmpnn'), ('complexa','proteina'), ('genie3','genie3')] if model.startswith(prefix)), None)
                 if native_family != family:

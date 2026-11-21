@@ -185,7 +185,7 @@ ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --timeout-secon
 ```
 
 This equivalent command relies on the prepared image's `/scratch` cache
-configuration; prefer the example runner to retain full logs and provenance.
+configuration; prefer the example runner to retain full logs and source information.
 The platform `--gpus 0` reserves a GPU; native `cuda:0` addresses that container's
 visible device. Multi-GPU throughput and concurrent workloads remain unvalidated.
 Do not rerun after a lost response or a watch timeout: inspect the same command
@@ -233,5 +233,5 @@ prediction needs a fresh directory. Reconcile an uncertain command's original ID
 before retrying.
 
 Code, weights, chemical data and service terms are separate. Read the
-[public provenance/terms notice](examples/mol1/NOTICE.md); repository Apache-2.0
+[component terms](examples/mol1/NOTICE.md); repository Apache-2.0
 licensing does not establish rights to separately hosted weights.

@@ -12,4 +12,4 @@ if a.controls:
     assert any('missing_units' in r['flags'] and r['unit'] is None for r in controlled)
     assert sum('measurements_differ' in r['flags'] for r in controlled)==2
     assert all(r['provenance']['source']=='synthetic importer controls' for r in controlled)
-print(json.dumps({'retained_imports':len(x['imports']),'observations':len(review['observations']),'identity_and_provenance':True}))
+print(json.dumps({'retained_imports':len(x['imports']),'observations':len(review['observations']),'identity_and_source':True}))

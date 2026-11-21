@@ -1487,17 +1487,16 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.match(catalog.stdout, /models:.*boltz2/);
     const routed = await invoke(['forge', 'catalog', '--task', 'antibodies']);
     assert.deepEqual(routed.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
-    const qualification = routed.payload.data.tools[0].capabilities.qualification[0];
-    assert.equal(qualification.native, 'passed');
-    assert.equal(qualification.installation, 'held');
-    assert.equal(qualification.restoration, 'untested');
+    assert.equal(Object.hasOwn(routed.payload.data.tools[0].capabilities, 'qualification'), false);
+    assert.equal(Object.hasOwn(routed.payload.data.tools[0], 'resource_evidence'), false);
+    assert.deepEqual(routed.payload.data.tools[0].capabilities.modes[0], { model: 'default', mode: 'native', maturity: 'experimental' });
     const full = await invoke(['forge', 'catalog']);
     assert.equal(full.payload.data.tools.length, 4);
     const selected = await invoke(['forge', 'catalog', '--tool', 'bindcraft2']);
     assert.deepEqual(selected.payload.data.tools, full.payload.data.tools.filter(tool => tool.tool === 'bindcraft2'));
-    assert.equal(selected.payload.data.tools[0].capabilities.qualification[1].scope, 'Not qualified');
+    assert.deepEqual(selected.payload.data.tools[0].capabilities.modes[1], { model: 'default', mode: 'other', maturity: 'unknown' });
     const selectedHuman = await invoke(['forge', 'catalog', '--tool', 'bindcraft2'], 0, true);
-    assert.match(selectedHuman.stdout, /Not qualified/);
+    assert.doesNotMatch(selectedHuman.stdout, /qualification|resource_evidence|Not qualified/i);
     assert.match(selectedHuman.stdout, /min_vram_gib_per_gpu/);
     const compact = await invoke(['forge', 'catalog', '--task', 'antibodies', '--tool', 'bindcraft2', '--compact']);
     assert.deepEqual(compact.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
@@ -1505,10 +1504,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.deepEqual(compactTool.resources, selected.payload.data.tools[0].resources);
     assert.deepEqual(compactTool.models[0].resources, selected.payload.data.tools[0].models[0].resources);
     assert.equal(compactTool.capabilities.guide, 'bindcraft2');
-    assert.deepEqual(compactTool.capabilities.qualification, {
-      rows: 2, native: ['passed', 'unknown'], installation: ['held', 'passed'], restoration: ['untested', 'held'],
-    });
-    assert.equal(Object.hasOwn(compactTool.capabilities.qualification, 'scope'), false);
+    assert.equal(Object.hasOwn(compactTool.capabilities, 'qualification'), false);
     const noMatch = await invoke(['forge', 'catalog', '--task', 'molecular-prediction', '--tool', 'bindcraft2']);
     assert.deepEqual(noMatch.payload.data.tools, []);
     await invoke(['forge', 'catalog', '--tool', 'not-in-catalog'], 1);

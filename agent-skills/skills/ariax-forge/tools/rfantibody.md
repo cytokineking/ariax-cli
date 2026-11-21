@@ -83,7 +83,7 @@ Run `to_rf2_json.py --input HLT.pdb --out /workspace/input.json` inside this ima
 to construct the pinned native sequence/target JSON and its source map. JSON
 contains sequence-only H/L and empty native CDR masks. Its native RF2 export
 contains pLDDT, PAE and interchain PAE and omits the ten geometry/CDR RMSDs.
-Record those omissions and the diagnostic's provenance alongside the
+Record those omissions and the diagnostic's source information alongside the
 structure-based screening report.
 
 Every stage saves `stage.json` with exact native argv, checkpoint, settings and

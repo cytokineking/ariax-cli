@@ -6,7 +6,7 @@
 | `spurs scan` | single-ddg.csv; single-ddg.npy | L × 20 native ddG matrix in ACDEFGHIKLMNPQRSTVWY order, including WT zero |
 | `spurs score --model higher-order` | result.json | Distinct `spurs_multi` checkpoint; joint prediction with learned correction |
 | `spurs functional-sites --method paper` | functional-sites.csv; functional-residuals.npy; esm1v-delta-log-likelihood.npy | Dimensionless mean residual plus normalized display score, ranked within this protein |
-| `spurs functional-sites --method native-notebook` | Same explicit output layout | Creator notebook comparison; native qualification on hold, biological interpretation unvalidated |
+| `spurs functional-sites --method native-notebook` | Same explicit output layout | Creator notebook comparison; support unconfirmed, biological interpretation unvalidated |
 
 The named `spurs` asset mounts at `/models/spurs`. It contains the separate single/higher-order configurations and checkpoints, native ESM2 650M base checkpoint and ESM1v 650M model 1. `/inputs` and `/models` are read-only. Outputs use a new directory beneath `/workspace`; caches use `/scratch`.
 

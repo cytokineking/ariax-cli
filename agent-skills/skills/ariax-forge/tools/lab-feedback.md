@@ -75,7 +75,7 @@ ariax forge run "$SESSION" --tool lab-feedback --timeout-seconds 300 --json -- l
 
 The public review example chooses two exported single-chain BLI records sharing a
 target slug. It supplies a bounded software example with pending target/construct
-review. Its affinity concentration series is explicitly nM. Candidate provenance
+review. Its affinity concentration series is explicitly nM. Candidate source information
 retains the complete original public rows. No candidate is transmitted to a lab.
 The generated `controls.csv` contains artificial importer controls; use its own
 source/version labels when exercising errors, and retain that distinction.

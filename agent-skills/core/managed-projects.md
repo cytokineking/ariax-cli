@@ -14,7 +14,7 @@ ariax schema PROTOCOL --raw -o schema.json
 ```
 
 Start with compact output and follow its `action`. Add `--details` when you
-need omitted diagnostic or provenance fields.
+need omitted additional diagnostic fields.
 
 ## Prepare and validate
 
@@ -103,7 +103,7 @@ Rates are USD per complete allocation-hour. Turbo hourly pricing is
 `single-GPU hourly price × GPU count`; use the API's explicit allocation
 rates; do not multiply a complete allocation rate by GPU count again. Use
 [observed campaign evidence](campaigns.md#forecast-from-observed-work) for
-qualified runtime and cost forecasts.
+runtime and cost estimates with explicit assumptions.
 The response includes the pricing source; identify fallback rates when returned.
 
 `data.rates[].hourly_rate` is the current CLI price for the complete GPU allocation.
@@ -182,15 +182,14 @@ ariax runs PROJECT_ID --job JOB_ID --json
 ariax candidates PROJECT_ID --view final --json
 ariax results PROJECT_ID --json
 ariax results PROJECT_ID --download ./results
-ariax results PROJECT_ID --path output/provenance.json --download ./results --details --json
 ariax results PROJECT_ID --path output/Trajectory --download ./results
 ```
 
 Results default to protocol-specific output roots. `--path` selects an exact
 artifact or all files beneath a directory, without glob or partial-prefix
-matching. The provenance example saves `./results/output/provenance.json`.
+matching.
 Listings show file paths, roles and sizes; downloads report destinations and
-file outcomes. Add `--details` for diagnostic and provenance fields. Downloads
+file outcomes. Add `--details` for additional diagnostic fields. Downloads
 check available checksums automatically.
 
 Rerun the same download to resume completed files. JSON failures identify every

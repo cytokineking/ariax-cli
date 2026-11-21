@@ -21,11 +21,26 @@ export function redactForgeText(value) {
   });
 }
 
+// Project server tool metadata onto the fields used by the installed CLI.
+export function presentForgeTool(tool) {
+  const { resource_evidence, patches, ...result } = tool;
+  if (!tool.capabilities || !Object.hasOwn(tool.capabilities, 'qualification')) return result;
+  const { qualification, ...capabilities } = tool.capabilities;
+  const rows = Array.isArray(qualification) ? qualification : [];
+  const modes = rows.filter(row => row && typeof row === 'object').map(row => ({
+    model: row.model,
+    mode: row.mode,
+    maturity: row.upstream_maturity,
+  }));
+  return { ...result, capabilities: { ...capabilities, modes } };
+}
+
 export function redactForgeOutput(value) {
   if (typeof value === 'string') return redactForgeText(value);
   if (Array.isArray(value)) return value.map(redactForgeOutput);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value)
+  const record = typeof value.tool === 'string' && value.capabilities ? presentForgeTool(value) : value;
+  return Object.fromEntries(Object.entries(record)
     .filter(([key]) => !/^(?:access_token|api_token|bearer_token|token|api_key|authorization|download_url|upload_url|signed_url|credential|credentials|secret|client_secret|private_key|password)$/i.test(key))
     .map(([key, item]) => [key, redactForgeOutput(item)]));
 }

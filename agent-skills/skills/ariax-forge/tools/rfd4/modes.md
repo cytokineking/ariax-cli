@@ -19,7 +19,7 @@ Use whole-complex geometry and atom identity checks appropriate to the task.
 AF3 and coupled oracle routes are excluded. The upstream OpenFold3-in-AF3
 runtime is not the standalone Forge OpenFold3 tool. RNA, glycans, modified
 residues, BioIR, training, arbitrary adapters, custom metrics and unreviewed
-sampling transforms are not independently qualified. Optional Foldseek
+sampling transforms are not independently verified. Optional Foldseek
 aggregation/novelty, nested PyRosetta and CDR reference assets have their own
 external dependencies and are not enabled by this guide. An upstream model
 vocabulary or a standalone Forge predictor does not qualify these paths.
@@ -29,7 +29,7 @@ vocabulary or a standalone Forge predictor does not qualify these paths.
 Hydra accepts the following keys after the native executable. Quote list
 arguments so the shell passes one argument, for example
 `'metrics_tags=[design,hotspot_conditioning]'`. Settings are controls, not
-claims that every value or combination has passed Forge qualification.
+claims that every value or combination is supported by Forge.
 
 | Setting | Practical effect |
 | --- | --- |
@@ -81,7 +81,7 @@ near-zero `partial_t` runs more of the trajectory. See the pinned
 [partial diffusion reference](https://github.com/RosettaCommons/RFD4-Proteina/blob/aaccdd2ad0720c180468df5f9cf037a713d403e5/docs/concepts/partial-diffusion.md)
 and [sampling controls](https://github.com/RosettaCommons/RFD4-Proteina/blob/aaccdd2ad0720c180468df5f9cf037a713d403e5/docs/how-to/run-the-model.md)
 for native temperature, ODE and guidance settings; these alternatives are not
-independently qualified here.
+independently verified here.
 
 Native default metrics can register excluded AF3 oracles. The image's
 `metrics=no_oracle` group provides inline metrics without oracles, filters or
@@ -89,6 +89,6 @@ pass criteria. Tags gate which metrics run; a missing score is neither zero nor
 a pass. When adding a filter, retain all rejections with
 `delete_failing_pre_oracle=false`. An independent predictor is a separate
 explicit command on the exact designed sequence, with its own mapping and
-qualification, not a coupled RFd4 search result.
+evaluation; a coupled RFd4 search result is unavailable.
 
 This Forge adaptation inherits the attribution in the [entrypoint](../rfd4.md).

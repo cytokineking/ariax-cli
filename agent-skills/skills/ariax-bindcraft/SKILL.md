@@ -18,7 +18,7 @@ authorization, durable recovery, and downloads.
 
 The [Forge FreeBindCraft guide](../ariax-forge/tools/freebindcraft.md) covers
 native commands under a separate contract. Check its exact live tool, model and
-mode qualification before choosing it.
+mode support before choosing it.
 
 ## Decide whether BindCraft fits
 

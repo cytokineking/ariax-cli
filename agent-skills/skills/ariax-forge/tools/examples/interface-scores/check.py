@@ -1,4 +1,4 @@
-"""Inspect scorer output. Real predictor qualification also retains the raw handoff."""
+"""Inspect scorer output. Real predictor checks also use the raw handoff."""
 from __future__ import annotations
 
 import argparse

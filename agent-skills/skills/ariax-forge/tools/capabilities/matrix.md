@@ -3,7 +3,7 @@
 Use this index to compare tools and open the relevant guide. Find available
 choices with `ariax forge catalog --task TASK --compact --json`, then inspect
 the selected tool/model/mode as described in [capability discovery](../capabilities.md).
-The live catalog supplies current workload limits, resources and terms.
+The live catalog supplies current modes, resources and terms.
 
 ## Design
 

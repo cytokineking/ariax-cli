@@ -60,5 +60,5 @@ ariax forge run SESSION --tool spurs --gpus 0 --timeout-seconds 900 -- python /i
 The checker consumes the example's saved outputs and checks its specific
 controls. It does not establish biological accuracy or validate arbitrary user
 inputs. The creator notebook method is a comparison path with native
-qualification on hold and unvalidated biological interpretation; inspect its
+support unconfirmed and unvalidated biological interpretation; inspect its
 current catalog status and the [mode reference](spurs/modes.md) before use.

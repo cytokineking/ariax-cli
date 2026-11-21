@@ -20,10 +20,9 @@ Other task filters are `antibodies`, `molecular-prediction`,
 `sequence-optimization` and `validation-search`. The [tool index](capabilities/matrix.md)
 compares purposes and links to usage guides.
 
-Check the selected model/mode's `qualification` rows for workload limits and
-`resources` for hardware requirements. Held, untested or unknown modes are not
-available choices; missing resource minima are unknown. Read the selected
-guide for inputs and commands, and wait for its tool and inputs to be ready.
+Use `capabilities.modes` for model and mode IDs and `resources` for hardware
+requirements. Read the linked tool guide for input and workload limits. Wait for
+the tool and inputs to be ready before running a command.
 
 Follow the component notices: source, weights and databases can have different
 terms. Use the [file synchronization flow](../outputs.md) to save inputs and useful outputs.

@@ -132,7 +132,7 @@ def check(spec_path: Path, generated: Path, mode: str, metrics: Path | None,
               },
               "aligned_ca_rmsd_angstrom": rmsd, "max_aligned_ca_displacement_angstrom": float(distances.max()),
               "scope": "mapped resolved seed CA atoms and sequence; no sidechain or experimental claim",
-              "qualification": "not established"}
+              "verified": False}
     if mode == "inverse":
         if max_backbone_rmsd is None or not math.isfinite(max_backbone_rmsd) or max_backbone_rmsd <= 0:
             raise ValueError("Inverse-folding comparison requires an explicit positive backbone RMSD tolerance")
@@ -216,7 +216,7 @@ def main() -> None:
                                                 args.max_backbone_displacement_angstrom, args.min_sequence_changes)):
             parser.error("--input-only cannot be combined with generated-output options")
         _, result = inspect_seed(args.input_spec)
-        print(json.dumps({"input": result, "qualification": "not established"}, indent=2))
+        print(json.dumps({"input": result, "verified": False}, indent=2))
         return
     if args.generated is None or args.mode is None:
         parser.error("--generated and --mode are required unless --input-only is used")

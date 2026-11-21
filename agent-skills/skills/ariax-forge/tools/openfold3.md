@@ -71,13 +71,13 @@ Each weight asset mounts read-only at `/models/openfold3/PAIR`; the shared
 `openfold3-ccd` asset mounts at `/models/openfold3/ccd`. Cache files use
 `/scratch/openfold3`. Use the measured profile with one L40, eight allowed CPUs,
 48 GiB container RAM and 250 GiB initially free payload space. A 32 GiB GPU
-profile remains unqualified; observed peaks do not establish a smaller hardware
+profile has not been verified; observed peaks do not establish a smaller hardware
 floor. Protein length is bounded at 512 total residues (monomer or 256+256),
 query batch at eight serial queries, seeds at two and samples at eight.
 The 256/512 profiles use repeated ubiquitin and establish execution/mapping
 bounds only. RNA is bounded at 32 residues, DNA at 32+32, and tested small ligands at AMP
 plus seven-heavy-atom toluene. Larger combinations and arbitrary modified residues
-are unqualified. Run workloads on an authorized remote GPU VM.
+have not been verified. Run workloads on an authorized remote GPU VM.
 
 Supplied MSAs require native filenames and matching runner configuration. Use
 [runner-custom-msa.yaml](openfold3/runner-custom-msa.yaml) for files named
@@ -157,7 +157,7 @@ Read [interface scoring](interface-scores.md) for the result.
 Native pair-ipTM retains `symmetric_native_pair`. PAE stays angstrom in native
 order and atom pLDDT stays 0–100. Single-protein cases return `no_protein_interface`;
 missing scores remain unavailable. Workloads beyond the bounded profiles above
-remain unqualified. AF3 is outside Ariax support.
+have not been verified. AF3 is outside Ariax support.
 
 For geometry checks, use [geometry_input.py](openfold3/geometry_input.py) to create a
 fresh CIF copy with modeled occupancy 1.0. It verifies existing atom columns remain

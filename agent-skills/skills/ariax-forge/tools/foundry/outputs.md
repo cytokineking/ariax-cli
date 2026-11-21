@@ -37,13 +37,13 @@ establish useful geometry, prediction accuracy or binding.
 Generation JSON retains `native_conditioning` from the model input, final atom
 identity and the native token map. Nonfinite native metrics are reported as
 unavailable nulls with named fields. If a map was reconstructed from CIF order
-and native ligand atomization, retain that provenance rather than treating it as
+and native ligand atomization, retain that source information rather than treating it as
 a native export. Secondary-structure analysis uses global mixed-array token IDs
 and evaluates only eligible matrix positions, with HBPLUS for pair geometry.
 
 Fixed atoms are compared through native correspondence and a proper rigid fit.
 The writer restores intra-residue bonds for input-defined fixed ligands from the
-native conditioning BondList. `bond_provenance` records the source, restored
+native conditioning BondList. The bond metadata records the source, restored
 count, unmatched external input bonds and unchanged coordinates. This is retained
 conditioning chemistry. Input graphs, boolean model-token adjacency and CCD
 reference graphs do not establish generated bond order or aromaticity.

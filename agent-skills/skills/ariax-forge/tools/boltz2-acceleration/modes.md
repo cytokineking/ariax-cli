@@ -14,7 +14,7 @@ Use `boltz2` for routine prediction. `boltz2-acceleration` offers only the expli
 
 Shortcut comparisons covered a synthetic protein pair and protein/L-tyrosine affinity with SMILES or CCD TYR. They do not establish general output equality, scientific accuracy, biological function or library-ranking performance. CCD artifact byte-exactness remains unresolved: chemical-component row ordering differed even where the tested atom identities, coordinates, JSON and arrays agreed. Do not promise byte-identical CCD artifacts.
 
-MSE has been emitted as MET and remains chemically unqualified. Verify intended modifications, ligand stereochemistry, charge and atom identity in the actual outputs. The shortcut leaves guidance unchanged and makes no new guidance-accuracy claim. Caller-selected MSA services remain unverified; public or custom service use requires authorized sequence disclosure and compliance with that service's policy.
+MSE has been emitted as MET and remains chemically unverified. Verify intended modifications, ligand stereochemistry, charge and atom identity in the actual outputs. The shortcut leaves guidance unchanged and makes no new guidance-accuracy claim. Caller-selected MSA services remain unverified; public or custom service use requires authorized sequence disclosure and compliance with that service's policy.
 
 Use one GPU and set `CUDA_VISIBLE_DEVICES=0` before either baseline or residual execution in the tested L40 setup. Forge's `--gpus` selects the host GPU; CUDA uses logical device 0. General RAM, VRAM and disk minima, workload maxima and performance on other hardware remain unknown.
 

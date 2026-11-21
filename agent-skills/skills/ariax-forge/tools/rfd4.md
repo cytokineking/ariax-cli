@@ -1,7 +1,7 @@
 # RFdiffusion4 / RFD4-Proteina on Forge
 
 RFd4 has bounded native scientific evidence and explicit held modes. Check the
-live catalog for availability, precise qualification and resource requirements
+live catalog for availability and resource requirements
 before choosing a tool or running the illustrative commands below. A packaged
 guide or example alone does not establish readiness.
 
@@ -9,14 +9,14 @@ RFd4 jointly designs a protein sequence and all-atom structure, including
 unconditional generation and molecular conditioning for a target, motif, ligand,
 DNA or an existing structure. The native tool key and guide alias are
 `rfd4` (`rfdiffusion4` also locates this guide); it is not a managed project
-protocol. Compare a requested experiment with the live qualified scope of
+protocol. Compare a requested experiment with the live supported scope of
 [Foundry RFD3/RFD3NA](foundry.md), [Proteina-Complexa](proteina-complexa.md),
 [BoltzGen](boltzgen.md) and [BindCraft2](bindcraft2.md). These methods have
 different inputs and scoring, and their scores do not establish a universal best
 choice. Preserve an explicit user choice.
 
 The separate [RFd4 antibody checkpoint](rfd4-antibody.md) uses its own tool
-and model for VHH design. Check its own live qualification.
+and model for VHH design. Read the tool guide for workload limits.
 
 RFd4's sequence is part of its design. Preserve that exact sequence when
 validating the generated structure. An MPNN redesign changes the candidate and
@@ -38,7 +38,7 @@ scope. A missing resource minimum is unknown, not zero. Read [inputs](rfd4/input
 [example inventory](examples/rfd4/README.md). The [Forge platform guide](../SKILL.md)
 explains session creation, authorization, command recovery, cancellation and close.
 
-When a qualified `rfd4` tool is available to the account, select it in an
+When `rfd4` is available to the account, select it in an
 appropriately authorized session and wait for readiness:
 
 ```sh
@@ -52,13 +52,13 @@ or mix components across releases. The reviewed code is RFD4-Proteina 0.0.3,
 commit `aaccdd2ad0720c180468df5f9cf037a713d403e5`; the selected public model
 snapshot is `nvidia/RFD4-Proteina` revision
 `48377e45eb25a4fce8d2aff56c1a659b726d2106`. The release manifest's original
-bundle lineage is a separate provenance field and must be retained.
+bundle lineage is a separate source field and must be retained.
 
 ## Stage inputs
 
 Set `EXAMPLES` to the `data.examples.rfd4` path returned by
 `ariax skills forge --tool rfd4 --json`. The small [baseline inputs](examples/rfd4/README.md)
-are bounded cases; check the live catalog's scientific scope. Stage the monomer
+are bounded cases; check the tool guide for input limits. Stage the monomer
 specification and its annotated CIF; inspect both returned input IDs:
 
 ```sh
@@ -85,7 +85,7 @@ before generation; a structure by itself does not express the experiment.
 
 ## Generate one design
 
-After the tool, example and profile have been qualified and the input is ready,
+Once you have selected a listed mode and prepared the input,
 use a fresh run directory. Native RFd4 takes Hydra `key=value` arguments after
 Forge's `--` separator:
 
@@ -107,7 +107,7 @@ its hotspot and target conditions; the fixture is not a general target template.
 
 The native quickstart is an eager, no-metrics smoke profile: it disables compile
 warm-up and does not produce refolding scores. It does not by itself reduce the
-native sampling schedule. For the qualified bounded compiled and non-oracle
+native sampling schedule. For the documented bounded compiled and non-oracle
 cases, consult the live catalog and [recipes](rfd4/recipes.md); other schedules
 and larger workloads need their own evidence. A longer input or larger batch has
 an unmeasured resource cost. Check the remote command's exit state and logs. A local watch timeout does
@@ -122,7 +122,7 @@ silently affect its results.
 
 Check the full annotated CIFs, designed sequence, chain/residue mapping,
 conditions and chemistry; preserve rejections and distinguish absent metrics
-from failed metrics or acceptance. Use an independently qualified predictor as
+from failed metrics or acceptance. Use an independently verified predictor as
 a separate downstream command when appropriate; its outputs are not coupled
 RFd4 search results or experimental evidence of binding.
 

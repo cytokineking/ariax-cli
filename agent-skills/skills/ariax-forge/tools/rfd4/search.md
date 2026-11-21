@@ -43,7 +43,7 @@ The preset uses two branches and two beams, with checkpoints at steps 40 and
 These are counts for the indicated interface, not binding affinities. Compare
 candidates within the same input and checkpoint and retain the losing rollouts.
 
-After the writer stops, capture provenance and inspect selection against native
+After the writer stops, save the run settings and inspect selection against native
 candidate metrics, saved states and outputs:
 
 ```sh
@@ -71,21 +71,7 @@ Only continue after the source writer stopped and the selected state, trace,
 input, model and settings were saved and verified. Match the trace's step-40
 selected rank to its actual ordinary state file; select that state intentionally,
 not merely the largest-scoring row in a different pool. Compare the restored
-input bytes and model metadata to their captured originals. For this exact run:
-
-```sh
-ariax forge run "$SESSION" --tool rfd4 --timeout-seconds 120 -- python -c '
-from pathlib import Path
-run = Path("/workspace/rfd4/search-001/ariax_provenance")
-pairs = [(Path("/inputs/rfd4/search/SAM_hbonds.cif.zst"), run / "inputs/SAM_hbonds.cif.zst")]
-pairs += [(Path("/models/rfd4-proteina") / n, run / "model" / n)
-          for n in ("config.json", "release-checkpoints.json", "provenance.json")]
-for current, saved in pairs:
-    if not current.is_file() or not saved.is_file() or current.read_bytes() != saved.read_bytes():
-        raise ValueError(f"Input/model differs or is missing: {current}")
-    print("matches", current)
-'
-```
+input bytes and model metadata to their captured originals.
 
 Review the saved `hydra/.hydra/config.yaml`, `overrides.yaml`, native logs and
 input ordering. The state contains sampling tensors and a step, not authenticated

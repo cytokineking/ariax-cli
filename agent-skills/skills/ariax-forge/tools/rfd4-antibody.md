@@ -18,7 +18,7 @@ ariax skills forge --tool rfd4-antibody --json
 ariax skills forge --reference rfd4-antibody --read --json
 ```
 
-Use the row's qualification and workload information; a guide or fixture alone
+Use the row's workload and support information; a guide or fixture alone
 does not establish availability. The [campaign guidance](../references/campaign-recipes.md#antibody-or-nanobody-design-prediction-and-export)
 describes alternatives and downstream handoffs.
 
@@ -96,7 +96,7 @@ The fixture checker verifies framework identity, CDR lengths and retained
 conditions, but does not establish that the authored hotspot was contacted.
 Inspect the hotspot, mapped framework cysteines and their geometry in the
 output. Retain the full structure, sequence, mappings, Hydra settings, model
-provenance, metrics and logs. The [RFd4 outputs guide](rfd4/outputs.md)
+source information, metrics and logs. The [RFd4 outputs guide](rfd4/outputs.md)
 explains metric and recovery semantics. Sync the workspace, inspect the saved
 files, and finish the session as described in the lifecycle guide.
 

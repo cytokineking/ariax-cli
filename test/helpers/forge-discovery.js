@@ -108,6 +108,5 @@ export async function exerciseAcceptedForgeDiscovery(discovery) {
   const observed = JSON.parse(execFileSync(process.execPath,
     [join(example, 'inspect.mjs'), join(example, 'catalog.json'), 'antibodies'], { encoding: 'utf8' }));
   assert.equal(observed.tools.length, 1);
-  assert.deepEqual(observed.tools[0].capabilities.qualification.map(row =>
-    [row.native, row.installation, row.restoration]), [['passed', 'held', 'untested']]);
+  assert.deepEqual(observed.tools[0].capabilities.modes, [{ model: 'example-checkpoint', mode: 'sequence-design', maturity: 'experimental' }]);
 }

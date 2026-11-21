@@ -1,4 +1,4 @@
-# Mol-1 provenance and component terms
+# Mol-1 sources and component terms
 
 Reviewed source: Molence Bio's Mol-1 commit
 [`6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0`](https://github.com/molence/Mol-1/tree/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0).
@@ -30,7 +30,7 @@ Source contracts used for this guide:
 
 - [Direct inference entrypoint](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/mol/runner/inference.py), [high-level CLI](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/mol/runner/batch_inference.py).
 - [Inference defaults](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/mol/config/inference.py), [base defaults](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/mol/config/base.py), [model architecture](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/mol/config/model_type.py).
-- [Input schema](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/infer_json_format.md), [reference-data provenance](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/data_sources.md), [memory controls](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/inference_memory.md).
+- [Input schema](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/infer_json_format.md), [reference data sources](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/data_sources.md), [memory controls](https://github.com/molence/Mol-1/blob/6ad1a133f919dc79b4f829bdc24fad28b9c4d3f0/docs/inference_memory.md).
 
 Upstream performance statements do not establish Forge resource minima or
-qualification. The current customer guide makes no benchmark-superiority claim.
+support. The current customer guide makes no benchmark-superiority claim.

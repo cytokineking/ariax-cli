@@ -120,7 +120,6 @@ const FORGE_REFERENCES = Object.freeze({
   'boltzgen-fixtures': join(FORGE_ROOT, 'tools', 'boltzgen', 'README.md'),
   'proteina-complexa': join(FORGE_ROOT, 'tools', 'proteina-complexa.md'),
   'proteina-complexa-fixtures': join(FORGE_ROOT, 'tools', 'examples', 'proteina-complexa', 'README.md'),
-  // Native guides retain each package's declared qualification scope.
   pxdesign: join(FORGE_ROOT, 'tools', 'pxdesign.md'),
   'pxdesign-native': join(FORGE_ROOT, 'tools', 'pxdesign.md'),
   'esmfold2-pipeline-native': join(FORGE_ROOT, 'tools', 'esmfold2-pipeline.md'),

@@ -13,7 +13,7 @@ import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
-import { readSync, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
+import { readSync, presentForgeTool, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
 
 import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js';
 
@@ -565,11 +565,7 @@ export function report(ctx, res, kind) {
   else printKv(data);
 }
 
-// Summary is for routing only. Keep all observed qualification states visible,
-// including unknown/missing values. Inspect the selected model/mode before use.
 function compactCatalogTool(tool) {
-  const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
-  const states = field => [...new Set(rows.length ? rows.map(row => row?.[field] ?? 'unknown') : ['unknown'])];
   return {
     tool: tool.tool,
     name: tool.name,
@@ -579,23 +575,20 @@ function compactCatalogTool(tool) {
     capabilities: {
       tasks: tool.capabilities?.tasks ?? null,
       guide: tool.capabilities?.guide ?? null,
-      qualification: { rows: rows.length, native: states('native'), installation: states('installation'), restoration: states('restoration') },
     },
   };
 }
 
-// Keep selected rows intact: scope/workload can carry scientific limits that
-// cannot safely be inferred from a passed state or shortened as generic prose.
 function selectedCatalogTool(tool, model, mode) {
   const models = Array.isArray(tool.models) ? tool.models : [];
-  const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
+  const rows = tool.capabilities?.modes ?? [];
   const modelRows = rows.filter(row => model === undefined || row?.model === model);
   const selectedModels = models.filter(item => model === undefined || item.id === model);
   if (model !== undefined && !selectedModels.length && !modelRows.length) {
     throw usageError(`forge catalog: model "${model}" is not in tool "${tool.tool}".`);
   }
-  const qualification = modelRows.filter(row => mode === undefined || row?.mode === mode);
-  if (mode !== undefined && !qualification.length && !selectedModels.some(item => item.modes?.includes(mode))) {
+  const modes = modelRows.filter(row => mode === undefined || row?.mode === mode);
+  if (mode !== undefined && !modes.length && !selectedModels.some(item => item.modes?.includes(mode))) {
     throw usageError(`forge catalog: mode "${mode}" is not in tool "${tool.tool}"${model === undefined ? '' : ` model "${model}"`}.`);
   }
   return {
@@ -604,7 +597,7 @@ function selectedCatalogTool(tool, model, mode) {
     gpu: tool.gpu,
     resources: tool.resources ?? null,
     models: selectedModels.filter(item => mode === undefined || item.modes?.includes(mode)
-      || qualification.some(row => row?.model === item.id)).map(item => ({
+      || modes.some(row => row?.model === item.id)).map(item => ({
       id: item.id,
       modes: mode === undefined ? item.modes ?? null : [mode],
       resources: item.resources ?? null,
@@ -614,7 +607,7 @@ function selectedCatalogTool(tool, model, mode) {
       guide: tool.capabilities?.guide ?? null,
       terms: tool.capabilities?.terms ?? null,
       citations: tool.capabilities?.citations ?? null,
-      qualification,
+      modes,
     },
   };
 }
@@ -875,7 +868,7 @@ async function runAction(ctx) {
       throw usageError('Use --task binder-design, antibodies, molecular-prediction, sequence-optimization, or validation-search.');
     }
     const response = await ctx.client.get(`${API}/catalog`);
-    let tools = response.data.tools;
+    let tools = response.data.tools.map(presentForgeTool);
     if (selectedTool !== undefined) {
       tools = tools.filter(tool => tool.tool === selectedTool);
       if (!tools.length) throw usageError(`forge catalog: tool "${selectedTool}" is not in the current catalog.`);
@@ -883,7 +876,7 @@ async function runAction(ctx) {
     if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
     if (flags.compact) tools = tools.map(compactCatalogTool);
     if (selected) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
-    if (selectedTool !== undefined || task !== undefined || flags.compact) response.data = { ...response.data, tools };
+    response.data = { ...response.data, tools };
     return report(ctx, response, 'catalog');
   }
   if (action === 'project' || action === 'activity') {

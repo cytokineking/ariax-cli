@@ -1,4 +1,4 @@
-/** Scientific provenance over the existing preparation parser, without file mutation. */
+/** Input metadata over the existing preparation parser, without file mutation. */
 import { parseStructureInput, protocolId, selectedChains } from './structure-input.js';
 import { structureRecordsError } from './structure-validation.js';
 import { sha256 } from './input-source.js';

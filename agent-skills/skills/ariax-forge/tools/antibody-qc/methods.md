@@ -54,7 +54,7 @@ Neural humanization or QC checkpoints are unselected. AbNatiV's learned nativene
 and AntiFold's structural sequence likelihood are research comparisons; their
 models are absent from this image. AbNatiV has noncommercial restrictions.
 
-Scientific provenance: [BioPhi paper](https://doi.org/10.1080/19420862.2021.2020203),
+References: [BioPhi paper](https://doi.org/10.1080/19420862.2021.2020203),
 [ANARCI paper](https://doi.org/10.1093/bioinformatics/btv552),
 [TNP creator preprint](https://doi.org/10.1101/2025.08.11.669635),
 [BioPhi source](https://github.com/Merck/BioPhi/tree/bc59cd17b690a634553ac50a60840b9a89bd21b0),

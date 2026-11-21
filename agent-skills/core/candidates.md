@@ -26,7 +26,7 @@ BindCraft2 defaults to compact scientific rows with ordered `binder_sequences`,
 `selected`, `native_outcome`, `ranking.eligible`, `ranking.reasons`, rejection
 details and per-target `target_scores`. Selection, native outcome and ranking
 eligibility are distinct. Add `--details` for the complete per-attempt record,
-additional metrics and provenance. Other engines retain their native fields.
+additional metrics and source information. Other engines retain their native fields.
 Use JSON for complete sequences and structure paths; human tables show a summary.
 
 `--eligible` keeps only explicit true eligibility and reports excluded false or
@@ -39,7 +39,7 @@ to find other artifacts. Missing/nonfinite metrics stay null;
 `producer_scaled_pae` is not in angstroms.
 
 Deleted or physically missing structures become unavailable while surviving
-metrics, sequences and scientific provenance remain. BindCraft2 and ESMFold2
+metrics, sequences and source information remain. BindCraft2 and ESMFold2
 links are checked without regenerating files. For BindCraft2 diagnostics,
 `--structures-only` filters rows without surviving structures in each bounded
 source-row window. Its `meta.total`

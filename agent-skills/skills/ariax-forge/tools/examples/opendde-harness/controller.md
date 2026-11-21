@@ -177,7 +177,7 @@ atomic multi-file snapshot, stop writers and verify the actual files needed.
 
 Use matching versions of the CLI, Forge services and Harness adapter. The new
 project-file continuation requires remote integration and scientific validation
-before release; earlier checkpoint-based qualification does not establish it.
+before release; earlier checkpoint-based support does not establish it.
 
 Other explicit hold points are available for the corresponding native cursors:
 

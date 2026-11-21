@@ -156,8 +156,5 @@
     "automatic_next_case": false
   },
   "timeout_minutes_per_inference_command": 30,
-  "automatic_replay": false,
-  "native_qualification": true,
-  "native_qualification_scope": "2026-10-06: 25 offline sample checks on one L40 through unchanged DockerRuntime 2e2ada8, across core, batch and six remaining-case commands. Two multi-command attempts failed CUDA initialization after host systemd reloads. Original 2026-10-05 uninterrupted 25-prediction and local-storage restore acceptance remains historical evidence.",
-  "public_service_qualification": "2026-10-06: monomer, unpaired, paired and unpaired_paired each passed serial public search, native GPU prediction, unchanged output and selected handoff checks; model 1, seed 7, one recycle/ensemble, effective MSA cap 32:64"
+  "automatic_replay": false
 }

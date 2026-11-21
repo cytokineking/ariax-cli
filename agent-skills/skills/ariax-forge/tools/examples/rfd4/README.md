@@ -6,7 +6,7 @@ locate this installed directory. See the [antibody checkpoint guide](../../rfd4-
 for the VHH recipe. Stage only the files needed for an authorized case and keep
 each YAML's companion paths together. The [RFd4 recipes](../../rfd4/recipes.md)
 and [search guide](../../rfd4/search.md) give native arguments and checks. Consult
-the live catalog for the current bounded scope and resources. These examples
+the guide for workload limits and the live catalog for resources. These examples
 are not evidence of binding, activity or a general success rate.
 
 | Files | Origin and intended use |
@@ -21,9 +21,9 @@ are not evidence of binding, activity or a general success rate.
 The upstream inputs are from RFD4-Proteina commit
 `aaccdd2ad0720c180468df5f9cf037a713d403e5` and retain the adjacent
 [BSD 3-Clause notice](baseline/LICENSE); the 1UBQ deposited structure is from
-RCSB PDB. The checkers report observed results, not a mode qualification.
+RCSB PDB. The checkers report observed results, specific to those inputs.
 The `rfd4.py`, protein, partial, antibody and search checks are the same finite
-case readers used for Forge qualification; `check_search_settings.py` compares
+case readers used by the examples; `check_search_settings.py` compares
 the saved continuation settings. The general mapping exporter verifies
 pre-sampling assembly only; check the generated annotations independently.
 

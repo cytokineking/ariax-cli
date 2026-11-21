@@ -11,7 +11,7 @@ complete sync/close flow.
 | [monomer.json](monomer.json) | `protein-monomer`: one 76-residue ubiquitin, chain A, job `ubiquitin` |
 | [protein-atp.json](protein-atp.json) | `ligand-ccd`: the same chain plus one `CCD_ATP`, chain B, job `ubiquitin_atp` |
 | [run.py](run.py) | Standard-library remote launcher; copies input and invocation, sets scratch caches, runs the pinned native module and saves full logs/exit status |
-| [NOTICE.md](NOTICE.md) | Public provenance and separate code/weight/data/service terms |
+| [NOTICE.md](NOTICE.md) | Sources and separate code/weight/data/service terms |
 
 The exact ubiquitin sequence, shared with the CLI's existing
 [Chai-1 monomer fixture](../chai1/monomer.fasta), is:
@@ -43,7 +43,7 @@ ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --timeout-secon
 ```
 
 The helper is deliberately a no-MSA fixture runner; it disables supplied MSA
-features too. For a separately qualified supplied-MSA experiment use the native
+features too. For a separately verified supplied-MSA experiment use the native
 command and [input guidance](../../mol1/inputs.md), preserving every companion.
 Every run needs a fresh output directory. Follow
 [output inspection](../../mol1/outputs.md) for required identities, confidence

@@ -12,7 +12,7 @@ and object storage.
 
 The [Forge BoltzGen guide](../ariax-forge/tools/boltzgen.md) covers native
 commands and separate bounded modes. Check the exact live tool, model and mode
-qualification; a native option is not automatically available or qualified.
+support; a native option is available only if the live catalog lists support.
 
 Use the [shared workflow](../../SKILL.md) for account access, existing user
 authorization, durable recovery, and downloads.

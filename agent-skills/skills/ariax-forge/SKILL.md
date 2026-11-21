@@ -67,7 +67,7 @@ Copy `TOOL`, `MODEL` and `GUIDE_ID` from the compact result's `tool`,
 mode; omit `--model` for a tool without model IDs. Scoped skill discovery returns that guide's references and example
 paths; `ariax skills forge --json` returns the complete index. The `ariax-forge`
 alias uses the same guides. Upload required input files and companions before
-executing examples, following their scientific provenance and license conditions.
+executing examples, following their source notes and license conditions.
 
 JSON results are in `data`; progress goes to stderr. Run `ariax help forge`
 for complete syntax or use the [tool index](tools/capabilities/matrix.md) to

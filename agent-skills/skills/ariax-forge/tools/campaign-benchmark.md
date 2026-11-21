@@ -18,7 +18,7 @@ ariax forge catalog --tool mmseqs2-uniref90 --json
 Set `EXAMPLES` to scoped discovery's `data.examples['campaign-benchmark']`.
 Its [README](examples/campaign-benchmark/README.md) describes the files and saved
 input layout. Both platform aliases expose the same guide. Read each selected
-tool's catalog scope and resources; for tools with models or modes, use
+tool's guide and catalog resources; for tools with models or modes, use
 `--tool TOOL --model MODEL --mode MODE --json` with the exact IDs from discovery.
 Follow the [Forge lifecycle](../SKILL.md) for preparation, billing, command
 recovery and closure. All helper and scientific execution runs remotely.
@@ -61,7 +61,7 @@ Preparation rereads the original manifest, scores and run records. It writes
 `selection.json`, `qc-input.json` and `queries.fasta`. The four FASTA accessions
 map to two separate binder chains and separate antibody heavy/light chains.
 Set `QC_COMMAND` and `SEARCH_COMMAND` to fresh UUIDs before submission; each
-helper saves the same UUID in its provenance:
+helper records the same UUID in its run metadata:
 
 ```sh
 ariax forge run "$SESSION" --tool design-qc --command-id "$QC_COMMAND" --timeout-seconds 120 --json -- python3 /inputs/campaign-benchmark/qc.py /workspace/benchmark --input prepared/qc-input.json --out /workspace/benchmark/new/qc --command-id "$QC_COMMAND"

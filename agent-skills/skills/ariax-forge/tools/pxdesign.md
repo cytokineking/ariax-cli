@@ -264,7 +264,7 @@ Native diffusion continuation restarts its original random seed while generating
 only missing indices, so new indices can repeat earlier coordinates. A 500-index
 continuation repeated prior coordinates at indices 470–499. Do not count returned
 rows as independent backbones or assume equivalence to an uninterrupted run.
-Keep continuation provenance and check duplicates; use a fresh run when
+Keep the original run settings and check duplicates; use a fresh run when
 independence is required.
 
 Set `PROJECT` to the session's returned `project_id`.

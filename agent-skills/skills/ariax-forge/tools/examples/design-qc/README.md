@@ -4,7 +4,7 @@ Use `ariax skills forge --tool design-qc --json` to find this directory in
 `data.examples["design-qc"]`. Copy `prepare.py` to the selected authorized remote
 host and run `python3 prepare.py --out design-qc-inputs` there.
 The helper downloads the pinned creator 1A2K complex and writes explicit partner
-maps plus `provenance.json`. Relabeling changes A/B/C to X/Y/Z. The changed pose
+maps and their input-source record. Relabeling changes A/B/C to X/Y/Z. The changed pose
 translates chain C by +50 angstrom along X. Preserve the helper's source URL and
 all generated inputs in the project.
 

@@ -181,7 +181,7 @@ a historical version. Transfer grants remain private. Only uncompressed `.pdb`,
 uncompressed preview copy on the VM and flush it alongside the original. Keep
 bulk scientific files on remote storage under the workstation storage policy.
 Link rejection reports or partial-stage records when no accepted structure
-exists, and preserve the scientific provenance needed to interpret each file.
+exists, and preserve the source information needed to interpret each file.
 
 ```sh
 ariax forge activity PROJECT --limit 50 --json

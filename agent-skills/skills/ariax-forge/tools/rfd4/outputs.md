@@ -52,7 +52,7 @@ whole-complex geometry, atom identities, bond order and an explicitly chosen
 tolerance when those matter, especially for DNA or ligand context. Do not infer
 full-backbone preservation from a Cα-only measure.
 
-Use a separately qualified predictor on the exact designed sequence when
+Use a separately verified predictor on the exact designed sequence when
 appropriate; its results are independent of RFd4's inline metrics. For a
 [Boltz-2](../boltz2.md) handoff, extract the designed chain in output residue
 order, retain its chain/residue mapping and compare processed tokens and output
@@ -79,7 +79,7 @@ ariax forge run "$SESSION" --tool rfd4 --timeout-seconds 600 -- \
 ```
 
 The helper snapshots the spec, explicitly referenced CIF/BCIF files and model
-metadata under `ariax_provenance/`. Simple relative paths retain their layout;
+metadata in the run directory. Simple relative paths retain their layout;
 absolute or parent-relative paths need explicit remapping after restore. Its
 separately resolved configuration uses the capture environment, so the original
 Hydra config, overrides and logs remain the run-time record. The helper does not

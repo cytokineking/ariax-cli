@@ -34,7 +34,7 @@ when matching equivalent protomers and check occupancy against relevant partners
 Tie each reported metric to its corresponding candidate, stage, model, and seed
 where available. Do not combine the best confidence from one prediction with
 the best pose agreement from another as if one structure achieved both. Distinguish
-source-table scores from later rerun structures; report missing provenance.
+source-table scores from later rerun structures; report missing source information.
 
 ## Metric glossary
 

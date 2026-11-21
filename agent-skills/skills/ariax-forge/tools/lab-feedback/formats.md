@@ -11,10 +11,10 @@ The public dataset's `v2026-10-12` tag identifies its published snapshot. The
 A shortlist has `request_id`, `name`, `target` (`catalog_id`, `context`,
 `construct_verified`), `assay` (`experiment_type`, `method`, `n_replicates`, optional
 `antigen_concentrations` and `concentration_unit`) and `candidates`. Each candidate
-has `id`, ordered `chains` of `{id,sequence}`, `sequence_metadata`, and `provenance`.
+has `id`, ordered `chains` of `{id,sequence}`, `sequence_metadata`, and source information.
 The installed prepare.py writes a complete example. Include native design IDs,
 model/settings/seed, original rejection flags, selection rationale and exact
-structure/settings checkpoint paths in real shortlist provenance.
+structure/settings checkpoint paths in real shortlist source information.
 
 `SingleChain` includes full minibinder or VHH constructs. Complete Fab has two
 ordered chains and `sequence_metadata.type="FAB"`. Paired variable Fv alone needs

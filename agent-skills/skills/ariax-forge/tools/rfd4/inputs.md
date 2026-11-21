@@ -5,7 +5,7 @@ ordinary structure does not specify which atoms or residues the design must hold
 or change. Inspect the target and intended chemistry first, then preserve the
 original input, conditions and mapping with the result. Examples under
 [`data.examples.rfd4`](../examples/rfd4/README.md) are small syntax cases,
-with bounded native evidence; consult the live catalog for their current scope.
+with bounded native evidence; consult the tool guide for input limits.
 
 ## Condition-spec grammar
 
@@ -14,7 +14,7 @@ that each design can override. `input` is a CIF/BCIF path or list of paths with
 non-overlapping chain IDs. Each condition has the shape `annotation: value:
 [{select: query}, ...]`; the selections are a list even for one entry. JSON
 uses the same structure with quoted object keys. This illustrative syntax is
-not a separately qualified experiment:
+not a separately verified experiment:
 
 ```yaml
 global_args:

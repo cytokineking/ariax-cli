@@ -20,7 +20,7 @@ relevant physical context. A crop can expose an artificial surface; check
 shortlisted poses against the larger biological assembly when available. Record
 the chosen chains, numbering, and crop so structural comparisons remain clear.
 Use only inputs and controls supported by the selected managed schema or the
-qualified native mode.
+supported native mode.
 
 ## Choose a size and review point
 
@@ -93,7 +93,7 @@ shared workflow for supported GPU-policy changes and recovery.
 
 Forge instead allocates an exact device count and assigns devices per command.
 Request extra devices only with a concrete concurrent-command or native
-multi-GPU plan and a qualified mode; extra devices do not automatically
+multi-GPU plan and a supported mode; extra devices do not automatically
 parallelize a command. Apply the same throughput, yield, price and deadline
 comparison and retain the uncertainty when evidence is absent.
 

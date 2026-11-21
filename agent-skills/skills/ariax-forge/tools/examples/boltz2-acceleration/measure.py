@@ -1,4 +1,4 @@
-"""Qualification instrumentation; native generation spans and total in-process time."""
+"""Execution timing; native generation spans and total in-process time."""
 import json
 import runpy
 import sys

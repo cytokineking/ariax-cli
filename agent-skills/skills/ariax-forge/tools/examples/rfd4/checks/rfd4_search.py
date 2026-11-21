@@ -229,7 +229,7 @@ def main() -> None:
                                                          resumed=True)
         result["continuation"] = check_continuation(initial, args.run_dir, continued,
                                                     args.continuation_run, args.source_rank, args.resume_seed)
-    result["qualification"] = "not established"
+    result["verified"] = False
     print(json.dumps(result, indent=2))
 
 

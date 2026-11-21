@@ -9,7 +9,7 @@ Read the shared [Ariax workflow](../../SKILL.md) before using this protocol. Fet
 
 The [Forge BindCraft2 guide](../ariax-forge/tools/bindcraft2.md) covers native
 commands in a separate session. Check its live tool, model and mode
-qualification; managed settings and results do not automatically transfer.
+support; managed settings and results do not automatically transfer.
 
 BindCraft2 optimizes a binder with AlphaFold2, redesigns sequences with ProteinMPNN, then validates and filters candidates. An accepted design passed computational filters. It does not establish affinity, specificity, immunogenicity, stability, or experimental success.
 
@@ -61,7 +61,7 @@ some choices resize it. Flag deltas apply in order, so a later `+DESIGN` makes
 the span editable again. Local checks cover edit syntax and held lengths for
 bundled scaffolds too; their coordinate bounds remain a server check.
 
-For the bundled VHH scaffold, leave `binder` empty to inherit its qualified mutation selection. Supplying `mutate_positions` replaces that selection. A plain span declares editable paratope residues; `*` keeps DESIGN and drops CONTACT for editable framework residues. The VHH preset's `binder_intra_coldspot` loss requires both kinds of position. If the experiment intentionally edits only paratope/CDR residues, set `advanced.weights_binder_intra_coldspot` to `0` and confirm that the live schema accepts it. The custom-scaffold example demonstrates this choice; replace its illustrative residue ranges with positions from your own scaffold. Adding `*` positions changes which framework residues can mutate and needs a scientific reason.
+For the bundled VHH scaffold, leave `binder` empty to inherit its default mutation selection. Supplying `mutate_positions` replaces that selection. A plain span declares editable paratope residues; `*` keeps DESIGN and drops CONTACT for editable framework residues. The VHH preset's `binder_intra_coldspot` loss requires both kinds of position. If the experiment intentionally edits only paratope/CDR residues, set `advanced.weights_binder_intra_coldspot` to `0` and confirm that the live schema accepts it. The custom-scaffold example demonstrates this choice; replace its illustrative residue ranges with positions from your own scaffold. Adding `*` positions changes which framework residues can mutate and needs a scientific reason.
 
 ## Configure properties and controls
 

@@ -51,7 +51,7 @@ VHH percentiles are null with `no_vhh_calibration`. Motifs and CDR-length flags
 suggest follow-up checks. Clinical immunogenicity and experimental developability
 remain unmeasured.
 
-Save registered inputs, provenance and the whole output directory with
+Save registered inputs, source information and the whole output directory with
 `ariax forge sync "$SESSION" --wait`. Follow the [Files guide](../outputs.md)
 for file inspection, resume and session closure. The
 [example](examples/antibody-qc/README.md) includes a controlled NGT-to-QGT motif

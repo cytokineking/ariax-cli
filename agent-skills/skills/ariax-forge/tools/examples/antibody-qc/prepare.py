@@ -17,7 +17,7 @@ def main():
                {'id': 'vhh-1zvh', 'kind': 'vhh', 'heavy': VHH}]
     for name, rows in [('batch', records), ('vhh', records[2:]), ('invalid', [{'id': 'invalid', 'kind': 'vhh', 'heavy': 'ACDE'}]), ('mixed', [records[2], {'id': 'invalid', 'kind': 'vhh', 'heavy': 'ACDE'}]), ('empty', [])]:
         (args.out / (name + '.json')).write_text(json.dumps(rows, indent=2) + '\n')
-    (args.out / 'provenance.json').write_text(json.dumps({
+    (args.out / 'input-sources.json').write_text(json.dumps({
         'paired_seed': 'Trastuzumab-like variable sequences used only as controlled sequence fixtures; no structure or efficacy reference',
         'deliberate_change': 'Heavy DGF segment in CDR3 replaced by NGT; second sequence changes that N to Q, preserving length',
         'vhh_source': 'RCSB 1ZVH polymer entity 2, author chain A, Camelus dromedarius; removed trailing RGRHHHHHH expression tag; same accepted reference entry as absolute-stability fixture',
