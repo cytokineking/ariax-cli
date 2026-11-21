@@ -53,7 +53,7 @@ async function boundary(root) {
         upstream_maturity: 'experimental', native: 'passed', installation: 'held', restoration: 'untested',
         scope: 'HTTP fixture: bounded native case only', workload: 'One chain' },
       ...(tool === 'bindcraft2' ? [{ model: 'default', mode: 'other', upstream_maturity: 'unknown',
-        native: 'unknown', installation: 'passed', restoration: 'held', scope: 'Not qualified', workload: null }] : [])] },
+        native: 'unknown', installation: 'passed', restoration: 'held', scope: 'Not qualified', workload: null }, { model: null, mode: 'tool-only', native: 'held' }] : [])] },
   }));
   const toolState = (tool, state) => ({ ...catalog.find(item => item.tool === tool), tool, state, error: null });
   const state = { sessions, projects, allocations: 0, executions: 0, releases: 0, posts: 0, preparations: 0,
@@ -1489,14 +1489,23 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.deepEqual(routed.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
     assert.equal(Object.hasOwn(routed.payload.data.tools[0].capabilities, 'qualification'), false);
     assert.equal(Object.hasOwn(routed.payload.data.tools[0], 'resource_evidence'), false);
-    assert.deepEqual(routed.payload.data.tools[0].capabilities.modes[0], { model: 'default', mode: 'native', maturity: 'experimental', support: 'held' });
+    assert.equal(Object.hasOwn(routed.payload.data.tools[0].capabilities, 'modes'), false);
+    assert.deepEqual(routed.payload.data.tools[0].models[0].modes, ['native', 'other']);
     const full = await invoke(['forge', 'catalog']);
     assert.equal(full.payload.data.tools.length, 4);
     const selected = await invoke(['forge', 'catalog', '--tool', 'bindcraft2']);
     assert.deepEqual(selected.payload.data.tools, full.payload.data.tools.filter(tool => tool.tool === 'bindcraft2'));
-    assert.deepEqual(selected.payload.data.tools[0].capabilities.modes[1], { model: 'default', mode: 'other', maturity: 'unknown', support: 'held' });
+    assert.deepEqual(selected.payload.data.tools[0].modes, ['tool-only']);
+    const lookup = ['forge', 'catalog', '--tool', 'bindcraft2'];
+    const byModel = await invoke([...lookup, '--model', 'default', '--mode', 'other']);
+    assert.deepEqual(byModel.payload.data.tools[0].models[0].modes, ['other']);
+    assert.equal(Object.hasOwn(byModel.payload.data.tools[0], 'modes'), false);
+    const byToolMode = await invoke([...lookup, '--mode', 'tool-only']);
+    assert.deepEqual(byToolMode.payload.data.tools[0].modes, ['tool-only']);
+    assert.deepEqual(byToolMode.payload.data.tools[0].models, []);
+    await invoke([...lookup, '--model', 'default', '--mode', 'tool-only'], 1);
     const selectedHuman = await invoke(['forge', 'catalog', '--tool', 'bindcraft2'], 0, true);
-    assert.doesNotMatch(selectedHuman.stdout, /qualification|resource_evidence|Not qualified/i);
+    assert.doesNotMatch(selectedHuman.stdout, /qualification|resource_evidence|Not qualified|maturity|unconfirmed|held/i);
     assert.match(selectedHuman.stdout, /min_vram_gib_per_gpu/);
     const compact = await invoke(['forge', 'catalog', '--task', 'antibodies', '--tool', 'bindcraft2', '--compact']);
     assert.deepEqual(compact.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);

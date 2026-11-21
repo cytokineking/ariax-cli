@@ -1,6 +1,6 @@
 # RFd4 modes and controls
 
-Use the live catalog for mode status and hardware requirements. The documented workloads cover unconditional
+Use the live catalog for mode IDs and hardware requirements. The examples cover unconditional
 protein, protein hotspots, indexed and unindexed motifs, resolved-seed partial
 diffusion, one VHH case, no-oracle metrics and structure-only search. They do
 not establish experimental binding, catalytic activity or a general success
@@ -8,8 +8,8 @@ rate. The [recipes](recipes.md) and [search guide](search.md) reproduce these
 finite profiles; larger inputs, different schedules or other combinations need
 their own evidence.
 
-Three modes remain held: fixed-ligand geometry, fixed DNA-duplex geometry and
-fixed-backbone sequence redesign. Preserving ligand identity and bonds is not a
+For fixed-ligand, fixed-duplex and fixed-backbone requests, check the geometry
+required by the input. Preserving ligand identity and bonds is not a
 fixed-geometry pass; do not relax a requested tolerance silently. Per-group DNA
 motif RMSD does not establish the strands' relative pose. A low Cα RMSD does
 not establish full-backbone preservation or that the sequence was redesigned.

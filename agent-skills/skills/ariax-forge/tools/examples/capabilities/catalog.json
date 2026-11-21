@@ -7,16 +7,16 @@
           "tasks": [
             "antibodies"
           ],
-          "guide": "capabilities",
-          "modes": [
-            {
-              "model": "example-checkpoint",
-              "mode": "sequence-design",
-              "maturity": "experimental",
-              "support": "unconfirmed"
-            }
-          ]
-        }
+          "guide": "capabilities"
+        },
+        "models": [
+          {
+            "id": "example-checkpoint",
+            "modes": [
+              "sequence-design"
+            ]
+          }
+        ]
       },
       {
         "tool": "example-predictor",
@@ -24,8 +24,7 @@
           "tasks": [
             "molecular-prediction"
           ],
-          "guide": "capabilities",
-          "modes": []
+          "guide": "capabilities"
         }
       }
     ]

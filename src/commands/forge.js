@@ -581,14 +581,14 @@ function compactCatalogTool(tool) {
 
 function selectedCatalogTool(tool, model, mode) {
   const models = Array.isArray(tool.models) ? tool.models : [];
-  const rows = tool.capabilities?.modes ?? [];
-  const modelRows = rows.filter(row => model === undefined || row?.model === model);
   const selectedModels = models.filter(item => model === undefined || item.id === model);
-  if (model !== undefined && !selectedModels.length && !modelRows.length) {
+  if (model !== undefined && !selectedModels.length) {
     throw usageError(`forge catalog: model "${model}" is not in tool "${tool.tool}".`);
   }
-  const modes = modelRows.filter(row => mode === undefined || row?.mode === mode);
-  if (mode !== undefined && !modes.length && !selectedModels.some(item => item.modes?.includes(mode))) {
+  const matchingModels = selectedModels.filter(item => mode === undefined || item.modes?.includes(mode));
+  const toolModes = model === undefined ? (tool.modes ?? []) : [];
+  const matchingToolModes = toolModes.filter(id => mode === undefined || id === mode);
+  if (mode !== undefined && !matchingModels.length && !matchingToolModes.length) {
     throw usageError(`forge catalog: mode "${mode}" is not in tool "${tool.tool}"${model === undefined ? '' : ` model "${model}"`}.`);
   }
   return {
@@ -596,8 +596,8 @@ function selectedCatalogTool(tool, model, mode) {
     name: tool.name,
     gpu: tool.gpu,
     resources: tool.resources ?? null,
-    models: selectedModels.filter(item => mode === undefined || item.modes?.includes(mode)
-      || modes.some(row => row?.model === item.id)).map(item => ({
+    ...(matchingToolModes.length ? { modes: matchingToolModes } : {}),
+    models: matchingModels.map(item => ({
       id: item.id,
       modes: mode === undefined ? item.modes ?? null : [mode],
       resources: item.resources ?? null,
@@ -607,7 +607,6 @@ function selectedCatalogTool(tool, model, mode) {
       guide: tool.capabilities?.guide ?? null,
       terms: tool.capabilities?.terms ?? null,
       citations: tool.capabilities?.citations ?? null,
-      modes,
     },
   };
 }

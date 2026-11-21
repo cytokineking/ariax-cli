@@ -1,9 +1,6 @@
 # RFdiffusion4 / RFD4-Proteina on Forge
 
-Some RFd4 modes are on hold. Check the
-live catalog for availability and resource requirements
-before choosing a tool or running the illustrative commands below. A packaged
-guide or example alone does not establish readiness.
+Check the live catalog for RFd4 mode IDs and hardware requirements.
 
 RFd4 jointly designs a protein sequence and all-atom structure, including
 unconditional generation and molecular conditioning for a target, motif, ligand,

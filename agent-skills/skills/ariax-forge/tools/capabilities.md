@@ -20,11 +20,9 @@ Other task filters are `antibodies`, `molecular-prediction`,
 `sequence-optimization` and `validation-search`. The [tool index](capabilities/matrix.md)
 compares purposes and links to usage guides.
 
-Use `capabilities.modes` for model and mode IDs and `resources` for hardware
-requirements. A mode marked `held` should not be used. A `documented` mode
-covers the workload limits in the linked guide. For `unconfirmed` modes, support
-is unknown. Wait for
-the tool and inputs to be ready before running a command.
+Model-specific mode IDs appear in `models[].modes`. Modes that take no model
+appear in the tool's `modes` list. Read `resources` for hardware requirements
+and the linked guide for input limits.
 
 Follow the component notices: source, weights and databases can have different
 terms. Use the [file synchronization flow](../outputs.md) to save inputs and useful outputs.

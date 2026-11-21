@@ -14,7 +14,7 @@ The standalone `tmol` tool uses Tmol 0.2.0 from
 It uses no model bundle. Score, interface and minimization have separate,
 supported workload limits. A guide or an image alone does not establish
 readiness. Check the live catalog for actual
-availability, status and measured resource scope; unknown minima are not zero.
+mode IDs and hardware requirements.
 
 ```sh
 ariax forge catalog --compact --tool tmol --json

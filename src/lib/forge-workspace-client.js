@@ -21,25 +21,35 @@ export function redactForgeText(value) {
   });
 }
 
-function modeSupport(row) {
-  const states = [row.native, row.installation, row.restoration];
-  if (states.includes('held')) return 'held';
-  if (row.workload && states.every(state => state === 'passed')) return 'documented';
-  return 'unconfirmed';
-}
-
-// Project server tool metadata onto the fields used by the installed CLI.
+// Keep the IDs used by catalog filters. Older responses and saved tool records
+// can carry some IDs only in their per-mode metadata.
 export function presentForgeTool(tool) {
   const { resource_evidence, patches, ...result } = tool;
-  if (!tool.capabilities || !Object.hasOwn(tool.capabilities, 'qualification')) return result;
-  const { qualification, ...capabilities } = tool.capabilities;
-  const rows = Array.isArray(qualification) ? qualification : [];
-  const modes = rows.filter(row => row && typeof row === 'object').map(row => ({
-    model: row.model,
-    mode: row.mode,
-    maturity: row.upstream_maturity,
-    support: modeSupport(row),
-  }));
+  if (!tool.capabilities) return result;
+  const { qualification, modes: previousRows, ...capabilities } = tool.capabilities;
+  if (qualification === undefined && previousRows === undefined) return result;
+  const rows = Array.isArray(qualification) ? qualification : previousRows;
+  const modelModes = new Map();
+  const toolModes = new Set(tool.modes ?? []);
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (typeof row?.mode !== 'string') continue;
+    if (row.model == null) {
+      toolModes.add(row.mode);
+    } else if (typeof row.model === 'string') {
+      if (!modelModes.has(row.model)) modelModes.set(row.model, new Set());
+      modelModes.get(row.model).add(row.mode);
+    }
+  }
+  if (modelModes.size) {
+    result.models = (tool.models ?? []).map(model => {
+      const extra = modelModes.get(model.id);
+      if (!extra) return model;
+      modelModes.delete(model.id);
+      return { ...model, modes: [...new Set([...(model.modes ?? []), ...extra])] };
+    });
+    for (const [id, modes] of modelModes) result.models.push({ id, modes: [...modes] });
+  }
+  if (toolModes.size) result.modes = [...toolModes];
   // These catalog labels describe internal test history. Keep the attribution,
   // license conditions and citation links as provided by the source.
   if (Array.isArray(capabilities.terms)) {
@@ -52,7 +62,7 @@ export function presentForgeTool(tool) {
       citation?.title === 'Native expected-TM export, exact two-file changes applied by B47 selected source'
         ? { ...citation, title: 'Native expected-TM export' } : citation);
   }
-  return { ...result, capabilities: { ...capabilities, modes } };
+  return { ...result, capabilities };
 }
 
 export function redactForgeOutput(value) {
