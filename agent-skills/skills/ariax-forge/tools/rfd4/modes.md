@@ -1,7 +1,6 @@
 # RFd4 modes and controls
 
-Use the live catalog for availability and the exact native, installation,
-restoration and resource scope. Bounded native passes cover unconditional
+Use the live catalog for mode status and hardware requirements. The documented workloads cover unconditional
 protein, protein hotspots, indexed and unindexed motifs, resolved-seed partial
 diffusion, one VHH case, no-oracle metrics and structure-only search. They do
 not establish experimental binding, catalytic activity or a general success

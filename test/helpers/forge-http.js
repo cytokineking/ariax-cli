@@ -1489,12 +1489,12 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.deepEqual(routed.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
     assert.equal(Object.hasOwn(routed.payload.data.tools[0].capabilities, 'qualification'), false);
     assert.equal(Object.hasOwn(routed.payload.data.tools[0], 'resource_evidence'), false);
-    assert.deepEqual(routed.payload.data.tools[0].capabilities.modes[0], { model: 'default', mode: 'native', maturity: 'experimental' });
+    assert.deepEqual(routed.payload.data.tools[0].capabilities.modes[0], { model: 'default', mode: 'native', maturity: 'experimental', support: 'held' });
     const full = await invoke(['forge', 'catalog']);
     assert.equal(full.payload.data.tools.length, 4);
     const selected = await invoke(['forge', 'catalog', '--tool', 'bindcraft2']);
     assert.deepEqual(selected.payload.data.tools, full.payload.data.tools.filter(tool => tool.tool === 'bindcraft2'));
-    assert.deepEqual(selected.payload.data.tools[0].capabilities.modes[1], { model: 'default', mode: 'other', maturity: 'unknown' });
+    assert.deepEqual(selected.payload.data.tools[0].capabilities.modes[1], { model: 'default', mode: 'other', maturity: 'unknown', support: 'held' });
     const selectedHuman = await invoke(['forge', 'catalog', '--tool', 'bindcraft2'], 0, true);
     assert.doesNotMatch(selectedHuman.stdout, /qualification|resource_evidence|Not qualified/i);
     assert.match(selectedHuman.stdout, /min_vram_gib_per_gpu/);

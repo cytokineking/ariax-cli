@@ -1,6 +1,6 @@
 # RFdiffusion4 / RFD4-Proteina on Forge
 
-RFd4 has bounded native scientific evidence and explicit held modes. Check the
+Some RFd4 modes are on hold. Check the
 live catalog for availability and resource requirements
 before choosing a tool or running the illustrative commands below. A packaged
 guide or example alone does not establish readiness.
@@ -9,7 +9,7 @@ RFd4 jointly designs a protein sequence and all-atom structure, including
 unconditional generation and molecular conditioning for a target, motif, ligand,
 DNA or an existing structure. The native tool key and guide alias are
 `rfd4` (`rfdiffusion4` also locates this guide); it is not a managed project
-protocol. Compare a requested experiment with the live supported scope of
+protocol. Compare a requested experiment with the documented input and workload limits of
 [Foundry RFD3/RFD3NA](foundry.md), [Proteina-Complexa](proteina-complexa.md),
 [BoltzGen](boltzgen.md) and [BindCraft2](bindcraft2.md). These methods have
 different inputs and scoring, and their scores do not establish a universal best

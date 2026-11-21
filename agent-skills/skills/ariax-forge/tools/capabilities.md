@@ -21,7 +21,9 @@ Other task filters are `antibodies`, `molecular-prediction`,
 compares purposes and links to usage guides.
 
 Use `capabilities.modes` for model and mode IDs and `resources` for hardware
-requirements. Read the linked tool guide for input and workload limits. Wait for
+requirements. A mode marked `held` should not be used. A `documented` mode
+covers the workload limits in the linked guide. For `unconfirmed` modes, support
+is unknown. Wait for
 the tool and inputs to be ready before running a command.
 
 Follow the component notices: source, weights and databases can have different

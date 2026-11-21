@@ -21,6 +21,13 @@ export function redactForgeText(value) {
   });
 }
 
+function modeSupport(row) {
+  const states = [row.native, row.installation, row.restoration];
+  if (states.includes('held')) return 'held';
+  if (row.workload && states.every(state => state === 'passed')) return 'documented';
+  return 'unconfirmed';
+}
+
 // Project server tool metadata onto the fields used by the installed CLI.
 export function presentForgeTool(tool) {
   const { resource_evidence, patches, ...result } = tool;
@@ -31,6 +38,7 @@ export function presentForgeTool(tool) {
     model: row.model,
     mode: row.mode,
     maturity: row.upstream_maturity,
+    support: modeSupport(row),
   }));
   // These catalog labels describe internal test history. Keep the attribution,
   // license conditions and citation links as provided by the source.

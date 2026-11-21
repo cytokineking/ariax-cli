@@ -18,8 +18,7 @@ ariax skills forge --tool rfd4-antibody --json
 ariax skills forge --reference rfd4-antibody --read --json
 ```
 
-Use the row's workload and support information; a guide or fixture alone
-does not establish availability. The [campaign guidance](../references/campaign-recipes.md#antibody-or-nanobody-design-prediction-and-export)
+Check the listed mode and hardware requirements. Use this guide for input limits. The [campaign guidance](../references/campaign-recipes.md#antibody-or-nanobody-design-prediction-and-export)
 describes alternatives and downstream handoffs.
 
 ## Input and conditions

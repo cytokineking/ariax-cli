@@ -12,7 +12,8 @@
             {
               "model": "example-checkpoint",
               "mode": "sequence-design",
-              "maturity": "experimental"
+              "maturity": "experimental",
+              "support": "unconfirmed"
             }
           ]
         }
