@@ -3,6 +3,7 @@
  * Core operation uses built-in Node APIs; native keyring support is optional.
  * Exit codes are stable (see exit-codes.js).
  */
+import { isNonInteractiveEnv } from './agent-env.js';
 import { buildInfo, formatBuildInfo } from './build-info.js';
 import { parseArgv, usageError, isUsageError } from './args.js';
 import {
@@ -79,7 +80,7 @@ const COMMAND_OPTIONS = {
   'gpu-preferences': [['file'], 1],
   runs: [['job', 'limit', 'cursor', 'all'], 1],
   candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
-  results: [['path', 'download', 'overwrite', 'limit', 'details'], 1],
+  results: [['path', 'download', 'overwrite', 'limit', 'cursor', 'details'], 1],
   upgrade: [['check', 'yes', 'channel'], 0],
   login: [['with-token', 'insecure-storage'], 0],
   logout: [[], 0],
@@ -215,7 +216,7 @@ const HELP_TOPICS = {
   feedback: 'ariax feedback <project-id-or-exact-name> --category technical-support|feature-request|other --message TEXT [--job JOB_ID]',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
-  results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]',
+  results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',
   logout: 'ariax logout',
@@ -253,14 +254,24 @@ function printHelp(topic) {
   printData('  6 payment/credit, 7 conflict, 8 rate-limit, 9 network/timeout, 10 server, 130 interrupted.');
 }
 
+function detectRawJsonMode(argv) {
+  let jsonForced = false;
+  let jsonDisabled = false;
+  for (const tok of argv) {
+    if (tok === '--') break;
+    if (tok === '--json') jsonForced = true;
+    else if (tok === '--no-json') jsonDisabled = true;
+  }
+  return jsonForced || (!jsonDisabled && !process.stdout.isTTY);
+}
+
 /** Run the CLI. Returns a process exit code (never throws). */
 export async function main(argv = process.argv.slice(2), env = process.env, runtime = {}) {
   let parsed;
   try {
     parsed = parseArgv(argv);
   } catch (err) {
-    printProgress(`error: ${err.message}`);
-    return EXIT.USAGE;
+    return reportError(err, detectRawJsonMode(argv));
   }
   const { command, positionals, flags, globals } = parsed;
   // Forge's local wait timeout is specified in seconds by its public contract.
@@ -286,7 +297,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
 
   if (globals.version === true) {
     const info = buildInfo();
-    if (globals.json === true) printJson({ data: info });
+    if (argumentJsonMode) printJson({ data: info });
     else printData(formatBuildInfo(info));
     return EXIT.OK;
   }
@@ -295,8 +306,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     return EXIT.OK;
   }
   if (!Object.prototype.hasOwnProperty.call(COMMANDS, command)) {
-    printProgress(`error: unknown command "${command}". Run: ariax help`);
-    return EXIT.USAGE;
+    return reportError(usageError(`unknown command "${command}". Run: ariax help`), argumentJsonMode);
   }
 
   const merged = { ...flags };
@@ -326,7 +336,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     }
   }
   const interactive = runtime.interactive ?? Boolean(
-    process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY,
+    process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY && !isNonInteractiveEnv(env),
   );
   const fetchImpl = runtime.fetchImpl ?? globalThis.fetch;
   const credentialStore = runtime.credentialStore ?? createCredentialStore();
@@ -358,6 +368,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
           flags: {},
           positionals: [],
           config,
+          env,
           json: false,
           interactive,
           fetchImpl,

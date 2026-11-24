@@ -637,6 +637,7 @@
     "build-info.json",
     "customer-files.json",
     "install.sh",
+    "src/agent-env.js",
     "src/args.js",
     "src/bindcraft2-inputs.js",
     "src/bindcraft2-progress.js",

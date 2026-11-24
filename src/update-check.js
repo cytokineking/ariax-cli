@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { isCiEnv } from './agent-env.js';
 
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const NPM_LATEST_URL = 'https://registry.npmjs.org/ariax-cli/latest';
@@ -158,8 +159,7 @@ export function shouldRunAutomaticUpdateCheck({ command, jsonMode, env = process
   if (!interactive || jsonMode) return false;
   if (!command || ['help', 'upgrade', 'login', 'logout', 'inputs'].includes(command)) return false;
   if (env.NO_UPDATE_NOTIFIER === '1') return false;
-  const ci = String(env.CI ?? '').toLowerCase();
-  if (ci && ci !== '0' && ci !== 'false') return false;
+  if (isCiEnv(env)) return false;
   return true;
 }
 

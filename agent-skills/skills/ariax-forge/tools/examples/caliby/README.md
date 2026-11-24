@@ -1,6 +1,6 @@
 # Caliby installed examples
 
-1CRN is the public 46-residue crambin structure from [RCSB](https://www.rcsb.org/structure/1CRN). `ariax skills forge --tool caliby --json` returns this directory in `data.examples.caliby`. Run `prepare.py` on the authorized remote host; it writes a monomer, a synthetic 92-residue pair and constraints. Register the generated files as described by the [main guide](../../caliby.md).
+1CRN is the public 46-residue crambin structure from [RCSB](https://www.rcsb.org/structure/1CRN). `ariax skills forge --tool caliby --json` returns this directory in `data.examples.caliby`. Run `prepare.py` to generate a monomer, a synthetic 92-residue pair and constraints, then register the generated files as described by the [main guide](../../caliby.md).
 
 `commands.json` supplies native argv and their dependencies for four checkpoints and four operations on monomer and multichain inputs. Choose the entries for your intended workflow. Generation creates two partial-diffusion conformers per cleaned structure. Wait after every command and retain its ID/log. Run each selected `check` argv through the same Forge tool. Generation outputs are under `/workspace/caliby/ensembles-{monomer,multichain}/cc95-epoch3490-sampling_partial_diffusion-ss1.0-schurn0-ccstart0.0-dx0.0-dy0.0-dz0.0-rewind150/{1crn,pair}`. Run `caliby-check ensemble DIRECTORY` on each before sequence design.
 

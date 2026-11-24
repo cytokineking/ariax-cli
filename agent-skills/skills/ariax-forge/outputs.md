@@ -169,9 +169,10 @@ ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --control-re
 `link` authorizes the current regular file and returns a project-page URL with
 its encoded path. The link can show newer bytes if that path changes; it is not
 a historical version. Transfer grants remain private. Only uncompressed `.pdb`,
-`.cif` and `.mmcif` up to 10,000,000 bytes preview on the page. Create any
-uncompressed preview copy on the VM and flush it alongside the original. Keep
-bulk scientific files on remote storage under the workstation storage policy.
+`.cif` and `.mmcif` up to 10,000,000 bytes preview on the page. Create any uncompressed preview copy on the VM and flush it alongside the original.
+Download needed files locally with `ariax forge download`, and keep heavy
+intermediates in `/scratch` or pack bulk directories into archives under
+`/workspace/archives/` before syncing and finishing.
 Link rejection reports or partial-stage records when no accepted structure
 exists, and preserve the scientific provenance needed to interpret each file.
 

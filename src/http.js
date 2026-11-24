@@ -48,7 +48,96 @@ export class ApiError extends Error {
   }
 }
 
-/** Keep bounded public validation, payment and project-control details. */
+const KNOWN_ERROR_DETAIL_KEYS = new Set([
+  'issues',
+  'current_balance_usd',
+  'required_balance_usd',
+  'deficit_usd',
+  'current_status',
+  'allowed_statuses',
+  'project_id',
+  'control_revision',
+  'human_resume_required',
+  'approval_path',
+  'approval_url',
+]);
+
+const SENSITIVE_DETAIL_KEY = /(?:^|[_-])(?:urls?|uris?|hrefs?|grants?|tokens?|secrets?|auth|authorization|cookies?|presign|presigned|signatures?|sig|credentials?|passwords?|passwd|jwts?|bearer|headers?|private|endpoints?|dsn)(?:$|[_-])|(?:url|uri|href|token|secret|signature|password|credential)s?$/i;
+const SENSITIVE_KEY_FIELD = /^(?:keys?)$|(?:^|[_-])(?:api|secret|access|private|public|signing|encryption|master|session|auth|client|storage|object|s3|r2|bucket)[_-]?keys?(?:$|[_-])|(?:^|[_-])keys?[_-]?(?:ids?|hash(?:es)?|prefix(?:es)?)(?:$|[_-])/i;
+
+function isSensitiveDetailKey(key) {
+  return SENSITIVE_DETAIL_KEY.test(key) || SENSITIVE_KEY_FIELD.test(key);
+}
+const DETAIL_MAX_DEPTH = 4;
+const DETAIL_MAX_KEYS = 32;
+const DETAIL_MAX_ARRAY = 50;
+const DETAIL_MAX_STRING = 512;
+const DETAIL_MAX_NODES = 250;
+
+function sanitizeDetailString(value) {
+  let text = sanitize(value)
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED]')
+    .replace(/https?:\/\/[^\s"'<>]+/gi, (candidate) => {
+      try {
+        const url = new URL(candidate);
+        if (url.username || url.password || url.search || url.hash) return '[REDACTED URL]';
+        return candidate;
+      } catch {
+        return '[REDACTED URL]';
+      }
+    });
+  if (text.length > DETAIL_MAX_STRING) text = text.slice(0, DETAIL_MAX_STRING);
+  return text;
+}
+
+function sanitizePublicDetailValue(value, depth, state) {
+  if (state.nodes >= DETAIL_MAX_NODES) return undefined;
+  if (value === null || typeof value === 'boolean') {
+    state.nodes += 1;
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return undefined;
+    state.nodes += 1;
+    return value;
+  }
+  if (typeof value === 'string') {
+    state.nodes += 1;
+    return sanitizeDetailString(value);
+  }
+  if (typeof value !== 'object' || depth >= DETAIL_MAX_DEPTH) return undefined;
+  if (state.seen.has(value)) return undefined;
+  state.seen.add(value);
+  state.nodes += 1;
+  try {
+    if (Array.isArray(value)) {
+      const items = [];
+      for (const entry of value.slice(0, DETAIL_MAX_ARRAY)) {
+        if (state.nodes >= DETAIL_MAX_NODES) break;
+        const clean = sanitizePublicDetailValue(entry, depth + 1, state);
+        if (clean !== undefined) items.push(clean);
+      }
+      return items;
+    }
+    const cleanObj = {};
+    let kept = 0;
+    for (const [key, entry] of Object.entries(value)) {
+      if (kept >= DETAIL_MAX_KEYS || state.nodes >= DETAIL_MAX_NODES) break;
+      if (!key || key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+      if (isSensitiveDetailKey(key)) continue;
+      const clean = sanitizePublicDetailValue(entry, depth + 1, state);
+      if (clean !== undefined) {
+        cleanObj[key] = clean;
+        kept += 1;
+      }
+    }
+    return Object.keys(cleanObj).length ? cleanObj : undefined;
+  } finally {
+    state.seen.delete(value);
+  }
+}
+
+/** Keep bounded public validation, payment, project-control and diagnostic details. */
 function sanitizeErrorDetails(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
   const result = {};
@@ -95,6 +184,18 @@ function sanitizeErrorDetails(details) {
         if (url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash
             && projectPath.test(url.pathname) && sanitize(url.href) === url.href) result.approval_url = url.href;
       } catch { /* Malformed approval links remain private. */ }
+    }
+  }
+  const state = { nodes: 0, seen: new WeakSet([details]) };
+  let extraKeys = 0;
+  for (const [key, value] of Object.entries(details)) {
+    if (extraKeys >= DETAIL_MAX_KEYS || state.nodes >= DETAIL_MAX_NODES) break;
+    if (!key || key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (KNOWN_ERROR_DETAIL_KEYS.has(key) || isSensitiveDetailKey(key)) continue;
+    const clean = sanitizePublicDetailValue(value, 1, state);
+    if (clean !== undefined) {
+      result[key] = clean;
+      extraKeys += 1;
     }
   }
   return Object.keys(result).length ? result : undefined;

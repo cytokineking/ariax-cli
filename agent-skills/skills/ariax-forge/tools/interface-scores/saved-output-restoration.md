@@ -28,8 +28,9 @@ ariax forge link "$PROJECT" /workspace/interface-scores/af2.json --json
 required subdirectory. Confirm that the complete registered input set and all
 workspace result/reference/log files are retained, with expected paths and byte
 counts. Saving just the final result JSON cannot restore its native evidence.
-Use project links to inspect/download current scientific files; later writes can change their bytes. Bulk output
-remains in private remote storage under the workstation storage policy.
+Use `ariax forge link` or `ariax forge download` to inspect or retrieve saved
+files locally; later writes can change their bytes. Keep heavy intermediates in
+`/scratch` and pack bulk directories before syncing or finishing.
 
 The [shared outputs guide](../../outputs.md) supplies the ordinary authorized
 resume command and the distinction between same-project resume and a new project.

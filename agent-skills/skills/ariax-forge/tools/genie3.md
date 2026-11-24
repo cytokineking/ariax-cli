@@ -18,15 +18,15 @@ For a motif problem, `paths.dataset` contains `problems/<name>.json`. `motif_fil
 
 If generation has already written its structures and tensors but helper metadata failed, `genie3-generate --config CONFIG --finalize-existing` writes metadata from those retained files. The supplied parsed config must match retained `request.yaml`; a missing original or any mismatch fails before metadata changes. This explicit operation does not generate another sample. Keep the original failure record.
 
-For each generated PDB, choose the explicit native mode and a fresh handoff directory:
+For each generated PDB, choose the explicit native mode and a fresh handoff directory (replace `/workspace/genie3-run` with your configured `rootdir`):
 
 ```sh
-genie3-handoff prepare --pdb /workspace/b51/unconditional/pdbs/50_0.pdb --mode unconditional --out /workspace/b51/handoff-unconditional
-mpnn-prepare --pdb /workspace/b51/handoff-unconditional/ca.pdb --plan /workspace/b51/handoff-unconditional/plan.json --ca-only --out /workspace/b51/prepared-unconditional
-proteinmpnn --prepared /workspace/b51/prepared-unconditional --ca_only --model_name v_48_020 --seed 51 --sampling_temp 0.1 --num_seq_per_target 1 --batch_size 1 --save_probs 1 --save_score 1 --out_folder /workspace/b51/mpnn-unconditional
-mpnn-check --prepared /workspace/b51/prepared-unconditional --output /workspace/b51/mpnn-unconditional --family protein --mode design --report /workspace/b51/mpnn-unconditional-check.json
-genie3-handoff sequence --handoff /workspace/b51/handoff-unconditional --prepared /workspace/b51/prepared-unconditional --fasta /workspace/b51/mpnn-unconditional/seqs/backbone.fa --out /workspace/b51/predict-input-unconditional
-boltz predict /workspace/b51/predict-input-unconditional/design.yaml --model boltz2 --cache /models/boltz2 --checkpoint /models/boltz2/boltz2_conf.ckpt --out_dir /workspace/b51/predict-unconditional --accelerator gpu --devices 1 --recycling_steps 3 --sampling_steps 200 --diffusion_samples 1 --max_parallel_samples 1 --seed 51 --num_workers 0 --preprocessing-threads 1 --output_format mmcif --write_full_pae
+genie3-handoff prepare --pdb /workspace/genie3-run/unconditional/pdbs/50_0.pdb --mode unconditional --out /workspace/genie3-run/handoff-unconditional
+mpnn-prepare --pdb /workspace/genie3-run/handoff-unconditional/ca.pdb --plan /workspace/genie3-run/handoff-unconditional/plan.json --ca-only --out /workspace/genie3-run/prepared-unconditional
+proteinmpnn --prepared /workspace/genie3-run/prepared-unconditional --ca_only --model_name v_48_020 --seed 51 --sampling_temp 0.1 --num_seq_per_target 1 --batch_size 1 --save_probs 1 --save_score 1 --out_folder /workspace/genie3-run/mpnn-unconditional
+mpnn-check --prepared /workspace/genie3-run/prepared-unconditional --output /workspace/genie3-run/mpnn-unconditional --family protein --mode design --report /workspace/genie3-run/mpnn-unconditional-check.json
+genie3-handoff sequence --handoff /workspace/genie3-run/handoff-unconditional --prepared /workspace/genie3-run/prepared-unconditional --fasta /workspace/genie3-run/mpnn-unconditional/seqs/backbone.fa --out /workspace/genie3-run/predict-input-unconditional
+boltz predict /workspace/genie3-run/predict-input-unconditional/design.yaml --model boltz2 --cache /models/boltz2 --checkpoint /models/boltz2/boltz2_conf.ckpt --out_dir /workspace/genie3-run/predict-unconditional --accelerator gpu --devices 1 --recycling_steps 3 --sampling_steps 200 --diffusion_samples 1 --max_parallel_samples 1 --seed 51 --num_workers 0 --preprocessing-threads 1 --output_format mmcif --write_full_pae
 ```
 
 Run MPNN commands in `proteinmpnn`, generation/handoff commands in `genie3`, and prediction in `boltz2`. The helper keeps native CA geometry unchanged, replaces free UNK with explicit temporary ALA placeholders for ProteinMPNN's parser, and records those placeholders in its map. It rejects changes to fixed motif or target residues and restores every fixed target chain in the predictor input. The supplied Boltz input declares an empty MSA; it does not contact a public MSA server.

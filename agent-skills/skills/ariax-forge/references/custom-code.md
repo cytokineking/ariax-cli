@@ -9,8 +9,8 @@ and GPU boundaries. Shipped installations and shared weights stay read-only.
 Read this reference with
 `ariax skills forge --reference custom-code --read --json`. Follow the
 [shared lifecycle](../SKILL.md) for tool readiness, command recovery, billing,
-human controls and closure. Run setup and execution inside the remote Forge
-session; keep environments and scientific workloads off the workstation.
+human controls and closure. Run setup and execution inside the remote Forge session so dependencies and
+scientific workloads use the session's container and GPU.
 
 ## Choose source and dependencies
 
@@ -161,9 +161,9 @@ ariax forge run "$RESTORED_SESSION" --tool base --json -- python3 /inputs/custom
 ```
 
 Watch each command to `succeeded` in sequence. Save the new outputs in a
-successful flush, close the session and confirm `closed`. Use links or
-downloads from the current project for result consumption; keep bulk outputs
-on remote storage under the workstation storage policy.
+successful flush, close the session and confirm `closed`. Use `ariax forge link` or `ariax forge download` from the current project to
+inspect or retrieve saved outputs locally; keep heavy intermediates in `/scratch`
+and pack bulk directories before syncing or finishing.
 
 ## Use a scientific container
 

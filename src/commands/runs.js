@@ -1,7 +1,7 @@
 /** Read optional recorded run settings without starting compute. */
 import { usageError } from '../args.js';
 import { EXIT } from '../exit-codes.js';
-import { printData, printJson, printProgress, printTable } from '../output.js';
+import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
 import { isUUID } from '../uuid.js';
 
@@ -19,7 +19,8 @@ export async function run(ctx) {
   if (flags.job) {
     const result = await ctx.client.get(`${base}/${encodeURIComponent(flags.job.trim())}`, { signal: ctx.signal });
     if (ctx.json) printJson({ data: result.data, request_id: result.requestId });
-    else printData(result.data);
+    else if (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) printKv(result.data);
+    else printData(typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2));
     return;
   }
   const data = [], seen = new Set(flags.cursor ? [flags.cursor] : []);

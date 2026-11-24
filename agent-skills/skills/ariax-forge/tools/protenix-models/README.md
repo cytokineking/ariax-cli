@@ -24,10 +24,9 @@ Query-only A3Ms test supplied-MSA parsing and contain no searched homologs.
 `templates/2lwu.cif` is unchanged from the pinned fork.
 
 The exact source is `b806d2540ab326d71edcc47128343e627248c099` under Apache-2.0.
-The v2 checkpoint has bounded internal-development coverage; its small
+The v2 checkpoint has bounded preview qualification coverage; its small
 standalone examples are described in the [package guide](../protenix-models.md#v2-standalone-example).
-Its customer/public distribution and production delivery retain their separate
-scope. The CLI guide follows the repository license.
+Availability follows the live session catalog. The CLI guide follows the repository license.
 
 Grouped direct PDB/minimal mmCIF/full mmCIF examples use explicit
 `residueMappings`, author insertion codes and gap masks. `template-batch.json`

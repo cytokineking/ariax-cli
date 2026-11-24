@@ -13,10 +13,10 @@ for supported inputs and native limits.
 Check `ariax forge catalog --tool design-qc --json` for current availability and
 resources. Find the installed examples with `ariax skills forge --tool design-qc --json`, using
 `data.examples['design-qc']`. Both `forge` and `ariax-forge` aliases expose
-`design-qc`, `design-qc-formats` and `design-qc-fixtures`. Copy the example helper
-`prepare.py` to the authorized remote host; it fetches the pinned creator fixture. Prepare the folder there
-with `python3 prepare.py --out design-qc-inputs`. Register its files through the
-normal project input upload/import path as `design-qc/`. Local installed paths
+`design-qc`, `design-qc-formats` and `design-qc-fixtures`. Run the example helper
+`prepare.py` (`python3 "$EXAMPLES/prepare.py" --out design-qc-inputs`) to fetch
+the pinned creator fixture and prepare the input folder, then register its files
+through the normal project input upload/import path as `design-qc/`. Local paths
 and remote `/inputs/design-qc` are distinct locations.
 
 ```sh

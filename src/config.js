@@ -74,6 +74,7 @@ export function requireApiKey(config) {
     );
     err.code = 'AUTH';
     err.exitHint = 'auth';
+    err.action = 'Run `ariax login` in an interactive terminal, pass a key via `ariax login --with-token`, or set ARIAX_API_KEY.';
     throw err;
   }
 }

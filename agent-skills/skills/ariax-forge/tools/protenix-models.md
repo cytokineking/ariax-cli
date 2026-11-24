@@ -5,9 +5,8 @@ The package uses the Ariax template-enabled Protenix fork, version `2.0.0`.
 Choose a checkpoint explicitly: model features and native defaults differ.
 
 `protenix-models` provides eight checkpoint choices; `protenix-v2` is a separate
-tool with bounded internal-development coverage. V2 customer/public
-redistribution and production delivery remain outside that scope. Tool
-availability follows the selected session's catalog; all nine model identities
+tool with bounded preview coverage. Availability and qualification limits
+follow the selected session's live catalog; all nine model identities
 stay distinct.
 
 | Exact choice | Native defaults: cycles / steps | Additional native features |
@@ -126,8 +125,7 @@ arrays are preferable for repeated sequences or intentional gaps. Ambiguous chai
 duplicate chains/indices, fractional/out-of-range indices, absent source chains, and incomplete
 group mappings fail with a concrete error. A flat `queryIndices`/`templateIndices` mapping is
 supported for one chain pair. Protein templates are supported by the two public v1 choices;
-the constraint checkpoint accepts its native soft priors instead. V2 template
-use remains within its bounded internal-development scope.
+the constraint checkpoint accepts its native soft priors instead. V2 template use remains within its bounded preview qualification scope.
 
 The shipped `grouped-pdb.json`, `grouped-cif.json` and `grouped-full-cif.json` examples include
 a query insertion, absent source residue, author insertion code and explicit two-chain correspondence.

@@ -77,7 +77,7 @@ query batch at eight serial queries, seeds at two and samples at eight.
 The 256/512 profiles use repeated ubiquitin and establish execution/mapping
 bounds only. RNA is bounded at 32 residues, DNA at 32+32, and tested small ligands at AMP
 plus seven-heavy-atom toluene. Larger combinations and arbitrary modified residues
-are unqualified. Run workloads on an authorized remote GPU VM.
+are unqualified. Run workloads inside an authorized Forge GPU session.
 
 Supplied MSAs require native filenames and matching runner configuration. Use
 [runner-custom-msa.yaml](openfold3/runner-custom-msa.yaml) for files named

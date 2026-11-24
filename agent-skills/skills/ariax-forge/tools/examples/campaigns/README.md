@@ -3,8 +3,8 @@
 Use these source files with the [campaign recipes](../../../references/campaign-recipes.md)
 and [five-path consensus guide](../../campaign-recipes.md). Locate this directory
 with `ariax skills forge --tool campaign-recipes --json` at
-`data.examples['campaign-recipes']`. Every helper and scientific command runs on
-the authorized remote host. No scientific outputs are bundled here.
+`data.examples['campaign-recipes']`. Run these helpers and scientific commands
+inside the Forge session. No scientific outputs are bundled here.
 
 | Files | Use and limits |
 | --- | --- |

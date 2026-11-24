@@ -22,9 +22,8 @@ ariax skills ariax-forge --reference antibody-qc-methods --read --json
 ```
 
 Set `EXAMPLES` to `data.examples["antibody-qc"]` from the scoped discovery response.
-Copy `prepare.py` from that directory to the authorized remote host and run
-`python3 prepare.py --out ./antibody-inputs` there. Register
-`batch.json` from that host with `ariax forge inputs add "$SESSION" --file
+Run `python3 "$EXAMPLES/prepare.py" --out ./antibody-inputs` and register
+`batch.json` with `ariax forge inputs add "$SESSION" --file
 ./antibody-inputs/batch.json --path antibody-qc/batch.json`, then wait for readiness.
 Select `antibody-qc` with `ariax forge tools add "$SESSION" --tools antibody-qc`
 and `ariax forge tools wait "$SESSION" antibody-qc`. Run the exact native example:

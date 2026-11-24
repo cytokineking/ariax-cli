@@ -30,8 +30,8 @@ account/data access.
 
 ProteinBase offers an attributed public export at its [download page](https://proteinbase.com/download).
 An export download supplies no claim about a public bulk REST API. Keep the original
-CSV, retrieval timestamp and source/version text. Dataset download and processing
-belong on the remote host. Include: “This work used Proteinbase by Adaptyv Bio under
+CSV, retrieval timestamp and source/version text. Dataset processing runs in
+the Forge session. Include: “This work used Proteinbase by Adaptyv Bio under
 ODC-BY license”. The full original CSV belongs in registered inputs and the project workspace
 storage; the installed package ships only helper source.
 

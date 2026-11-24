@@ -4,7 +4,7 @@ Use tool `igdesign` for structure-conditioned redesign of a paired antibody with
 
 The named asset `igdesign-weights` mounts at `/models/igdesign-weights`. Use one CUDA GPU. Measured examples used the observed 1N8Z trastuzumab VH B, VL A and HER2 C backbone: 117/107 antibody residues and 581 antigen residues, 805 total. The exact crop retained 40 antigen residues, giving 264 total. One L40 with 49,140 MiB VRAM, 56 GiB host RAM and 28 CPUs ran these cases. Sampled peaks reached 14,709 MiB GPU memory and about 33.8 GiB container RAM. Minimum hardware requirements and larger envelopes remain unmeasured. [Modes and mapping](igdesign/modes.md) explains the selected paths, patch, terms and native output columns.
 
-Discover the installed inputs on the authorized remote execution host:
+Discover the installed example inputs:
 
 ```sh
 ariax skills forge --tool igdesign --json
@@ -12,7 +12,7 @@ ariax skills forge --reference igdesign --read --json
 ariax skills ariax-forge --reference igdesign-modes --read --json
 ```
 
-Set `EXAMPLES` to that host’s `data.examples.igdesign` directory from the discovery response. Run `python3 "$EXAMPLES/prepare.py" "$EXAMPLES" ./igdesign-inputs`. It generates SEQRES headers and configs for this complete observed fixture. Register each file under `igdesign/FILE` with `ariax forge inputs add "$SESSION" --file ./igdesign-inputs/FILE --path igdesign/FILE`; wait for every input to be ready. The source and generated paths above refer to the execution host; container paths use `/inputs`.
+Set `EXAMPLES` to `data.examples.igdesign` from the discovery response. Run `python3 "$EXAMPLES/prepare.py" "$EXAMPLES" ./igdesign-inputs`. It generates SEQRES headers and configs for this complete observed fixture. Register each file under `igdesign/FILE` with `ariax forge inputs add "$SESSION" --file ./igdesign-inputs/FILE --path igdesign/FILE`; wait for every input to be ready. Local paths and container `/inputs` paths are distinct.
 
 ```sh
 ariax forge tools add "$SESSION" --tools igdesign

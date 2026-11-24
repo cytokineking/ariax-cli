@@ -1,5 +1,5 @@
 /**
- * `ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--details]`
+ * `ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]`
  * List artifacts; with --download, presign + stream each file safely.
  */
 import fs from 'node:fs';
@@ -37,6 +37,16 @@ export async function run(ctx) {
   if (downloadDir !== undefined && (typeof downloadDir !== 'string' || downloadDir === '')) {
     throw usageError('results: --download requires a directory (e.g. --download ./out).');
   }
+  let initialCursor;
+  if (ctx.flags.cursor !== undefined) {
+    if (typeof ctx.flags.cursor !== 'string' || !ctx.flags.cursor.trim()) {
+      throw usageError('results: --cursor requires a non-empty continuation token.');
+    }
+    initialCursor = ctx.flags.cursor.trim();
+  }
+  if (initialCursor !== undefined && downloadDir !== undefined) {
+    throw usageError('results: --cursor cannot be combined with --download (downloads resume automatically via local checkpoint state).');
+  }
   const controller = new AbortController();
   const interrupt = () => {
     const error = new Error('Results interrupted. Re-run the same command to resume completed downloads.');
@@ -48,31 +58,104 @@ export async function run(ctx) {
   const meta = {};
   const responseInfo = {};
   try {
+    let lastNextCursor = null;
+    const detailsMode = ctx.flags.details === true;
+    let collectedCount = 0;
     const pages = artifactPages(ctx.client, projectId, limit, artifactPrefix, {
       signal,
+      initialCursor,
       onMeta: (value, requestId) => {
         Object.assign(meta, value);
         if (requestId) responseInfo.requestId = requestId;
       },
+      onPage: ({ nextCursor }) => {
+        lastNextCursor = nextCursor;
+      },
+      nextLimit: limit !== undefined
+        ? () => Math.max(1, limit - collectedCount)
+        : undefined,
     });
-    if (downloadDir !== undefined) return await downloadAll({ ...ctx, signal }, projectId, pages, downloadDir, meta, responseInfo);
+    if (downloadDir !== undefined) {
+      let downloadTruncated = false;
+      let downloadNextCursor = null;
+      const downloadPages = limit === undefined
+        ? pages
+        : (async function* () {
+          for await (const batch of pages) {
+            const remaining = limit - collectedCount;
+            if (remaining <= 0) break;
+            const sliced = batch.length > remaining;
+            const taken = sliced ? batch.slice(0, remaining) : batch;
+            collectedCount += taken.length;
+            if (taken.length) yield taken;
+            if (collectedCount >= limit) {
+              downloadTruncated = sliced || Boolean(lastNextCursor);
+              downloadNextCursor = sliced ? null : lastNextCursor;
+              break;
+            }
+          }
+        })();
+      return await downloadAll(
+        { ...ctx, signal },
+        projectId,
+        downloadPages,
+        downloadDir,
+        meta,
+        responseInfo,
+        { limit, getPagination: () => ({ truncated: downloadTruncated, nextCursor: downloadNextCursor }) },
+      );
+    }
     let count = 0;
     let displayed = 0;
+    let truncated = false;
+    let nextCursor = null;
     // JSON retains a single envelope. Details preserve the historical raw
     // artifact response; the default projects a stable, compact public view.
     const artifacts = [];
     for await (const batch of pages) {
-      count += batch.length;
-      if (ctx.json) artifacts.push(...batch);
-      else if (batch.length) displayed += emitTable(batch, ctx.flags.details === true);
+      const candidates = detailsMode
+        ? batch
+        : batch.filter((artifact) => !isOperationalArtifact(artifact));
+      let selected = candidates;
+      let slicedMidPage = false;
+      if (limit !== undefined) {
+        const remaining = limit - collectedCount;
+        if (remaining <= 0) break;
+        if (candidates.length > remaining) {
+          selected = candidates.slice(0, remaining);
+          slicedMidPage = true;
+        }
+      }
+      count += slicedMidPage ? selected.length : batch.length;
+      collectedCount += selected.length;
+      if (ctx.json) artifacts.push(...selected);
+      else if (selected.length) displayed += emitTable(selected, detailsMode);
+      if (limit !== undefined && collectedCount >= limit) {
+        truncated = slicedMidPage || Boolean(lastNextCursor);
+        nextCursor = slicedMidPage ? null : lastNextCursor;
+        break;
+      }
     }
     if (ctx.json) {
-      if (ctx.flags.details === true) {
-        printJson({ data: { artifacts }, meta, ...(responseInfo.requestId ? { request_id: responseInfo.requestId } : {}) });
+      const outMeta = {
+        ...meta,
+        ...(limit !== undefined
+          ? { truncated, next_cursor: nextCursor }
+          : (Object.hasOwn(meta, 'next_cursor') ? { next_cursor: null } : {})),
+      };
+      if (detailsMode) {
+        printJson({ data: { artifacts }, meta: outMeta, ...(responseInfo.requestId ? { request_id: responseInfo.requestId } : {}) });
       }
       else {
-        const visible = artifacts.filter((artifact) => !isOperationalArtifact(artifact)).map(presentArtifact);
-        printJson({ data: { artifacts: visible, count: visible.length } });
+        const visible = artifacts.map(presentArtifact);
+        printJson({
+          data: {
+            artifacts: visible,
+            count: visible.length,
+            ...(truncated ? { truncated: true } : {}),
+          },
+          ...(limit !== undefined ? { meta: { truncated, next_cursor: nextCursor } } : {}),
+        });
       }
     }
     else if (!displayed) {
@@ -80,18 +163,25 @@ export async function run(ctx) {
         ? 'No user-facing artifacts found. Use --details to inspect operational artifacts.'
         : 'No artifacts found.');
     }
-    return { count };
+    else if (truncated) {
+      printProgress(nextCursor
+        ? `Showing first ${displayed} artifact(s); pass --cursor with the JSON next_cursor or omit --limit to list all artifacts.`
+        : `Showing first ${displayed} artifact(s); omit --limit to list all artifacts.`);
+    }
+    return { count, ...(limit !== undefined ? { truncated, nextCursor } : {}) };
   } finally {
     process.removeListener('SIGINT', interrupt);
   }
 }
 
-export async function* artifactPages(client, projectId, limit, artifactPrefix, { signal, onMeta } = {}) {
-  let cursor;
-  const seenCursors = new Set();
+export async function* artifactPages(client, projectId, limit, artifactPrefix, { signal, initialCursor, onMeta, onPage, nextLimit } = {}) {
+  let cursor = initialCursor;
+  const seenCursors = new Set(cursor ? [cursor] : []);
   do {
     signal?.throwIfAborted();
-    const query = { limit: limit ?? 100, cursor };
+    const requested = nextLimit ? nextLimit() : (limit ?? 100);
+    const pageLimit = Math.max(1, Math.min(100, requested));
+    const query = { limit: pageLimit, cursor };
     if (artifactPrefix !== undefined) query.path = artifactPrefix;
     const res = await client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/artifacts`, { query, signal });
     signal?.throwIfAborted();
@@ -105,6 +195,7 @@ export async function* artifactPages(client, projectId, limit, artifactPrefix, {
     }
     if (next && seenCursors.has(next)) throw serverError('Artifact listing repeated a continuation cursor; retry the listing.');
     if (next) seenCursors.add(next);
+    onPage?.({ nextCursor: next ?? null, count: batch.length });
     yield batch;
     cursor = next;
   } while (cursor);
@@ -142,7 +233,7 @@ function serverError(message, code = 'results_invalid_response', action = 'Retry
   return error;
 }
 
-async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInfo) {
+async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInfo, { limit, getPagination } = {}) {
   const overwrite = ctx.flags.overwrite === true;
   const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
   const downloaded = [];
@@ -268,12 +359,14 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
   } finally {
     state.close();
   }
+  const pagination = getPagination ? getPagination() : { truncated: false, nextCursor: null };
   const destination = path.resolve(downloadDir);
   const counts = { downloaded: downloaded.length, resumed: resumed.length, skipped: skipped.length, failed: failures.length };
   const compact = {
     destination,
     counts,
     files: completed.filter((artifact) => !isOperationalArtifact(artifact)),
+    ...(pagination.truncated ? { truncated: true } : {}),
   };
   const details = {
     dir: downloadDir,
@@ -285,6 +378,12 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
     checkpoint: state.path,
     archive_verification: archiveVerification,
   };
+  const outMeta = {
+    ...meta,
+    ...(limit !== undefined
+      ? { truncated: pagination.truncated, next_cursor: pagination.nextCursor }
+      : (Object.hasOwn(meta, 'next_cursor') ? { next_cursor: null } : {})),
+  };
   if (!ctx.json) {
     printData(`Results: ${downloaded.length} downloaded, ${resumed.length} resumed, ${skipped.length} skipped, ${failures.length} failed`);
     printData(`Destination: ${destination}`);
@@ -293,6 +392,9 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
     if (ctx.flags.details === true) {
       printData(`checkpoint: ${state.path}`);
       printData(`archive verification: ${archiveVerification}`);
+    }
+    if (pagination.truncated) {
+      printProgress(`Stopped after --limit ${limit}; omit --limit to download all artifacts.`);
     }
     for (const failure of failures) {
       printData(`Failure: ${failure.path} [${failure.code}] ${failure.reason}`);
@@ -317,8 +419,8 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
   }
   if (ctx.json) {
     printJson(ctx.flags.details === true
-      ? { data: details, meta, ...(responseInfo.requestId ? { request_id: responseInfo.requestId } : {}) }
-      : { data: compact });
+      ? { data: details, meta: outMeta, ...(responseInfo.requestId ? { request_id: responseInfo.requestId } : {}) }
+      : { data: compact, ...(limit !== undefined ? { meta: { truncated: pagination.truncated, next_cursor: pagination.nextCursor } } : {}) });
   }
   return {
     downloaded: downloaded.length,

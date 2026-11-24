@@ -72,7 +72,7 @@ inputs. Missing alignments are a gate. Preview and infer need no target search.
 
 ## Direct command recipe
 
-Run on an authorized remote GPU VM. Require host `available` and each selected
+Run inside an authorized Forge GPU session. Require host `available` and each selected
 tool `ready`; inspect actual devices, allowed CPU IDs and free disk. Set
 `ALLOWED_CPUS` to eight actual allowed CPU IDs from that host inventory and use
 the explicit in-container `taskset` prefix; OMP threads do not limit JAX startup

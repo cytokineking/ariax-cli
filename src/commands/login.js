@@ -1,4 +1,5 @@
 /** ariax login [--with-token] [--insecure-storage] — validate and store an API key. */
+import { isNonInteractiveEnv } from '../agent-env.js';
 import { usageError } from '../args.js';
 import { createClient } from '../http.js';
 import { looksLikeApiKey } from '../credentials.js';
@@ -31,8 +32,12 @@ export async function authenticateAndStore(ctx, { automatic = false } = {}) {
       throw usageError('login: ' + (cause?.message || cause));
     }
   } else {
-    if (!ctx.interactive) {
-      throw usageError('login: run interactively, or pass a key through stdin with --with-token.');
+    const canPromptKey = ctx.interactive === true
+      && (typeof ctx.promptApiKey === 'function' || !isNonInteractiveEnv(ctx.env ?? process.env));
+    if (!canPromptKey) {
+      const err = usageError('login: run interactively, or pass a key through stdin with --with-token.');
+      err.action = 'Run `ariax login` in an interactive terminal, pass a key via `ariax login --with-token`, or set ARIAX_API_KEY.';
+      throw err;
     }
     printProgress(automatic ? 'Ariax is not connected.' : 'Connect the Ariax CLI.');
     printProgress('Create or copy an API key: ' + API_KEYS_URL);
@@ -63,7 +68,9 @@ export async function authenticateAndStore(ctx, { automatic = false } = {}) {
     storage = 'keychain';
   } else {
     let allowFile = flags['insecure-storage'] === true;
-    if (!allowFile && ctx.interactive) {
+    const canConfirmFile = ctx.interactive === true
+      && (typeof ctx.confirmFileStorage === 'function' || !isNonInteractiveEnv(ctx.env ?? process.env));
+    if (!allowFile && canConfirmFile) {
       const confirm = ctx.confirmFileStorage ?? promptConfirm;
       allowFile = await confirm(
         'System credential storage is unavailable. Save the key in '
@@ -75,10 +82,12 @@ export async function authenticateAndStore(ctx, { automatic = false } = {}) {
       await ctx.credentialStore.storeFile(apiKey);
       storage = 'file';
     } else if (flags['with-token'] === true) {
-      throw usageError(
+      const err = usageError(
         'login: system credential storage is unavailable; rerun with --insecure-storage '
           + 'to use the user-only credential file.',
       );
+      err.action = 'Rerun with `ariax login --with-token --insecure-storage`, or set ARIAX_API_KEY in the environment.';
+      throw err;
     }
   }
 

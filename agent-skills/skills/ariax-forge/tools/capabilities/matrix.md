@@ -32,7 +32,7 @@ The live catalog supplies current workload limits, resources and terms.
 | `biohub-esmfold2`, `biohub-esmfold2-fast` | Standalone sequence-to-protein structure prediction | [Biohub ESM](../biohub-esm.md) |
 | `opendde` | Preview molecular prediction | [OpenDDE](../opendde.md) |
 | `openbind-0`, `openfold3-preview2` | OpenFold3-family prediction with MSA/template inputs | [OpenFold3/OpenBind](../openfold3.md) |
-| Mol-1 | Prepared-JSON molecular prediction | [Mol-1](../mol1.md) |
+| `mol1` | Prepared-JSON molecular prediction | [Mol-1](../mol1.md) |
 | `chai1` | Molecular prediction with local MSA, templates or restraints | [Chai-1](../chai1.md) |
 | `immunebuilder` | Antibody, VHH or TCR variable-domain structure prediction | [ImmuneBuilder](../immunebuilder.md) |
 
@@ -54,7 +54,8 @@ The live catalog supplies current workload limits, resources and terms.
 
 | Tool or family | Use for | Guide |
 | --- | --- | --- |
-| `ipsae`, `interface-scores` | Predicted-complex interface confidence | [ipSAE](../ipsae.md), [interface scores](../interface-scores.md) |
+| `interface-scores` | Unified multi-predictor interface confidence (ipSAE, pDockQ, pDockQ2, LIS) for AF2, Boltz-2, Protenix, RF3, OpenDDE and OpenFold3 | [Interface scores](../interface-scores.md) |
+| `ipsae` | Legacy/specialized AF2-focused standalone ipSAE v3 scorer (use `interface-scores` for multi-predictor workflows) | [ipSAE](../ipsae.md) |
 | `tmol` | Protein energy, interface interaction scoring or Cartesian minimization | [Tmol](../tmol.md) |
 | `structure-tools`, `foldseek` | Structure preparation, geometry, alignment, clustering or structural database search | [Structure tools](../structure-tools.md) |
 | `mmseqs2`, `mmseqs2-gpu`, `mmseqs2-uniref90` | Protein sequence search, clustering, redundancy filtering or alignments | [MMseqs2](../mmseqs2.md) |

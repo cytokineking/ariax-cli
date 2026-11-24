@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 
+import { isNonInteractiveEnv } from '../agent-env.js';
 import { usageError } from '../args.js';
 import { EXIT } from '../exit-codes.js';
 import { printData, printJson, printProgress } from '../output.js';
@@ -74,8 +75,12 @@ export async function run(ctx) {
   }
 
   if (ctx.flags.yes !== true) {
-    if (!ctx.interactive) {
-      throw usageError('upgrade: confirmation requires a terminal; rerun with --yes to upgrade.');
+    const canConfirm = ctx.interactive === true
+      && (typeof ctx.confirmUpgrade === 'function' || !isNonInteractiveEnv(ctx.env ?? process.env));
+    if (!canConfirm) {
+      const err = usageError('upgrade: confirmation requires an interactive human terminal; rerun with --yes to upgrade.');
+      err.action = 'Rerun with `ariax upgrade --yes`, or run `ariax upgrade --check` to inspect without installing.';
+      throw err;
     }
     const confirmed = await (ctx.confirmUpgrade ?? confirmUpgrade)();
     if (!confirmed) {

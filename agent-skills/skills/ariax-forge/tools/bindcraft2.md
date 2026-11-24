@@ -81,7 +81,7 @@ ariax forge inputs list "$SESSION" --json
 
 Record each input ID and require all paths ready. Observe imports with
 `ariax forge inputs status "$SESSION" "$INPUT_ID" --json`. Inputs are read-only.
-The bundled settings write to `/workspace/b09/bindcraft2`; set `OUTPUT` to
+Read `project_folder` from the bundled `settings.json` and set `OUTPUT` to
 that path for the commands below. For your own run, stage your target/settings,
 choose a fresh `project_folder` under `/workspace` and set `OUTPUT` accordingly.
 Update input paths when staging elsewhere. With `resume: false`, an existing
@@ -203,8 +203,9 @@ Require the flush state `saved`. Set `RANKED_DESIGN` from the actual ranked
 table (or the example checker JSON) and confirm its file in the project listing
 before linking. If no ranked design exists, link the stage/rejection tables and
 available structures instead. Saved project files remain available after close; use the [outputs reference](../outputs.md)
-for downloads and storage limits. Keep bulk scientific outputs on remote
-storage under the applicable workstation policy. Public `closed` confirms
+for downloads and storage limits. Download needed results locally with
+`ariax forge download`, and keep heavy intermediates in `/scratch` or pack bulk
+directories before syncing and finishing. Public `closed` confirms
 allocation release; inspect synchronization errors separately.
 
 Set `PROJECT` from the session. If the user clears a human hold with

@@ -639,6 +639,7 @@
   "scripts/pack-release.js",
   "scripts/record-agent-evaluation.js",
   "scripts/test-package.js",
+  "src/agent-env.js",
   "src/args.js",
   "src/bindcraft2-inputs.js",
   "src/bindcraft2-progress.js",

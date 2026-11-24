@@ -94,9 +94,9 @@ that command and its logs before the dependent command. `watch` timeout ends
 local waiting while remote work retains its state. On an uncertain response,
 reconcile the original saved command ID before dispatching more work.
 
-`EXAMPLES` is the installed `ariax-forge/tools` directory, or this repository's
-same directory before admission. `SESSION` is the actual authorized session UUID.
-Do not execute these examples on the workstation.
+`EXAMPLES` is the installed `ariax-forge/tools` directory. `SESSION` is the
+actual authorized Forge session UUID; execute these commands remotely in the
+Forge session.
 
 ```sh
 ariax forge tools add "$SESSION" --tools esmfold2-pipeline --priority esmfold2-pipeline --json

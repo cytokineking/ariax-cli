@@ -6,7 +6,7 @@ gives exact native argv. `prepare.py --csv /inputs/lab-feedback/proteinbase.csv
 --out /workspace/lab-feedback/public-review` selects two actual public BLI records
 sharing a target, writes a complete offline shortlist and creates separate marked
 synthetic controls. The source CSV must come from the permitted ProteinBase export
-and be retained with attribution. It is downloaded only on the remote host.
+and be retained with attribution. Stage it into `/inputs/lab-feedback/` for processing in the Forge session.
 
 `check.py --ledger /workspace/lab-feedback/exchange.json` checks saved identity and
 provenance. `--controls` checks the independent artificial

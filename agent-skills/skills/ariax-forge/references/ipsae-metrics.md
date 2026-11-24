@@ -38,4 +38,4 @@ Inspect plausible coordinates/interface geometry separately. Scores describe pre
 
 Attribution: native calculations are Roland Dunbrack's ipSAE v3, retaining its MIT notice and paper references in the runtime vendored source. The native header cites [ipSAE](https://www.biorxiv.org/content/10.1101/2025.02.10.637595v1), [pDockQ](https://www.nature.com/articles/s41467-022-28865-w), [pDockQ2](https://academic.oup.com/bioinformatics/article/39/7/btad424/7219714), and [LIS](https://www.biorxiv.org/content/10.1101/2024.02.19.580970v1). Formulas above describe the inspected implementation, not a review of those papers' calibration datasets.
 
-Scientific reference adapted from Forge archive `d8c0b040f553bf9e51a532cb4db693529f50cc70` and checked against the current vendored source.
+Scientific reference verified against the current vendored source.

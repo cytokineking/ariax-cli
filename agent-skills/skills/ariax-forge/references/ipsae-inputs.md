@@ -27,7 +27,7 @@ The Boltz 2.2.1 writer writes matched files below `predictions/<record-id>/`: `<
 
 ## Protenix and other predictors
 
-Pinned Protenix `b806d2540ab326d71edcc47128343e627248c099` emits `token_pair_pae`, `atom_plddt` (0–1), `atom_to_token_idx`, `token_asym_id`, and `token_has_frame`, with `<task>_summary_confidence_sample_<rank>.json`. There is no Protenix adapter here. Preserve its matched CIF/full-data/summary and explicit mapping for future adapter development; do not rename fields or reshape arrays to claim support. Chai and arbitrary PAE-only exports are likewise pending.
+The standalone `ipsae` tool does not provide Protenix, RF3, OpenDDE, or OpenFold3 adapters. For Protenix, Boltz-2, RF3, OpenDDE, or OpenFold3 predictions, use the unified [`interface-scores`](../tools/interface-scores.md) tool instead, which validates matched native confidence and mapping files across AF2, Boltz-2, Protenix, RF3, OpenDDE, and OpenFold3. Do not rename Protenix fields or reshape arrays to pass them to standalone `ipsae`. Chai and arbitrary PAE-only exports remain unsupported.
 
 ## Check the recorded handoff
 
@@ -59,4 +59,3 @@ prediction follows a failed handoff.
 
 Sources: [vendored-source ancestor](https://github.com/DunbrackLab/IPSAE/blob/f892de5ba6f8567912764c990aae59ee8ce781c4/ipsae.py),
 [Boltz 2.2.1 tokenizer](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/data/tokenize/boltz2.py).
-Adapted from Forge archive `d8c0b040f553bf9e51a532cb4db693529f50cc70`.

@@ -27,7 +27,7 @@ count, attempt cap, GPU/time allowance and review point before compute.
 | [RFantibody](../tools/rfantibody.md) | Paired VH/VL or VHH CDR design, sequence design and RF2 prediction | Use a supported construct/count profile, native HLT annotations and explicit numbering maps. |
 | [Genie3](../tools/genie3.md) | Scaffold generation with motif or target conditioning, followed by CA-only MPNN and prediction | Preserve fixed residues, sampled scaffold maps and the selected mode's native success criteria. |
 | [Native PXDesign](../tools/pxdesign.md) | A joined design/prediction pipeline with preview or extended settings | Inspect the exact preset, checkpoint, MSA/template requirements and native export conditions. |
-| [Native ESMFold2 pipeline](../tools/esmfold2-pipeline.md) | Experimental design/critic with integrated Protenix validation | Internal-development scope is bounded to at most 318 polymer residues/eight design steps; custom scFv validation needs a supported structural framework. |
+| [Native ESMFold2 pipeline](../tools/esmfold2-pipeline.md) | Experimental design/critic with integrated Protenix validation | Experimental scope is currently validated up to 318 polymer residues and eight design steps; custom scFv validation needs a supported structural framework. |
 
 The live selected-tool record supplies actual keys, model choices, mode limits
 and resource floors. A guide or compact entry alone does not establish that a
@@ -61,9 +61,10 @@ BG="$FORGE_SKILL/tools/boltzgen"
 CAMPAIGNS="$FORGE_SKILL/tools/examples/campaigns"
 ```
 
-CLI orchestration and small source uploads can run on the workstation. Every
-Python/helper/native command below runs remotely through `forge run`. Keep
-environments, dependencies, images, weights and bulk scientific outputs remote.
+CLI orchestration and input uploads run from your local machine, while Python
+helpers and native scientific commands execute remotely in the Forge session
+through `forge run`. Keep heavy intermediate files in `/scratch` and pack bulk
+directories before syncing or finishing.
 Keep API/registry/R2 credentials outside workloads, argv, logs and saved source;
 use the existing grant/transfer path and named shared assets.
 
@@ -439,9 +440,10 @@ and partial-stage records if there is no accepted structure. Each link returns
 an authorized project-page URL for the current path; include it in
 the handoff, noting that later updates can change the linked bytes. The page previews uncompressed PDB/CIF/mmCIF ≤10,000,000 bytes.
 Make any decompressed preview copy on the VM and save it beside the original.
-Keep structures/arrays/bulk files remote. Use `forge download ... --dest ...`
-only on an authorized remote host for restore/analysis; downloaded files publish
-atomically after the complete byte count.
+Download needed results locally with `ariax forge download "$PROJECT" REMOTE_PATH --dest LOCAL_PATH`;
+downloaded files publish atomically after the complete byte count. Keep heavy
+intermediates in `/scratch` and pack bulk directories into archives before
+syncing or downloading.
 
 Set `PROJECT` from the session's actual `project_id`. Human pause on the
 project page establishes `human_resume_required`. Stop this project's work,

@@ -16,8 +16,8 @@ denominators and limitations.
 | `report-files.json` | Lists the 24 report output paths. |
 
 Register the five executable/plan inputs under `/inputs/campaign-benchmark/`
-and observe each import ID until ready. Installed source paths and remote
-input paths are distinct. Every helper runs on the authorized remote host.
+and observe each import ID until ready. Local source paths and remote
+input paths are distinct. Run these helpers inside the Forge session.
 
 Under `/workspace/benchmark/`, supply `campaign-delivery/campaign.json` with
 all referenced original files and `campaign-shortlists/shortlists.json`.

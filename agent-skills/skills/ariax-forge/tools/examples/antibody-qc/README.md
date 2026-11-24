@@ -1,8 +1,8 @@
 # Antibody QC sequence controls
 
 Use `ariax skills forge --tool antibody-qc --json` to find this directory in
-`data.examples["antibody-qc"]`. Run `python3 prepare.py --out DIRECTORY` on the
-authorized remote host. It writes `batch.json`, `vhh.json`, `invalid.json`,
+`data.examples["antibody-qc"]`. Run `python3 prepare.py --out DIRECTORY`. It
+writes `batch.json`, `vhh.json`, `invalid.json`,
 `mixed.json`, `empty.json` and `provenance.json`. The
 paired seed is a trastuzumab-like variable sequence used as a controlled input.
 Its deliberately introduced CDR3 NGT sequon changes to QGT in the second record.
@@ -11,8 +11,8 @@ its trailing RGRHHHHHH expression tag removed. The TNP BSD notice is included he
 these sequences.
 
 Register `batch.json` and use the command in the [primary guide](../../antibody-qc.md).
-Copy `check.py` to the remote analysis host and run `python3 check.py BATCH_JSON RESULT_JSON`
-against the input and saved result there. The checker validates
+Run `python3 check.py BATCH_JSON RESULT_JSON` against the input and saved result
+(in the Forge session or after downloading results locally). The checker validates
 original sequences, residue indices, distinct IMGT positions, regions, native
 peptide counts and disappearance of the deliberate NGT alert. The adapter checks
 native TNP and AbNumber CDR sequence agreement during execution.

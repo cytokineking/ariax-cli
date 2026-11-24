@@ -12,7 +12,7 @@ ariax skills forge --reference caliby --read --json
 ariax skills ariax-forge --reference caliby-modes --read --json
 ```
 
-Set `EXAMPLES` to `data.examples.caliby`. Copy `prepare.py` and the public `1crn.pdb` fixture from that directory to the authorized remote host. There, run `python3 prepare.py 1crn.pdb ./caliby-inputs`. Register the generated files from that host under `caliby/monomer/1crn.pdb`, `caliby/multichain/pair.pdb` and `caliby/constraints.csv` with `ariax forge inputs add SESSION --file FILE --path PATH`; wait for each input to be ready. The synthetic pair is two copies separated by 25 Å and checks chain handling.
+Set `EXAMPLES` to `data.examples.caliby`. Run `python3 "$EXAMPLES/prepare.py" "$EXAMPLES/1crn.pdb" ./caliby-inputs` (locally or in a Forge session) and register the generated files under `caliby/monomer/1crn.pdb`, `caliby/multichain/pair.pdb` and `caliby/constraints.csv` with `ariax forge inputs add SESSION --file FILE --path PATH`; wait for each input to be ready. The synthetic pair is two copies separated by 25 Å and checks chain handling.
 
 Select the tool with `ariax forge tools add SESSION --tools caliby` and wait for `ariax forge status SESSION` to show it ready. Run these exact native commands through `ariax forge run SESSION --tool caliby --gpus 0 -- NATIVE_ARGV`, then `ariax forge watch SESSION COMMAND_ID`:
 

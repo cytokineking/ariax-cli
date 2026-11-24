@@ -28,7 +28,7 @@ Choose the matching `settings-<family>-openmm.json` or
 `/workspace/complete/`. Select OpenMM explicitly with `--no-pyrosetta`;
 PyRosetta requires the separately authorized complete named asset and its
 license terms. Preserve source and dependency notices as described in the
-main guide. Run workloads on the authorized remote GPU host. Keep native
+main guide. Run workloads inside an authorized Forge GPU session. Keep native
 rejections, missing metrics and failures in the saved result, and choose
 filters before the run.
 
