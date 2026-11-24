@@ -41,7 +41,7 @@ to the selected settings file's remote `design_path`:
 
 ```sh
 ariax forge run "$SESSION" --tool freebindcraft --json -- python3 /inputs/freebindcraft/complete/check.py "$RUN_DIR"
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 180 --json
+ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --wait-timeout 180 --json
 ```
 
 Set `CHECK_COMMAND_ID` to the returned command ID and inspect its terminal

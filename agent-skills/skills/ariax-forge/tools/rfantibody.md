@@ -36,7 +36,7 @@ before submitting work. Tool readiness does not establish input readiness.
 
 ```sh
 ariax forge tools add "$SESSION" --tools rfantibody --priority rfantibody --json
-ariax forge tools wait "$SESSION" rfantibody --timeout 1800 --json
+ariax forge tools wait "$SESSION" rfantibody --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$RFANTIBODY_EXAMPLES/rsv_site3.pdb" --path rfantibody/rsv_site3.pdb --json
 ariax forge inputs add "$SESSION" --file "$RFANTIBODY_EXAMPLES/hu-4D5-8_Fv.pdb" --path rfantibody/hu-4D5-8_Fv.pdb --json
 ariax forge inputs add "$SESSION" --file "$RFANTIBODY_EXAMPLES/h-NbBCII10.pdb" --path rfantibody/h-NbBCII10.pdb --json
@@ -45,19 +45,19 @@ ariax forge inputs add "$SESSION" --file "$RFANTIBODY_EXAMPLES/check_outputs.py"
 ariax forge inputs add "$SESSION" --file "$RFANTIBODY_EXAMPLES/to_rf2_json.py" --path rfantibody-code/to_rf2_json.py --json
 ariax forge inputs add "$SESSION" --file "$RFANTIBODY_EXAMPLES/../examples/campaigns/rfantibody-select.py" --path rfantibody-code/select.py --json
 ariax forge inputs list "$SESSION" --json
-ariax forge run "$SESSION" --tool base --json -- sh -c 'mkdir -p /workspace/rfantibody-code && cp /inputs/rfantibody-code/*.py /workspace/rfantibody-code/'
+ariax forge run "$SESSION" --tool base --wait-ready --wait --json -- sh -c 'mkdir -p /workspace/rfantibody-code && cp /inputs/rfantibody-code/*.py /workspace/rfantibody-code/'
 ```
 
-Wait for each command ID to finish and inspect its logs before the next
-dependent action. This example requests one reproducible paired backbone and
-two sequences. Omitted counts instead use the native defaults above. Every
-explicit retry needs a new output directory.
+Wait for each command to succeed before the next dependent action (pass
+`--wait-ready --wait` on each `forge run`). This example requests one
+reproducible paired backbone and two sequences. Omitted counts instead use the
+native defaults above. Every explicit retry needs a new output directory.
 
 ```sh
-ariax forge run "$SESSION" --tool rfantibody --gpus 0 --timeout-seconds 1800 --json -- taskset -c 0-7 env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/launch.py generate --target /inputs/rfantibody/rsv_site3.pdb --framework /inputs/rfantibody/hu-4D5-8_Fv.pdb --out /workspace/paired/generate --design-loops H1:7,H2:6,H3:7,L1:11,L2:7,L3:9 --hotspots T305,T456 --num-designs 1 --deterministic
-ariax forge run "$SESSION" --tool rfantibody --gpus 0 --timeout-seconds 600 --json -- taskset -c 0-7 env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/launch.py sequence --input /workspace/paired/generate/pdbs --out /workspace/paired/sequence --loops H1,H2,H3,L1,L2,L3 --num-sequences 2 --temperature 0.1 --deterministic
-ariax forge run "$SESSION" --tool rfantibody --gpus 0 --timeout-seconds 1800 --json -- taskset -c 0-7 env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/launch.py predict --input /workspace/paired/sequence/pdbs --out /workspace/paired/predict --seed 0
-ariax forge run "$SESSION" --tool rfantibody --gpus 0 --timeout-seconds 60 --json -- env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/check_outputs.py --framework /inputs/rfantibody/hu-4D5-8_Fv.pdb --target /inputs/rfantibody/rsv_site3.pdb --generated /workspace/paired/generate/pdbs/design_0.pdb --sequenced /workspace/paired/sequence/pdbs/design_0_dldesign_0.pdb --predicted /workspace/paired/predict/pdbs/design_0_dldesign_0_best.pdb --loops H1,H2,H3,L1,L2,L3 --out /workspace/paired/check-0.json
+ariax forge run "$SESSION" --tool rfantibody --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- taskset -c 0-7 env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/launch.py generate --target /inputs/rfantibody/rsv_site3.pdb --framework /inputs/rfantibody/hu-4D5-8_Fv.pdb --out /workspace/paired/generate --design-loops H1:7,H2:6,H3:7,L1:11,L2:7,L3:9 --hotspots T305,T456 --num-designs 1 --deterministic
+ariax forge run "$SESSION" --tool rfantibody --gpus 0 --wait-ready --wait --wait-timeout 600 --timeout-seconds 600 --json -- taskset -c 0-7 env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/launch.py sequence --input /workspace/paired/generate/pdbs --out /workspace/paired/sequence --loops H1,H2,H3,L1,L2,L3 --num-sequences 2 --temperature 0.1 --deterministic
+ariax forge run "$SESSION" --tool rfantibody --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- taskset -c 0-7 env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/launch.py predict --input /workspace/paired/sequence/pdbs --out /workspace/paired/predict --seed 0
+ariax forge run "$SESSION" --tool rfantibody --gpus 0 --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- env PYTHONPATH=/opt/forge-rfantibody python /workspace/rfantibody-code/check_outputs.py --framework /inputs/rfantibody/hu-4D5-8_Fv.pdb --target /inputs/rfantibody/rsv_site3.pdb --generated /workspace/paired/generate/pdbs/design_0.pdb --sequenced /workspace/paired/sequence/pdbs/design_0_dldesign_0.pdb --predicted /workspace/paired/predict/pdbs/design_0_dldesign_0_best.pdb --loops H1,H2,H3,L1,L2,L3 --out /workspace/paired/check-0.json
 ```
 
 Repeat the check for every sequence. For VHH, use `h-NbBCII10.pdb`, lengths
@@ -115,20 +115,27 @@ again, so earlier copied reports do not become duplicate candidates. A report
 under `checks/` uses its native sequence ID as filename; the single-backbone
 example also supports `check-0.json`, `check-1.json`, and so on.
 
-Save the complete workspace and inputs, including source helpers, rejected
-outputs, arrays, settings and source maps:
+For large multi-design campaigns (hundreds of PDBs, trajectories, and
+`.native.npz` arrays), follow **Scratch → Curate → Pack → Finish**: write raw
+`generate/`, `sequence/`, and `predict/` trees under `/scratch/rfantibody-run/`,
+copy curated selection summaries and top preview PDBs (≤10 MB) to
+`/workspace/results/`, pack the full raw tree with
+`ariax forge pack "$SESSION" --src /scratch/rfantibody-run --dest /workspace/archives/rfantibody-run.tar.zst --wait --json`,
+and finish cleanly:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --json
 ariax forge link "$PROJECT" /workspace/paired/predict/pdbs/design_0_dldesign_0_best.pdb --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
 Project links refer to the current file path and can show newer bytes after an
-update. Resume starts with empty scratch and does not replay commands. Flush any
-new changes before closing, and submit the next scientific command explicitly.
-See [saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume).
+update. Resume starts with empty scratch and does not replay commands. Finish
+the session with `ariax forge finish "$SESSION" --wait --json` to flush changes
+and release compute cleanly, and submit the next scientific command explicitly.
+See [saved results](../outputs.md) and [Forge recovery](../references/recovery.md).
 The [example inputs](rfantibody/README.md) retain their source attribution and
 [MIT license](rfantibody/LICENSE.RFantibody).

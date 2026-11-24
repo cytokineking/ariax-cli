@@ -27,8 +27,7 @@ For a session with FreeBindCraft in its deployed catalog:
 
 ```sh
 ariax forge tools add "$SESSION" --tools freebindcraft --priority freebindcraft --json
-ariax forge tools wait "$SESSION" freebindcraft --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" freebindcraft --wait-timeout 1800 --json
 ```
 
 Require host `available` and `freebindcraft` ready. The shared `alphafold2`
@@ -102,9 +101,7 @@ preserving the previous run and its IDs.
 arguments follow the CLI's `--` separator:
 
 ```sh
-ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 3600 --json -- freebindcraft --settings /inputs/freebindcraft/complete/settings-miniprotein-openmm.json --advanced /inputs/freebindcraft/complete/advanced-miniprotein.json --filters /inputs/freebindcraft/complete/filters-miniprotein.json --no-pyrosetta --no-plots --no-animations --verbose
-ariax forge watch "$SESSION" "$DESIGN_COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$DESIGN_COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- freebindcraft --settings /inputs/freebindcraft/complete/settings-miniprotein-openmm.json --advanced /inputs/freebindcraft/complete/advanced-miniprotein.json --filters /inputs/freebindcraft/complete/filters-miniprotein.json --no-pyrosetta --no-plots --no-animations --verbose
 ```
 
 Set `DESIGN_COMMAND_ID` to the returned ID. For peptide design, stage and use
@@ -151,9 +148,7 @@ Accepted/Ranked/<native ranked name>.pdb
 ```
 
 ```sh
-ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 120 --json -- freebindcraft-check "$RUN_DIR"
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 180 --json
-ariax forge logs "$SESSION" "$CHECK_COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- freebindcraft-check "$RUN_DIR"
 ```
 
 Record the checker ID and require it to pass. Inspect command logs for completed
@@ -189,9 +184,8 @@ effective settings, advanced and filter JSON. `CAMPAIGN_DIR`, `SETTINGS_PATH`,
 be a fresh output path.
 
 ```sh
-ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 900 --json -- freebindcraft-refold --campaign "$CAMPAIGN_DIR" --settings "$SETTINGS_PATH" --advanced "$ADVANCED_PATH" --filters "$FILTERS_PATH" --output "$DIAGNOSTIC_DIR" --recycles 3 --no-pyrosetta
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 900 --json
-ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 120 --json -- freebindcraft-check "$DIAGNOSTIC_DIR" --diagnostic
+ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --wait-ready --wait --wait-timeout 900 --timeout-seconds 900 --json -- freebindcraft-refold --campaign "$CAMPAIGN_DIR" --settings "$SETTINGS_PATH" --advanced "$ADVANCED_PATH" --filters "$FILTERS_PATH" --output "$DIAGNOSTIC_DIR" --recycles 3 --no-pyrosetta
+ariax forge run "$SESSION" --tool freebindcraft --gpus 0 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- freebindcraft-check "$DIAGNOSTIC_DIR" --diagnostic
 ```
 
 This selects OpenMM and held-out models 1 and 2 with three recycles. For
@@ -201,27 +195,34 @@ native run did not record them. Refolding and relaxation after rejection do
 not change the original filter decision or turn the candidate into an accepted
 design. Share rejected results when Accepted/Ranked files are absent.
 
-## Save, download and restore results
+## Save, pack, download and restore results
 
-After run/check commands are terminal, flush the changed files:
+For multi-trajectory campaigns, follow **Scratch → Curate → Pack → Finish**:
+set `design_path` under `/scratch/freebindcraft-run/` so raw trajectories,
+`NativeArrays/`, and `NativeMPNN/` stay on local NVMe, copy compact CSVs
+(`final_design_stats.csv`, `trajectory_stats.csv`) and top accepted PDBs
+(≤10 MB) into `/workspace/results/`, pack the full raw tree with
+`ariax forge pack "$SESSION" --src /scratch/freebindcraft-run --dest /workspace/archives/freebindcraft-run.tar.zst --wait --json`,
+and finish the session.
+
+After run/check commands are terminal, flush and finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path "$RUN_DIR" --json
 ariax forge files "$PROJECT" --path "$RUN_DIR/Accepted" --json
 ariax forge link "$PROJECT" "$RUN_DIR/final_design_stats.csv" --json
 ariax forge link "$PROJECT" "$RUN_DIR/Accepted/$ACCEPTED_FILE" --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved`.
-Set `ACCEPTED_FILE` from the completed listing and match it to the checked
-result. If none were accepted, link the available rejection tables instead.
-To download a checked result, set `RESULT_DEST` to an authorized destination
-and read the current project files:
+Require the flush state `saved` and `finish` with `release: "released"` and
+`durability: "saved"`. Set `ACCEPTED_FILE` from the completed listing and match
+it to the checked result. If none were accepted, link the available rejection
+tables instead. To download a checked result, set `RESULT_DEST` to an authorized
+destination and read the current project files:
 
 ```sh
 ariax forge download "$PROJECT" "$RUN_DIR/final_design_stats.csv" --dest "$RESULT_DEST/freebindcraft-final.csv" --json
@@ -229,9 +230,8 @@ ariax forge download "$PROJECT" "$RUN_DIR/Accepted/$ACCEPTED_FILE" --dest "$RESU
 ```
 
 Keep inputs, effective settings, logs, failure tables, NativeArrays,
-NativeMPNN and original decisions in Files. Saved project files remain
-available after close. Public `closed` confirms allocation release; inspect
-synchronization errors separately.
+NativeMPNN and original decisions (packed in `/workspace/archives/` for bulk
+runs). Saved project files remain available after finish.
 
 Set `PROJECT` from the session. If the user clears a human hold with
 **Resume workspace**, inspect the project and set `RESTORED_SESSION` to its
@@ -244,23 +244,19 @@ Recover an uncertain earlier request using its original ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40S --tools freebindcraft --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40S --tools freebindcraft --control-revision "$REVISION" --max-gpu-hours 1 --wait --json
 ```
 
 For the CLI path, set `RESTORED_SESSION` from the response. After either path,
-inspect the session and existing commands before running a new authorized check:
+inspect existing commands before running a new authorized check:
 
 ```sh
-ariax forge status "$RESTORED_SESSION" --json
-ariax forge tools wait "$RESTORED_SESSION" freebindcraft --timeout 1800 --json
-ariax forge run "$RESTORED_SESSION" --tool freebindcraft --gpus 0 --timeout-seconds 120 --json -- freebindcraft-check "$RUN_DIR"
-ariax forge watch "$RESTORED_SESSION" "$RESTORED_CHECK_COMMAND_ID" --timeout 180 --json
-ariax forge close "$RESTORED_SESSION" --json
-ariax forge status "$RESTORED_SESSION" --json
+ariax forge run "$RESTORED_SESSION" --tool freebindcraft --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 120 --json -- freebindcraft-check "$RUN_DIR"
+ariax forge finish "$RESTORED_SESSION" --wait --json
 ```
 
-Require host/tool readiness and watch the explicit checker command before
-closure. Use the checker appropriate to the saved layout. Restoration recovers workspace and
-ready staged inputs without replaying design. Each new session uses normal
-allocation and billing. Read the [outputs reference](../outputs.md) for
-project-file and recovery semantics.
+Require tool readiness and finish the restored session cleanly. Use the checker
+appropriate to the saved layout. Restoration recovers workspace and ready staged
+inputs without replaying design. Each new session uses normal allocation and
+billing. Read the [outputs reference](../outputs.md) for project-file and
+recovery semantics.

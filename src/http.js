@@ -60,6 +60,9 @@ const KNOWN_ERROR_DETAIL_KEYS = new Set([
   'human_resume_required',
   'approval_path',
   'approval_url',
+  'command_id',
+  'exit_code',
+  'output_tail',
 ]);
 
 const SENSITIVE_DETAIL_KEY = /(?:^|[_-])(?:urls?|uris?|hrefs?|grants?|tokens?|secrets?|auth|authorization|cookies?|presign|presigned|signatures?|sig|credentials?|passwords?|passwd|jwts?|bearer|headers?|private|endpoints?|dsn)(?:$|[_-])|(?:url|uri|href|token|secret|signature|password|credential)s?$/i;
@@ -72,9 +75,10 @@ const DETAIL_MAX_DEPTH = 4;
 const DETAIL_MAX_KEYS = 32;
 const DETAIL_MAX_ARRAY = 50;
 const DETAIL_MAX_STRING = 512;
+const OUTPUT_TAIL_MAX_STRING = 4096;
 const DETAIL_MAX_NODES = 250;
 
-function sanitizeDetailString(value) {
+function sanitizeDetailString(value, maxLen = DETAIL_MAX_STRING, fromEnd = false) {
   let text = sanitize(value)
     .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, '[REDACTED]')
     .replace(/https?:\/\/[^\s"'<>]+/gi, (candidate) => {
@@ -86,7 +90,7 @@ function sanitizeDetailString(value) {
         return '[REDACTED URL]';
       }
     });
-  if (text.length > DETAIL_MAX_STRING) text = text.slice(0, DETAIL_MAX_STRING);
+  if (text.length > maxLen) text = fromEnd ? text.slice(text.length - maxLen) : text.slice(0, maxLen);
   return text;
 }
 
@@ -171,6 +175,13 @@ function sanitizeErrorDetails(details) {
     result.allowed_statuses = [...new Set(details.allowed_statuses)];
   }
   if (isUUID(details.project_id)) result.project_id = details.project_id.trim().toLowerCase();
+  if (isUUID(details.command_id)) result.command_id = details.command_id.trim().toLowerCase();
+  if (details.exit_code === null || (Number.isSafeInteger(details.exit_code) && details.exit_code >= -255 && details.exit_code <= 65535)) {
+    result.exit_code = details.exit_code;
+  }
+  if (typeof details.output_tail === 'string' && details.output_tail.length > 0) {
+    result.output_tail = sanitizeDetailString(details.output_tail, OUTPUT_TAIL_MAX_STRING, true);
+  }
   if (Number.isSafeInteger(details.control_revision) && details.control_revision >= 0) result.control_revision = details.control_revision;
   if (typeof details.human_resume_required === 'boolean') result.human_resume_required = details.human_resume_required;
   // Approval points at an ordinary project page. Never retain a grant, query,

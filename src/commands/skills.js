@@ -409,9 +409,6 @@ function readTarget(requested, reference, all) {
       : { id: 'shared', scope: 'shared', path: all.shared };
   }
   if (reference === 'shared') return { id: reference, scope: 'shared', path: all.shared };
-  if (Object.hasOwn(coreRefs, reference)) {
-    return { id: reference, scope: 'core', path: coreRefs[reference] };
-  }
   if (Object.hasOwn(PLATFORMS, requested) && Object.hasOwn(forgeRefs, reference)) {
     return { id: reference, scope: 'platform', platform: 'forge', path: forgeRefs[reference] };
   }
@@ -425,6 +422,9 @@ function readTarget(requested, reference, all) {
       protocol: requested,
       path: join(ROOT, 'skills', PROTOCOLS[requested], 'outputs.md'),
     };
+  }
+  if (Object.hasOwn(coreRefs, reference)) {
+    return { id: reference, scope: 'core', path: coreRefs[reference] };
   }
   const names = Object.keys({
     ...all.references,

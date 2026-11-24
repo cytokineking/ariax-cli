@@ -41,8 +41,7 @@ tool before running. When the assembled catalog offers the tool:
 
 ```sh
 ariax forge tools add "$SESSION" --tools interface-scores --priority interface-scores --json
-ariax forge tools wait "$SESSION" interface-scores --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" interface-scores --wait-timeout 1800 --json
 ```
 
 Stage the handoff and all declared paths through ordinary `forge inputs add`.
@@ -55,10 +54,8 @@ ariax forge inputs add "$SESSION" --file "$EXAMPLES/interface-scores/af2/model.p
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/interface-scores/af2/confidence.json" --path interface-scores/af2/confidence.json --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/interface-scores/af2/handoff.json" --path interface-scores/af2/handoff.json --json
 ariax forge inputs list "$SESSION" --json
-ariax forge run "$SESSION" --tool interface-scores --timeout-seconds 120 --json -- interface-scores /inputs/interface-scores/af2/handoff.json --output /workspace/interface-scores/af2.json --pae-cutoff 10
-ariax forge watch "$SESSION" "$SCORE_COMMAND_ID" --timeout 180 --json
-ariax forge run "$SESSION" --tool interface-scores --timeout-seconds 60 --json -- python3 /opt/interface-scores/check.py /workspace/interface-scores/af2.json --require-available
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 120 --json
+ariax forge run "$SESSION" --tool interface-scores --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- interface-scores /inputs/interface-scores/af2/handoff.json --output /workspace/interface-scores/af2.json --pae-cutoff 10
+ariax forge run "$SESSION" --tool interface-scores --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- python3 /opt/interface-scores/check.py /workspace/interface-scores/af2.json --require-available
 ```
 
 Use each returned command ID and require success before the dependent check.
@@ -102,18 +99,22 @@ experimental success. Compare consistent constructs, predictor/model,
 settings and cutoffs, and preserve rejected/absent data. Do not replace
 missing confidence with B-factors, PDE, averaged PAE or zero vectors.
 
-Save results and raw originals before closure:
+Save results and raw originals before finishing (for large batch sweeps, write
+per-complex JSON outputs under `/scratch/interface-scores/`, copy a combined
+summary table to `/workspace/results/`, and pack raw files with
+`ariax forge pack`):
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/interface-scores --json
 ariax forge download "$PROJECT" /workspace/interface-scores/af2.json --dest ./interface-scores-af2.json --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved`. Use the [complete saved-output procedure](interface-scores/saved-output-restoration.md)
+Require the flush state `saved` and `finish` with `release: "released"` and
+`durability: "saved"`. Use the [complete saved-output procedure](interface-scores/saved-output-restoration.md)
 for native inputs, saved-file links and restoration, together
 with the [outputs guide](../outputs.md). Restore recovers files for explicit later
-checks and does not rerun predictions/scoring. Close owned compute and confirm
-closed state when work ends.
+checks and does not rerun predictions/scoring.

@@ -20,13 +20,12 @@ through the normal project input upload/import path as `design-qc/`. Local paths
 and remote `/inputs/design-qc` are distinct locations.
 
 ```sh
-ariax forge tools add SESSION --tools design-qc --json
-ariax forge tools wait SESSION design-qc --timeout 600 --json
-ariax forge run SESSION --tool design-qc -- design-qc dssp --candidate reference --input /inputs/design-qc/reference.pdb --format mmcif --out /workspace/qc-dssp
-ariax forge run SESSION --tool design-qc -- design-qc dockq --candidate relabeled --model /inputs/design-qc/relabeled.pdb --reference /inputs/design-qc/reference.pdb --reference-kind experimental --partners /inputs/design-qc/relabeled-partners.json --out /workspace/qc-dockq
+ariax forge tools add "$SESSION" --tools design-qc --json
+ariax forge tools wait "$SESSION" design-qc --wait-timeout 600 --json
+ariax forge run "$SESSION" --tool design-qc --wait-ready --wait --wait-timeout 600 --json -- design-qc dssp --candidate reference --input /inputs/design-qc/reference.pdb --format mmcif --out /workspace/qc-dssp
+ariax forge run "$SESSION" --tool design-qc --wait-ready --wait --wait-timeout 600 --json -- design-qc dockq --candidate relabeled --model /inputs/design-qc/relabeled.pdb --reference /inputs/design-qc/reference.pdb --reference-kind experimental --partners /inputs/design-qc/relabeled-partners.json --out /workspace/qc-dockq
 ```
 
-Watch the returned command IDs with `ariax forge watch SESSION COMMAND --json`.
 Output directories must be new so prior reports survive. Inspect `result.json`
 and every `native_reports` member. Identical relabeled partner groups should give
 DockQ near one. Run the changed pose example from the fixtures guide to see a
@@ -50,8 +49,11 @@ The ipSAE text adapter takes the main report, byres report and original structur
 see the format reference. It performs no new interface calculation.
 
 Keep registered structures, partner maps, prediction/reference provenance,
-input interface reports and all output directories using the [Files guide](../outputs.md)
-for file synchronization, resume and session closure.
+input interface reports and output directories, then release the VM with
+`ariax forge finish "$SESSION" --wait --json` (for large multi-candidate QC
+sweeps, write raw per-candidate outputs under `/scratch/design-qc/`, copy
+summaries to `/workspace/results/`, and pack raw files with `ariax forge pack`;
+see the [Files guide](../outputs.md)).
 
 Sources: DSSP v4.6.1 at
 [d8278f9](https://github.com/PDB-REDO/dssp/tree/d8278f9f4f8c49fc353b580b7d0d7bc8b1b4e384)

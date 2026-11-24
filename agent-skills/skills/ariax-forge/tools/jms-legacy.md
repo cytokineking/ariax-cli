@@ -28,7 +28,7 @@ Lowercase A3M insertions are not removed. The two-row example is synthetic.
 
 ```sh
 ariax forge tools add "$SESSION" --tools jms-legacy --json
-ariax forge tools wait "$SESSION" jms-legacy --timeout 7200 --json
+ariax forge tools wait "$SESSION" jms-legacy --wait-timeout 7200 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/6MRR-A.pdb" --path jms-legacy/6MRR-A.pdb --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/6MRR-A.fasta" --path jms-legacy/6MRR-A.fasta --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/two-sequence.fasta" --path jms-legacy/two-sequence.fasta --json
@@ -41,9 +41,9 @@ hard switch at iteration 50. Choose hardware from the deployed requirements;
 these small inputs do not establish larger-input capacity.
 
 ```sh
-ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --timeout-seconds 1800 --json -- jms-legacy score --model joint --pdb /inputs/jms-legacy/6MRR-A.pdb --chain A --fasta /inputs/jms-legacy/6MRR-A.fasta --seed 7 --output /workspace/jms-legacy/joint-score
-ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --timeout-seconds 1800 --json -- jms-legacy predict --model trros --fasta /inputs/jms-legacy/two-sequence.fasta --msa --seed 7 --output /workspace/jms-legacy/msa-predict
-ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --timeout-seconds 1800 --json -- jms-legacy design --model trros --pdb /inputs/jms-legacy/6MRR-A.pdb --chain A --fasta /inputs/jms-legacy/6MRR-A.fasta --iterations 100 --num 1 --hard-switch 50 --seed 7 --output /workspace/jms-legacy/fixed-design
+ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- jms-legacy score --model joint --pdb /inputs/jms-legacy/6MRR-A.pdb --chain A --fasta /inputs/jms-legacy/6MRR-A.fasta --seed 7 --output /workspace/jms-legacy/joint-score
+ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- jms-legacy predict --model trros --fasta /inputs/jms-legacy/two-sequence.fasta --msa --seed 7 --output /workspace/jms-legacy/msa-predict
+ariax forge run "$SESSION" --tool jms-legacy --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- jms-legacy design --model trros --pdb /inputs/jms-legacy/6MRR-A.pdb --chain A --fasta /inputs/jms-legacy/6MRR-A.fasta --iterations 100 --num 1 --hard-switch 50 --seed 7 --output /workspace/jms-legacy/fixed-design
 ```
 
 `score` accepts all five model selectors. Single-sequence prediction uses one
@@ -68,14 +68,21 @@ Observe `forge command`, `forge watch` and `forge logs` until each command
 succeeds. A client wait timeout leaves the command running; inspect the
 original command ID before deciding on an explicit new operation.
 
+For multi-design sweeps, write bulk outputs under `/scratch/jms-legacy/`, copy
+`scores.json` summaries to `/workspace/results/`, pack raw arrays/FASTAs with
+`ariax forge pack "$SESSION" --src /scratch/jms-legacy --dest /workspace/archives/jms-legacy.tar.zst --wait --json`,
+and release compute cleanly.
+
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/jms-legacy --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush. Preserve complete output
-directories, including arrays and FASTA. Follow the [Files guide](../outputs.md)
-for saved links, remote export, restoration and session closure, and
-[project controls](../SKILL.md#project-controls-and-resume) for pause and same-project resume.
+Require a successful flush and `finish` with `release: "released"` and
+`durability: "saved"`. Preserve complete output directories, including arrays
+and FASTA. Follow the [Files guide](../outputs.md) for saved links, remote
+export and restoration, and [Forge recovery](../references/recovery.md) for
+pause and same-project resume.

@@ -27,13 +27,13 @@ ariax forge inputs add SESSION --file "$EXAMPLES/FILENAME" --path spurs/FILENAME
 Observe each input's `ready` state. The installed directory and remote
 `/inputs/spurs` directory serve different stages.
 
-Use the shared [session lifecycle](../SKILL.md#discover-plan-run-and-close) to
-select an authorized one-GPU session with the `spurs` tool and wait for readiness:
+Use the shared [session lifecycle](../SKILL.md) to
+select an authorized one-GPU session with the `spurs` tool and run with `--wait-ready --wait`:
 
 ```sh
-ariax forge tools add SESSION --tools spurs
-ariax forge tools wait SESSION spurs
-ariax forge run SESSION --tool spurs --gpus 0 --timeout-seconds 900 -- sh /inputs/spurs/run.sh /workspace/spurs-example
+ariax forge tools add "$SESSION" --tools spurs --json
+ariax forge tools wait "$SESSION" spurs --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool spurs --gpus 0 --wait-ready --wait --wait-timeout 900 --timeout-seconds 900 --json -- sh /inputs/spurs/run.sh /workspace/spurs-example
 ```
 
 The example runs single-score controls, a complete saturation scan, a copy numbered 101–166 that checks parsed-position mapping, two double mutants plus a wild-type control, and both the corrected paper-aligned and creator notebook functional-site workflows on one real structure. Inspect `/workspace/spurs-example/checks.json` and each `result.json`. These example checks cover execution and output identity; experimental stability and functional-site accuracy remain unmeasured. The resource example is limited to 66 residues on an L40; assess larger proteins and other GPU architectures separately. Hardware minima remain unmeasured.
@@ -48,7 +48,7 @@ Mutation strings use 1-based positions in the parsed chain sequence. Check `resi
 
 Single scores are already mutant-minus-WT in kcal/mol. Negative values predict stabilization; the single-model WT diagonal is zero. Higher-order scores retain the native learned correction and can have a WT offset. Compare those values with the constituent single-model sum as separate model outputs. That difference includes checkpoint changes and correction terms. Absolute folding stability requires a different method.
 
-Save the registered inputs, mutation selections, all `result.json` and residue maps, arrays and CSV outputs using the shared [saved-results instructions](../outputs.md). A later session restores these files without replaying scientific commands. Failed or empty requests produce an explicit failed result with its reason, and require an explicit corrected command.
+Save the registered inputs, mutation selections, all `result.json` and residue maps, arrays and CSV outputs using **Scratch → Curate → Pack → Finish** for bulk scans (write raw per-protein scan dirs under `/scratch/spurs/`, copy summary CSVs/JSONs to `/workspace/results/`, pack with `ariax forge pack`, and finish with `ariax forge finish "$SESSION" --wait --json`; see the shared [saved-results instructions](../outputs.md)). A later session restores these files without replaying scientific commands. Failed or empty requests produce an explicit failed result with its reason, and require an explicit corrected command.
 
 For the bundled example, inspect saved outputs with the checker inside the ready
 tool container:

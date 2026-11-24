@@ -6,11 +6,11 @@ the experiment's required inputs and outputs; use the
 
 | Need | Selection guide |
 | --- | --- |
-| Generate a binder or conditioned design | [Design tools](../tools/capabilities/matrix.md#design): compare modality, design mechanism, fixed regions, chemistry and required downstream stages. |
-| Predict a defined structure or complex | [Prediction tools](../tools/capabilities/matrix.md#prediction): match molecule types, MSA/template needs, restraints and checkpoint choice. |
-| Redesign or score sequences | [Sequence tools](../tools/capabilities/matrix.md#sequence-optimization): distinguish backbone-conditioned design, sequence likelihood and learned stability estimates. |
-| Assess, search or compare existing candidates | [Validation and search](../tools/capabilities/matrix.md#validation-and-search): choose confidence, geometry, energy, reference comparison or database search for the actual question. |
-| Compose stages or incorporate experimental results | [Campaign and workspace guides](../tools/capabilities/matrix.md#campaigns-and-workspace): preserve candidate identity, native rejection and explicit review points. |
+| Generate a binder or conditioned design | [Design tools](../tools/capabilities/matrix.md): compare modality, design mechanism, fixed regions, chemistry and required downstream stages. |
+| Predict a defined structure or complex | [Prediction tools](../tools/capabilities/matrix.md): match molecule types, MSA/template needs, restraints and checkpoint choice. |
+| Redesign or score sequences | [Sequence tools](../tools/capabilities/matrix.md): distinguish backbone-conditioned design, sequence likelihood and learned stability estimates. |
+| Assess, search or compare existing candidates | [Validation and search](../tools/capabilities/matrix.md): choose confidence, geometry, energy, reference comparison or database search for the actual question. |
+| Compose stages or incorporate experimental results | [Campaign and workspace guides](../tools/capabilities/matrix.md): preserve candidate identity, native rejection and explicit review points. |
 
 Discover current account-visible choices with
 `ariax forge catalog --task TASK --compact --json`, then fetch
@@ -31,8 +31,8 @@ settings and native Forge scope are separate; compare
 Require ready tools and inputs, inspect native output and rejection records,
 then use the [project file and resume flow](../outputs.md) before closing compute.
 After a lost acknowledgment, reconcile the original command/session ID through
-the [Forge lifecycle](../SKILL.md#recover-a-lost-response). For a human pause,
-follow [project controls](../SKILL.md#project-controls-and-resume).
+the [Forge recovery guide](recovery.md). For a human pause,
+follow [Forge recovery](recovery.md).
 **Resume workspace** starts a same-project session to inspect and use, while
 **Allow agent to resume later** leaves compute stopped until an authorized agent
 resume. Do not automatically replay science.

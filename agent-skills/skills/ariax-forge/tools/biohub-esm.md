@@ -74,12 +74,10 @@ Upload required files individually and confirm their input records are ready:
 
 ```sh
 ariax forge tools add "$SESSION" --tools biohub-esmfold2-fast --priority biohub-esmfold2-fast --json
-ariax forge tools wait "$SESSION" biohub-esmfold2-fast --timeout 1800 --json
+ariax forge tools wait "$SESSION" biohub-esmfold2-fast --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/complex.json" --path biohub-esm/complex.json --json
 ariax forge inputs list "$SESSION" --json
-ariax forge run "$SESSION" --tool biohub-esmfold2-fast --gpus 0 --timeout-seconds 3600 --json -- biohub-esm fold --model biohub-esmfold2-fast --input /inputs/biohub-esm/complex.json --output /workspace/biohub-esm/fast-complex --num-loops 1 --num-sampling-steps 14 --num-diffusion-samples 2 --seed 7
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool biohub-esmfold2-fast --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- biohub-esm fold --model biohub-esmfold2-fast --input /inputs/biohub-esm/complex.json --output /workspace/biohub-esm/fast-complex --num-loops 1 --num-sampling-steps 14 --num-diffusion-samples 2 --seed 7
 ```
 
 Use the returned command ID. The reduced loop/step counts demonstrate only
@@ -146,8 +144,7 @@ classification heads and SAEs are outside this interface.
 Check a terminal batch through its selected tool:
 
 ```sh
-ariax forge run "$SESSION" --tool biohub-esmfold2-fast --timeout-seconds 120 --json -- biohub-esm-check /workspace/biohub-esm/fast-complex
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 180 --json
+ariax forge run "$SESSION" --tool biohub-esmfold2-fast --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- biohub-esm-check /workspace/biohub-esm/fast-complex
 ```
 
 The checker parses real exports and confirms identity, finite coordinates and
@@ -182,22 +179,30 @@ An uncertain delivery is resolved with its saved command ID before any new
 scientific submission. Diagnose failed items and preserve all prior outcomes.
 The adapter runs once per unfinished item during an explicitly submitted command.
 
-After all writers are terminal, flush the changed files:
+For large multi-sequence batches, follow **Scratch → Curate → Pack → Finish**:
+write raw outputs under `/scratch/biohub-esm-batch/`, copy `batch.json`,
+summary tables, and top preview CIFs (≤10 MB) to `/workspace/results/`, pack
+bulk `.cif`/`.npz` outputs with
+`ariax forge pack "$SESSION" --src /scratch/biohub-esm-batch --dest /workspace/archives/biohub-esm-batch.tar.zst --wait --json`,
+and finish the session.
+
+After all writers are terminal, flush and finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/biohub-esm/fast-complex --json
 ariax forge download "$PROJECT" "$EXPORTED_CIF_PATH" --dest ./sample.cif --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
 Use a file path from `batch.json`; attempt UUIDs are generated per execution.
 Restore through the platform's accepted same-project control path, honor any
 human hold, and read/check completed files before an explicit unfinished-item
 resume. Restoration reinstalls named assets normally and starts no inference.
-Close and confirm cleanup within the user's task scope. Follow the
-[saved-output guide](../outputs.md) for current project downloads and links.
+Confirm `finish` reports `release: "released"` and `durability: "saved"`. Follow
+the [saved-output guide](../outputs.md) for current project downloads and links.
 
 Project-local source and environments belong in workspace/scratch. Shared `/opt`
 and `/models` remain read-only. Record the custom revision, edits and compatibility
@@ -213,7 +218,7 @@ layer-state fixture (`sequences-interrupt.fasta`) are
 interruption examples without a biological accuracy claim.
 
 Use [saved results](../outputs.md) for current project `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
+and [Forge recovery](../references/recovery.md) for human
 pause and same-project resume. **Resume workspace** starts a same-project
 session; inspect and use it. **Allow agent to resume later** leaves compute
 stopped until an authorized agent resume. Never automatically replay science.

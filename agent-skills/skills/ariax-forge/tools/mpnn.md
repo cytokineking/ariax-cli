@@ -52,11 +52,10 @@ the authorized session UUID. Check the selected tool’s catalog record for avai
 
 ```sh
 ariax forge tools add "$SESSION" --tools proteinmpnn --priority proteinmpnn --json
-ariax forge tools wait "$SESSION" proteinmpnn --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" proteinmpnn --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$MPNN_EXAMPLES/protein.pdb" --path mpnn/protein.pdb --json
 ariax forge inputs add "$SESSION" --file "$MPNN_EXAMPLES/protein.plan.json" --path mpnn/protein.plan.json --json
-ariax forge run "$SESSION" --tool proteinmpnn --gpus 0 --timeout-seconds 60 --json -- mpnn-prepare --pdb /inputs/mpnn/protein.pdb --plan /inputs/mpnn/protein.plan.json --out /workspace/mpnn-demo/prepared-protein
+ariax forge run "$SESSION" --tool proteinmpnn --gpus 0 --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- mpnn-prepare --pdb /inputs/mpnn/protein.pdb --plan /inputs/mpnn/protein.plan.json --out /workspace/mpnn-demo/prepared-protein
 ```
 
 Require input paths ready, host available and tool ready. Watch the returned
@@ -84,10 +83,8 @@ directory so stale sequences cannot pass inspection.
 ## Design and inspect actual sequences
 
 ```sh
-ariax forge run "$SESSION" --tool proteinmpnn --gpus 0 --timeout-seconds 1800 --json -- proteinmpnn --prepared /workspace/mpnn-demo/prepared-protein --model_name v_48_020 --seed 7 --num_seq_per_target 2 --batch_size 1 --sampling_temp 0.3 --save_score 1 --save_probs 1 --out_folder /workspace/mpnn-demo/protein-design
-ariax forge watch "$SESSION" "$DESIGN_COMMAND_ID" --timeout 1800 --json
-ariax forge logs "$SESSION" "$DESIGN_COMMAND_ID" --tail 1000 --json
-ariax forge run "$SESSION" --tool proteinmpnn --gpus 0 --timeout-seconds 60 --json -- mpnn-check --prepared /workspace/mpnn-demo/prepared-protein --output /workspace/mpnn-demo/protein-design --family protein --mode design --report /workspace/mpnn-demo/protein-design/check.json
+ariax forge run "$SESSION" --tool proteinmpnn --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- proteinmpnn --prepared /workspace/mpnn-demo/prepared-protein --model_name v_48_020 --seed 7 --num_seq_per_target 2 --batch_size 1 --sampling_temp 0.3 --save_score 1 --save_probs 1 --out_folder /workspace/mpnn-demo/protein-design
+ariax forge run "$SESSION" --tool proteinmpnn --gpus 0 --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- mpnn-check --prepared /workspace/mpnn-demo/prepared-protein --output /workspace/mpnn-demo/protein-design --family protein --mode design --report /workspace/mpnn-demo/protein-design/check.json
 ```
 
 Use the actual returned command UUIDs. Require terminal success and checker
@@ -229,21 +226,28 @@ sequence design using deep learning*, Zenodo
 Weights are unchanged under CC-BY-4.0; source MIT notices are retained with
 the image/assets. The checkpoint does not replace RFantibody's sequence stage.
 
-## Save results and preserve their meaning
+## Save, pack and finish
+
+For large multi-backbone sequence sweeps, follow **Scratch → Curate → Pack → Finish**:
+write raw `--out_folder` trees under `/scratch/mpnn-batch/`, copy compact
+FASTA/score summaries to `/workspace/results/`, pack bulk `.npz`/sequence files
+with `ariax forge pack "$SESSION" --src /scratch/mpnn-batch --dest /workspace/archives/mpnn-batch.tar.zst --wait --json`,
+then finish the session.
 
 Keep source structures, plans, residue maps, actual sequences, scores,
-checker reports, native settings and command IDs together. Save before
-sharing or closing compute:
+checker reports, native settings and command IDs together:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/mpnn-demo --json
 ariax forge download "$PROJECT" /workspace/mpnn-demo/protein-design/check.json --dest ./mpnn-check.json --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush before exporting current project files.
+Require a successful flush and `finish` with `release: "released"` and
+`durability: "saved"`.
 
 Measured examples span 93–805 protein residues, batch one, two samples and
 explicit selected positions, including paired/VHH/scFv constraints and DNA/zinc
@@ -253,5 +257,5 @@ not establish a general resource minimum or design-quality claim. Keep the
 antibody-input restrictions above.
 
 Use [saved results](../outputs.md) for current project exports and
-[project controls](../SKILL.md#project-controls-and-resume) for pause, closure
+[Forge recovery](../references/recovery.md) for pause, finish/closure
 and explicit continuation.

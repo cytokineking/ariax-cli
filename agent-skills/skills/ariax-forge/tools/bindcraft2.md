@@ -23,8 +23,7 @@ For a session with BindCraft2 in its catalog:
 
 ```sh
 ariax forge tools add "$SESSION" --tools bindcraft2 --priority bindcraft2 --json
-ariax forge tools wait "$SESSION" bindcraft2 --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" bindcraft2 --wait-timeout 1800 --json
 ```
 
 Require host `available` and `bindcraft2` ready. The shared named `alphafold2`
@@ -103,8 +102,7 @@ filters to turn a rejected outcome into acceptance.
 `bindcraft` is on PATH. Run the staged settings through the ready GPU tool:
 
 ```sh
-ariax forge run "$SESSION" --tool bindcraft2 --timeout-seconds 3600 --json -- bindcraft design /inputs/bindcraft2/settings.json
-ariax forge watch "$SESSION" "$DESIGN_COMMAND_ID" --timeout 3600 --json
+ariax forge run "$SESSION" --tool bindcraft2 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- bindcraft design /inputs/bindcraft2/settings.json
 ariax forge logs "$SESSION" "$DESIGN_COMMAND_ID" --tail 1000 --json
 ```
 
@@ -160,8 +158,7 @@ For the unchanged one-trajectory PD-L1 example only, the bundled
 checker (`check.py`) inspects its saved outputs:
 
 ```sh
-ariax forge run "$SESSION" --tool bindcraft2 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 120 --json
+ariax forge run "$SESSION" --tool bindcraft2 --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"
 ariax forge logs "$SESSION" "$CHECK_COMMAND_ID" --tail 1000 --json
 ```
 
@@ -183,30 +180,36 @@ those inputs; larger constructs, binders, model ensembles and other modalities
 need their own capacity assessment. Bound both native attempts and session
 duration, including compilation and validation time.
 
-## Save, inspect and restore
+## Save, pack, inspect and restore
 
-After all writers are terminal, flush the changed files:
+For multi-trajectory campaigns, follow **Scratch → Curate → Pack → Finish**:
+set `project_folder` under `/scratch/bindcraft2-run/` so raw trajectories stay
+on local NVMe, copy compact CSV tables (`3_Ranked/!_Ranked.csv`, stage/rejection
+CSVs) and top preview structures (≤10 MB `.cif`/`.pdb`) into
+`/workspace/results/`, pack the full raw tree with `ariax forge pack`, then
+finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge pack "$SESSION" --src /scratch/bindcraft2-run --dest /workspace/archives/bindcraft2-run.tar.zst --wait --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path "$OUTPUT" --json
 ariax forge files "$PROJECT" --path "$OUTPUT/3_Ranked" --json
 ariax forge link "$PROJECT" "$OUTPUT/3_Ranked/!_Ranked.csv" --json
 ariax forge link "$PROJECT" "$OUTPUT/3_Ranked/$RANKED_DESIGN.cif" --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved`. Set `RANKED_DESIGN` from the actual ranked
-table (or the example checker JSON) and confirm its file in the project listing
-before linking. If no ranked design exists, link the stage/rejection tables and
-available structures instead. Saved project files remain available after close; use the [outputs reference](../outputs.md)
-for downloads and storage limits. Download needed results locally with
-`ariax forge download`, and keep heavy intermediates in `/scratch` or pack bulk
-directories before syncing and finishing. Public `closed` confirms
-allocation release; inspect synchronization errors separately.
+(Omit the `pack` line when using the tiny bundled 1-trajectory example writing
+directly to `$OUTPUT`.) Require the flush state `saved` and `finish` with
+`release: "released"` and `durability: "saved"`. Set `RANKED_DESIGN` from the
+actual ranked table (or the example checker JSON) and confirm its file in the
+project listing before linking. If no ranked design exists, link the
+stage/rejection tables and available structures instead. Saved project files
+remain available after finish; use the [outputs reference](../outputs.md) for
+downloads and storage limits, and `ariax forge download` to retrieve results
+locally.
 
 Set `PROJECT` from the session. If the user clears a human hold with
 **Resume workspace**, inspect the project and set `RESTORED_SESSION` to its
@@ -219,24 +222,19 @@ request using its original ID, fields and revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40S --tools bindcraft2 --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40S --tools bindcraft2 --control-revision "$REVISION" --max-gpu-hours 1 --wait --json
 ```
 
 For the CLI path, set `RESTORED_SESSION` from the response. After either path,
-inspect the session and existing commands. The saved-output checker below
-applies to the unchanged PD-L1 example; replace it with an appropriate check for
-other results:
+inspect existing commands. The saved-output checker below applies to the
+unchanged PD-L1 example; replace it with an appropriate check for other results:
 
 ```sh
-ariax forge status "$RESTORED_SESSION" --json
-ariax forge tools wait "$RESTORED_SESSION" bindcraft2 --timeout 1800 --json
-ariax forge run "$RESTORED_SESSION" --tool bindcraft2 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"
-ariax forge watch "$RESTORED_SESSION" "$RESTORED_CHECK_COMMAND_ID" --timeout 120 --json
-ariax forge close "$RESTORED_SESSION" --json
-ariax forge status "$RESTORED_SESSION" --json
+ariax forge run "$RESTORED_SESSION" --tool bindcraft2 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"
+ariax forge finish "$RESTORED_SESSION" --wait --json
 ```
 
-Require host/tool readiness, then inspect the saved results and run an
-appropriate saved-output check before closure; record and watch that explicit
-command. Restore recovers workspace and ready staged inputs without replaying
-design. Each new session uses normal allocation and billing.
+Require tool readiness, inspect the saved results and run an appropriate
+saved-output check before finishing. Restore recovers workspace and ready staged
+inputs without replaying design. Each new session uses normal allocation and
+billing.

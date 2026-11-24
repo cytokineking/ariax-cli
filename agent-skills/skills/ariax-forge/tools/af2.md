@@ -54,15 +54,13 @@ JAX scratch and cache directories must be writable.
 
 ```sh
 ariax forge tools add "$SESSION" --tools af2 --priority af2 --json
-ariax forge tools wait "$SESSION" af2 --timeout 1800 --json
+ariax forge tools wait "$SESSION" af2 --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/monomer.a3m" --path af2/monomer.a3m --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/alphafold2_ptm.json" --path af2/alphafold2_ptm.json --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/af2_outputs.py" --path af2/af2_outputs.py --json
 ariax forge inputs list "$SESSION" --json
-ariax forge run "$SESSION" --tool af2 --gpus 0 --timeout-seconds 3600 --json -- colabfold_batch /inputs/af2/monomer.a3m /workspace/af2-ptm-UNIQUE --model-type alphafold2_ptm --num-models 5 --model-order 1,2,3,4,5 --num-seeds 1 --random-seed 7 --num-recycle 1 --num-ensemble 1 --max-msa 32:64 --num-relax 0 --pair-mode unpaired_paired --pair-strategy greedy --stop-at-score 100 --disable-unified-memory --save-all
-ariax forge watch "$SESSION" "$COMMAND" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND" --tail 1000 --json
-ariax forge run "$SESSION" --tool af2 --gpus 0 --timeout-seconds 60 --json -- python3 /inputs/af2/af2_outputs.py /workspace/af2-ptm-UNIQUE /inputs/af2/alphafold2_ptm.json
+ariax forge run "$SESSION" --tool af2 --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- colabfold_batch /inputs/af2/monomer.a3m /workspace/af2-ptm-UNIQUE --model-type alphafold2_ptm --num-models 5 --model-order 1,2,3,4,5 --num-seeds 1 --random-seed 7 --num-recycle 1 --num-ensemble 1 --max-msa 32:64 --num-relax 0 --pair-mode unpaired_paired --pair-strategy greedy --stop-at-score 100 --disable-unified-memory --save-all
+ariax forge run "$SESSION" --tool af2 --gpus 0 --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- python3 /inputs/af2/af2_outputs.py /workspace/af2-ptm-UNIQUE /inputs/af2/alphafold2_ptm.json
 ```
 
 Replace `UNIQUE` with a fresh run name and `COMMAND` with its returned UUID.
@@ -161,16 +159,25 @@ native `config.json` together. Preserve server/pairing settings from the
 MSA-generation run separately when prediction consumes saved alignments.
 Then save through the existing file path:
 
+For batch predictions generating many PDB/JSON/pickle outputs, follow
+**Scratch → Curate → Pack → Finish**: write raw outputs under
+`/scratch/af2-batch/`, copy summary tables and top-ranked preview PDBs
+(≤10 MB) to `/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/af2-batch --dest /workspace/archives/af2-batch.tar.zst --wait --json`,
+and finish the session.
+
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/af2-ptm-UNIQUE --json
 ariax forge download "$PROJECT" /workspace/af2-ptm-UNIQUE/config.json --dest ./af2-config.json --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush. Follow the shared outputs guide for
-saved result links, explicit resume and cleanup.
+Require a successful flush and `finish` with `release: "released"` and
+`durability: "saved"`. Follow the shared outputs guide for saved result links,
+explicit resume and cleanup.
 
 ## Selected sample for interface scores
 
@@ -213,7 +220,7 @@ explicitly submitting unfinished work. Broader capacity and host-reload
 workloads remain unverified.
 
 Use [saved results](../outputs.md) for current project `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
+and [Forge recovery](../references/recovery.md) for human
 pause and same-project resume. **Resume workspace** starts a same-project
 session; inspect and use it. **Allow agent to resume later** leaves compute
 stopped until an authorized agent resume. Never automatically replay science.

@@ -110,9 +110,7 @@ ColabDesign's three-recycle initial-guess/binder-template path. Its settings dif
 from a standalone ColabFold prediction, even when using the same AF2 weights.
 
 ```sh
-ariax forge run "$SESSION" --tool pxdesign --gpus 0 --timeout-seconds 3600 --json -- taskset -c "$ALLOWED_CPUS" forge-pxdesign pipeline --preset preview -i /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/preview-01 --N_sample 2 --N_max_runs 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --analysis-workers 1 --early_stop false --use_fast_ln false --use_deepspeed_evo_attention false --eval.binder.num_seqs 1 --eval.binder.tools.mpnn.weights original --eval.binder.tools.mpnn.temperature 0.0001
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool pxdesign --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- taskset -c "$ALLOWED_CPUS" forge-pxdesign pipeline --preset preview -i /workspace/pxdesign/inputs/task.yaml -o /workspace/pxdesign/preview-01 --N_sample 2 --N_max_runs 1 --N_step 400 --dtype bf16 --seeds 101 --num_workers 0 --analysis-workers 1 --early_stop false --use_fast_ln false --use_deepspeed_evo_attention false --eval.binder.num_seqs 1 --eval.binder.tools.mpnn.weights original --eval.binder.tools.mpnn.temperature 0.0001
 ```
 
 Extended requires its specialized assets and supplied full-query MSAs:
@@ -270,10 +268,9 @@ independence is required.
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 900 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 900 --json
 ariax forge files "$PROJECT" --path /workspace/pxdesign --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
 The 5o45 software example contains 129 source residues: crop 116 + binder 80 = 196
@@ -282,13 +279,19 @@ is a separate capacity fixture, not biological PD-L1. These examples establish
 execution bounds only, not broader sequence-length or independent-sample support.
 Query-only A3Ms test supplied-MSA plumbing and provide no evolutionary evidence.
 
-For large native trees, create a gzip tar on the remote host and split it into
-ordered Files parts of at most 4 GiB, with a JSON manifest listing order and sizes.
-Keep the closed raw tree outside the saved workspace until the complete
-export is saved and restored. Flush the parts and verify every saved file before relying on the export;
-a flush is not an atomic snapshot. Keep
-every part and the original selected inputs. After restoration, concatenate and
-unpack into `/workspace/pxdesign`, compare native files and rerun output checks.
-Files lists archive parts until they are explicitly unpacked. Retain failed
-transfer operations and use new IDs for explicit retries; restoration does not
-replay scientific commands. See the [output/file workflow](../outputs.md).
+For large native trees, follow **Scratch → Curate → Pack → Finish**: write raw
+outputs under `/scratch/pxdesign-run/`, copy compact summary CSVs and top-ranked
+preview structures (≤10 MB) to `/workspace/results/`, pack the raw tree into a
+verified (and automatically sharded when >10 GiB) archive with a companion
+manifest, then finish:
+
+```sh
+ariax forge pack "$SESSION" --src /scratch/pxdesign-run --dest /workspace/archives/pxdesign-run.tar.zst --wait --json
+ariax forge finish "$SESSION" --wait --json
+```
+
+Keep every shard part, manifest, and the original selected inputs. After
+restoration, unpack the archive into `/scratch/pxdesign-restored` (or
+`/workspace/pxdesign`), compare native files, and rerun output checks. Retain
+failed transfer operations and use new IDs for explicit retries; restoration
+does not replay scientific commands. See the [output/file workflow](../outputs.md).

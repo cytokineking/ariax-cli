@@ -102,7 +102,7 @@ Succeeded items are skipped. Each explicit retry gets a new attempt directory,
 preserving prior failures. Changed jobs, settings or source are refused for an
 existing batch; use a new output directory for changed science. Follow the
 [saved-results workflow](../outputs.md) before releasing a VM and the
-[project controls](../SKILL.md#project-controls-and-resume) for same-project
+[Forge recovery](../references/recovery.md) for same-project
 resume. Restoring files leaves the next prediction command explicit.
 
 ## Inspect outputs and score a protein interface
@@ -126,17 +126,23 @@ with the shipped handoff script. Keep the original prediction command/run
 identity through restoration:
 
 ```bash
-ariax forge run SESSION --tool opendde --gpus 0 --timeout-seconds 120 -- \
+ariax forge run "$SESSION" --tool opendde --gpus 0 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 -- \
   python /opt/forge-opendde/handoff.py /workspace/opendde-batch \
   --item insulin --seed 102 --rank 0 --chains A B \
   --run-id ORIGINAL_PREDICTION_COMMAND_ID --output /workspace/handoffs/insulin.json
 
-ariax forge tools add SESSION --tools interface-scores --json
-ariax forge tools wait SESSION interface-scores --timeout 1800 --json
-ariax forge run SESSION --tool interface-scores --timeout-seconds 120 -- \
+ariax forge tools add "$SESSION" --tools interface-scores --json
+ariax forge tools wait "$SESSION" interface-scores --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool interface-scores --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 -- \
   interface-scores /workspace/handoffs/insulin.json \
   --output /workspace/interface-scores/opendde-insulin.json --pae-cutoff 10
 ```
+
+For large prediction batches, follow **Scratch → Curate → Pack → Finish**: write
+raw prediction trees to `/scratch/opendde-batch/`, copy compact summary JSONs
+and top preview CIFs (≤10 MB) to `/workspace/results/`, pack raw outputs with
+`ariax forge pack "$SESSION" --src /scratch/opendde-batch --dest /workspace/archives/opendde-batch.tar.zst --wait --json`,
+and release compute with `ariax forge finish "$SESSION" --wait --json`.
 
 The [interface-scoring consumer](interface-scores.md) requires
 `files.native_identity` and `files.original_input` beside structure, confidence

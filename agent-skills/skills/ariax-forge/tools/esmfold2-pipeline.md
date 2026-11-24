@@ -100,12 +100,12 @@ Forge session.
 
 ```sh
 ariax forge tools add "$SESSION" --tools esmfold2-pipeline --priority esmfold2-pipeline --json
-ariax forge tools wait "$SESSION" esmfold2-pipeline --timeout 1800 --json
+ariax forge tools wait "$SESSION" esmfold2-pipeline --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/esmfold2-pipeline/campaign.yaml" --path esmfold2-pipeline/campaign.yaml --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/boltzgen/1ubq.cif" --path esmfold2-pipeline/1ubq.cif --json
 ariax forge inputs list "$SESSION" --json
-ariax forge run "$SESSION" --tool esmfold2-pipeline --gpus 0 --timeout-seconds 180 --json -- forge-esmfold2-pipeline-case prepare
-ariax forge run "$SESSION" --tool esmfold2-pipeline --gpus 0 --timeout-seconds 1800 --json -- forge-esmfold2-pipeline-case shard-one
+ariax forge run "$SESSION" --tool esmfold2-pipeline --gpus 0 --wait-ready --wait --wait-timeout 180 --timeout-seconds 180 --json -- forge-esmfold2-pipeline-case prepare
+ariax forge run "$SESSION" --tool esmfold2-pipeline --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- forge-esmfold2-pipeline-case shard-one
 ```
 
 `prepare` calls native `check YAML` and `plan YAML`. Before design, review the
@@ -300,6 +300,11 @@ After a failed phase, read its command/logs and native status, confirm no worker
 is active, and diagnose the actual preparation/MSA/artifact error. Stale-task
 recovery controls are in this pinned native `run --help`. Do not manually reset
 SQLite, start duplicate workers, silently retry or change backend/model to evade
-an error. Unsaved output remains unavailable after compute loss. Before closing
-the session, save required workspace files through Files and confirm the save
-completed. Resume the same project to load its current saved files when continuing the campaign.
+an error. Unsaved output remains unavailable after compute loss. For large
+multi-shard runs, follow **Scratch → Curate → Pack → Finish**: write bulk
+intermediates/validation-debug trees under `/scratch/esmfold2-run/`, copy
+`ranked_results/` summaries and top preview structures (≤10 MB) into
+`/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/esmfold2-run --dest /workspace/archives/esmfold2-run.tar.zst --wait --json`,
+and release compute with `ariax forge finish "$SESSION" --wait --json`. Resume
+the same project to load its current saved files when continuing the campaign.

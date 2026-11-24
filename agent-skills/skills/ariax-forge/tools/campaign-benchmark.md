@@ -101,7 +101,12 @@ hit rate.
 
 Save the plan, original candidate files, structures, native scores, command
 records, search logs/TSVs, QC diagnostics, measurement sources and reports using
-the [saved-output workflow](../outputs.md). `report.json` lists its complete
+**Scratch → Curate → Pack → Finish**: write bulk raw search/QC/benchmark trees
+under `/scratch/benchmark/`, copy `report.json`, `report.md`, and compact TSVs
+into `/workspace/results/`, pack the raw benchmark root with
+`ariax forge pack "$SESSION" --src /scratch/benchmark --dest /workspace/archives/benchmark.tar.zst --wait --json`,
+and release compute with `ariax forge finish "$SESSION" --wait --json` (see
+the [saved-output workflow](../outputs.md)). `report.json` lists its complete
 saved input closure by relative path and byte size. To regenerate a report later,
 make those files available under one benchmark root and run only the report
 command with a fresh `--out` directory. That command performs no generation,

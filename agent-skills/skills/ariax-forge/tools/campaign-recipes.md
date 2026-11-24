@@ -123,8 +123,13 @@ have separate meanings. Cross-family averaging is unavailable. Preserve explicit
 protein-only interfaces. RF3 `chain_ptm` is the native chain mean pLDDT field,
 whose name differs from its meaning; the native checker preserves that interpretation.
 
-Stop workspace writers, then save inputs, settings, native outputs, numbering
-maps, the manifest and shortlists with `ariax forge sync "$SESSION" --wait --json`.
+Follow **Scratch → Curate → Pack → Finish** for multi-stage campaigns: write
+bulk intermediate structures/arrays under `/scratch/<stage>/`, copy compact
+shortlists, manifests, and top preview structures (≤10 MB) into
+`/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/<stage> --dest /workspace/archives/<stage>.tar.zst --wait --json`,
+and finalize with `ariax forge finish "$SESSION" --wait --json` (or flush
+mid-session with `ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json`).
 Export through current project Files. Use [saved results](../outputs.md) to
 resume and inspect saved candidates before continuing. Restoration does not
 replay generation, optimization or prediction.

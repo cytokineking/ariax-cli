@@ -47,12 +47,13 @@ import * as gpuPreferences from './commands/gpu-preferences.js';
 import * as inputs from './commands/inputs.js';
 import * as feedback from './commands/feedback.js';
 import * as forge from './commands/forge.js';
+import * as storage from './commands/storage.js';
 import * as discover from './commands/discover.js';
 
 const COMMANDS = {
   discover,
   me, protocols, pricing, schema, validate, submit,
-  projects, jobs, status, logs, pause, restart, abort, results, upgrade,
+  projects, jobs, status, logs, pause, restart, abort, results, storage, upgrade,
   login, logout,
   skills, operations, recover, inputs, candidates, runs,
   feedback, forge,
@@ -206,6 +207,9 @@ function reportError(err, jsonMode, authContext) {
     for (const issue of err?.details?.issues || []) {
       printProgress(`${issue.field.join('.') || 'job'} [${issue.rule}]: ${issue.message}`);
     }
+    if (typeof err?.details?.output_tail === 'string' && err.details.output_tail) {
+      printProgress(`output_tail:\n${err.details.output_tail}`);
+    }
     if (requestId) printProgress(`request-id: ${requestId}`);
   }
   return code;
@@ -236,6 +240,7 @@ const HELP_TOPICS = {
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
   results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
+  storage: storage.help,
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',
   logout: 'ariax logout',
@@ -253,7 +258,12 @@ function printHelp(topic) {
   printData('');
   printData('Commands:');
   for (const [topic, line] of Object.entries(HELP_TOPICS)) {
-    printData(`  ${topic === 'forge' ? 'ariax forge <action> [options] (run ariax help forge for commands)' : line}`);
+    const display = topic === 'forge'
+      ? 'ariax forge <action> [options] (run ariax help forge for commands)'
+      : topic === 'storage'
+        ? 'ariax storage <usage|projects|project|entries|suggest|delete|deletion> [options] (run ariax help storage)'
+        : line;
+    printData(`  ${display}`);
   }
   printData('');
   printData('Global flags:');
@@ -271,7 +281,8 @@ function printHelp(topic) {
   printData('  ARIAX_ALLOW_CUSTOM_ORIGIN=1 (intentional custom endpoints only),');
   printData('  NO_UPDATE_NOTIFIER=1 (disable automatic version checks)');
   printData('Exit codes: 0 ok, 1 usage, 2 auth, 3 forbidden, 4 not found, 5 validation,');
-  printData('  6 payment/credit, 7 conflict, 8 rate-limit, 9 network/timeout, 10 server, 130 interrupted.');
+  printData('  6 payment/credit, 7 conflict, 8 rate-limit, 9 network/timeout, 10 server,');
+  printData('  11 remote command failed, 130 interrupted.');
 }
 
 function detectRawJsonMode(argv) {
@@ -309,6 +320,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     // Bare `inputs --help` still displays its topic without requiring a subcommand.
     if (!(command === 'inputs' && positionals.length === 0 && Object.keys(flags).length === 0 && globals.help)) {
       if (command === 'forge') forge.validateArguments(parsed);
+      else if (command === 'storage') storage.validateArguments(parsed);
       else validateCommandArguments(parsed);
     }
   } catch (err) {

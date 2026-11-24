@@ -51,7 +51,7 @@ using the user's approved GPU/time allowance and live hardware choices, selectin
 `lab-feedback`. Wait for session `available` and tool `ready`:
 
 ```sh
-ariax forge tools wait "$SESSION" lab-feedback --timeout 600 --json
+ariax forge tools wait "$SESSION" lab-feedback --wait-timeout 600 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/prepare.py" --path lab-feedback/prepare.py --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/check.py" --path lab-feedback/check.py --json
 ariax forge inputs add "$SESSION" --url https://storage.proteinbase.com/proteinbase_latest.csv --path lab-feedback/proteinbase.csv --json
@@ -61,16 +61,14 @@ ariax forge inputs status "$SESSION" "$INPUT" --json
 
 Wait on each returned input ID. Capture the actual export retrieval timestamp in
 `EXPORT_VERSION` and generate a UUID for `IMPORT_ID` before submitting. Reuse that
-ID with identical source/version/bytes after an uncertain reply. Each command
-returns its own durable command ID; watch it and read its exit status before
-starting the dependent command:
+ID with identical source/version/bytes after an uncertain reply. Run each step
+with `--wait-ready --wait` before starting the dependent command:
 
 ```sh
-ariax forge run "$SESSION" --tool lab-feedback --timeout-seconds 300 --json -- lab-feedback import-proteinbase --csv /inputs/lab-feedback/proteinbase.csv --source https://storage.proteinbase.com/proteinbase_latest.csv --version "$EXPORT_VERSION" --request-id "$IMPORT_ID" --ledger /workspace/lab-feedback/exchange.json
-ariax forge watch "$SESSION" "$COMMAND" --timeout 600 --json
-ariax forge run "$SESSION" --tool lab-feedback --timeout-seconds 60 --json -- python3 /inputs/lab-feedback/prepare.py --csv /inputs/lab-feedback/proteinbase.csv --out /workspace/lab-feedback/public-review
-ariax forge run "$SESSION" --tool lab-feedback --timeout-seconds 60 --json -- lab-feedback draft --shortlist /workspace/lab-feedback/public-review/shortlist.json --out /workspace/lab-feedback/drafts
-ariax forge run "$SESSION" --tool lab-feedback --timeout-seconds 300 --json -- lab-feedback inspect --ledger /workspace/lab-feedback/exchange.json --out /workspace/lab-feedback/observations.json
+ariax forge run "$SESSION" --tool lab-feedback --wait-ready --wait --wait-timeout 600 --timeout-seconds 300 --json -- lab-feedback import-proteinbase --csv /inputs/lab-feedback/proteinbase.csv --source https://storage.proteinbase.com/proteinbase_latest.csv --version "$EXPORT_VERSION" --request-id "$IMPORT_ID" --ledger /workspace/lab-feedback/exchange.json
+ariax forge run "$SESSION" --tool lab-feedback --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- python3 /inputs/lab-feedback/prepare.py --csv /inputs/lab-feedback/proteinbase.csv --out /workspace/lab-feedback/public-review
+ariax forge run "$SESSION" --tool lab-feedback --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- lab-feedback draft --shortlist /workspace/lab-feedback/public-review/shortlist.json --out /workspace/lab-feedback/drafts
+ariax forge run "$SESSION" --tool lab-feedback --wait-ready --wait --wait-timeout 600 --timeout-seconds 300 --json -- lab-feedback inspect --ledger /workspace/lab-feedback/exchange.json --out /workspace/lab-feedback/observations.json
 ```
 
 The public review example chooses two exported single-chain BLI records sharing a
@@ -109,12 +107,14 @@ Store the sync/session/project IDs with the review. Inspect saved files:
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --json
+ariax forge sync "$SESSION" --wait --wait-timeout 900 --json
 ariax forge files "$PROJECT" --path /workspace/lab-feedback --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush. Follow the [Files guide](../outputs.md)
-for remote export, session closure and restoration, and [project controls](../SKILL.md#project-controls-and-resume)
+Require a successful flush and `finish` with `release: "released"` and
+`durability: "saved"`. Follow the [Files guide](../outputs.md)
+for remote export and restoration, and [Forge recovery](../references/recovery.md)
 to continue the same project. Run `inspect` on a restored ledger when reviewing it.
 A later result import uses its own persisted import UUID and saved identity map.
 Read original IDs after uncertain commands before repeating an import.

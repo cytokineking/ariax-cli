@@ -23,8 +23,7 @@ Require an authorized available session and tool `ipsae` ready:
 
 ```sh
 ariax forge tools add "$SESSION" --tools ipsae --priority ipsae --json
-ariax forge tools wait "$SESSION" ipsae --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" ipsae --wait-timeout 1800 --json
 ```
 
 
@@ -61,12 +60,9 @@ fresh writable workspace directory first. The explicitly invoked shell is
 ordinary argv; Forge does not interpret the command through a host shell.
 
 ```sh
-ariax forge run "$SESSION" --tool base --timeout-seconds 60 --json -- /bin/sh -c 'mkdir -p /workspace/ipsae-demo && cp /inputs/ipsae/toy.pdb /workspace/ipsae-demo/toy.pdb'
-ariax forge watch "$SESSION" "$COPY_COMMAND_ID" --timeout 120 --json
-ariax forge run "$SESSION" --tool ipsae --timeout-seconds 60 --json -- ipsae /inputs/ipsae/scores.json /workspace/ipsae-demo/toy.pdb 10 10
-ariax forge watch "$SESSION" "$SCORE_COMMAND_ID" --timeout 120 --json
-ariax forge run "$SESSION" --tool base --timeout-seconds 60 --json -- python3 /inputs/ipsae/check.py /workspace/ipsae-demo/toy_10_10
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 120 --json
+ariax forge run "$SESSION" --tool base --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- /bin/sh -c 'mkdir -p /workspace/ipsae-demo && cp /inputs/ipsae/toy.pdb /workspace/ipsae-demo/toy.pdb'
+ariax forge run "$SESSION" --tool ipsae --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- ipsae /inputs/ipsae/scores.json /workspace/ipsae-demo/toy.pdb 10 10
+ariax forge run "$SESSION" --tool base --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- python3 /inputs/ipsae/check.py /workspace/ipsae-demo/toy_10_10
 ```
 
 Set command variables to the corresponding returned IDs. Require each
@@ -108,20 +104,21 @@ using consistent constructs, predictor settings, and cutoffs. Record actual
 floating cutoffs because native filenames truncate them to integer suffixes;
 choose a fresh output directory to avoid overwriting an earlier result.
 
-Save terminal results before closure:
+Save terminal results before finishing (for bulk scoring sweeps, write per-model
+outputs to `/scratch/ipsae-batch/`, copy a combined summary table into
+`/workspace/results/`, and pack raw files with `ariax forge pack`):
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/ipsae-demo --json
 ariax forge download "$PROJECT" /workspace/ipsae-demo/toy_10_10.txt --dest ./ipsae-scores.txt --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved` before inspecting current project files.
-Read the [outputs reference](../outputs.md) with
+Require the flush state `saved` and `finish` with `release: "released"` and
+`durability: "saved"`. Read the [outputs reference](../outputs.md) with
 `ariax skills forge --reference outputs --read --json` for durability/restore
-behavior and
-[base](base.md) for restore commands. Restore recovers files for
-explicit future checks and does not rerun scoring. Finish with `forge close`
-and confirm the session is closed.
+behavior and [base](base.md) for restore commands. Restore recovers files for
+explicit future checks and does not rerun scoring.

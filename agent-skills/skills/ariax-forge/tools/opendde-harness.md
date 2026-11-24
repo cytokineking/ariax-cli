@@ -123,7 +123,7 @@ adjustments prevent a new initial batch until explicitly reviewed.
 
 Preserve the original CLI root/account/API origin, state, bundle and runner
 files. Follow [saved results](../outputs.md) and
-[same-project resume](../SKILL.md#project-controls-and-resume) to save and
+[same-project resume](../references/recovery.md) to save and
 restore `/workspace/harness/native-batch` when moving to a new allocation.
 Require a successful flush and a ready same-project `opendde` session.
 Set `HARNESS_PROJECT` to the project ID and `HARNESS_RESUMED` to the
@@ -181,6 +181,11 @@ optional failed metrics is not scientific evidence. For completed protein
 samples, use [OpenDDE's original-run-ID handoff](opendde.md#inspect-outputs-and-score-a-protein-interface)
 and the [interface-scoring consumer](interface-scores.md). Keep exclusions,
 rejected candidates and unavailable metrics. Scores do not establish binding.
+For multi-cycle campaigns producing many prediction directories, write raw
+attempt trees under `/scratch/opendde-harness/`, copy compact reports and top
+preview CIFs (≤10 MB) into `/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/opendde-harness --dest /workspace/archives/opendde-harness.tar.zst --wait --json`,
+and finalize with `ariax forge finish "$SESSION" --wait --json`.
 
 The bridge uses OpenDDE 1.1.1 source
 `ddfa1df8aff1babf1fddac4247b7d2351bd0ce9f`, Torch 2.7.1/CUDA 12.6 and model

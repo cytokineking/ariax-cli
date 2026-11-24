@@ -60,6 +60,11 @@ const BOOLEAN_FLAGS = new Set([
   'with-guide',
   'paths',
   'dry-run',
+  'force',
+  'remove-src',
+  'no-manifest',
+  'refresh',
+  'preview',
 ]);
 
 /**

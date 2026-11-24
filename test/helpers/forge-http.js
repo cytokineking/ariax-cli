@@ -949,12 +949,13 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
 
     const failedRun = await invoke(['forge', 'run', sessionId, '--tool', 'base', '--', process.execPath, '-e', 'process.exit(2)']);
     const failedId = failedRun.payload.data.command_id;
-    const failure = await invoke(['forge', 'watch', sessionId, failedId, '--timeout', '30'], { code: 10 });
+    const failure = await invoke(['forge', 'watch', sessionId, failedId, '--timeout', '30'], { code: 11 });
     assert.equal(failure.payload.error.code, 'command_failed');
+    assert.equal(failure.payload.error.details.exit_code, 2);
     assert.match(failure.payload.error.action, new RegExp(`forge logs ${sessionId} ${failedId}`));
     assert.equal((await invoke(['forge', 'command', sessionId, failedId])).payload.data.exit_code, 2);
     const beforeFailedRecovery = state.posts;
-    const failedRecovery = await invoke(['forge','recover',failedId,'--wait'], {code:10});
+    const failedRecovery = await invoke(['forge','recover',failedId,'--wait'], {code:11});
     assert.equal(failedRecovery.payload.error.code,'command_failed');
     assert.equal(state.posts,beforeFailedRecovery,'failed science was replayed');
 

@@ -112,7 +112,12 @@ error (PSCE); backbone values are zero. It is not pLDDT or experimental temperat
 factor. `structures/` changes only the upstream chain letter to the corresponding
 input chain ID. Keep the complete native directory alongside mapped exports.
 
-Save unique outputs and modifications through ordinary Forge project file synchronization.
+For bulk design or packing runs producing many PDB/PKL files, follow
+**Scratch → Curate → Pack → Finish**: write raw outputs under
+`/scratch/fampnn-run/`, copy compact FASTA/score summaries and top preview PDBs
+(≤10 MB) to `/workspace/results/`, pack the full raw tree with
+`ariax forge pack "$SESSION" --src /scratch/fampnn-run --dest /workspace/archives/fampnn-run.tar.zst --wait --json`,
+and finish the session with `ariax forge finish "$SESSION" --wait --json`.
 An explicit restore recovers files; scientific execution is not automatically
 replayed. Public unmodified weights can be prepared again from the recorded source
 revision, layout and upstream model card.
@@ -142,5 +147,5 @@ A/B to Y/Z and adding 1000/2000 to author numbers. Its `profiles.json` lists exa
 present fixed positions. A range spanning an absent author residue is rejected.
 
 Use [saved results](../outputs.md) for current project exports and
-[project controls](../SKILL.md#project-controls-and-resume) for pause, closure
+[Forge recovery](../references/recovery.md) for pause, finish/closure
 and explicit continuation.

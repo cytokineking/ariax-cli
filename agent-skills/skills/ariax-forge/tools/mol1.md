@@ -135,9 +135,8 @@ preparation and idle time count toward its limit.
 
 ```sh
 ariax pricing --json
-ariax forge create --name mol1-pilot --gpu GPU --gpu-count 1 --tools mol1 --max-gpu-hours LIMIT --json
-ariax forge status SESSION --json
-ariax forge tools wait SESSION mol1 --timeout 1800 --json
+ariax forge create --name mol1-pilot --gpu GPU --gpu-count 1 --tools mol1 --max-gpu-hours LIMIT --wait --json
+ariax forge tools wait "$SESSION" mol1 --wait-timeout 1800 --json
 ```
 
 Use the returned session UUID as `SESSION`. Set `EXAMPLES` to the installed
@@ -158,12 +157,9 @@ Wait until **each** returned input is `ready` and the tool is `ready`. Use a
 fresh directory; the runner refuses to reuse an existing one.
 
 ```sh
-ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --timeout-seconds 1800 --json -- \
+ariax forge run "$SESSION" --tool mol1 --gpus 0 --cwd /workspace --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- \
   python /inputs/mol1/run.py --input /inputs/mol1/input.json \
   --out-dir /workspace/mol1/default-001 --profile default
-ariax forge watch "$SESSION" COMMAND_ID --timeout 1800 --json
-ariax forge command "$SESSION" COMMAND_ID --json
-ariax forge logs "$SESSION" COMMAND_ID --tail 1000 --json
 ```
 
 For an explicitly chosen reduced execution check, use the same invocation with
@@ -191,7 +187,7 @@ visible device. Multi-GPU throughput and concurrent workloads remain unvalidated
 Do not rerun after a lost response or a watch timeout: inspect the same command
 ID first. A new intentional attempt needs a fresh output directory.
 
-## Inspect, save and close
+## Inspect, pack and finish
 
 Check the terminal command state and exit code, then the
 [output inventory and scientific checks](mol1/outputs.md). Check every requested
@@ -200,22 +196,23 @@ profile writes five CIF/summary/full-data triples per job; smoke writes one.
 Preserve error reports and failed samples. A completed process or
 high confidence score does not establish a correct fold or biological activity.
 
-After all writers stop, inspect for symlinks/special files (synchronization rejects
-them), then flush and inspect the project files before closing:
+For multi-job batches, write raw `--out-dir /scratch/mol1-batch`, copy compact
+summaries and top preview CIFs (≤10 MB) into `/workspace/results/`, and pack the
+full raw tree with `ariax forge pack`. After all writers stop, inspect for
+symlinks/special files (synchronization rejects them), then flush and finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge run "$SESSION" --tool base -- sh -eu -c 'find /workspace/mol1 ! -type f ! -type d -print'
-ariax forge sync "$SESSION" --wait --json
+ariax forge run "$SESSION" --tool base --wait -- sh -eu -c 'find /workspace/mol1 ! -type f ! -type d -print'
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/mol1 --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved`. Confirm `closed` for resource release
-and inspect persistence separately. Download only required files within the
-user's storage constraints.
+Require the flush state `saved` and `finish` with `release: "released"` and
+`durability: "saved"`. Download only required files within the user's storage
+constraints.
 
 <a id="installation-and-recovery-scope"></a>
 

@@ -22,10 +22,10 @@ For a deployment that exposes these tools, select them and wait for each require
 
 ```sh
 ariax forge tools add "$SESSION" --tools jms-esm2,jms-mpnn,jms-esmfold,jms-aggregate --json
-ariax forge tools wait "$SESSION" jms-esm2 --timeout 7200 --json
-ariax forge tools wait "$SESSION" jms-mpnn --timeout 7200 --json
-ariax forge tools wait "$SESSION" jms-esmfold --timeout 7200 --json
-ariax forge tools wait "$SESSION" jms-aggregate --timeout 7200 --json
+ariax forge tools wait "$SESSION" jms-esm2 --wait-timeout 7200 --json
+ariax forge tools wait "$SESSION" jms-mpnn --wait-timeout 7200 --json
+ariax forge tools wait "$SESSION" jms-esmfold --wait-timeout 7200 --json
+ariax forge tools wait "$SESSION" jms-aggregate --wait-timeout 7200 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/1crn.fasta" --path jms/1crn.fasta --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/1crn.pdb" --path jms/1crn.pdb --json
 ariax forge inputs list "$SESSION" --json
@@ -34,11 +34,11 @@ ariax forge inputs list "$SESSION" --json
 Require host available and both inputs ready. Keep the returned input/command IDs. Choose a fresh output directory for every run; existing directories are rejected. GPU commands use an explicitly assigned device and require CUDA. These runs do not build or install models on the user's workstation.
 
 ```sh
-ariax forge run "$SESSION" --tool jms-esm2 --gpus 0 --timeout-seconds 3600 --json -- jms-components esm2 --sequence-file /inputs/jms/1crn.fasta --mask-batch-size 8 --out /workspace/jms/esm2
-ariax forge run "$SESSION" --tool jms-mpnn --gpus 0 --timeout-seconds 3600 --json -- jms-components mpnn --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --model v_48_010 --mode both --seed 0 --weights /models/proteinmpnn/colabdesign/v1.1.0 --out /workspace/jms/mpnn010
-ariax forge run "$SESSION" --tool jms-mpnn --gpus 0 --timeout-seconds 3600 --json -- jms-components mpnn --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --model v_48_020 --mode both --seed 0 --weights /models/proteinmpnn/colabdesign/v1.1.0 --out /workspace/jms/mpnn020
-ariax forge run "$SESSION" --tool jms-esmfold --gpus 0 --timeout-seconds 3600 --json -- jms-components esmfold --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --mode full --out /workspace/jms/esmfold-full
-ariax forge run "$SESSION" --tool jms-esmfold --gpus 0 --timeout-seconds 3600 --json -- jms-components esmfold --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --mode reference-half-mask --out /workspace/jms/esmfold-half
+ariax forge run "$SESSION" --tool jms-esm2 --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- jms-components esm2 --sequence-file /inputs/jms/1crn.fasta --mask-batch-size 8 --out /workspace/jms/esm2
+ariax forge run "$SESSION" --tool jms-mpnn --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- jms-components mpnn --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --model v_48_010 --mode both --seed 0 --weights /models/proteinmpnn/colabdesign/v1.1.0 --out /workspace/jms/mpnn010
+ariax forge run "$SESSION" --tool jms-mpnn --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- jms-components mpnn --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --model v_48_020 --mode both --seed 0 --weights /models/proteinmpnn/colabdesign/v1.1.0 --out /workspace/jms/mpnn020
+ariax forge run "$SESSION" --tool jms-esmfold --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- jms-components esmfold --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --mode full --out /workspace/jms/esmfold-full
+ariax forge run "$SESSION" --tool jms-esmfold --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- jms-components esmfold --sequence-file /inputs/jms/1crn.fasta --pdb /inputs/jms/1crn.pdb --chain A --mode reference-half-mask --out /workspace/jms/esmfold-half
 ```
 
 Require each command succeeded before starting dependent work or reusing its GPU. Observe returned IDs with `forge watch`, `forge command` and `forge logs`. A local wait timeout leaves the command running. Query an uncertain command ID before deciding on an explicit new run.
@@ -64,11 +64,14 @@ Other notebook hybrids need unsupported AF2/ESM-IF constituents or have inconsis
 
 Inspect `result.json` status, model, conditioning, sequence and structure fields, plus actual per-residue/sample output. Keep the complete result directories, including per-residue arrays, structures and recorded settings. The 46-residue ESMFold example used about 9 GiB GPU memory and 9.5 GB container memory; larger inputs can require more. Choose hardware from the deployed tool requirements.
 
+For large multi-candidate sweeps, write bulk per-candidate directories under `/scratch/jms-batch/`, copy compact summary JSON/CSVs to `/workspace/results/`, pack bulk outputs with `ariax forge pack "$SESSION" --src /scratch/jms-batch --dest /workspace/archives/jms-batch.tar.zst --wait --json`, and release compute cleanly.
+
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/jms --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush. Keep NPZ arrays, PDB exports, JSON results and exact argv together. Follow the [Files guide](../outputs.md) for saved-result links, remote export, restoration and session closure, and [project controls](../SKILL.md#project-controls-and-resume) for pause and same-project resume.
+Require a successful flush and `finish` with `release: "released"` and `durability: "saved"`. Keep NPZ arrays, PDB exports, JSON results and exact argv together. Follow the [Files guide](../outputs.md) for saved-result links, remote export and restoration, and [Forge recovery](../references/recovery.md) for pause and same-project resume.

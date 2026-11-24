@@ -64,7 +64,7 @@ shows an input schema and candidate selection.
 
 ```sh
 ariax forge tools add "$SESSION" --tools boltzgen --priority boltzgen --json
-ariax forge tools wait "$SESSION" boltzgen --timeout 1800 --json
+ariax forge tools wait "$SESSION" boltzgen --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$DESIGN_YAML" --path boltzgen/design.yaml --json
 ariax forge inputs add "$SESSION" --file "$TARGET_CIF" --path boltzgen/target.cif --json
 ariax forge inputs list "$SESSION" --json
@@ -73,17 +73,13 @@ ariax forge inputs list "$SESSION" --json
 Require every input `ready`. Set `DESIGN_COUNT`, `OUTPUT_BUDGET`, `SEED` and
 `TIMEOUT_SECONDS` for the requested workload. `OUTPUT_BUDGET` is the native
 final-selection budget, separate from the session's GPU-hour limit. This
-protein design command uses the diverse checkpoint and native refold settings:
+protein design command uses the diverse checkpoint and native refold settings
+(write large campaigns to `/scratch/boltzgen/run-01`, curate summaries and top
+preview CIFs to `/workspace/results/`, pack raw files with `ariax forge pack`,
+then finish):
 
 ```sh
-ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds "$TIMEOUT_SECONDS" --json -- forge-boltzgen --seed "$SEED" run /inputs/boltzgen/design.yaml --output /workspace/boltzgen/run-01 --protocol protein-anything --num_designs "$DESIGN_COUNT" --budget "$OUTPUT_BUDGET" --devices 1 --num_workers 0 --cache /scratch/cache --moldir /models/boltzgen/mols --design_checkpoints /models/boltzgen/boltzgen1_diverse.ckpt --inverse_fold_checkpoint /models/boltzgen/boltzgen1_ifold.ckpt --folding_checkpoint /models/boltzgen/boltz2_conf_final.ckpt --config analysis num_processes=2
-```
-
-Set `COMMAND_ID` to the command ID returned by `run`, then monitor it:
-
-```sh
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout "$TIMEOUT_SECONDS" --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool boltzgen --gpus 0 --wait-ready --wait --wait-timeout "$TIMEOUT_SECONDS" --timeout-seconds "$TIMEOUT_SECONDS" --json -- forge-boltzgen --seed "$SEED" run /inputs/boltzgen/design.yaml --output /scratch/boltzgen/run-01 --protocol protein-anything --num_designs "$DESIGN_COUNT" --budget "$OUTPUT_BUDGET" --devices 1 --num_workers 0 --cache /scratch/cache --moldir /models/boltzgen/mols --design_checkpoints /models/boltzgen/boltzgen1_diverse.ckpt --inverse_fold_checkpoint /models/boltzgen/boltzgen1_ifold.ckpt --folding_checkpoint /models/boltzgen/boltz2_conf_final.ckpt --config analysis num_processes=2
 ```
 
 Use a fresh output directory for each run. Inspect resolved settings, candidate
@@ -126,7 +122,12 @@ peptide settings differ and remain in resolved configs. Unconditioned inputs
 leave SS-conditioning metrics unavailable. Confidence, ranking and affinity
 predictions establish no experimental binding or benchmark-accuracy claim.
 
-Save inputs and complete outputs using [Forge Files](../outputs.md). Resume
-restores saved files without replaying scientific commands. For optional
-single-file packaging and explicit unpacking, see the
-[archive helper](boltzgen/README.md#optional-archive-helper).
+For multi-design campaigns, follow **Scratch → Curate → Pack → Finish**: copy
+CSVs (`final_ranked_designs/all_designs_metrics.csv`, `final_designs_metrics_*.csv`,
+`results_overview.pdf`) and top preview CIFs (≤10 MB) to `/workspace/results/`,
+pack the full raw tree with
+`ariax forge pack "$SESSION" --src /scratch/boltzgen/run-01 --dest /workspace/archives/boltzgen-run-01.tar.zst --wait --json`,
+and release the VM with `ariax forge finish "$SESSION" --wait --json`. Resume
+restores saved files without replaying scientific commands (see
+[Forge Files](../outputs.md) and the
+[archive helper](boltzgen/README.md#optional-archive-helper)).

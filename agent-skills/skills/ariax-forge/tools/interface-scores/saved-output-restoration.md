@@ -18,7 +18,7 @@ disposable. Wait for every writer to finish, sync and require the flush state `s
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /inputs --json
 ariax forge files "$PROJECT" --path /workspace/interface-scores --json
 ariax forge link "$PROJECT" /workspace/interface-scores/af2.json --json
@@ -44,7 +44,7 @@ expectation:
 
 ```sh
 ariax forge run "$RESTORED_SESSION" --tool interface-scores --timeout-seconds 60 --json -- python3 /opt/interface-scores/check.py /workspace/interface-scores/af2.json --require-available
-ariax forge watch "$RESTORED_SESSION" "$RESTORED_CHECK_COMMAND_ID" --timeout 120 --json
+ariax forge watch "$RESTORED_SESSION" "$RESTORED_CHECK_COMMAND_ID" --wait-timeout 120 --json
 ```
 
 Omit `--require-available` for a monomer or a case with recorded unavailable metrics.

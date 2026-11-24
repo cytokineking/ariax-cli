@@ -37,22 +37,22 @@ Use the OpenBind runner (`runner-openbind.yaml`) or
 Preview2 runner (`runner.yaml`), with MSA-server and template generation disabled:
 
 ```sh
-ariax forge tools add SESSION --tools openbind-0 --json
-ariax forge tools wait SESSION openbind-0 --timeout 1800 --json
-ariax forge inputs add SESSION --file "$OPENFOLD3_EXAMPLES/queries.json" --path queries.json --json
-ariax forge inputs add SESSION --file "$OPENFOLD3_EXAMPLES/runner-openbind.yaml" --path runner-openbind.yaml --json
-ariax forge inputs add SESSION --file "$OPENFOLD3_EXAMPLES/check_outputs.py" --path openfold3/check_outputs.py --json
-ariax forge inputs list SESSION --json
+ariax forge tools add "$SESSION" --tools openbind-0 --json
+ariax forge tools wait "$SESSION" openbind-0 --wait-timeout 1800 --json
+ariax forge inputs add "$SESSION" --file "$OPENFOLD3_EXAMPLES/queries.json" --path queries.json --json
+ariax forge inputs add "$SESSION" --file "$OPENFOLD3_EXAMPLES/runner-openbind.yaml" --path runner-openbind.yaml --json
+ariax forge inputs add "$SESSION" --file "$OPENFOLD3_EXAMPLES/check_outputs.py" --path openfold3/check_outputs.py --json
+ariax forge inputs list "$SESSION" --json
 ```
 
 `OPENFOLD3_EXAMPLES` is `data.examples.openfold3` from
 `ariax skills forge --tool openfold3 --json`.
 Require session available, tool ready and each returned input ID ready before
 prediction. Read pending inputs with
-`ariax forge inputs status SESSION INPUT_ID`. Then submit:
+`ariax forge inputs status "$SESSION" "$INPUT_ID"`. Then submit:
 
 ```sh
-ariax forge run SESSION --tool openbind-0 --gpus 0 --timeout-seconds 1800 -- \
+ariax forge run "$SESSION" --tool openbind-0 --gpus 0 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- \
   openfold3-native --pair openbind-0 --query-json /inputs/queries.json \
   --runner-yaml /inputs/runner-openbind.yaml --samples 2 \
   --out-dir /workspace/openbind-small
@@ -135,15 +135,15 @@ Watch the prediction command to terminal success, inspect its logs, then invoke
 the staged checker explicitly on the remote workload:
 
 ```sh
-ariax forge run SESSION --tool openbind-0 --gpus 0 --timeout-seconds 120 -- \
+ariax forge run "$SESSION" --tool openbind-0 --gpus 0 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- \
   python /inputs/openfold3/check_outputs.py /workspace/openbind-small \
   --output /workspace/openbind-small-check.json
 ```
 
 ```sh
-ariax forge tools add SESSION --tools interface-scores --json
-ariax forge tools wait SESSION interface-scores --timeout 1800 --json
-ariax forge run SESSION --tool interface-scores --timeout-seconds 120 -- \
+ariax forge tools add "$SESSION" --tools interface-scores --json
+ariax forge tools wait "$SESSION" interface-scores --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool interface-scores --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- \
   interface-scores /workspace/openbind-small/insulin/seed_42/insulin_seed_42_sample_1_handoff.json \
   --output /workspace/interface-scores/openbind-insulin-sample-1.json --pae-cutoff 10
 ```
@@ -165,13 +165,18 @@ unchanged. Run the shipped geometry command on that copy. Reports retain overlap
 and backbone distances. These checks do not establish experimental accuracy,
 binding affinity, ligand pose accuracy or complete chemical stereochemistry.
 
-Flush useful files with `ariax forge sync SESSION --wait`. View CIFs through
-the Files page. Restore retains files without scientific replay; inspect restored
-native and handoff files before requesting another prediction. See the
-[Forge output/file workflow](../outputs.md).
+For multi-query prediction batches, follow **Scratch → Curate → Pack → Finish**:
+write raw outputs under `/scratch/openfold3-batch/`, copy summary JSONs and top
+preview CIFs (≤10 MB) to `/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/openfold3-batch --dest /workspace/archives/openfold3-batch.tar.zst --wait --json`,
+and release compute with `ariax forge finish "$SESSION" --wait --json` (or flush
+mid-session with `ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json`).
+View CIFs through the Files page. Restore retains files without scientific
+replay; inspect restored native and handoff files before requesting another
+prediction. See the [Forge output/file workflow](../outputs.md).
 
 Use [saved results](../outputs.md) for current project `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
+and [Forge recovery](../references/recovery.md) for human
 pause and same-project resume. **Resume workspace** starts a same-project
 session; inspect and use it. **Allow agent to resume later** leaves compute
 stopped until an authorized agent resume. Never automatically replay science.

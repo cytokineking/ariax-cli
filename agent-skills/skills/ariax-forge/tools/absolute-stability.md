@@ -61,7 +61,7 @@ ariax skills forge --reference absolute-stability --read --json
 
 `SESSION` is an authorized session UUID; `EXAMPLES` is the absolute
 `data.examples["absolute-stability"]` directory returned by the scoped skill
-lookup. Follow the shared [session lifecycle](../SKILL.md#discover-plan-run-and-close)
+lookup. Follow the shared [session lifecycle](../SKILL.md)
 for allocation, billing and closure. Require the host to be available and the
 selected tool to be ready. The examples use SaProt; for ESM3, select
 `absolute-stability-esm3` and a matching `esm3-*` model from the table. Inspect
@@ -69,8 +69,7 @@ the catalog for each intended mode before running it.
 
 ```sh
 ariax forge tools add "$SESSION" --tools absolute-stability-saprot --json
-ariax forge tools wait "$SESSION" absolute-stability-saprot --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" absolute-stability-saprot --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/stability_1998469.pdb" --path absolute-stability/domain.pdb --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/stability_1998469.cif" --path absolute-stability/domain.cif --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/Trka_binder_AF2_10.pdb" --path absolute-stability/complex.pdb --json
@@ -85,10 +84,8 @@ devices. No CPU substitute or scientific retry is automatic.
 ## Delta G
 
 ```sh
-ariax forge run "$SESSION" --tool absolute-stability-saprot --gpus 0 --timeout-seconds 3600 --json -- absolute-stability dg --input /inputs/absolute-stability/domain.pdb --chain A --model saprot-augmented --output /workspace/stability/domain-pdb
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
-ariax forge run "$SESSION" --tool absolute-stability-saprot --gpus 0 --timeout-seconds 120 --json -- absolute-stability-check /workspace/stability/domain-pdb --input /inputs/absolute-stability/domain.pdb --chains A --model saprot-augmented --mode dg
+ariax forge run "$SESSION" --tool absolute-stability-saprot --gpus 0 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- absolute-stability dg --input /inputs/absolute-stability/domain.pdb --chain A --model saprot-augmented --output /workspace/stability/domain-pdb
+ariax forge run "$SESSION" --tool absolute-stability-saprot --gpus 0 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- absolute-stability-check /workspace/stability/domain-pdb --input /inputs/absolute-stability/domain.pdb --chains A --model saprot-augmented --mode dg
 ```
 
 Require the prediction and checker commands to succeed. `result.json` has
@@ -159,21 +156,25 @@ run, inspect saved mapping, source, ensemble completeness, arrays and logs.
 A command can fail after partial files were written; only a completed
 `result.json` plus a successful checker marks a usable output.
 
+For large multi-protein or saturation-scan sweeps, write raw outputs under
+`/scratch/stability-run/`, copy compact `result.json`/`mutations.csv` summaries
+into `/workspace/results/`, and pack full `.npz` arrays with
+`ariax forge pack "$SESSION" --src /scratch/stability-run --dest /workspace/archives/stability-run.tar.zst --wait --json`.
+
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/stability --json
 ariax forge download "$PROJECT" /workspace/stability/domain-pdb/result.json --dest ./stability-result.json --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
 Follow [saved results](../outputs.md) to inspect the current saved files and
-create project links before sharing or closing compute. Use the
-shared [recovery instructions](../SKILL.md#recover-a-lost-response) after a lost
-reply or watch timeout. Correct a scientific failure explicitly and retain the
-failed run. The models were trained for small-domain stability. Larger complexes and novel
-constructs require appropriate scientific scrutiny; execution success alone
-does not establish calibration, binding or experimental success.
-
-Use [project controls](../SKILL.md#project-controls-and-resume) for human pause
-and same-project resume; restoration leaves the next scientific command explicit.
+create project links before finishing compute. Use
+[Forge recovery](../references/recovery.md) after a lost reply, watch timeout,
+human pause, or same-project resume; restoration leaves the next scientific
+command explicit. Correct a scientific failure explicitly and retain the failed
+run. The models were trained for small-domain stability. Larger complexes and
+novel constructs require appropriate scientific scrutiny; execution success
+alone does not establish calibration, binding or experimental success.

@@ -13,10 +13,10 @@ description: Route protein design, structure prediction, and molecular workflows
    - **Forge** (`ariax forge`): interactive GPU/CPU sessions for structure prediction, inverse folding, scoring/QC, search, or custom multi-stage pipelines — you manage commands, syncs, and session closure.
    - Managed and Forge settings differ even for shared engine names; always check the live schema or tool catalog.
 3. **Authenticate:** Check `ariax me --json`. If unauthenticated or rejected, ask the user to run `ariax login` with a key from <https://www.ariax.bio/settings/api-keys>. Never ask for, print, or inline API keys in argv, URLs, or job JSON.
-4. **Guard spending & recover safely:**
+4. **Guard spending, storage hygiene & recover safely:**
    - Check `ariax pricing --json` before allocating compute and stay within explicit user authorization.
-   - Validate managed jobs (`ariax validate`) before `ariax submit`; set `--max-gpu-hours` on Forge sessions and explicitly `ariax forge finish` / `close` when done (idle time is billed).
-   - Local interruptions do not stop remote compute. Reconcile uncertain requests with `ariax operations` / `ariax recover ID` or `ariax forge operations` / `ariax forge recover ID` before starting replacement work.
+   - Validate managed jobs (`ariax validate`) before `ariax submit`; set `--max-gpu-hours` on Forge sessions, follow **Scratch → Curate → Pack → Finish** (`ariax forge pack` for bulk `/scratch` outputs, then `ariax forge finish --wait`), and audit/clean storage with `ariax storage` (`usage`, `projects`, `project`, `entries`, `suggest`, `delete`).
+   - Use `--wait` on `forge create`/`resume`/`close`/`run` (`forge run --wait` returns `output_tail` and exits with code `11` on remote script failure). Local interruptions do not stop remote compute — reconcile uncertain requests with `ariax operations` / `ariax recover ID` or `ariax forge operations` / `ariax forge recover ID` before starting replacement work.
 5. **Handoff:** Report computational scores alongside native filters and caveats (see [interpretation](core/interpretation.md)); computational pass ≠ wet-lab binding. Record project-linked bugs or feature requests with `ariax feedback` (see [feedback](core/feedback.md)); email `support@ariax.bio` only if asked.
 
 Key references: [engine choice](core/engine-choice.md) · [managed lifecycle](core/managed-projects.md) · [recovery & support](core/recovery.md) · [Forge](skills/ariax-forge/SKILL.md) · [campaigns](core/campaigns.md)

@@ -16,8 +16,7 @@ For an authorized session with Boltz2 in its deployed catalog:
 
 ```sh
 ariax forge tools add "$SESSION" --tools boltz2 --priority boltz2 --json
-ariax forge tools wait "$SESSION" boltz2 --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" boltz2 --wait-timeout 1800 --json
 ```
 
 Require host `available` and `boltz2` ready. The tool is GPU-class; execution
@@ -61,9 +60,7 @@ small case's process activity. Native options are defined in the
 [official 2.2.1 source](https://github.com/jwohlwend/boltz/blob/v2.2.1/src/boltz/main.py).
 
 ```sh
-ariax forge run "$SESSION" --tool boltz2 --timeout-seconds 3600 --json -- boltz predict /inputs/boltz2/complex.yaml --model boltz2 --cache /models/boltz2 --checkpoint /models/boltz2/boltz2_conf.ckpt --out_dir /workspace/boltz2-demo/run1 --accelerator gpu --devices 1 --recycling_steps 3 --sampling_steps 200 --diffusion_samples 1 --max_parallel_samples 1 --seed 7 --num_workers 0 --preprocessing-threads 1 --output_format mmcif --write_full_pae
-ariax forge watch "$SESSION" "$PREDICT_COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$PREDICT_COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool boltz2 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- boltz predict /inputs/boltz2/complex.yaml --model boltz2 --cache /models/boltz2 --checkpoint /models/boltz2/boltz2_conf.ckpt --out_dir /workspace/boltz2-demo/run1 --accelerator gpu --devices 1 --recycling_steps 3 --sampling_steps 200 --diffusion_samples 1 --max_parallel_samples 1 --seed 7 --num_workers 0 --preprocessing-threads 1 --output_format mmcif --write_full_pae
 ```
 
 Set `PREDICT_COMMAND_ID` to the returned ID. Require `succeeded` before the
@@ -86,8 +83,7 @@ root. For the single sample, require all four nonempty files:
 ```
 
 ```sh
-ariax forge run "$SESSION" --tool boltz2 --timeout-seconds 60 --json -- python3 /inputs/boltz2/check.py /workspace/boltz2-demo/run1
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 120 --json
+ariax forge run "$SESSION" --tool boltz2 --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- python3 /inputs/boltz2/check.py /workspace/boltz2-demo/run1
 ```
 
 The checker (`check.py`) parses the actual CIF, requires chains
@@ -113,52 +109,58 @@ Choose a new output directory for changed inputs or settings. In 2.2.1,
 `--override` does not clear already processed inputs, so a reused stem can
 reuse stale preprocessing. Preserve previous runs, command IDs and settings.
 
-## Save and restore
+## Save, pack and restore
+
+For batch predictions producing many CIF/PAE/pLDDT outputs, follow
+**Scratch → Curate → Pack → Finish**: write raw `--out_dir /scratch/boltz2-batch`,
+copy summary JSON/CSV and top preview CIFs (≤10 MB) to `/workspace/results/`,
+pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/boltz2-batch --dest /workspace/archives/boltz2-batch.tar.zst --wait --json`,
+and finish the session.
 
 After prediction and check commands are terminal:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/boltz2-demo/run1 --json
 ariax forge download "$PROJECT" /workspace/boltz2-demo/run1/boltz_results_complex/predictions/complex/complex_model_0.cif --dest ./complex_model_0.cif --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved`, then confirm source `closed`. Listing and
-download read the current saved project files. Creating or
-resuming a session allocates paid resources; preparation and idle time count
-toward its GPU-hour limit, and a successful command does not close it. Continue
-that same `PROJECT`. If the user clears a human hold with **Resume workspace**,
-inspect the project and set `RESTORED_SESSION` to its `active_session_id`;
-continue there without starting another session or automatically replaying
-science. **Allow agent to resume later** leaves compute stopped; await the user's
-direction. For a new CLI resume, confirm no session is active, no hold blocks it
-and cleanup has completed. Set `REVISION` from the current `control.revision`
-and explicitly resume. Recover an uncertain earlier request using its original
-ID, fields and revision:
+Require the flush state `saved`, then confirm `finish` reports
+`release: "released"` and `durability: "saved"`. Listing and download read the
+current saved project files. Creating or resuming a session allocates paid
+resources; preparation and idle time count toward its GPU-hour limit, and a
+successful command does not close it. Continue that same `PROJECT`. If the user
+clears a human hold with **Resume workspace**, inspect the project and set
+`RESTORED_SESSION` to its `active_session_id`; continue there without starting
+another session or automatically replaying science. **Allow agent to resume
+later** leaves compute stopped; await the user's direction. For a new CLI
+resume, confirm no session is active, no hold blocks it and cleanup has
+completed. Set `REVISION` from the current `control.revision` and explicitly
+resume. Recover an uncertain earlier request using its original ID, fields and
+revision:
 
 ```sh
 ariax forge project "$PROJECT" --json
-ariax forge resume "$PROJECT" --gpu L40S --tools boltz2 --control-revision "$REVISION" --max-gpu-hours 1 --json
+ariax forge resume "$PROJECT" --gpu L40S --tools boltz2 --control-revision "$REVISION" --max-gpu-hours 1 --wait --json
 ```
 
 For the CLI path, set `RESTORED_SESSION` from the response. After either path,
-inspect the session and existing commands:
+wait for `boltz2` readiness (or pass `--wait-ready` on your next `forge run`):
 
 ```sh
-ariax forge status "$RESTORED_SESSION" --json
-ariax forge tools wait "$RESTORED_SESSION" boltz2 --timeout 1800 --json
+ariax forge tools wait "$RESTORED_SESSION" boltz2 --wait-timeout 1800 --json
 ```
 
-Require host/tool readiness. Verify restored
-input/result identities before reuse. Restore recovers inputs/workspace without replaying
-prediction or restoring model caches. The new session prepares named assets
-normally. Read the [outputs reference](../outputs.md) with
-`ariax skills forge --reference outputs --read --json` for storage semantics. Close
-and confirm cleanup for the restored session, too.
+Verify restored input/result identities before reuse. Restore recovers
+inputs/workspace without replaying prediction or restoring model caches. The new
+session prepares named assets normally. Read the [outputs reference](../outputs.md)
+with `ariax skills forge --reference outputs --read --json` for storage
+semantics. Finish the restored session with `ariax forge finish "$RESTORED_SESSION" --wait --json`
+and confirm cleanup.
 
 ## Other inputs and limits
 

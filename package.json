@@ -248,6 +248,7 @@
     "src/commands/schema.js",
     "src/commands/skills.js",
     "src/commands/status.js",
+    "src/commands/storage.js",
     "src/commands/submit.js",
     "src/commands/upgrade.js",
     "src/commands/validate.js",

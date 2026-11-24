@@ -13,6 +13,7 @@ import { EXIT } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 import { isForgeOperationTerminal, pruneExpiredRecords } from '../state-dir.js';
+import { detectAgentShell } from '../agent-env.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
 import { readSync, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
@@ -21,12 +22,17 @@ import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js
 import { readForgeToolGuide } from './skills.js';
 
 const API = '/api/v1/forge';
-const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
+const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted', 'timed_out']);
+const DEFAULT_WATCH_TAIL_LINES = 80;
+const MAX_WATCH_TAIL_LINES = 400;
+const MAX_WATCH_TAIL_BYTES = 4096;
+const CLOSE_PENDING_FILES_LIMIT = 100;
+const CLOSE_PENDING_BYTES_LIMIT = 500 * 1024 * 1024;
 const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
   'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id'];
 const OPTIONS = {
-  create: [['name', ...SESSION_OPTIONS], 1],
-  resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS], 2],
+  create: [['name', ...SESSION_OPTIONS, 'wait', 'wait-timeout'], 1],
+  resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS, 'wait', 'wait-timeout'], 2],
   project: [['limit', 'cursor', 'details'], 2],
   activity: [['limit', 'cursor', 'details'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
@@ -34,20 +40,21 @@ const OPTIONS = {
   list: [['details'], 1], status: [[], 2], tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
   'tools wait': [['timeout', 'wait-timeout'], 4],
-  run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout'], 2],
+  run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout', 'tail'], 2],
+  pack: [['src', 'dest', 'format', 'max-shard-gib', 'remove-src', 'no-manifest', 'wait', 'wait-timeout', 'wait-ready', 'tail', 'operation-id'], 2],
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
   finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
-  commands: [['retained', 'details'], 2], command: [['retained', 'details'], 3], watch: [['timeout', 'wait-timeout'], 3],
+  commands: [['retained', 'details'], 2], command: [['retained', 'details'], 3], watch: [['timeout', 'wait-timeout', 'tail'], 3],
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
   files: [['path', 'cursor'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
   download: [['dest'], 3], link: [[], 3],
-  logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [[], 2],
+  logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [['force', 'wait', 'wait-timeout'], 2],
 };
 
-export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
-  ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID]
+export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
@@ -58,16 +65,17 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge tools SESSION [--details]
   ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
   ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS]
-  ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] -- COMMAND ARG...
+  ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] [--tail N] -- COMMAND ARG...
+  ariax forge pack SESSION --src PATH --dest /workspace/archives/NAME.tar.zst [--format tar.zst|tar.gz] [--max-shard-gib 10] [--remove-src] [--no-manifest] [--wait] [--wait-timeout SECONDS] [--wait-ready] [--tail N] [--operation-id UUID]
   ariax forge operations
   ariax forge recover OPERATION_ID [--wait] [--wait-timeout SECONDS]
   ariax forge finish SESSION [--timeout-seconds SECONDS] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge commands SESSION [--retained] [--details]
   ariax forge command SESSION COMMAND_ID [--retained] [--details]
-  ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS]
+  ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS] [--tail N]
   ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]
   ariax forge cancel SESSION COMMAND_ID
-  ariax forge close SESSION
+  ariax forge close SESSION [--force] [--wait] [--wait-timeout SECONDS]
   ariax forge inputs add SESSION --file FILE --path PATH [--input-id UUID]
   ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path PATH [--input-id UUID]
   ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID]
@@ -82,9 +90,11 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge link PROJECT PATH
   Files and links refer to the current project workspace, not a historical version.
   Sync flushes changed files on an active session; it is not an atomic multi-file snapshot.
+  Pack stages in /scratch, verifies archive integrity, shards >--max-shard-gib (default 10 GiB), and writes a manifest under /workspace.
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
   --wait-ready waits for the session, tool, listed inputs and command capacity before dispatch.
-  --wait-timeout bounds local waiting in seconds (run/files recover default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
+  --wait-timeout bounds local waiting in seconds (create/resume/close/run/pack/files recover default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
+  --tail bounds output_tail lines returned by run --wait, pack --wait, and watch (default 80, max 400, capped at 4096 bytes). Remote command failures exit with code 11.
   Finish uses --timeout-seconds for its fixed remote deadline (default 3600); its --wait-timeout defaults to 7200 seconds.
   For tools wait, watch and sync, --wait-timeout is in seconds; omission or 0 waits indefinitely. Their older --timeout option also uses seconds.
   Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
@@ -792,7 +802,185 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, re
   } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
 }
 
+function formatBytes(bytes) {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+  let val = bytes / 1024;
+  let unit = 0;
+  while (val >= 1024 && unit < units.length - 1) { val /= 1024; unit++; }
+  return `${val >= 10 ? val.toFixed(1) : val.toFixed(2)} ${units[unit]}`;
+}
+
+export function extractSynchronization(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.synchronization && typeof data.synchronization === 'object') return data.synchronization;
+  if (data.runtime_observation?.synchronization && typeof data.runtime_observation.synchronization === 'object') {
+    return data.runtime_observation.synchronization;
+  }
+  return null;
+}
+
+const HYGIENE_ACTIONS = Object.freeze({
+  high_file_count: (sessionId) =>
+    `Pack bulk directories into a compressed archive before finishing: ariax forge pack ${sessionId || 'SESSION'} --src /scratch/<run> --dest /workspace/archives/<name>.tar.zst --wait --json`,
+  high_pending_files: (sessionId) =>
+    `Use ariax forge finish ${sessionId || 'SESSION'} --wait --json to allow full drain, or pack bulk directories with ariax forge pack.`,
+  low_disk_space: (sessionId) =>
+    `Remove unneeded intermediates under /scratch or pack and remove raw outputs with ariax forge pack ${sessionId || 'SESSION'} --src /scratch/<run> --dest /workspace/archives/<name>.tar.zst --remove-src --wait --json`,
+  symlink_blocks_sync: () =>
+    'Replace symlinks under /workspace with regular files or move them to /scratch so synchronization can proceed.',
+  file_near_20gib_limit: (sessionId) =>
+    `Pack large outputs into sharded archives below the 20 GiB file limit using ariax forge pack ${sessionId || 'SESSION'} --max-shard-gib 10.`,
+  scratch_data_not_saved: (sessionId) =>
+    `Files in /scratch are ephemeral and are not saved after session release. Pack outputs you want to keep first: ariax forge pack ${sessionId || 'SESSION'} --src /scratch/<run> --dest /workspace/archives/<name>.tar.zst --wait --json`,
+});
+
+export function emitHygieneNotices(ctx, sync, { sessionId, includeScratch = false } = {}) {
+  if (!sync || typeof sync !== 'object') return;
+  const structured = ctx.json === true || (!ctx.config?.jsonDisabled && Boolean(detectAgentShell(ctx.env)));
+  const seenCodes = new Set();
+  const emit = (code, message, action, details) => {
+    const cleanCode = String(code);
+    const cleanMessage = redactForgeText(String(message));
+    const cleanAction = action ? redactForgeText(String(action)) : undefined;
+    const cleanDetails = details && typeof details === 'object' ? redactForgeOutput(details) : undefined;
+    if (structured) {
+      printProgress(JSON.stringify({
+        notice: {
+          code: cleanCode,
+          message: cleanMessage,
+          ...(cleanAction ? { action: cleanAction } : {}),
+          ...(cleanDetails ? { details: cleanDetails } : {}),
+        },
+      }));
+    } else {
+      printProgress(`warning [${cleanCode}]: ${cleanMessage}${cleanAction ? ` — ${cleanAction}` : ''}`);
+    }
+  };
+  if (Array.isArray(sync.warnings)) {
+    for (const warning of sync.warnings) {
+      if (!warning || typeof warning !== 'object' || typeof warning.code !== 'string' || !warning.code.trim()) continue;
+      const code = warning.code.trim();
+      seenCodes.add(code);
+      const message = typeof warning.message === 'string' && warning.message.trim() ? warning.message.trim() : code;
+      const action = typeof warning.action === 'string' && warning.action.trim()
+        ? warning.action.trim()
+        : HYGIENE_ACTIONS[code]?.(sessionId);
+      const details = warning.details && typeof warning.details === 'object' ? warning.details : undefined;
+      emit(code, message, action, details);
+    }
+  }
+  if (includeScratch && !seenCodes.has('scratch_data_not_saved')
+      && typeof sync.scratch_bytes === 'number' && Number.isFinite(sync.scratch_bytes) && sync.scratch_bytes > 0) {
+    emit(
+      'scratch_data_not_saved',
+      `/scratch contains ${formatBytes(sync.scratch_bytes)} of ephemeral data that will not be saved after session release.`,
+      HYGIENE_ACTIONS.scratch_data_not_saved(sessionId),
+      { scratch_bytes: sync.scratch_bytes },
+    );
+  }
+}
+
+export async function observeSessionSync(
+  ctx,
+  sessionId,
+  sessionPath,
+  initialData = null,
+  { tryDirect = false, propagateAuthErrors = false } = {},
+) {
+  const fromInitial = extractSynchronization(initialData);
+  if (fromInitial) return fromInitial;
+
+  const hasSessionShape = Boolean(
+    initialData
+    && typeof initialData === 'object'
+    && (initialData.session_id === sessionId || isUUID(initialData.project_id)),
+  );
+  let sessionData = hasSessionShape ? initialData : null;
+  if (!sessionData) {
+    try {
+      const res = await ctx.client.get(sessionPath, { attempts: 1 });
+      sessionData = res.data;
+      const fromSession = extractSynchronization(sessionData);
+      if (fromSession) return fromSession;
+    } catch (error) {
+      if (propagateAuthErrors && error instanceof ApiError && [401, 403, 404].includes(error.status)) {
+        throw error;
+      }
+    }
+  }
+
+  if (sessionData && !['closed', 'failed'].includes(sessionData.state) && isUUID(sessionData.project_id)) {
+    try {
+      const filesStatus = await ctx.client.get(`${API}/projects/${sessionData.project_id}/files/status`, { attempts: 1 });
+      const fromFilesStatus = extractSynchronization(filesStatus.data);
+      if (fromFilesStatus) return fromFilesStatus;
+    } catch { /* Control-plane file status telemetry is best-effort. */ }
+  }
+
+  const canDirect = sessionData ? sessionData.state === 'available' : tryDirect;
+  if (canDirect && (tryDirect || hasCachedForgeConnection(ctx, sessionId))) {
+    try {
+      const direct = await forgeRequest(ctx, sessionId, 'GET', '/v1/session');
+      const fromDirect = extractSynchronization(direct.data);
+      if (fromDirect) return fromDirect;
+    } catch { /* Direct daemon lookup is best-effort. */ }
+  }
+  return null;
+}
+
+function tailLimit(value) {
+  if (value === undefined) return DEFAULT_WATCH_TAIL_LINES;
+  const lines = number(value, 'tail', { integer: true });
+  if (lines > MAX_WATCH_TAIL_LINES) throw usageError(`forge: --tail must be an integer 1..${MAX_WATCH_TAIL_LINES}.`);
+  return lines;
+}
+
+function boundOutputTail(text, maxLines = DEFAULT_WATCH_TAIL_LINES, maxBytes = MAX_WATCH_TAIL_BYTES) {
+  if (typeof text !== 'string' || !text.length) return '';
+  let clean = redactForgeText(text);
+  const trailingNewline = clean.endsWith('\n');
+  const body = trailingNewline ? clean.slice(0, -1) : clean;
+  const lines = body.split('\n');
+  if (lines.length > maxLines) {
+    clean = lines.slice(lines.length - maxLines).join('\n') + (trailingNewline ? '\n' : '');
+  }
+  const buf = Buffer.from(clean, 'utf8');
+  if (buf.length > maxBytes) {
+    let start = buf.length - maxBytes;
+    while (start < buf.length && (buf[start] & 0xc0) === 0x80) start++;
+    clean = buf.subarray(start).toString('utf8');
+  }
+  return clean;
+}
+
+function isFailedCommand(command) {
+  return ['failed', 'interrupted', 'timed_out'].includes(command?.state)
+    || (command?.state === 'succeeded' && typeof command?.exit_code === 'number' && command.exit_code !== 0);
+}
+
+function commandFailedError(sessionId, commandId, command, outputTail) {
+  const state = command?.state ?? 'failed';
+  const exitCode = command?.exit_code;
+  const details = {
+    command_id: commandId,
+    state,
+    ...(exitCode !== undefined ? { exit_code: exitCode } : {}),
+    ...(outputTail ? { output_tail: outputTail } : {}),
+  };
+  const failure = new ApiError({
+    code: 'command_failed',
+    message: `Command ${commandId} is ${state}${typeof exitCode === 'number' ? ` (exit_code=${exitCode})` : ''}${command?.error?.message ? `: ${command.error.message}` : ''}`,
+    details,
+    retryable: false,
+  });
+  failure.action = `Inspect ariax forge command ${sessionId} ${commandId} and ariax forge logs ${sessionId} ${commandId}. Keep the same command ID while its outcome is uncertain.`;
+  return failure;
+}
+
 async function watchCommand(ctx, sessionId, commandId, options = {}) {
+  const maxLines = tailLimit(ctx.flags.tail);
   const waitTimeout = ctx.flags['wait-timeout'] ?? ctx.flags.timeout;
   const timeout = options.signal || waitTimeout === undefined ? 0 : localWaitSeconds(waitTimeout, 0, { allowZero: true }) * 1000;
   const controller = options.signal ? null : new AbortController();
@@ -802,19 +990,27 @@ async function watchCommand(ctx, sessionId, commandId, options = {}) {
   const timer = timeout ? setTimeout(() => controller.abort(), timeout) : undefined;
   if (controller) process.once('SIGINT', interrupt);
   let cursor;
+  let rollingTail = '';
   printProgress(`Waiting. Resume with: ariax forge watch ${sessionId} ${commandId}`);
   try {
     for (;;) {
       const result = await forgeRequest(ctx, sessionId, 'GET', `/v1/commands/${commandId}/logs`, {
-        query: { wait_seconds: 25, ...(cursor ? { cursor } : {}) }, signal,
+        query: { wait_seconds: 25, ...(cursor ? { cursor } : { tail: maxLines }) }, signal,
       });
       cursor = result.data.next_cursor;
-      if (result.data.gap) printProgress('An output interval is unavailable; the retained tail follows.');
+      if (result.data.gap) {
+        printProgress('An output interval is unavailable; the retained tail follows.');
+        rollingTail = '';
+      }
+      if (typeof result.data.text === 'string' && result.data.text.length) {
+        rollingTail = boundOutputTail(rollingTail + result.data.text, maxLines, MAX_WATCH_TAIL_BYTES);
+      }
       const command = result.data.command;
       remember(ctx, commandId, `/v1/commands/${commandId}`, command);
-      if (['failed', 'interrupted'].includes(command.state)) failed('command_failed', `Command ${commandId} is ${command.state}`, command.error,
-        `Inspect ariax forge command ${sessionId} ${commandId} and ariax forge logs ${sessionId} ${commandId}. Keep the same command ID while its outcome is uncertain.`);
-      if (TERMINAL_COMMANDS.has(command.state)) return { ...result, data: command };
+      if (isFailedCommand(command)) throw commandFailedError(sessionId, commandId, command, rollingTail);
+      if (TERMINAL_COMMANDS.has(command.state)) {
+        return { ...result, data: { ...command, ...(rollingTail ? { output_tail: rollingTail } : {}) } };
+      }
     }
   } catch (error) {
     if (controller?.signal.aborted) {
@@ -832,10 +1028,25 @@ async function waitCommandResult(ctx, session, id, signal, current) {
     error.action = `Inspect ariax forge command ${session} ${id} --retained. Keep the same ID while the outcome is uncertain.`;
     throw error;
   }
-  const result = current && TERMINAL_COMMANDS.has(current.data?.state) ? current
-    : await watchCommand(ctx, session, id, {signal});
-  if (['failed', 'interrupted'].includes(result.data.state)) failed('command_failed', `Command ${id} is ${result.data.state}`, result.data.error,
-    `Inspect ariax forge command ${session} ${id} and ariax forge logs ${session} ${id}.`);
+  let result;
+  if (current && TERMINAL_COMMANDS.has(current.data?.state)) {
+    let outputTail = typeof current.data.output_tail === 'string' ? current.data.output_tail : '';
+    if (!outputTail) {
+      try {
+        const maxLines = tailLimit(ctx.flags.tail);
+        const logsRes = current.retained
+          ? await ctx.client.get(`${API}/sessions/${session}/commands/${id}/logs`, { query: { tail: maxLines }, signal })
+          : await forgeRequest(ctx, session, 'GET', `/v1/commands/${id}/logs`, { query: { tail: maxLines, wait_seconds: 0 }, signal });
+        if (typeof logsRes.data?.text === 'string' && logsRes.data.text.length) {
+          outputTail = boundOutputTail(logsRes.data.text, maxLines, MAX_WATCH_TAIL_BYTES);
+        }
+      } catch { /* Preserve command outcome when log tail cannot be read. */ }
+    }
+    result = { ...current, data: { ...current.data, ...(outputTail ? { output_tail: outputTail } : {}) } };
+  } else {
+    result = await watchCommand(ctx, session, id, { signal });
+  }
+  if (isFailedCommand(result.data)) throw commandFailedError(session, id, result.data, result.data.output_tail);
   if (result.data.state === 'cancelled') failed('command_cancelled', `Command ${id} was cancelled`, result.data.error,
     `Inspect ariax forge command ${session} ${id} and its logs before deciding whether to run new work.`);
   return result;
@@ -892,10 +1103,10 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
   for (;;) {
     const data = result.data;
     if (kind === 'session') {
-      if (data.state === 'available') return result;
+      if (data.state === 'available' || data.state === 'ready') return result;
       if (['closing','closed','failed'].includes(data.state)) failed('session_unavailable', `Session ${id} is ${data.state}`, data.error);
     } else if (kind === 'close') {
-      if (data.state === 'closed') return result;
+      if (data.state === 'closed' || data.state === 'released') return result;
       if (data.state === 'failed') failed('session_unavailable', `Session closure failed`, data.error);
     } else if (kind === 'selection') {
       const tools = record.request.body.tools.map(name => data.tools?.find(tool => tool.tool === name));
@@ -939,10 +1150,274 @@ export function failed(code, message, error, recovery) {
   throw failure;
 }
 
+function posixQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function validatePackPath(value, flag, { allowScratch }) {
+  if (typeof value !== 'string' || !value || Buffer.byteLength(value) > 1024
+      || value.includes('\\') || /[\x00-\x1f\x7f]/.test(value)) {
+    throw usageError(`forge pack: --${flag} must be an absolute POSIX path without control characters or backslashes.`);
+  }
+  const normalized = allowScratch && value.length > 1 && value.endsWith('/') ? value.slice(0, -1) : value;
+  const pattern = allowScratch ? /^\/(scratch|workspace)\// : /^\/workspace\//;
+  if (!pattern.test(normalized)) {
+    throw usageError(allowScratch
+      ? `forge pack: --${flag} must be a path under /scratch/ or /workspace/ (root directories are not allowed).`
+      : `forge pack: --${flag} must be a file path under /workspace/ (root /workspace is not allowed).`);
+  }
+  if (!allowScratch && value.endsWith('/')) {
+    throw usageError(`forge pack: --${flag} must name an archive file, not end with '/'.`);
+  }
+  const parts = normalized.slice(1).split('/');
+  if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..' || Buffer.byteLength(part) > 255)) {
+    throw usageError(`forge pack: --${flag} cannot contain empty, dot, or traversal components.`);
+  }
+  return normalized;
+}
+
+function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, removeSrc, noManifest, packId }) {
+  return [
+    'set -euo pipefail',
+    `SRC=${posixQuote(src)}`,
+    `DEST=${posixQuote(dest)}`,
+    `FORMAT=${posixQuote(format)}`,
+    `EXPLICIT_FORMAT=${posixQuote(explicitFormat ? '1' : '0')}`,
+    `MAX_SHARD_GIB=${posixQuote(String(maxShardGib))}`,
+    `REMOVE_SRC=${posixQuote(removeSrc ? '1' : '0')}`,
+    `NO_MANIFEST=${posixQuote(noManifest ? '1' : '0')}`,
+    `PACK_ID=${posixQuote(packId)}`,
+    'if [ ! -e "$SRC" ]; then',
+    '  echo "pack error: source path does not exist: $SRC" >&2',
+    '  exit 2',
+    'fi',
+    'STAGE="/scratch/.ariax-pack-${PACK_ID}"',
+    'mkdir -p "$STAGE"',
+    'trap \'rm -rf "$STAGE"\' EXIT',
+    'PARENT="$(dirname "$SRC")"',
+    'BASE="$(basename "$SRC")"',
+    'python3 - "$SRC" "$PARENT" "$STAGE/files.lst" "$STAGE/stats.json" <<\'PY\'',
+    'import json, os, stat, sys',
+    'src, parent, list_path, stats_path = sys.argv[1:5]',
+    'entries = []',
+    'file_count = 0',
+    'uncompressed_bytes = 0',
+    'skipped = 0',
+    'visited_dirs = set()',
+    'def add_rel(full_path):',
+    '    rel = os.path.relpath(full_path, parent)',
+    '    if rel.startswith("-"):',
+    '        rel = "./" + rel',
+    '    entries.append(rel)',
+    'def walk_entry(full_path):',
+    '    global file_count, uncompressed_bytes, skipped',
+    '    try:',
+    '        st = os.stat(full_path)',
+    '    except OSError:',
+    '        skipped += 1',
+    '        return',
+    '    mode = st.st_mode',
+    '    if stat.S_ISREG(mode):',
+    '        add_rel(full_path)',
+    '        file_count += 1',
+    '        uncompressed_bytes += st.st_size',
+    '    elif stat.S_ISDIR(mode):',
+    '        key = (st.st_dev, st.st_ino)',
+    '        if key in visited_dirs:',
+    '            skipped += 1',
+    '            return',
+    '        visited_dirs.add(key)',
+    '        children = sorted(os.listdir(full_path))',
+    '        before = len(entries)',
+    '        for name in children:',
+    '            walk_entry(os.path.join(full_path, name))',
+    '        if len(entries) == before:',
+    '            add_rel(full_path)',
+    '    else:',
+    '        skipped += 1',
+    'walk_entry(src)',
+    'with open(list_path, "wb") as f:',
+    '    for rel in entries:',
+    '        f.write(rel.encode("utf-8") + b"\\0")',
+    'with open(stats_path, "w", encoding="utf-8") as f:',
+    '    json.dump({"file_count": file_count, "uncompressed_bytes": uncompressed_bytes, "skipped_special_or_broken": skipped}, f)',
+    'if skipped:',
+    '    sys.stderr.write(f"pack notice: skipped {skipped} broken symlink or special file(s)\\n")',
+    'PY',
+    'ACTUAL_FORMAT="$FORMAT"',
+    'ACTUAL_DEST="$DEST"',
+    'if [ "$FORMAT" = "tar.zst" ]; then',
+    '  if command -v zstd >/dev/null 2>&1; then',
+    '    COMPRESS_CMD=(zstd -T0 -3)',
+    '    VERIFY_CMD=(zstd -t)',
+    '    DECOMPRESS_CMD=(zstd -dc)',
+    '  elif [ "$EXPLICIT_FORMAT" = "1" ]; then',
+    '    echo "pack error: zstd is not installed in this image; re-run with --format tar.gz" >&2',
+    '    exit 3',
+    '  else',
+    '    echo "pack notice: zstd not found; falling back to tar.gz" >&2',
+    '    ACTUAL_FORMAT="tar.gz"',
+    '    if [[ "$ACTUAL_DEST" == *.tar.zst ]]; then',
+    '      ACTUAL_DEST="${ACTUAL_DEST%.tar.zst}.tar.gz"',
+    '    elif [[ "$ACTUAL_DEST" != *.tar.gz && "$ACTUAL_DEST" != *.tgz ]]; then',
+    '      ACTUAL_DEST="${ACTUAL_DEST}.tar.gz"',
+    '    fi',
+    '    if command -v pigz >/dev/null 2>&1; then COMPRESS_CMD=(pigz); else COMPRESS_CMD=(gzip); fi',
+    '    VERIFY_CMD=(gzip -t)',
+    '    DECOMPRESS_CMD=(gzip -dc)',
+    '  fi',
+    'else',
+    '  if command -v pigz >/dev/null 2>&1; then COMPRESS_CMD=(pigz); else COMPRESS_CMD=(gzip); fi',
+    '  VERIFY_CMD=(gzip -t)',
+    '  DECOMPRESS_CMD=(gzip -dc)',
+    'fi',
+    'if [ -d "$ACTUAL_DEST" ]; then',
+    '  echo "pack error: destination path is an existing directory: $ACTUAL_DEST" >&2',
+    '  exit 2',
+    'fi',
+    'if [ -s "$STAGE/files.lst" ]; then',
+    '  tar -C "$PARENT" --dereference --no-recursion --null -T "$STAGE/files.lst" -cf - | "${COMPRESS_CMD[@]}" > "$STAGE/archive.tmp"',
+    'else',
+    '  tar -C "$PARENT" --no-recursion -cf - "$BASE" | "${COMPRESS_CMD[@]}" > "$STAGE/archive.tmp"',
+    'fi',
+    '"${VERIFY_CMD[@]}" "$STAGE/archive.tmp"',
+    '"${DECOMPRESS_CMD[@]}" "$STAGE/archive.tmp" | tar -tf - > "$STAGE/entries.txt"',
+    'COMPRESSED_BYTES="$(python3 -c \'import os, sys; print(os.path.getsize(sys.argv[1]))\' "$STAGE/archive.tmp")"',
+    'MAX_SHARD_BYTES=$((MAX_SHARD_GIB * 1024 * 1024 * 1024))',
+    'SHARDED=0',
+    'if [ "$COMPRESSED_BYTES" -gt "$MAX_SHARD_BYTES" ]; then',
+    '  SHARDED=1',
+    '  split -b "${MAX_SHARD_GIB}G" -d -a 3 "$STAGE/archive.tmp" "$STAGE/archive.part"',
+    '  python3 - "$COMPRESSED_BYTES" "$STAGE"/archive.part* <<\'PY\'',
+    'import os, sys',
+    'expected = int(sys.argv[1])',
+    'total = sum(os.path.getsize(p) for p in sys.argv[2:])',
+    'if total != expected:',
+    '    sys.stderr.write(f"pack error: shard byte total {total} != archive size {expected}\\n")',
+    '    sys.exit(4)',
+    'PY',
+    '  rm -f "$STAGE/archive.tmp"',
+    'fi',
+    'python3 - "$SRC" "$ACTUAL_DEST" "$ACTUAL_FORMAT" "$SHARDED" "$COMPRESSED_BYTES" "$NO_MANIFEST" "$REMOVE_SRC" "$STAGE/stats.json" "$STAGE/entries.txt" "$STAGE/manifest.json" "$STAGE/summary.json" "$STAGE" <<\'PY\'',
+    'import glob, json, os, sys',
+    'src, dest, fmt, sharded_s, comp_s, no_manifest_s, remove_src_s, stats_path, entries_path, manifest_path, summary_path, stage = sys.argv[1:13]',
+    'sharded = sharded_s == "1"',
+    'no_manifest = no_manifest_s == "1"',
+    'remove_src = remove_src_s == "1"',
+    'stats = json.load(open(stats_path, encoding="utf-8"))',
+    'sample = []',
+    'with open(entries_path, encoding="utf-8", errors="replace") as f:',
+    '    for line in f:',
+    '        line = line.rstrip("\\r\\n")',
+    '        if line:',
+    '            sample.append(line)',
+    '            if len(sample) >= 50:',
+    '                break',
+    'shards = []',
+    'if sharded:',
+    '    for p in sorted(glob.glob(os.path.join(stage, "archive.part*"))):',
+    '        suffix = os.path.basename(p).split("archive.", 1)[1]',
+    '        shards.append(f"{dest}.{suffix}")',
+    'manifest = {',
+    '    "src": src,',
+    '    "dest": dest,',
+    '    "format": fmt,',
+    '    "sharded": sharded,',
+    '    "shards": shards,',
+    '    "file_count": stats["file_count"],',
+    '    "uncompressed_bytes": stats["uncompressed_bytes"],',
+    '    "compressed_bytes": int(comp_s),',
+    '    "sample_entries": sample,',
+    '}',
+    'if not no_manifest:',
+    '    with open(manifest_path, "w", encoding="utf-8") as f:',
+    '        json.dump(manifest, f, indent=2)',
+    '        f.write("\\n")',
+    'summary = {**manifest, "manifest_path": None if no_manifest else f"{dest}.manifest.json", "removed_src": remove_src}',
+    'with open(summary_path, "w", encoding="utf-8") as f:',
+    '    json.dump(summary, f)',
+    '    f.write("\\n")',
+    'PY',
+    'mkdir -p "$(dirname "$ACTUAL_DEST")"',
+    'if [ "$SHARDED" = "1" ]; then',
+    '  for p in "$STAGE"/archive.part*; do',
+    '    base="$(basename "$p")"',
+    '    suffix="${base#archive.}"',
+    '    mv -f "$p" "${ACTUAL_DEST}.${suffix}"',
+    '  done',
+    'else',
+    '  if [ -d "$ACTUAL_DEST" ]; then',
+    '    echo "pack error: destination path is an existing directory: $ACTUAL_DEST" >&2',
+    '    exit 2',
+    '  fi',
+    '  mv -f "$STAGE/archive.tmp" "$ACTUAL_DEST"',
+    'fi',
+    'if [ "$NO_MANIFEST" = "0" ]; then',
+    '  mv -f "$STAGE/manifest.json" "${ACTUAL_DEST}.manifest.json"',
+    'fi',
+    'if [ "$REMOVE_SRC" = "1" ]; then',
+    '  rm -rf "$SRC"',
+    'fi',
+    'cat "$STAGE/summary.json"',
+  ].join('\n');
+}
+
+async function waitSessionReady(ctx, sessionId, initialResult, signal) {
+  let result = initialResult;
+  const record = readRecordFor(ctx, sessionId);
+  const writeFile = record ? recordPath(ctx, sessionId, true) : null;
+  let lastState;
+  let attempt = 0;
+  for (;;) {
+    const state = result.data?.state;
+    if (state === 'available' || state === 'ready') return result;
+    if (['closing', 'closed', 'failed'].includes(state)) {
+      failed('session_unavailable', `Session ${sessionId} is ${state}`, result.data?.error);
+    }
+    if (state !== lastState) {
+      printProgress(`Waiting for session ${sessionId}: ${redactForgeText(String(state ?? 'pending'))}`);
+      lastState = state;
+    }
+    const waitMs = Math.min(3000, Math.round(1000 * Math.pow(1.5, attempt)));
+    attempt += 1;
+    await delay(waitMs, undefined, { signal });
+    result = await ctx.client.get(`${API}/sessions/${sessionId}`, { signal });
+    if (record && writeFile) saveResult(writeFile, record, result.data);
+  }
+}
+
+async function waitSessionClosed(ctx, sessionId, sessionPath, closeId, initialResult, signal) {
+  let result = initialResult;
+  const record = readRecordFor(ctx, closeId);
+  const writeFile = record ? recordPath(ctx, closeId, true) : null;
+  let lastState;
+  let attempt = 0;
+  for (;;) {
+    const state = result.data?.state;
+    if (state === 'closed' || state === 'released') return result;
+    if (state === 'failed') {
+      failed('session_unavailable', `Session ${sessionId} closure failed`, result.data?.error);
+    }
+    if (state !== lastState) {
+      printProgress(`Waiting for session ${sessionId} closure: ${redactForgeText(String(state ?? 'closing'))}`);
+      lastState = state;
+    }
+    const waitMs = Math.min(3000, Math.round(1000 * Math.pow(1.5, attempt)));
+    attempt += 1;
+    await delay(waitMs, undefined, { signal });
+    result = await ctx.client.get(sessionPath, { signal });
+    remember(ctx, sessionId, sessionPath, result.data);
+    if (record && writeFile) saveResult(writeFile, record, result.data);
+  }
+}
+
 async function runAction(ctx) {
   const action = actionOf(ctx.positionals);
   const flags = ctx.flags;
   if (action === 'create' || action === 'resume') {
+    if (flags['wait-timeout'] !== undefined && !flags.wait) {
+      throw usageError(`forge ${action}: --wait-timeout requires --wait.`);
+    }
     const sessionId = flags['session-id'] === undefined ? randomUUID() : uuid(flags['session-id'], 'session ID');
     const resuming = action === 'resume';
     const projectId = resuming ? uuid(ctx.positionals[1], 'project ID') : undefined;
@@ -975,8 +1450,15 @@ async function runAction(ctx) {
       ...(resuming ? { expected_control_revision: revision, ...(hydratePaths ? { hydrate_paths: hydratePaths } : {}) }
         : { name: required(flags.name, 'name') }) };
     const destination = resuming ? `${API}/projects/${projectId}/sessions` : `${API}/sessions`;
-    return report(ctx, await submit(ctx, sessionId, { method: 'POST', path: destination, body }, 'session_id',
-      `Inspect ariax forge status ${sessionId}; retry the same ${action} request with --session-id ${sessionId}, identical fields, and the same --root-dir, account, and API origin.`));
+    const request = { method: 'POST', path: destination, body };
+    const recovery = `Inspect ariax forge status ${sessionId}; retry the same ${action} request with --session-id ${sessionId}, identical fields, and the same --root-dir, account, and API origin.`;
+    if (!flags.wait) return report(ctx, await submit(ctx, sessionId, request, 'session_id', recovery));
+    const seconds = localWaitSeconds(flags['wait-timeout'], 1800);
+    return controlled(ctx, sessionId, seconds, async (signal) => {
+      const created = await submit(ctx, sessionId, request, 'session_id', recovery, { signal });
+      const ready = await waitSessionReady(ctx, sessionId, created, signal);
+      return report(ctx, ready);
+    }, { resume: `ariax forge status ${sessionId}` });
   }
   if (action === 'catalog') {
     const task = flags.task === undefined ? undefined : required(flags.task, 'task');
@@ -1226,6 +1708,8 @@ async function runAction(ctx) {
       ? prior?.request?.body?.timeout_seconds ?? 3600 : number(flags['timeout-seconds'],'timeout-seconds',{integer:true});
     if (!Number.isSafeInteger(duration) || duration < 1) throw usageError('forge finish: --timeout-seconds must be between 1 and 86400.');
     if (duration > 86400) throw usageError('forge finish: --timeout-seconds must be between 1 and 86400.');
+    const preFinishSync = await observeSessionSync(ctx, sessionId, sessionPath, null, { tryDirect: false });
+    if (preFinishSync) emitHygieneNotices(ctx, preFinishSync, { sessionId, includeScratch: true });
     const existing = await optionalRead(() => ctx.client.get(`${sessionPath}/finish`));
     if (existing && flags['operation-id'] === undefined) {
       const id = uuid(existing.data?.operation_id,'finish operation ID');
@@ -1257,6 +1741,8 @@ async function runAction(ctx) {
     const res = await ctx.client.get(sessionPath);
     remember(ctx, sessionId, sessionPath, res.data);
     const project = await ctx.client.get(`${API}/projects/${uuid(res.data.project_id, 'project ID')}`, { query: { view: 'summary' } });
+    const syncInfo = await observeSessionSync(ctx, sessionId, sessionPath, res.data, { tryDirect: false });
+    if (syncInfo) emitHygieneNotices(ctx, syncInfo, { sessionId, includeScratch: false });
     return report(ctx, { ...res, data: { ...res.data, project_status: project.data.status,
       control: project.data.control, project_url: projectUrl(ctx, res.data.project_id) } }, action);
   }
@@ -1272,6 +1758,8 @@ async function runAction(ctx) {
     return report(ctx, { ...res, data: { session_id: sessionId, ...res.data.tools.find(t => t.tool === toolName) } });
   }
   if (action === 'run') {
+    if (flags.tail !== undefined && !flags.wait) throw usageError('forge run: --tail requires --wait.');
+    if (flags.tail !== undefined) tailLimit(flags.tail);
     const commandId = flags['command-id'] === undefined ? randomUUID() : uuid(flags['command-id'], 'command ID');
     const cwd = flags.cwd === undefined ? '/workspace' : required(flags.cwd, 'cwd');
     if (!path.posix.isAbsolute(cwd) || (cwd !== '/workspace' && !cwd.startsWith('/workspace/'))
@@ -1295,11 +1783,102 @@ async function runAction(ctx) {
       return report(ctx,result);
     });
   }
+  if (action === 'pack') {
+    if (flags.tail !== undefined && !flags.wait) throw usageError('forge pack: --tail requires --wait.');
+    if (flags.tail !== undefined) tailLimit(flags.tail);
+    if (flags['wait-timeout'] !== undefined && !flags['wait-ready'] && !flags.wait) {
+      throw usageError('forge pack: --wait-timeout requires --wait-ready or --wait.');
+    }
+    const src = validatePackPath(required(flags.src, 'src'), 'src', { allowScratch: true });
+    const dest = validatePackPath(required(flags.dest, 'dest'), 'dest', { allowScratch: false });
+    if (dest === src || dest.startsWith(`${src}/`) || src.startsWith(`${dest}/`)) {
+      throw usageError('forge pack: --dest cannot equal or overlap --src.');
+    }
+    const explicitFormat = flags.format !== undefined;
+    const format = explicitFormat
+      ? required(flags.format, 'format')
+      : (dest.endsWith('.tar.gz') || dest.endsWith('.tgz') ? 'tar.gz' : 'tar.zst');
+    if (!['tar.zst', 'tar.gz'].includes(format)) {
+      throw usageError(`forge pack: --format must be tar.zst or tar.gz (got "${format}").`);
+    }
+    const maxShardGib = flags['max-shard-gib'] === undefined
+      ? 10
+      : number(flags['max-shard-gib'], 'max-shard-gib', { integer: true });
+    if (maxShardGib < 1 || maxShardGib > 18) {
+      throw usageError('forge pack: --max-shard-gib must be an integer between 1 and 18.');
+    }
+    const commandId = flags['operation-id'] === undefined ? randomUUID() : uuid(flags['operation-id'], 'operation ID');
+    const script = buildPackScript({
+      src,
+      dest,
+      format,
+      explicitFormat,
+      maxShardGib,
+      removeSrc: flags['remove-src'] === true,
+      noManifest: flags['no-manifest'] === true,
+      packId: commandId,
+    });
+    const body = {
+      command_id: commandId,
+      tool: 'base',
+      argv: ['bash', '-euo', 'pipefail', '-c', script],
+      cwd: '/workspace',
+      timeout_seconds: 86400,
+    };
+    const readiness = flags['wait-ready'] ? { input_ids: [] } : undefined;
+    const request = { method: 'POST', session_id: sessionId, path: '/v1/commands', body };
+    const recovery = `Inspect ariax forge command ${sessionId} ${commandId}. Keep operation ID ${commandId} while its outcome is uncertain; a fresh pack could duplicate work.`;
+    if (!flags.wait && !readiness) return report(ctx, await submit(ctx, commandId, request, 'command_id', recovery));
+    const seconds = localWaitSeconds(flags['wait-timeout'], 1800);
+    return controlled(ctx, commandId, seconds, async (signal) => {
+      let result = await submit(ctx, commandId, request, 'command_id', recovery, { signal, readiness });
+      if (flags.wait) result = await waitCommandResult(ctx, sessionId, commandId, signal, result);
+      return report(ctx, result);
+    });
+  }
   if (action === 'close') {
-    const res = await submit(ctx, randomUUID(), { method: 'POST', path: `${sessionPath}/close`, body: {} }, 'request_id',
-      `Inspect ariax forge status ${sessionId}; repeat ariax forge close ${sessionId} if needed.`);
-    remember(ctx, sessionId, sessionPath, res.data);
-    return report(ctx, res);
+    if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge close: --wait-timeout requires --wait.');
+    const preCloseSync = await observeSessionSync(ctx, sessionId, sessionPath, null, {
+      tryDirect: false,
+      propagateAuthErrors: true,
+    });
+    if (flags.force !== true && preCloseSync) {
+      const pendingFiles = typeof preCloseSync.pending_files === 'number' && Number.isFinite(preCloseSync.pending_files) ? preCloseSync.pending_files : 0;
+      const pendingBytes = typeof preCloseSync.pending_bytes === 'number' && Number.isFinite(preCloseSync.pending_bytes) ? preCloseSync.pending_bytes : 0;
+      if (pendingFiles > CLOSE_PENDING_FILES_LIMIT || pendingBytes > CLOSE_PENDING_BYTES_LIMIT) {
+        const guardError = new ApiError({
+          status: 409,
+          code: 'pending_files_use_finish',
+          message: `Session ${sessionId} has ${pendingFiles} pending file(s) (${formatBytes(pendingBytes)}) awaiting sync. \`ariax forge close\` has a 75-second final sync ceiling and may drop unsaved files.`,
+          details: {
+            session_id: sessionId,
+            pending_files: pendingFiles,
+            pending_bytes: pendingBytes,
+            close_sync_ceiling_seconds: 75,
+          },
+          retryable: false,
+        });
+        guardError.action = `Run \`ariax forge finish ${sessionId} --wait --json\` to drain and save all files cleanly, or re-run with \`--force\` to close immediately.`;
+        throw guardError;
+      }
+    }
+    const closeId = randomUUID();
+    const request = { method: 'POST', path: `${sessionPath}/close`, body: {} };
+    const recovery = `Inspect ariax forge status ${sessionId}; repeat ariax forge close ${sessionId} if needed.`;
+    if (!flags.wait) {
+      const res = await submit(ctx, closeId, request, 'request_id', recovery);
+      remember(ctx, sessionId, sessionPath, res.data);
+      emitHygieneNotices(ctx, extractSynchronization(res.data) ?? preCloseSync, { sessionId, includeScratch: true });
+      return report(ctx, res);
+    }
+    const seconds = localWaitSeconds(flags['wait-timeout'], 1800);
+    return controlled(ctx, closeId, seconds, async (signal) => {
+      const submitted = await submit(ctx, closeId, request, 'request_id', recovery, { signal });
+      remember(ctx, sessionId, sessionPath, submitted.data);
+      const closed = await waitSessionClosed(ctx, sessionId, sessionPath, closeId, submitted, signal);
+      emitHygieneNotices(ctx, extractSynchronization(closed.data) ?? preCloseSync, { sessionId, includeScratch: true });
+      return report(ctx, closed);
+    }, { resume: `ariax forge status ${sessionId}` });
   }
   if (action === 'commands') {
     const res = flags.retained

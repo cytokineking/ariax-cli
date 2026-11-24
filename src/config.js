@@ -71,6 +71,7 @@ export function loadConfig(flags, env = process.env) {
     legacyRootDir,
     jsonMode,
     jsonForced,
+    jsonDisabled,
     allowCustomOrigin,
   };
 }

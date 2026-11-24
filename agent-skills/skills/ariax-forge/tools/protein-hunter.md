@@ -24,7 +24,7 @@ reference and `protein-hunter-fixtures` alias provide this guide and its example
 ```sh
 ariax forge project "$PROJECT" --json
 ariax forge tools add "$SESSION" --tools protein-hunter --json
-ariax forge tools wait "$SESSION" protein-hunter --timeout 1800 --json
+ariax forge tools wait "$SESSION" protein-hunter --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/protein-binder.json" --path protein-hunter/protein-binder.json --json
 ariax forge inputs list "$SESSION" --json
 ```
@@ -34,9 +34,7 @@ Choose a fresh UUID `ATTEMPT` for both the durable command and adapter attempt.
 Use an isolated campaign directory:
 
 ```sh
-ariax forge run "$SESSION" --tool protein-hunter --gpus 0 --command-id "$ATTEMPT" --timeout-seconds 1800 --json -- protein-hunter attempt --campaign /workspace/protein-hunter/pdl1 --config /inputs/protein-hunter/protein-binder.json --attempt-id "$ATTEMPT"
-ariax forge watch "$SESSION" "$ATTEMPT" --timeout 1800 --json
-ariax forge logs "$SESSION" "$ATTEMPT" --tail 1000 --json
+ariax forge run "$SESSION" --tool protein-hunter --gpus 0 --command-id "$ATTEMPT" --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- protein-hunter attempt --campaign /workspace/protein-hunter/pdl1 --config /inputs/protein-hunter/protein-binder.json --attempt-id "$ATTEMPT"
 ```
 
 The bundled example supplies the PD-L1 construct, a 90-residue binder, two design
@@ -120,29 +118,35 @@ After a completed native best-cycle pass, export one explicitly chosen version
 and use the [Boltz-2 guide](boltz2.md) for a separate refold:
 
 ```sh
-ariax forge run "$SESSION" --tool protein-hunter --gpus 0 --command-id "$EXPORT_COMMAND" --timeout-seconds 60 --json -- protein-hunter export --attempt "/workspace/protein-hunter/pdl1/attempts/$ATTEMPT" --destination /workspace/protein-hunter/pdl1/selected-v1.yaml
-ariax forge watch "$SESSION" "$EXPORT_COMMAND" --timeout 120 --json
+ariax forge run "$SESSION" --tool protein-hunter --gpus 0 --command-id "$EXPORT_COMMAND" --wait-ready --wait --wait-timeout 120 --timeout-seconds 60 --json -- protein-hunter export --attempt "/workspace/protein-hunter/pdl1/attempts/$ATTEMPT" --destination /workspace/protein-hunter/pdl1/selected-v1.yaml
 ```
 
 Export checks the actual chosen sequence and refuses rejected/incomplete
 attempts or an existing destination. Retain referenced template/MSA inputs when
 refolding a conditioned export. A separate refold never rewrites native acceptance.
 
-## Save, restore and explicit continuation
+## Save, pack, restore and explicit continuation
 
-After writers stop, flush the changed files:
+For multi-attempt campaigns generating many cycle PDBs and `.npz` arrays, follow
+**Scratch → Curate → Pack → Finish**: write bulk raw attempts under
+`/scratch/protein-hunter/`, copy `design_stats.csv` and top `best_designs/`
+PDBs (≤10 MB) into `/workspace/results/`, pack raw attempt directories with
+`ariax forge pack "$SESSION" --src /scratch/protein-hunter --dest /workspace/archives/protein-hunter.tar.zst --wait --json`,
+and finish cleanly:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 900 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 900 --json
 ariax forge files "$PROJECT" --path /workspace/protein-hunter/pdl1 --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush before inspection and exports. See
-[saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume)
-for closure and same-project resume. Read saved settings, native outcomes,
-inputs and arrays before continuing; restoration does not replay science.
+Require a successful flush and `finish` with `release: "released"` and
+`durability: "saved"`. See [saved results](../outputs.md) and
+[Forge recovery](../references/recovery.md) for closure and same-project
+resume. Read saved settings, native outcomes, inputs and arrays before
+continuing; restoration does not replay science.
 
 Continuation uses a fresh UUID and preserves the chosen terminal predecessor:
 

@@ -40,7 +40,7 @@ Upload the bounded example after the chosen tool is ready:
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/length-batch.fasta" --path biohub-esm/length-batch.fasta --json
 ariax forge inputs list "$SESSION" --json
 ariax forge run "$SESSION" --tool esmc-600m --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-600m --mode embeddings --precision bf16 --input /inputs/biohub-esm/length-batch.fasta --output /workspace/biohub-esm/length-embeddings
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
+ariax forge watch "$SESSION" "$COMMAND_ID" --wait-timeout 3600 --json
 ```
 
 Use `length-batch.json` and `--precision fp32` for the JSON/FP32 case. Select
@@ -56,8 +56,8 @@ command ID. Cancellation is optional and explicit:
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/interruption.json" --path biohub-esm/interruption.json --json
 ariax forge run "$SESSION" --tool esmc-6b --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-6b --mode hidden-states --precision bf16 --input /inputs/biohub-esm/interruption.json --output /workspace/biohub-esm/interrupted-6b
 ariax forge cancel "$SESSION" "$COMMAND_ID" --json
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge watch "$SESSION" "$COMMAND_ID" --wait-timeout 3600 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ```
 
 After the command is terminal and any same-project restore is complete, read
@@ -68,10 +68,10 @@ Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
 ariax forge run "$SESSION" --tool esmc-6b --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-6b --mode hidden-states --precision bf16 --input /inputs/biohub-esm/interruption.json --output /workspace/biohub-esm/interrupted-6b --resume
-ariax forge watch "$SESSION" "$RESUME_COMMAND_ID" --timeout 3600 --json
+ariax forge watch "$SESSION" "$RESUME_COMMAND_ID" --wait-timeout 3600 --json
 ariax forge run "$SESSION" --tool esmc-6b --timeout-seconds 1800 --json -- biohub-esm-check /workspace/biohub-esm/interrupted-6b
-ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 1800 --json
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --wait-timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/biohub-esm/interrupted-6b --json
 ariax forge download "$PROJECT" "$EXPORTED_NPZ_PATH" --dest ./sequence.npz --json
 ```

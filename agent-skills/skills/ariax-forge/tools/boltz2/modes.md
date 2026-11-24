@@ -53,7 +53,7 @@ output root and record the returned durable command UUID:
 
 ```sh
 ariax forge run "$SESSION" --tool boltz2 --gpus 0 --timeout-seconds 3600 --json -- boltz predict /inputs/boltz2/monomer_a3m.yaml --model boltz2 --cache /models/boltz2 --checkpoint /models/boltz2/boltz2_conf.ckpt --out_dir /workspace/boltz2-a3m/run1 --accelerator gpu --devices 1 --recycling_steps 3 --sampling_steps 200 --diffusion_samples 1 --max_parallel_samples 1 --seed 7 --num_workers 0 --preprocessing-threads 1 --output_format mmcif --write_full_pae
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
+ariax forge watch "$SESSION" "$COMMAND_ID" --wait-timeout 3600 --json
 ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
 ```
 
@@ -146,7 +146,7 @@ or hardware minimum.
 
 Save exact YAML/MSA/template inputs, raw predictions and complete `processed/`
 files, reports, argv/seed/settings, command IDs and logs to the current project workspace.
-Follow [save and restore](../boltz2.md#save-and-restore), close the session and
+Follow [save, pack and restore](../boltz2.md#save-pack-and-restore), finish the session and
 confirm resource release. Restore saved files and check their input/rank/chemistry
 mapping before reuse; restoration does not replay inference. Keep an existing
 held project's identity and use its authorized resume workflow.

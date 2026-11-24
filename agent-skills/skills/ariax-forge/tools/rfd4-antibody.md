@@ -51,7 +51,7 @@ scoped skill discovery. Stage the input and checker files, retaining each input
 ID returned by the CLI:
 
 ```sh
-ariax forge tools wait "$SESSION" rfd4-antibody --timeout 1800 --json
+ariax forge tools wait "$SESSION" rfd4-antibody --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/antibody/mzb1_7AAH__h-NbBCII10_cdr123.cif.zst" --path rfd4-antibody/mzb1.cif.zst --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/checks/rfd4.py" --path rfd4-antibody/checks/rfd4.py --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/checks/rfd4_antibody.py" --path rfd4-antibody/checks/rfd4_antibody.py --json
@@ -97,8 +97,12 @@ conditions, but does not establish that the authored hotspot was contacted.
 Inspect the hotspot, mapped framework cysteines and their geometry in the
 output. Retain the full structure, sequence, mappings, Hydra settings, model
 provenance, metrics and logs. The [RFd4 outputs guide](rfd4/outputs.md)
-explains metric and recovery semantics. Sync the workspace, inspect the saved
-files, and finish the session as described in the lifecycle guide.
+explains metric and recovery semantics. For multi-replicate antibody campaigns,
+follow **Scratch → Curate → Pack → Finish**: write bulk `out_dir` trees under
+`/scratch/rfd4-antibody/`, copy summary CSVs and top preview CIFs (≤10 MB) to
+`/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/rfd4-antibody --dest /workspace/archives/rfd4-antibody.tar.zst --wait --json`,
+and release compute with `ariax forge finish "$SESSION" --wait --json`.
 
 This guide adapts the upstream [VHH example](https://github.com/RosettaCommons/RFD4-Proteina/blob/aaccdd2ad0720c180468df5f9cf037a713d403e5/examples/antibody_design/README.md)
 by the Institute for Protein Design / Baker Lab and NVIDIA GenAIR. Upstream

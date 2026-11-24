@@ -29,8 +29,7 @@ Select `antibody-qc` with `ariax forge tools add "$SESSION" --tools antibody-qc`
 and `ariax forge tools wait "$SESSION" antibody-qc`. Run the exact native example:
 
 ```sh
-ariax forge run "$SESSION" --tool antibody-qc -- antibody-qc --input /inputs/antibody-qc/batch.json --methods number-liabilities oasis tnp-sequence --out /workspace/antibody-qc/batch
-ariax forge watch "$SESSION" "$COMMAND_ID"
+ariax forge run "$SESSION" --tool antibody-qc --wait-ready --wait --wait-timeout 600 --json -- antibody-qc --input /inputs/antibody-qc/batch.json --methods number-liabilities oasis tnp-sequence --out /workspace/antibody-qc/batch
 ```
 
 Choose a fresh `--out` directory on each explicit command. JSON input is a list of
@@ -50,8 +49,9 @@ VHH percentiles are null with `no_vhh_calibration`. Motifs and CDR-length flags
 suggest follow-up checks. Clinical immunogenicity and experimental developability
 remain unmeasured.
 
-Save registered inputs, provenance and the whole output directory with
-`ariax forge sync "$SESSION" --wait`. Follow the [Files guide](../outputs.md)
-for file inspection, resume and session closure. The
+Save registered inputs, provenance and the output directory, then release the VM
+with `ariax forge finish "$SESSION" --wait --json` (or flush mid-session with
+`ariax forge sync "$SESSION" --wait --wait-timeout 900 --json`). Follow the
+[Files guide](../outputs.md) for file inspection and resume. The
 [example](examples/antibody-qc/README.md) includes a controlled NGT-to-QGT motif
 change. Humanization is outside this tool.

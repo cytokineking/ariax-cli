@@ -16,7 +16,7 @@ Select the molecules, exact sequences and chemical identities before prediction.
 
 ```sh
 ariax forge tools add "$SESSION" --tools chai1 --json
-ariax forge tools wait "$SESSION" chai1 --timeout 1800 --json
+ariax forge tools wait "$SESSION" chai1 --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/monomer.fasta" --path chai1/monomer.fasta --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/predict.py" --path chai1/predict.py --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/check.py" --path chai1/check.py --json
@@ -30,9 +30,7 @@ fresh output directory. This example uses three trunk recycles, 200 diffusion
 steps and one diffusion sample:
 
 ```sh
-ariax forge run "$SESSION" --tool chai1 --timeout-seconds 1800 --json -- python /inputs/chai1/predict.py /inputs/chai1/monomer.fasta /workspace/chai1/monomer1 --num-trunk-recycles 3 --num-diffn-timesteps 200 --num-diffn-samples 1 --seed 7
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 1800 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
+ariax forge run "$SESSION" --tool chai1 --wait-ready --wait --wait-timeout 1800 --timeout-seconds 1800 --json -- python /inputs/chai1/predict.py /inputs/chai1/monomer.fasta /workspace/chai1/monomer1 --num-trunk-recycles 3 --num-diffn-timesteps 200 --num-diffn-samples 1 --seed 7
 ```
 
 Use the returned command ID. Inspect that same ID if a watch ends before the
@@ -106,12 +104,19 @@ input inspection; predictions retain the ESM model.
 
 ## Inspect and save
 
+For multi-complex batches, follow **Scratch → Curate → Pack → Finish**: write
+raw prediction trees under `/scratch/chai1-batch/`, copy summary JSONs and top
+preview CIFs (≤10 MB) to `/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/chai1-batch --dest /workspace/archives/chai1-batch.tar.zst --wait --json`,
+and release the VM with `ariax forge finish "$SESSION" --wait --json`.
+
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge run "$SESSION" --tool chai1 --timeout-seconds 180 --json -- python /inputs/chai1/check.py /workspace/chai1/monomer1 /inputs/chai1/monomer.expected.json --output /workspace/chai1/monomer1-check.json
-ariax forge sync "$SESSION" --wait --json
+ariax forge run "$SESSION" --tool chai1 --wait-ready --wait --wait-timeout 180 --timeout-seconds 180 --json -- python /inputs/chai1/check.py /workspace/chai1/monomer1 /inputs/chai1/monomer.expected.json --output /workspace/chai1/monomer1-check.json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/chai1 --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
 Require a successful flush. The inspector verifies chain
@@ -138,8 +143,8 @@ conservative planning allowances; the measured hardware was the L40 profile.
 The measured examples use one GPU within the 256-token native padding size.
 Larger systems and additional sampling need a separate capacity assessment.
 Use [saved results](../outputs.md) and
-[project controls](../SKILL.md#project-controls-and-resume) for synchronization,
-closure and explicit continuation.
+[Forge recovery](../references/recovery.md) for synchronization,
+finish/closure and explicit continuation.
 
 [Creator documentation](https://github.com/chaidiscovery/chai-lab/blob/66c38d1fe5c6756a89ff8596b1dea87d305ec06f/README.md),
 [native inference](https://github.com/chaidiscovery/chai-lab/blob/66c38d1fe5c6756a89ff8596b1dea87d305ec06f/chai_lab/chai1.py).

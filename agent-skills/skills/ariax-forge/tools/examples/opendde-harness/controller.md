@@ -126,13 +126,13 @@ session/project and read its current `OBSERVED_REVISION` before starting.
   --task-id harness-partial --control-revision "$OBSERVED_REVISION" \
   --max-model-calls 16 --max-input-bytes 524288 --max-output-tokens 32768 \
   --hold-after-cycle 1
-ariax --root-dir "$CLI_ROOT" forge sync "$PARTIAL_SESSION" --wait --timeout 900 --json
-ariax --root-dir "$CLI_ROOT" forge close "$PARTIAL_SESSION" --json
+ariax --root-dir "$CLI_ROOT" forge sync "$PARTIAL_SESSION" --wait --wait-timeout 900 --json
+ariax --root-dir "$CLI_ROOT" forge finish "$PARTIAL_SESSION" --wait --json
 ariax --root-dir "$CLI_ROOT" forge status "$PARTIAL_SESSION" --json
 ```
 
 Require the flush state `saved` and confirm resource release. Follow
-[same-project resume](../../../SKILL.md#project-controls-and-resume). If the
+[same-project resume](../../../references/recovery.md). If the
 user clears a human hold with **Resume workspace**, inspect the project and set
 `RESUMED_SESSION` to its `active_session_id`; continue there without allocating
 another session or automatically replaying science. **Allow agent to resume later**
@@ -157,7 +157,7 @@ do not replace an uncertain retained request with this new revision:
 
 ```sh
 ariax --root-dir "$CLI_ROOT" forge status "$RESUMED_SESSION" --json
-ariax --root-dir "$CLI_ROOT" forge tools wait "$RESUMED_SESSION" opendde-harness --timeout 1800 --json
+ariax --root-dir "$CLI_ROOT" forge tools wait "$RESUMED_SESSION" opendde-harness --wait-timeout 1800 --json
 "$HARNESS_PYTHON" "$HARNESS_ADAPTER/controller.py" continue --resume \
   --workflow /srv/harness/partial/workflow.json --state-dir /srv/harness/partial/state \
   --cli-root "$CLI_ROOT" --session "$RESUMED_SESSION" --project "$PARTIAL_PROJECT" \

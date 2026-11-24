@@ -39,13 +39,10 @@ Use an authorized session whose live catalog has admitted the chosen tool. Prese
 
 ```sh
 ariax forge tools add "$SESSION" --tools protenix-models --json
-ariax forge tools wait "$SESSION" protenix-models --timeout 1800 --json
-ariax forge status "$SESSION" --json
-ariax forge run "$SESSION" --tool protenix-models --timeout-seconds 3600 --json -- forge-protenix --model_name protenix_base_default_v1.0.0 --input_json_path /opt/forge-protenix-fixtures/consumer-complex.json --dump_dir /workspace/protenix/insulin-01 --use_msa false --sample_diffusion.N_sample 1 --seeds 101 --need_atom_confidence true
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
-ariax forge run "$SESSION" --tool protenix-models --timeout-seconds 120 --json -- python /opt/forge-protenix-check.py /opt/forge-protenix-fixtures/consumer-complex.json /workspace/protenix/insulin-01
-ariax forge run "$SESSION" --tool protenix-models --timeout-seconds 120 --json -- python /opt/forge-protenix-handoff.py /opt/forge-protenix-fixtures/consumer-complex.json /workspace/protenix/insulin-01 --run-id "$COMMAND_ID"
+ariax forge tools wait "$SESSION" protenix-models --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool protenix-models --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- forge-protenix --model_name protenix_base_default_v1.0.0 --input_json_path /opt/forge-protenix-fixtures/consumer-complex.json --dump_dir /workspace/protenix/insulin-01 --use_msa false --sample_diffusion.N_sample 1 --seeds 101 --need_atom_confidence true
+ariax forge run "$SESSION" --tool protenix-models --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- python /opt/forge-protenix-check.py /opt/forge-protenix-fixtures/consumer-complex.json /workspace/protenix/insulin-01
+ariax forge run "$SESSION" --tool protenix-models --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- python /opt/forge-protenix-handoff.py /opt/forge-protenix-fixtures/consumer-complex.json /workspace/protenix/insulin-01 --run-id "$COMMAND_ID"
 ```
 
 Set `COMMAND_ID` from the prediction response and inspect each check/export command. Use a fresh output directory when settings or inputs change. Watch timeouts leave the remote operation running; observe its ID and never replay automatically. `forge-protenix` passes native configuration flags to `runner.inference`; use `protenix pred --help` for the native CLI help surface.
@@ -73,18 +70,24 @@ Set the handoff run ID to the actual prediction command ID or attempt identity. 
 
 The checker requires all requested items/seeds/samples, finite structures, polymer/chemical identities, confidence shapes and atom/token/chain mappings, and rejects retained native error files. A zero prediction exit alone is insufficient. Keep original failed attempts beside corrected runs.
 
-After commands are terminal, flush actual outputs to the project workspace. Restoration recovers saved files and never reruns predictions.
+For large batch predictions, follow **Scratch → Curate → Pack → Finish**: write
+raw `--dump_dir` / `--output` under `/scratch/protenix-batch/`, copy summary
+JSON/CSV and top preview CIFs (≤10 MB) to `/workspace/results/`, pack bulk
+outputs with
+`ariax forge pack "$SESSION" --src /scratch/protenix-batch --dest /workspace/archives/protenix-batch.tar.zst --wait --json`,
+and finish the session. After commands are terminal, flush and finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/protenix/insulin-01 --json
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require confirmed compute/resource release before reporting the session closed. Restore project-local environments explicitly in scratch and preserve the shared human controls.
+Require `finish` to report `release: "released"` and `durability: "saved"`.
+Restore project-local environments explicitly in scratch and preserve the shared
+human controls.
 
 ## Direct templates and explicit batch continuation
 
@@ -145,8 +148,8 @@ completion from an all-success result. Successful items are skipped and their re
 untouched. Continuation requires explicit item names and unchanged input/model/settings.
 
 ```sh
-ariax forge run "$SESSION" --tool protenix-models --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/template-batch.json --output /workspace/protenix/template-batch --model protenix_base_default_v1.0.0 --cycles 3 --steps 20 --seeds 101 --samples 1 --use-template --max-items 1
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge run "$SESSION" --tool protenix-models --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/template-batch.json --output /workspace/protenix/template-batch --model protenix_base_default_v1.0.0 --cycles 3 --steps 20 --seeds 101 --samples 1 --use-template --max-items 1
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/protenix/template-batch --json
 ```
 
@@ -169,7 +172,7 @@ item/attempt identity. This retains native confidence and the scoring adapter's 
 and substructure geometry remains a soft prior; preserve the reported deviations.
 
 Use [saved results](../outputs.md) for current project `forge link` paths,
-and [project controls](../SKILL.md#project-controls-and-resume) for human
+and [Forge recovery](../references/recovery.md) for human
 pause and same-project resume. **Resume workspace** starts a same-project
 session; inspect and use it. **Allow agent to resume later** leaves compute
 stopped until an authorized agent resume. Never automatically replay science.
@@ -189,16 +192,12 @@ protein/ATP/MG examples. Omitting cycle/step flags retains native defaults:
 
 ```sh
 ariax forge tools add "$SESSION" --tools protenix-v2 --json
-ariax forge tools wait "$SESSION" protenix-v2 --timeout 1800 --json
-ariax forge run "$SESSION" --tool protenix-v2 --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/v2-small-batch.json --output /workspace/protenix/v2-small-01 --model protenix-v2 --seeds 101 --samples 1
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
-ariax forge run "$SESSION" --tool protenix-v2 --timeout-seconds 120 --json -- python /opt/forge-protenix-confidence.py /workspace/protenix/v2-small-01/item-0000/attempt-001/input.json /workspace/protenix/v2-small-01/item-0000/attempt-001/native
-ariax forge run "$SESSION" --tool protenix-v2 --timeout-seconds 120 --json -- python /opt/forge-protenix-confidence.py /workspace/protenix/v2-small-01/item-0001/attempt-001/input.json /workspace/protenix/v2-small-01/item-0001/attempt-001/native
-ariax forge run "$SESSION" --tool protenix-v2 --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/rna-msa.json --output /workspace/protenix/v2-rna-01 --model protenix-v2 --seeds 101 --samples 1 --use-msa --use-rna-msa
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 3600 --json
-ariax forge logs "$SESSION" "$COMMAND_ID" --tail 1000 --json
-ariax forge run "$SESSION" --tool protenix-v2 --timeout-seconds 120 --json -- python /opt/forge-protenix-confidence.py /workspace/protenix/v2-rna-01/item-0000/attempt-001/input.json /workspace/protenix/v2-rna-01/item-0000/attempt-001/native
+ariax forge tools wait "$SESSION" protenix-v2 --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool protenix-v2 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/v2-small-batch.json --output /workspace/protenix/v2-small-01 --model protenix-v2 --seeds 101 --samples 1
+ariax forge run "$SESSION" --tool protenix-v2 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- python /opt/forge-protenix-confidence.py /workspace/protenix/v2-small-01/item-0000/attempt-001/input.json /workspace/protenix/v2-small-01/item-0000/attempt-001/native
+ariax forge run "$SESSION" --tool protenix-v2 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- python /opt/forge-protenix-confidence.py /workspace/protenix/v2-small-01/item-0001/attempt-001/input.json /workspace/protenix/v2-small-01/item-0001/attempt-001/native
+ariax forge run "$SESSION" --tool protenix-v2 --wait-ready --wait --wait-timeout 3600 --timeout-seconds 3600 --json -- python /opt/forge-protenix-batch.py --input /opt/forge-protenix-fixtures/rna-msa.json --output /workspace/protenix/v2-rna-01 --model protenix-v2 --seeds 101 --samples 1 --use-msa --use-rna-msa
+ariax forge run "$SESSION" --tool protenix-v2 --wait-ready --wait --wait-timeout 180 --timeout-seconds 120 --json -- python /opt/forge-protenix-confidence.py /workspace/protenix/v2-rna-01/item-0000/attempt-001/input.json /workspace/protenix/v2-rna-01/item-0000/attempt-001/native
 ```
 
 Capture each prediction command ID before watching or submitting readback.

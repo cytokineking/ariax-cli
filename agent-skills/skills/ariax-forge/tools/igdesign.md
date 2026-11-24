@@ -15,15 +15,14 @@ ariax skills ariax-forge --reference igdesign-modes --read --json
 Set `EXAMPLES` to `data.examples.igdesign` from the discovery response. Run `python3 "$EXAMPLES/prepare.py" "$EXAMPLES" ./igdesign-inputs`. It generates SEQRES headers and configs for this complete observed fixture. Register each file under `igdesign/FILE` with `ariax forge inputs add "$SESSION" --file ./igdesign-inputs/FILE --path igdesign/FILE`; wait for every input to be ready. Local paths and container `/inputs` paths are distinct.
 
 ```sh
-ariax forge tools add "$SESSION" --tools igdesign
-ariax forge tools wait "$SESSION" igdesign
-ariax forge run "$SESSION" --tool igdesign --gpus 0 -- igdesign --model igdesign --config /inputs/igdesign/igdesign-hcdr3.json
-ariax forge watch "$SESSION" "$COMMAND_ID"
-ariax forge run "$SESSION" --tool igdesign --gpus 0 -- igdesign-check /workspace/igdesign/igdesign-hcdr3.csv --rows 1
+ariax forge tools add "$SESSION" --tools igdesign --json
+ariax forge tools wait "$SESSION" igdesign --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool igdesign --gpus 0 --wait-ready --wait --wait-timeout 1800 --json -- igdesign --model igdesign --config /inputs/igdesign/igdesign-hcdr3.json
+ariax forge run "$SESSION" --tool igdesign --gpus 0 --wait-ready --wait --wait-timeout 180 --json -- igdesign-check /workspace/igdesign/igdesign-hcdr3.csv --rows 1
 ```
 
-Use each actual command ID returned by `forge run`. The generated `commands.json` lists model/CDR and crop commands with their checkers. Execute a command and wait for its terminal state before its check. Failed or empty results retain their reported state and diagnostics. Start an explicit new command to retry.
+The generated `commands.json` lists model/CDR and crop commands with their checkers. Execute each command and confirm success before its check. Failed or empty results retain their reported state and diagnostics. Start an explicit new command to retry.
 
-Inspect the native `.csv` CDR columns and their cross-entropy fields. The `.identity.json` file links each row to its model, original parsed chains, selected indices and reconstructed full Fv. `.fasta` contains those reconstructed VH/VL sequences. Only the requested CDR positions are replaced; all other positions copy the parsed input. Preserve the input structure/config, CSV, identity, FASTA and checker result with `ariax forge sync "$SESSION" --wait`, then verify the flush completed. See [saved results](../outputs.md) and [project controls](../SKILL.md#project-controls-and-resume) for export, closure and continuation.
+Inspect the native `.csv` CDR columns and their cross-entropy fields. The `.identity.json` file links each row to its model, original parsed chains, selected indices and reconstructed full Fv. `.fasta` contains those reconstructed VH/VL sequences. Only the requested CDR positions are replaced; all other positions copy the parsed input. For large CDR libraries, write raw outputs under `/scratch/igdesign-run/`, copy compact `.csv`/`.fasta` summaries to `/workspace/results/`, pack bulk files with `ariax forge pack "$SESSION" --src /scratch/igdesign-run --dest /workspace/archives/igdesign-run.tar.zst --wait --json`, and release compute with `ariax forge finish "$SESSION" --wait --json` (see [saved results](../outputs.md) and [Forge recovery](../references/recovery.md)).
 
 The [creator README](https://github.com/AbSciBio/igdesign/blob/70431eef0afaf0496d7d84e22dfdc1980ec9e70e/README.md) and [paper](https://doi.org/10.1101/2023.12.08.570889) describe the method. Heavy-only, nanobody, antigen-sequence-only generation and automatic spatial crop are outside the supported scope.

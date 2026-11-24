@@ -17,7 +17,7 @@ Read `data.examples.mmseqs2` from the scoped discovery response and set `EXAMPLE
 
 ```sh
 ariax forge tools add "$SESSION" --tools mmseqs2 --priority mmseqs2 --json
-ariax forge tools wait "$SESSION" mmseqs2 --timeout 1800 --json
+ariax forge tools wait "$SESSION" mmseqs2 --wait-timeout 1800 --json
 for name in query.fasta target.fasta unmatched.fasta run.sh search-managed.sh check.py; do
   ariax forge inputs add "$SESSION" --file "$EXAMPLES/$name" --path "mmseqs2/$name" --json
 done
@@ -29,8 +29,7 @@ Require every registered input ready. Observe an importing input with `ariax for
 ## Run the bounded CPU example
 
 ```sh
-ariax forge run "$SESSION" --tool mmseqs2 --timeout-seconds 600 --json -- sh /inputs/mmseqs2/run.sh /workspace/mmseqs2-cpu /scratch/mmseqs2-cpu cpu
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 900 --json
+ariax forge run "$SESSION" --tool mmseqs2 --wait-ready --wait --wait-timeout 900 --timeout-seconds 600 --json -- sh /inputs/mmseqs2/run.sh /workspace/mmseqs2-cpu /scratch/mmseqs2-cpu cpu
 ```
 
 Save the returned command ID. The example uses human beta-globin P68871, a duplicate, a three-substitution control, an N-terminal fragment and human ubiquitin. It tests identity 0.90 versus 0.99 and coverage 0.80 for both sequences versus target alone. The two CPU cluster operations should export a three-member beta-globin group and two singleton groups. `check.py` inspects accession membership, coordinates, aligned strings, A3M width and redundancy filtering. Its deliberate unrelated query should produce an empty TSV. This small control supplies no performance claim for a large candidate library.
@@ -41,9 +40,8 @@ The native commands are visible in `run.sh`. `hits.tsv` contains `query,target,f
 
 ```sh
 ariax forge tools add "$SESSION" --tools mmseqs2-gpu --priority mmseqs2-gpu --json
-ariax forge tools wait "$SESSION" mmseqs2-gpu --timeout 1800 --json
-ariax forge run "$SESSION" --tool mmseqs2-gpu --gpus 0 --timeout-seconds 600 --json -- sh /inputs/mmseqs2/run.sh /workspace/mmseqs2-gpu /scratch/mmseqs2-gpu gpu
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 900 --json
+ariax forge tools wait "$SESSION" mmseqs2-gpu --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool mmseqs2-gpu --gpus 0 --wait-ready --wait --wait-timeout 900 --timeout-seconds 600 --json -- sh /inputs/mmseqs2/run.sh /workspace/mmseqs2-gpu /scratch/mmseqs2-gpu gpu
 ```
 
 GPU mode calls `makepaddedseqdb` before searching and runs the same output checks. Clustering remains a CPU operation. CPU and CUDA prefilters can return different hit sets; record the selected mode and candidate limit. GPU preparation can reorder internal IDs, so compare accessions. Read the catalog's measured GPU envelope before selecting devices.
@@ -52,22 +50,24 @@ GPU mode calls `makepaddedseqdb` before searching and runs the same output check
 
 ```sh
 ariax forge tools add "$SESSION" --tools mmseqs2-uniref90 --priority mmseqs2-uniref90 --json
-ariax forge tools wait "$SESSION" mmseqs2-uniref90 --timeout 1800 --json
-ariax forge run "$SESSION" --tool mmseqs2-uniref90 --gpus 0,1 --timeout-seconds 900 --json -- sh /inputs/mmseqs2/search-managed.sh /workspace/novelty /scratch/novelty
-ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 1200 --json
+ariax forge tools wait "$SESSION" mmseqs2-uniref90 --wait-timeout 1800 --json
+ariax forge run "$SESSION" --tool mmseqs2-uniref90 --gpus 0,1 --wait-ready --wait --wait-timeout 1200 --timeout-seconds 900 --json -- sh /inputs/mmseqs2/search-managed.sh /workspace/novelty /scratch/novelty
 ```
 
 The snapshot contains every UniRef90 representative from that release. Header descriptions are removed; complete accessions remain. Its prepared directory and metadata mount read-only. Reserve the catalog's disk requirement for cold download/extraction and keep the query/output files through Files. The beta-globin control should return a strong beta-globin match. Inspect accessions and thresholds in every result.
 
 Write a missing-match statement as: “No hit was retained against UniRef90 2026_03 using MMseqs2 18-8cc5c CUDA search, minimum identity 0.30, both-side coverage 0.80, E-value ≤0.001 and max-seqs 300.” Candidate limits, low complexity and search sensitivity affect detection. Sequence absence under these settings establishes a computational observation. Biological novelty, measured binding and lack of training overlap need separate evidence.
 
-## Save and continue
+## Save, pack and finish
+
+Keep MMseqs2 temp/DB directories in `/scratch/`. For large A3M/alignment batches, write raw `a3m/` and `filtered-a3m/` directories under `/scratch/mmseqs2-out/`, copy compact `hits.tsv` and cluster summaries to `/workspace/results/`, pack raw A3Ms with `ariax forge pack "$SESSION" --src /scratch/mmseqs2-out --dest /workspace/archives/mmseqs2-out.tar.zst --wait --json`, then flush and finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 1800 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require a successful flush. Retain original candidate accessions, query FASTA, exact argv and database metadata alongside TSVs, A3M files and cluster representatives. Follow the [Files guide](../outputs.md) for saved results, restoration and session closure.
+Require a successful flush and `finish` with `release: "released"` and `durability: "saved"`. Retain original candidate accessions, query FASTA, exact argv and database metadata alongside TSVs, A3M files and cluster representatives. Follow the [Files guide](../outputs.md) for saved results and restoration.

@@ -69,7 +69,7 @@ model 1 and chain A; replace them with the intended input and selection.
 
 ```sh
 ariax forge tools add "$SESSION" --tools tmol --priority tmol --json
-ariax forge tools wait "$SESSION" tmol --timeout 1800 --json
+ariax forge tools wait "$SESSION" tmol --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$EXAMPLES/run.py" --path tmol/run.py --json
 ariax forge inputs add "$SESSION" --file "$PROTEIN" --path tmol/protein.pdb --json
 ariax forge inputs status "$SESSION" ADAPTER_INPUT_ID --json
@@ -136,12 +136,17 @@ preparation and Tmol's `beta2016` weighted energy affect every comparison. The
 interface value is a sum of weighted cross-partner terms, with both stored
 orientations included by the Tmol API, not an affinity or dissociation constant.
 
-Observe the returned command ID with `ariax forge watch` and inspect its logs;
-a lost reply or watch timeout does not justify rerunning the science. After all
-writers finish, use `ariax forge sync "$SESSION" --wait --json`, inspect the
-current saved project files, and restore only for a new explicit command
-as described in the [platform guide](../SKILL.md) and [outputs guide](../outputs.md).
-Follow the session's normal close/status procedure.
+Run commands with `--wait-ready --wait` (or observe a returned ID with
+`ariax forge watch "$SESSION" "$COMMAND_ID" --wait-timeout 600 --json`); a lost
+reply or watch timeout does not justify rerunning the science. For large
+multi-structure scoring or minimization batches, write raw outputs under
+`/scratch/tmol-batch/`, copy summary JSONs and top minimized CIFs (≤10 MB) to
+`/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/tmol-batch --dest /workspace/archives/tmol-batch.tar.zst --wait --json`,
+and release compute cleanly with `ariax forge finish "$SESSION" --wait --json`
+(or flush mid-session with `ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json`).
+Inspect saved project files and restore only for a new explicit command as
+described in the [platform guide](../SKILL.md) and [outputs guide](../outputs.md).
 
 Tmol's code is [Apache-2.0](https://github.com/uw-ipd/tmol/blob/33fd3e9eed8b497638d8a7bf32955dcde0c181fd/LICENSE).
 Retain the upstream and component notices supplied with the runtime, including

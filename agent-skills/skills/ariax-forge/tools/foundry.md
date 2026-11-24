@@ -230,13 +230,19 @@ example failures. RF3 full precision is not offered: the native cuEquivariance
 path requires BF16. Motif geometry, design quality and experimental accuracy
 need separate evidence.
 
-Sync actual outputs before sharing a saved-file link or ending compute:
+For multi-design RFD3/RFD3NA/RF3 batches, follow **Scratch → Curate → Pack → Finish**:
+write raw `.cif.gz`/JSON trees under `/scratch/foundry-run/`, copy compact
+summary CSV/JSON and uncompressed top preview CIFs (≤10 MB) to
+`/workspace/results/`, pack bulk outputs with
+`ariax forge pack "$SESSION" --src /scratch/foundry-run --dest /workspace/archives/foundry-run.tar.zst --wait --json`,
+and release compute cleanly:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync SESSION --wait
-ariax forge files "$PROJECT" --path /workspace/outputs
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
+ariax forge files "$PROJECT" --path /workspace/outputs --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
 RFD3/RFD3NA outputs are `.cif.gz` plus native JSON. Decompress a separate copy for
@@ -252,5 +258,5 @@ HBPLUS source access follows the
 [current EBI download page](https://www.ebi.ac.uk/thornton-srv/software/HBPLUS/download.html).
 
 Use [saved results](../outputs.md) for current project exports and
-[project controls](../SKILL.md#project-controls-and-resume) for pause, closure
+[Forge recovery](../references/recovery.md) for pause, finish/closure
 and explicit continuation.

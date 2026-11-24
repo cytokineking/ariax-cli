@@ -3,11 +3,10 @@
 Find tools by task, then request only the model and mode you need:
 
 ```sh
-ariax forge catalog --task binder-design --compact --json
+ariax forge catalog --task binder-design --json
 ariax forge catalog --tool TOOL --model MODEL --json
 ariax forge catalog --tool TOOL --model MODEL --mode MODE --json
-ariax skills forge --tool GUIDE --json
-ariax skills forge --reference GUIDE --read --json
+ariax forge catalog --tool TOOL --with-guide --json
 ```
 
 Copy `TOOL`, `MODEL` and `GUIDE` from the compact result's `tool`, `models[].id`

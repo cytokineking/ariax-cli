@@ -120,7 +120,7 @@ release. The saved source, bootstrap and outputs remain available through the
 ## Continue saved code when needed
 
 Continue only when the user's task calls for more work. Set `PROJECT` from the
-source session and follow [project controls](../SKILL.md#project-controls-and-resume)
+source session and follow [Forge recovery](recovery.md)
 to inspect any human hold. If the user chose **Resume workspace**, inspect the
 project's `active_session_id`, set `RESTORED_SESSION` to it and continue in that
 session; do not allocate another session or automatically replay science.
@@ -142,7 +142,7 @@ Set `REVISION` from `control.revision` and use a fresh UUID for `NEW_SESSION_ID`
 Omitting tools suffices for this composition example. Scientific work must
 explicitly select its compatible tools. Choose hardware and the new allowance
 within the authorized scope. After an uncertain reply, use the saved request
-ID and fields as described in [request recovery](../SKILL.md#recover-a-lost-response).
+ID and fields as described in [Forge recovery](recovery.md).
 For the CLI path, set `RESTORED_SESSION` to the returned new session UUID.
 After either resume path, wait for the selected session and its tools to be ready
 before execution.

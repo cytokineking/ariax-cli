@@ -17,9 +17,8 @@ For a session authorized for this work, with these keys in its live catalog:
 
 ```sh
 ariax forge tools add "$SESSION" --tools structure-tools,foldseek --json
-ariax forge tools wait "$SESSION" structure-tools --timeout 1800 --json
-ariax forge tools wait "$SESSION" foldseek --timeout 1800 --json
-ariax forge status "$SESSION" --json
+ariax forge tools wait "$SESSION" structure-tools --wait-timeout 1800 --json
+ariax forge tools wait "$SESSION" foldseek --wait-timeout 1800 --json
 ```
 
 Require session `available` and each needed tool `ready`. `SESSION` is its real
@@ -63,10 +62,12 @@ ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools sasa /inputs/structure-tools/1ubq-protein.pdb --probe-radius 1.4 --slices 100 --threads 1 --out-dir /workspace/structures/sasa1
 ```
 
-Wait on each returned command ID with `ariax forge watch "$SESSION" "$COMMAND_ID"
---timeout 180 --json`, and read its logs. A waiting timeout does not establish the
-remote command outcome. Query the same ID and retain its request before deciding
-on an explicit correction. Never automatically replay scientific work.
+Pass `--wait-ready --wait --wait-timeout 180` on each `forge run` (or wait on a
+returned command ID with `ariax forge watch "$SESSION" "$COMMAND_ID"
+--wait-timeout 180 --json`), and inspect its `output_tail` / logs. A waiting
+timeout does not establish the remote command outcome. Query the same ID and
+retain its request before deciding on an explicit correction. Never
+automatically replay scientific work.
 
 Kabsch uses unweighted CA pairs. Default correspondence requires identical
 chain/residue IDs and residue names. For deliberate renumbering, upload a pairs
@@ -202,15 +203,23 @@ other tools. Compare scores only with matching settings and molecule types.
 Relaxation potential energy, SASA, geometric overlaps, RMSD and TM-score are
 separate quantities. Unsupported metrics remain unavailable.
 
+For large batch structure comparisons or Foldseek sweeps, write raw outputs and
+temporary DBs under `/scratch/structures/`, copy compact TSV/JSON summaries and
+selected preview structures (≤10 MB) to `/workspace/results/`, pack bulk outputs
+with `ariax forge pack "$SESSION" --src /scratch/structures --dest /workspace/archives/structures.tar.zst --wait --json`,
+and finish cleanly:
+
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/structures --json
 ariax forge link "$PROJECT" /workspace/structures/geometry1/result.json --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Require the flush state `saved`; choose an actual project file path for the
-link. Links refer to current files and can change after later writes. Preserve the project
+Require the flush state `saved` and `finish` with `release: "released"` and
+`durability: "saved"`; choose an actual project file path for the link. Links
+refer to current files and can change after later writes. Preserve the project
 identity and human hold through pause/resume. Resume restores files and requires
 an explicit decision on the next command.

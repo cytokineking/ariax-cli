@@ -13,7 +13,7 @@ import { ApiError, NetworkError, backoffDelay, validateTransferUrl } from '../ht
 import { printProgress } from '../output.js';
 import { workspacePath, listProjectFiles, projectFileGrant, readSync, startSync } from '../lib/forge-workspace-client.js';
 import { isForgeOperationTerminal, pruneExpiredRecords } from '../state-dir.js';
-import { uuid, required, recordPath, findRecord, readRecordFor, listRecordFiles, readRecord, saveResult, report, poll, failed, projectUrl, transient, controlled, localWaitSeconds } from './forge.js';
+import { uuid, required, recordPath, findRecord, readRecordFor, listRecordFiles, readRecord, saveResult, report, poll, failed, projectUrl, transient, controlled, localWaitSeconds, emitHygieneNotices, observeSessionSync } from './forge.js';
 
 function safePath(value, absolute = false) {
   const relative = absolute ? value?.replace(/^\/(workspace|inputs)\//, '') : value;
@@ -938,6 +938,8 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
       result = await poll(ctx,resource,id,inspect,resume,sessionId,
         options => readSync(ctx,sessionId,id,options));
     }
+    const syncInfo = await observeSessionSync(ctx, sessionId, sessionPath, result.data, { tryDirect: true });
+    if (syncInfo) emitHygieneNotices(ctx, syncInfo, { sessionId, includeScratch: false });
     return report(ctx,result);
   }
   if (action === 'files') {

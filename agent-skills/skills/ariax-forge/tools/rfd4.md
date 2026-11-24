@@ -43,7 +43,7 @@ appropriately authorized session and wait for readiness:
 
 ```sh
 ariax forge tools add "$SESSION" --tools rfd4 --priority rfd4 --json
-ariax forge tools wait "$SESSION" rfd4 --timeout 1800 --json
+ariax forge tools wait "$SESSION" rfd4 --wait-timeout 1800 --json
 ```
 
 The package uses the matched October 19, 2026 flow-model/autoencoder
@@ -130,23 +130,24 @@ After the writer stops, follow [outputs](rfd4/outputs.md) to capture the
 input, model, Hydra settings and mapping, and to materialize any evaluation
 sidecars before flushing.
 
-Once all writers have stopped, flush and inspect the project files:
+For large multi-design campaigns, follow **Scratch → Curate → Pack → Finish**:
+write raw outputs under `/scratch/rfd4-run/`, copy compact summary CSV/JSON and
+top preview CIFs (≤10 MB) into `/workspace/results/`, pack the raw outputs with
+`ariax forge pack "$SESSION" --src /scratch/rfd4-run --dest /workspace/archives/rfd4-run.tar.zst --wait --json`,
+and finish the session.
+
+Once all writers have stopped, flush, inspect project files, and finish:
 
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --json
+ariax forge sync "$SESSION" --wait --wait-timeout 1800 --json
 ariax forge files "$PROJECT" --path /workspace/rfd4/monomer-001 --json
+ariax forge finish "$SESSION" --wait --json
 ```
 
-Inspect the flush result and synchronization error before closing. When the
-session's authorized work is finished, close it and inspect status until `closed`
-confirms resource release:
-
-```sh
-ariax forge close "$SESSION" --json
-ariax forge status "$SESSION" --json
-```
+Require `finish` to report `release: "released"` and `durability: "saved"` to
+confirm both persistence and resource release.
 
 The [outputs guide](../outputs.md) covers current-file downloads, resume and the
 remaining persistence checks. Restoration saves files, not automatic scientific

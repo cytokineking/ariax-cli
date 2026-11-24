@@ -13,6 +13,7 @@
  *   8   rate limited (HTTP 429)
  *   9   network / timeout failure (DNS, refused, aborted, HTTP 504)
  *   10  server failure (HTTP 500/502/503, unexpected status)
+ *   11  remote command failed (Forge command exited nonzero, interrupted, or timed out)
  *   130 interrupted (SIGINT during --wait; remote work NOT aborted, resume hints printed)
  */
 
@@ -28,6 +29,7 @@ export const EXIT = Object.freeze({
   RATE_LIMIT: 8,
   NETWORK: 9,
   SERVER: 10,
+  REMOTE_COMMAND: 11,
   INTERRUPTED: 130,
 });
 
@@ -66,6 +68,7 @@ export function errorCodeToExit(code) {
   if (c.includes('idempotency_conflict') || c === 'conflict' || c === 'cursor_stale' || c.includes('already_exists')) return EXIT.CONFLICT;
   if (c.includes('rate_limit') || c.includes('too_many_requests')) return EXIT.RATE_LIMIT;
   if (c.includes('payment') || c.includes('credit') || c.includes('insufficient')) return EXIT.PAYMENT;
+  if (c === 'command_failed' || c === 'remote_command_failed') return EXIT.REMOTE_COMMAND;
   if (c.includes('validat') || c.includes('schema') || c.includes('ambiguous') || c.includes('bad_request') || c.includes('payload_too_large')) return EXIT.VALIDATION;
   return undefined;
 }
