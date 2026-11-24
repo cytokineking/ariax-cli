@@ -38,8 +38,8 @@ when working with real predictions. Chain positions in the PAE array must
 match the parsed structure representatives. A matching dimension alone does
 not prove matching model identity.
 
-The tiny [PDB](examples/ipsae/toy.pdb) contains glycine CA representatives for
-A1, A2, B1, B2, with [JSON](examples/ipsae/scores.json) in that same order.
+The tiny PDB (`toy.pdb`) contains glycine CA representatives for
+A1, A2, B1, B2, with JSON (`scores.json`) in that same order.
 It is synthetic and does not represent a complete protein or biological
 interaction. [Expected values](examples/ipsae/expected.md) are calculated
 independently from its deliberately directional PAE blocks.
@@ -84,7 +84,7 @@ The positional cutoffs are PAE 10 Å and distance 10 Å. Expected outputs are:
 The chain table must have A→B `asym` ipSAE 0.212489, B→A `asym` 0.063193,
 and A/B `max` 0.212489. The by-residue table has four rows. Both directional
 residue/contact counts are 2/2. `ipTM_af=0.5` is supplied fixture metadata.
-The [checker](examples/ipsae/check.py) requires these files and values, with
+The checker (`check.py`) requires these files and values, with
 print-rounding tolerance. Missing PAE can make this native script exit zero,
 so inspect the files and logs even after command `succeeded`.
 

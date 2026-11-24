@@ -60,8 +60,8 @@ Multistate completion remains unconfirmed after prediction-metadata failures;
 partial arrays do not establish a completed multistate result. Native preset
 availability alone does not establish successful execution for every modality.
 
-The bundled [settings](examples/bindcraft2/settings.json) use the
-[PD-L1 example structure](examples/bindcraft2/PDL1.pdb): chain A, 115 residues
+The bundled settings (`settings.json`) use the
+PD-L1 example structure (`PDL1.pdb`): chain A, 115 residues
 numbered 18–132, hotspot 56, and a 31-residue chain B binder. They request one
 trajectory, one MPNN sequence, seed 7, one design model and one held-out
 validation model, with one recycle each. Screen/refine/anneal/harden budgets
@@ -87,7 +87,7 @@ choose a fresh `project_folder` under `/workspace` and set `OUTPUT` accordingly.
 Update input paths when staging elsewhere. With `resume: false`, an existing
 nonempty campaign directory is refused.
 
-The alternative [campaign settings](examples/bindcraft2/campaign-settings.json)
+The alternative campaign settings (`campaign-settings.json`)
 restore native confidence and final filters. They cap attempts at two
 trajectories and MPNN proposals at two per trajectory, use stage budgets
 10/10/3/1 and the negative ProteinMPNN variant, and retain the same target,
@@ -157,7 +157,7 @@ metrics. A separate diagnostic evaluation of a rejected pose does not promote
 it into a ranked campaign result.
 
 For the unchanged one-trajectory PD-L1 example only, the bundled
-[checker](examples/bindcraft2/check.py) inspects its saved outputs:
+checker (`check.py`) inspects its saved outputs:
 
 ```sh
 ariax forge run "$SESSION" --tool bindcraft2 --timeout-seconds 60 --json -- python3 /inputs/bindcraft2/check.py "$OUTPUT"

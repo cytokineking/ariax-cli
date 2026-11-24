@@ -29,13 +29,15 @@ export async function run(ctx) {
   process.once('SIGINT', interrupt);
   const signal = ctx.signal ? AbortSignal.any([ctx.signal, controller.signal]) : controller.signal;
   const data = [], seenCursors = new Set(), seenIds = new Set();
-  let cursor = ctx.flags.cursor, meta = {}, requestId;
+  const maxPages = ctx.flags.all ? 20 : 1;
+  let cursor = ctx.flags.cursor, meta = {}, requestId, pages = 0;
   let excludedFalse = 0, excludedUnknown = 0;
   const exclusionReasons = new Set();
   try {
     do {
       signal.throwIfAborted();
       const res = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/candidates`, { query: { view, limit, cursor }, signal });
+      pages += 1;
       signal.throwIfAborted();
       if (!Array.isArray(res.data)) throw serverError('Candidate endpoint returned an invalid page.');
       meta = res.meta || {};
@@ -53,11 +55,22 @@ export async function run(ctx) {
       if (next && seenCursors.has(next)) throw serverError('Candidate endpoint repeated a cursor; restart retrieval.');
       if (next) seenCursors.add(next);
       cursor = next;
-    } while (ctx.flags.all && cursor);
+    } while (ctx.flags.all && cursor && pages < maxPages);
+    const capped = Boolean(ctx.flags.all && cursor && pages >= maxPages);
     const eligibilityFilter = ctx.flags.eligible
       ? { mode: 'explicit_true_only', excluded_false: excludedFalse, excluded_unknown: excludedUnknown, reasons: [...exclusionReasons] }
       : null;
-    const result = { data, meta: { ...meta, returned: data.length, fetched: seenIds.size, ...(eligibilityFilter ? { eligibility_filter: eligibilityFilter } : {}) }, ...(requestId ? { request_id: requestId } : {}) };
+    const result = {
+      data,
+      meta: {
+        ...meta,
+        returned: data.length,
+        fetched: seenIds.size,
+        ...(capped ? { truncated_by_page_limit: true, max_pages: maxPages } : {}),
+        ...(eligibilityFilter ? { eligibility_filter: eligibilityFilter } : {}),
+      },
+      ...(requestId ? { request_id: requestId } : {}),
+    };
     const compact = ctx.flags.details !== true && usesCompactCandidatePresentation(data, result.meta);
     const presented = compact ? compactCandidateResult(data, result.meta, eligibilityFilter) : result;
     if (destination) {
@@ -78,7 +91,8 @@ export async function run(ctx) {
       if (compact) for (const note of presented.meta?.notes || []) printData(`Note: ${note}`);
       if (ctx.flags.eligible) printProgress(`Explicit eligibility filter excluded ${excludedFalse} false and ${excludedUnknown} unknown rows. ${[...exclusionReasons].join(' ')}`);
       if (!compact) for (const warning of meta.warnings || []) printProgress(String(warning));
-      if (meta.next_cursor) printProgress('More rows are available; use --all or --cursor with the JSON next_cursor.');
+      if (capped) printProgress(`Stopped after ${maxPages} pages; pass --cursor ${cursor} to continue.`);
+      else if (meta.next_cursor) printProgress('More rows are available; use --all or --cursor with the JSON next_cursor.');
     }
     return presented;
   } finally { process.removeListener('SIGINT', interrupt); }
@@ -103,17 +117,18 @@ function emitCompactTable(data) {
       .slice(0, 4)
       .map(({ metric }) => `${metric.name}=${metric.value}`)
       .join(', ');
-    const targetScores = candidate.target_scores.targets
+    const targetScores = (candidate.target_scores?.targets ?? [])
       .map((target) => `${target.name ?? 'unnamed'}(weight=${target.weight ?? 'unknown'},i_pDAE=${target.i_pDAE ?? 'unknown'})`);
-    if (candidate.target_scores.aligned_positive_target_mean_i_pDAE !== null) {
+    if (candidate.target_scores && candidate.target_scores.aligned_positive_target_mean_i_pDAE !== null) {
       targetScores.unshift(`aligned_positive_mean=${candidate.target_scores.aligned_positive_target_mean_i_pDAE}`);
     }
-    const rejection = candidate.rejection.terminated_stage
+    const failedFilters = candidate.rejection?.failed_filters ?? candidate.failed_filters ?? [];
+    const rejection = candidate.rejection?.terminated_stage
       ? `terminated:${candidate.rejection.terminated_stage}`
-      : (candidate.rejection.failed_filters.length ? candidate.rejection.failed_filters.join(',') : '-');
+      : (failedFilters.length ? failedFilters.join(',') : '-');
     return [
-      candidate.native_id ?? candidate.id ?? '-', candidate.rank, candidate.selected, candidate.native_outcome, candidate.native_filter_pass, candidate.ranking.eligible,
-      candidate.optimization.state === 'unknown' ? null : candidate.optimization.state,
+      candidate.native_id ?? candidate.id ?? '-', candidate.rank, candidate.selected, candidate.native_outcome ?? null, candidate.native_filter_pass, candidate.ranking.eligible,
+      !candidate.optimization || candidate.optimization.state === 'unknown' ? null : candidate.optimization.state,
       scores || null, targetScores.join(', ') || null, rejection === '-' ? null : rejection, candidate.binder_sequences.length, candidate.structures.length,
     ];
   });

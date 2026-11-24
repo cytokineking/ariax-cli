@@ -100,7 +100,7 @@ def check(source: Path, generated: Path, metrics: Path | None, max_motif_rmsd: f
     if not coords[framework_indices].any():
         raise ValueError("No coordinate-conditioned VHH framework targets were retained")
     if not C_HOT.mask(output, default="generate").any():
-        raise ValueError("No sampled target hotspot was retained")
+        raise ValueError("No target hotspot condition was retained")
     result = {"input": str(source), "generated": str(generated), "framework_chain": chain,
               "framework_residues": len(framework), "cdr_lengths": cdr_counts,
               "framework_source_to_output": {

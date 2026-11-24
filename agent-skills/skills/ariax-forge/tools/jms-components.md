@@ -14,7 +14,7 @@ ProteinMPNN uses ColabDesign v1.1.0 and the reference `v_48_010` or `v_48_020` J
 
 Legacy ESMFold full mode uses the reference serialized model, zero recycles, and virtual-Cβ distance targets across all ordered pairs including the diagonal. `log_CE` is distogram NLL with the reference epsilon; the notebook's `CE` is mean target-bin probability. Mean CA pLDDT uses the 0–100 scale. pTM retains its 0–1 scale. Per-sample NPZ arrays and a predicted PDB accompany the result. The runner checks exported backbone coordinates and sequence and records the native predicted chain/residue mapping back to the input. ESMFold2 and ESMC have separate scientific names.
 
-The [1CRN PDB](examples/jms-components/1crn.pdb) and [FASTA](examples/jms-components/1crn.fasta) retain known crambin chain A, residues 1–46. The PDB must have one model, consecutive canonical residues, complete N/CA/C/O backbone atoms and no unresolved backbone alternate locations or insertion codes. Sequence and selected-chain sequence must match exactly. Prepare any other construct explicitly before JMS scoring.
+The 1CRN PDB (`1crn.pdb`) and FASTA (`1crn.fasta`) retain known crambin chain A, residues 1–46. The PDB must have one model, consecutive canonical residues, complete N/CA/C/O backbone atoms and no unresolved backbone alternate locations or insertion codes. Sequence and selected-chain sequence must match exactly. Prepare any other construct explicitly before JMS scoring.
 
 ## Run available tools
 

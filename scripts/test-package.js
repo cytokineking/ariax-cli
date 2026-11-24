@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
+import { AGENT_SHELL_ENV_VARS } from '../src/agent-env.js';
 import { buildInfo, PACKAGE_ROOT } from '../src/build-info.js';
 import { installGitHub, verifyInstallation } from '../src/installation.js';
 import { releaseUpdateAvailable } from '../src/update-check.js';
@@ -77,6 +80,7 @@ globalThis.fetch = async (url) => {
     const root = execute(npm, ['root', '--global'], { shell: process.platform === 'win32' }).trim();
     assert.equal((await fs.lstat(path.join(root, 'ariax-cli'))).isSymbolicLink(), false);
     const script = path.join(root, 'ariax-cli/bin/ariax.js');
+    if (index < 2) await exerciseAgentUpdateNotice(script, channel);
     if (index < 2 || channel === 'source') {
       await exerciseConnectivityCli(script, env);
       await exerciseForgeCli(script, env);
@@ -84,16 +88,21 @@ globalThis.fetch = async (url) => {
       console.log(`Installed ${channel} Forge recovery, devices, caps and hold/resume controls verified at the local boundary.`);
     }
     assert.match(execute(process.execPath, [script, 'help']), /ariax skills/);
-    const skills = JSON.parse(execute(process.execPath, [script, 'skills', '--json']));
-    assert.ok(JSON.stringify(skills).includes('ariax-boltzgen'));
-    assert.ok(JSON.stringify(skills).includes('ariax-bindcraft2'));
+    const skillsCompactRaw = execute(process.execPath, [script, 'skills', '--json']);
+    assert.ok(Buffer.byteLength(skillsCompactRaw) < 6000, 'default skills --json must stay compact');
+    const skillsCompact = JSON.parse(skillsCompactRaw);
+    assert.ok(JSON.stringify(skillsCompact).includes('ariax-boltzgen'));
+    assert.ok(JSON.stringify(skillsCompact).includes('ariax-bindcraft2'));
+    const skills = JSON.parse(execute(process.execPath, [script, 'skills', '--paths', '--json']));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-boltzgen/SKILL.md'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/SKILL.md'));
     await fs.access(path.join(root, 'ariax-cli/agent-skills/skills/ariax-bindcraft2/outputs.md'));
     for (const platform of ['forge', 'ariax-forge']) {
-      const forge = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--json'])).data;
+      const forge = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--paths', '--json'])).data;
       assert.equal(forge.platform, 'forge');
       await exerciseAcceptedForgeDiscovery(forge);
+      const oneCall = JSON.parse(execute(process.execPath, [script, 'skills', platform, '--tool', 'boltz2', '--read', '--json'])).data;
+      assert.equal(oneCall.content, await fs.readFile(forge.references.boltz2, 'utf8'));
       for (const reference of Object.keys(skills.data.platform_references.forge)) {
         const guide = JSON.parse(execute(process.execPath, [script, 'skills', platform,
           '--reference', reference, '--read', '--json'])).data;
@@ -103,30 +112,9 @@ globalThis.fetch = async (url) => {
         assert.equal(guide.content, await fs.readFile(forge.references[reference], 'utf8'));
         assert.equal(guide.size_bytes, Buffer.byteLength(guide.content));
       }
-      for (const [tool, filename] of Object.entries({ base: 'message.txt', ipsae: 'scores.json', boltz2: 'complex.yaml', bindcraft2: 'settings.json', freebindcraft: 'settings.json' })) {
-        assert.equal(forge.examples[tool], path.join(forge.examples.root, tool));
-        assert.ok((await fs.readFile(path.join(forge.examples[tool], filename))).length > 0);
-        if (['bindcraft2', 'freebindcraft'].includes(tool)) {
-          for (const input of ['PDL1.pdb', 'check.py', ...(tool === 'freebindcraft' ? ['advanced.json', 'filters.json', 'check-limit.py'] : [])]) {
-            assert.ok((await fs.readFile(path.join(forge.examples[tool], input))).length > 0);
-          }
-        }
-      }
       assert.equal(forge.examples.root, skills.data.platform_examples.forge.root);
-      const science = forge.examples.science;
-      const checkedTarget = JSON.parse(execute('python3', [forge.references['freebindcraft-preflight'],
-        '--settings', path.join(science, 'freebindcraft/target.json'),
-        '--pdb', path.join(science, 'freebindcraft/target.pdb'), '--family', 'miniprotein']));
-      assert.equal(checkedTarget.target_residues, 3);
-      const checkedAffinity = JSON.parse(execute('python3', [forge.references['boltz2-affinity-check'],
-        path.join(science, 'affinity/affinity_affinity.json'), '--record-id', 'affinity']));
-      assert.equal(checkedAffinity.predicted_pIC50, 9);
-      for (const predictor of ['boltz2']) {
-        const handoff = JSON.parse(await fs.readFile(path.join(science, predictor, 'handoff.json'), 'utf8'));
-        for (const file of Object.values(handoff.files)) {
-          assert.ok((await fs.readFile(path.join(science, predictor, file))).length > 0);
-        }
-      }
+      assert.ok((await fs.readFile(forge.references['freebindcraft-preflight'])).length > 0);
+      assert.ok((await fs.readFile(forge.references['boltz2-affinity-check'])).length > 0);
     }
     // Exercise the managed output reader from the same installed package.
     const managedOutput = JSON.parse(execute(process.execPath, [script, 'skills', 'boltzgen',
@@ -163,4 +151,46 @@ globalThis.fetch = async (url) => {
   console.log('Same-version migration in both directions and shadowed-executable detection verified.');
 } finally {
   await fs.rm(temporary, { recursive: true, force: true });
+}
+
+async function exerciseAgentUpdateNotice(script, channel) {
+  const dir = await fs.mkdtemp(path.join(temporary, `agent-updates-${channel}-`));
+  const transport = path.join(dir, 'release-source.mjs');
+  const checks = path.join(dir, 'checks');
+  const url = channel === 'github'
+    ? 'https://api.github.com/repos/cytokineking/ariax-cli/commits/main'
+    : 'https://registry.npmjs.org/ariax-cli/latest';
+  const release = channel === 'github' ? { sha: 'b'.repeat(40) } : { version: '999.0.0' };
+  await fs.writeFile(transport, `import fs from 'node:fs';
+globalThis.fetch = async (url) => {
+  if (String(url) !== ${JSON.stringify(url)}) throw new Error('Unexpected release source');
+  fs.appendFileSync(${JSON.stringify(checks)}, 'check\\n');
+  return Response.json(${JSON.stringify(release)});
+};
+Date.now = () => ${Date.now()};\n`);
+  const run = promisify(execFile);
+  const clearedAgents = Object.fromEntries(AGENT_SHELL_ENV_VARS.map((name) => [name, '']));
+  const skills = (overrides = {}) => run(process.execPath, ['--import', pathToFileURL(transport).href, script, 'skills', '--json'], {
+    env: { ...env, CI: 'false', NO_UPDATE_NOTIFIER: '0', ...clearedAgents,
+      TMPDIR: dir, TMP: dir, TEMP: dir, ...overrides },
+  });
+  const codex = { CODEX_THREAD_ID: 'package-smoke' };
+  const claude = { CLAUDECODE: '1' };
+  const baseline = await skills();
+  assert.ok(JSON.parse(baseline.stdout).data);
+  for (const result of [baseline, await skills({ ...codex, CI: 'true' }), await skills({ ...claude, NO_UPDATE_NOTIFIER: '1' })]) {
+    assert.equal(result.stderr, '');
+  }
+  for (const marker of [codex, claude]) {
+    const results = await Promise.all([skills(marker), skills(marker)]);
+    for (const result of results) assert.equal(result.stdout, baseline.stdout);
+    const notices = results.flatMap(({ stderr }) => stderr.trim() ? [JSON.parse(stderr).notice] : []);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].code, 'cli_update_available');
+    assert.equal(notices[0].channel, channel);
+    assert.equal(notices[0].command, 'ariax upgrade');
+    assert.equal(channel === 'github' ? notices[0].latest_revision : notices[0].latest_version,
+      channel === 'github' ? release.sha : release.version);
+  }
+  assert.equal(await fs.readFile(checks, 'utf8'), 'check\ncheck\n');
 }

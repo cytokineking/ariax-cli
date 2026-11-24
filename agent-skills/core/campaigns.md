@@ -72,9 +72,9 @@ Run `ariax pricing --json` to check current hourly prices. Select a range of
 compatible GPU models within the user's hourly price preferences to maximize
 availability, retaining the necessary VRAM. Verify identifiers and eligibility
 with `ariax schema PROTOCOL --json` before setting GPU preferences. Follow the
-[shared pricing guidance](managed-projects.md#check-prices-and-choose-gpus) for allocation
+[shared pricing guidance](managed-projects.md#3-pricing-and-gpu-policy) for allocation
 rates and use the evidence rules below for campaign forecasts.
-The [shared GPU policy table](managed-projects.md#check-prices-and-choose-gpus) requires
+The [shared GPU policy table](managed-projects.md#3-pricing-and-gpu-policy) requires
 at least one protocol-compatible core GPU; supplemental classes alone are
 insufficient. A single core GPU class is valid but has fewer availability options.
 Select every compatible class within the authorized memory and hourly budget
@@ -139,7 +139,7 @@ changes instead of silently relaxing filters to obtain a desired count.
 Report generated/attempted, evaluated, native filter-passing, objective-respecting,
 and distinct shortlisted counts **where supported by evidence**. Label the unit:
 BindCraft and BindCraft2 trajectories and accepted sequence variants are different populations.
-Use the [shared count-source guidance](managed-projects.md#results-and-errors) and complete
+Use the [shared count-source guidance](managed-projects.md#5-results-candidates-and-logs) and complete
 [candidate retrieval](candidates.md); state unavailable counts rather than
 inventing them. Retain result paths and the settings used for the comparison.
 

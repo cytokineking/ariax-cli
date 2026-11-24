@@ -1,7 +1,7 @@
 /**
  * Persistent resume state for `--wait` / `--resume`.
  *
- * State lives beneath `--root-dir` (default: cwd) at:
+ * State lives beneath `--root-dir` (default: OS state dir; legacy cwd `.ariax/` read-only fallback) at:
  *   <rootDir>/.ariax/waits/<project-id>.json for new status waits;
  *   <rootDir>/.ariax/resume.json remains readable for existing installations.
  *
@@ -13,6 +13,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isUUID } from './uuid.js';
 import { usageError } from './args.js';
+import { defaultStateDir } from './state-dir.js';
 
 export const RESUME_VERSION = 1;
 
@@ -50,8 +51,7 @@ export async function saveResume(rootDir, state, { separate = false } = {}) {
   return file;
 }
 
-/** @param {string} rootDir @returns {Promise<null|{version:number,projectId?:string,jobId?:string|null,createdAt?:string,updatedAt?:string}>} */
-export async function loadResume(rootDir) {
+async function loadResumeFromRoot(rootDir) {
   const file = resumePath(rootDir);
   let raw;
   try {
@@ -78,6 +78,16 @@ export async function loadResume(rootDir) {
   }
 }
 
+/** @param {string} rootDir @returns {Promise<null|{version:number,projectId?:string,jobId?:string|null,createdAt?:string,updatedAt?:string}>} */
+export async function loadResume(rootDir, { legacyRootDir } = {}) {
+  const primary = await loadResumeFromRoot(rootDir);
+  if (primary) return primary;
+  if (legacyRootDir && path.resolve(legacyRootDir) !== path.resolve(rootDir)) {
+    return loadResumeFromRoot(legacyRootDir);
+  }
+  return null;
+}
+
 /** @param {string} rootDir @returns {Promise<boolean>} true when a file was removed */
 export async function clearResume(rootDir, projectId) {
   const file = resumePath(rootDir);
@@ -97,10 +107,12 @@ export async function clearResume(rootDir, projectId) {
 
 /**
  * Human instructions printed when a wait is interrupted so the user can resume.
- * @param {{ projectId?: string, rootDir: string }} opts
+ * @param {{ projectId?: string, rootDir: string, rootDirExplicit?: boolean }} opts
  */
-export function resumeHint({ projectId, rootDir }) {
-  const where = rootDir && rootDir !== process.cwd() ? ` --root-dir ${rootDir}` : '';
+export function resumeHint({ projectId, rootDir, rootDirExplicit }) {
+  const showRoot = rootDirExplicit === true
+    || (rootDirExplicit === undefined && rootDir && rootDir !== process.cwd() && rootDir !== path.resolve(defaultStateDir()));
+  const where = showRoot && rootDir ? ` --root-dir ${rootDir}` : '';
   const what = projectId ? `ariax status ${projectId} --wait${where}` : `ariax status --resume${where}`;
   return `Remote work was NOT aborted. Resume with: ${what}`;
 }

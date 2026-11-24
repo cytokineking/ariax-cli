@@ -12,7 +12,7 @@ export async function run(ctx) {
   if (ctx.flags.file || ctx.flags.f || ctx.flags.input || ctx.flags.name) {
     throw usageError('recover reuses the saved request. Submit changed inputs as a new operation.');
   }
-  const operation = loadOperation(ctx.config.rootDir, id);
+  const operation = loadOperation(ctx.config.rootDir, id, { legacyRootDir: ctx.config.legacyRootDir });
   await verifyAccount(ctx, operation);
   const remote = await lookupOperation(ctx, operation);
   if (!remote || remote.replay_allowed === true) {

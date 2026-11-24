@@ -152,6 +152,12 @@ async function boundary(root) {
         return reply(res, 200, { actor: { user_id: user }, billing: { account_type: 'user', account_id: user } });
       }
       if (req.method === 'GET' && url.pathname === '/api/v1/forge/catalog') return reply(res, 200, { tools: catalog });
+      const catalogItem = /^\/api\/v1\/forge\/catalog\/([^/]+)$/.exec(url.pathname);
+      if (req.method === 'GET' && catalogItem) {
+        const found = catalog.find(item => item.tool === decodeURIComponent(catalogItem[1]));
+        if (!found) return error(res, 404, 'not_found', 'Tool not found');
+        return reply(res, 200, found);
+      }
       if (direct && req.method === 'POST' && state.rejectPost401 > 0) {
         state.rejectPost401--;
         state.rejectedPost401++;
@@ -1283,13 +1289,19 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const catalog = await invoke(['forge', 'catalog', '--details'], 0, true);
     assert.match(catalog.stdout, /sources:.*https:\/\/example.org\/boltz2/);
     assert.match(catalog.stdout, /models:.*boltz2/);
-    const routed = await invoke(['forge', 'catalog', '--task', 'antibodies']);
+    // Default forge catalog is compact summary; --full returns full qualification rows.
+    const routedCompact = await invoke(['forge', 'catalog', '--task', 'antibodies']);
+    assert.deepEqual(routedCompact.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
+    assert.deepEqual(routedCompact.payload.data.tools[0].capabilities.qualification, {
+      rows: 2, native: ['passed', 'unknown'], installation: ['held', 'passed'], restoration: ['untested', 'held'],
+    });
+    const routed = await invoke(['forge', 'catalog', '--task', 'antibodies', '--full']);
     assert.deepEqual(routed.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
     const qualification = routed.payload.data.tools[0].capabilities.qualification[0];
     assert.equal(qualification.native, 'passed');
     assert.equal(qualification.installation, 'held');
     assert.equal(qualification.restoration, 'untested');
-    const full = await invoke(['forge', 'catalog']);
+    const full = await invoke(['forge', 'catalog', '--full']);
     assert.equal(full.payload.data.tools.length, 4);
     const selected = await invoke(['forge', 'catalog', '--tool', 'bindcraft2']);
     assert.deepEqual(selected.payload.data.tools, full.payload.data.tools.filter(tool => tool.tool === 'bindcraft2'));
@@ -1297,6 +1309,8 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const selectedHuman = await invoke(['forge', 'catalog', '--tool', 'bindcraft2'], 0, true);
     assert.match(selectedHuman.stdout, /Not qualified/);
     assert.match(selectedHuman.stdout, /min_vram_gib_per_gpu/);
+    const withGuide = await invoke(['forge', 'catalog', '--tool', 'bindcraft2', '--with-guide']);
+    assert.match(withGuide.payload.data.guide_content, /BindCraft2/i);
     const compact = await invoke(['forge', 'catalog', '--task', 'antibodies', '--tool', 'bindcraft2', '--compact']);
     assert.deepEqual(compact.payload.data.tools.map(tool => tool.tool), ['bindcraft2']);
     const compactTool = compact.payload.data.tools[0];
@@ -1309,9 +1323,12 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(Object.hasOwn(compactTool.capabilities.qualification, 'scope'), false);
     const noMatch = await invoke(['forge', 'catalog', '--task', 'molecular-prediction', '--tool', 'bindcraft2']);
     assert.deepEqual(noMatch.payload.data.tools, []);
+    const unrecognizedTask = await invoke(['forge', 'catalog', '--task', 'unrecognized-task']);
+    assert.deepEqual(unrecognizedTask.payload.data.tools, []);
     await invoke(['forge', 'catalog', '--tool', 'not-in-catalog'], 1);
     await invoke(['forge', 'catalog', '--compact', '--details'], 1);
-    await invoke(['forge', 'catalog', '--task', 'unrecognized-task'], 1);
+    await invoke(['forge', 'catalog', '--compact', '--full'], 1);
+    await invoke(['forge', 'catalog', '--with-guide'], 1);
     const inspected = await invoke(['forge', 'tools', sid, '--details'], 0, true);
     assert.match(inspected.stdout, /source-revision/);
     const countText = await invoke(['forge', 'list'], 0, true);

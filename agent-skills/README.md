@@ -4,18 +4,20 @@ These guides ship with `ariax-cli`. Install the CLI with
 `npm install --global ariax-cli`, then read the shared entry point:
 
 ```sh
+ariax discover --query "<goal>" --json
 ariax skills --read --json
+ariax skills install --target all --dry-run
 ```
 
 Use [engine choice](core/engine-choice.md) to select a managed protocol or
-Forge. Read the selected guide and its live schema or catalog entry:
+Forge. Read the selected guide and its live schema or catalog entry in one call:
 
 ```sh
 ariax skills PROTOCOL --read --json
 ariax skills forge --read --json
-# Locate only one native tool's references and examples:
-ariax skills forge --tool GUIDE --json
-ariax skills forge --reference GUIDE --read --json
+# Read one Forge tool guide (or combine with live catalog via --with-guide):
+ariax skills forge --tool GUIDE --read --json
+ariax forge catalog --tool TOOL --with-guide --json
 ```
 
 Managed protocol guides cover [BindCraft](skills/ariax-bindcraft/SKILL.md),
@@ -24,6 +26,9 @@ Managed protocol guides cover [BindCraft](skills/ariax-bindcraft/SKILL.md),
 [ESMFold2-pipeline](skills/ariax-esmfold2-pipeline/SKILL.md).
 [Forge discovery](skills/ariax-forge/tools/capabilities.md) explains how to find
 native tools and their guide IDs.
+
+For VHH generation, `ariax skills forge --tool rfd4-antibody --json` locates the
+[RFd4 antibody guide](skills/ariax-forge/tools/rfd4-antibody.md) and its fixture.
 
 Use [managed lifecycle](core/managed-projects.md) for preparation, pricing,
 recovery and results; [campaign planning](core/campaigns.md) for sizing and

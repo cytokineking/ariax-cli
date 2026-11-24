@@ -4,7 +4,7 @@ Use Genie3 for unconditional, motif-conditioned or target-conditioned protein sc
 
 ## Inputs and commands
 
-Upload the files in [genie3/](genie3/unconditional.yaml) under `/inputs/genie3/`, preserving relative paths. Each supplied config has an explicit seed, model paths, a fresh output directory, one sample and the native 100-step DDIM settings. The target example conditions on BHRF1 geometry, preserves its sequence and selects its upstream extended interface residues, with binder length exactly 80. These are example inputs, not customer results.
+Upload the files in genie3/ (`unconditional.yaml`) under `/inputs/genie3/`, preserving relative paths. Each supplied config has an explicit seed, model paths, a fresh output directory, one sample and the native 100-step DDIM settings. The target example conditions on BHRF1 geometry, preserves its sequence and selects its upstream extended interface residues, with binder length exactly 80. These are example inputs, not customer results.
 
 ```sh
 genie3-generate --config /inputs/genie3/unconditional.yaml
@@ -35,4 +35,4 @@ Run MPNN commands in `proteinmpnn`, generation/handoff commands in `genie3`, and
 
 Retain generation arrays, PDBs, sampled motif configurations, original problem files, maps, MPNN sequences/probabilities/scores, Boltz confidence and PAE/pLDDT arrays, and final CIFs. A successful process can produce a rejected scientific candidate. The upstream unconditional filter requires self-consistency CA RMSD <2 Å. Motif success additionally requires motif backbone RMSD <1 Å, with all-atom criteria <2 Å or strict <1 Å. Binder filtering uses complex RMSD <2.5 Å, binder pTM >0.8, minimum interface PAE <1.5 Å, and its native hotspot coverage criterion. Keep missing metrics unavailable; the Boltz handoff does not replace ColabFold-specific binder metrics.
 
-Additional [native profiles](genie3/complete/U1.yaml) add ESMFold/ColabFold evaluation, beam search and iterative refinement with their finite settings, retained defaults and explicit continuation. Training, predecessor checkpoints, joint sequence/sidechain generation and multi-GPU execution remain excluded. Broad hardware minima remain unknown. Target-conditioned generation alone does not establish binding success. Fixtures retain the upstream [Apache-2.0 notice](genie3/LICENSE).
+Additional native profiles (`U1.yaml`) add ESMFold/ColabFold evaluation, beam search and iterative refinement with their finite settings, retained defaults and explicit continuation. Training, predecessor checkpoints, joint sequence/sidechain generation and multi-GPU execution remain excluded. Broad hardware minima remain unknown. Target-conditioned generation alone does not establish binding success. Fixtures retain the upstream [Apache-2.0 notice](genie3/LICENSE).

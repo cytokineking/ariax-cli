@@ -54,7 +54,7 @@ Upload user JSON and supporting files through `ariax forge inputs add`, require 
 
 ## Substructure priors
 
-Only `protenix_base_constraint_v0.5.0` accepts constraints. Its `constraint.structure.tokens` list names at least two token centre atoms with positive 1-based `entity`, `copy` and `position`, an `atom` name and a finite three-number `coordinate`. Duplicate, missing and non-centre selectors fail. Protein centres use CA; other molecular centres must match the actual tokenizer. The full [substructure fixture](protenix-models/substructure.json) preserves fifteen CA coordinates from the pinned 2LWU example.
+Only `protenix_base_constraint_v0.5.0` accepts constraints. Its `constraint.structure.tokens` list names at least two token centre atoms with positive 1-based `entity`, `copy` and `position`, an `atom` name and a finite three-number `coordinate`. Duplicate, missing and non-centre selectors fail. Protein centres use CA; other molecular centres must match the actual tokenizer. The full substructure fixture (`substructure.json`) preserves fifteen CA coordinates from the pinned 2LWU example.
 
 ```json
 "constraint": {"structure": {"tokens": [

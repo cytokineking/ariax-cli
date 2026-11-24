@@ -21,7 +21,7 @@ license notices and model cards.
 
 The native query JSON contains `queries` and named query `chains`. Each chain has
 `molecule_type`, `chain_ids`, and `sequence` or ligand `ccd_codes`/`smiles`.
-The [small inputs](openfold3/queries.json) contain ubiquitin, insulin chains A/B,
+The small inputs (`queries.json`) contain ubiquitin, insulin chains A/B,
 and ubiquitin with RNA, DNA and AMP. These are software examples, not customer
 results. The example run uses two samples per query, seed 42, three recycles and
 200 diffusion steps. Bounded input coverage also includes supplied synthetic
@@ -33,8 +33,8 @@ the documented input coverage. MSA service
 selection and training/fine-tuning are outside the package.
 
 Stage the matching files through the normal input API.
-Use the [OpenBind runner](openfold3/runner-openbind.yaml) or
-[Preview2 runner](openfold3/runner.yaml), with MSA-server and template generation disabled:
+Use the OpenBind runner (`runner-openbind.yaml`) or
+Preview2 runner (`runner.yaml`), with MSA-server and template generation disabled:
 
 ```sh
 ariax forge tools add SESSION --tools openbind-0 --json
@@ -64,7 +64,7 @@ use `runner.yaml`. Omit `--samples` to retain the native five-sample default;
 the pair matching the selected tool image. The launcher runs one native invocation;
 preparation supplies assets
 and the native loader reports errors. The separate
-[Preview1 runner](openfold3/runner-preview1.yaml) requires the engine's `pae_enabled`
+Preview1 runner (`runner-preview1.yaml`) requires the engine's `pae_enabled`
 preset to load the checkpoint; its no-MSA geometry remains unsuitable for admission.
 
 Each weight asset mounts read-only at `/models/openfold3/PAIR`; the shared
@@ -80,9 +80,9 @@ plus seven-heavy-atom toluene. Larger combinations and arbitrary modified residu
 are unqualified. Run workloads inside an authorized Forge GPU session.
 
 Supplied MSAs require native filenames and matching runner configuration. Use
-[runner-custom-msa.yaml](openfold3/runner-custom-msa.yaml) for files named
+`openfold3/runner-custom-msa.yaml` for files named
 `custom.a3m`, with the query as the first row and explicit per-chain paths in
-`main_msa_file_paths` / `paired_msa_file_paths`. For paired inputs use [runner-paired-msa.yaml](openfold3/runner-paired-msa.yaml),
+`main_msa_file_paths` / `paired_msa_file_paths`. For paired inputs use `openfold3/runner-paired-msa.yaml`,
 which registers `custom` in `msas_to_pair` and `paired_msa_order`; keep paired row order aligned across
 chains. Check actual saved `msa`, `msa_mask` and `num_paired_seqs` features;
 a successful parse alone does not demonstrate consumption. Supplied templates
@@ -92,7 +92,7 @@ the direct `--templates` path. Use the packaged Preview2 engine's paired-MSA and
 template-cache handling. A completed native run can still have zero template
 masks; check actual features to confirm template consumption. An explicit cached
 workflow is also available: run the upstream standalone preprocessor through
-the staged [helper](openfold3/preprocess_templates.py), then predict from its
+the staged helper (`preprocess_templates.py`), then predict from its
 processed JSON with template generation disabled:
 
 ```sh
@@ -104,7 +104,7 @@ ariax forge run SESSION --tool openfold3-preview2 --timeout-seconds 120 -- \
 
 Stage that helper alongside the input structures. Use `/workspace/template-query.processed.json`
 for the subsequent native prediction's `--query-json`; omit `--templates` to keep
-its saved cache path. Use [runner-template-cache.yaml](openfold3/runner-template-cache.yaml)
+its saved cache path. Use `openfold3/runner-template-cache.yaml`
 with `template_preprocessor_settings.structure_directory` matching the staged
 structure directory supplied to the helper. Inspect `template_pseudo_beta_mask` and
 `template_backbone_frame_mask` in the trusted fresh native features.
@@ -129,7 +129,7 @@ native confidence JSON and those maps without loading PT/pickle features.
 Complete standard protein chains require one token per residue. Preview1
 and split protein tokens remain excluded.
 
-The [output checker](openfold3/check_outputs.py) reads structure and handoff files
+The output checker (`check_outputs.py`) reads structure and handoff files
 and checks molecular/chain identity, native array equality and summary availability.
 Watch the prediction command to terminal success, inspect its logs, then invoke
 the staged checker explicitly on the remote workload:
@@ -159,7 +159,7 @@ order and atom pLDDT stays 0–100. Single-protein cases return `no_protein_inte
 missing scores remain unavailable. Workloads beyond the bounded profiles above
 remain unqualified. AF3 is outside Ariax support.
 
-For geometry checks, use [geometry_input.py](openfold3/geometry_input.py) to create a
+For geometry checks, use `openfold3/geometry_input.py` to create a
 fresh CIF copy with modeled occupancy 1.0. It verifies existing atom columns remain
 unchanged. Run the shipped geometry command on that copy. Reports retain overlaps
 and backbone distances. These checks do not establish experimental accuracy,

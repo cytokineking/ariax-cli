@@ -69,7 +69,7 @@ distribution license; check the separate code, weight and data terms before use.
 Disposable temporary, Python, Torch extension, Triton, CUDA and other JIT caches
 belong under `/scratch`. Forge supplies `HOME=/workspace`; save inputs, commands,
 logs, structures and confidence in `/workspace`. The small
-[example runner](examples/mol1/run.py) sets those cache paths and uses the native
+example runner (`run.py`) sets those cache paths and uses the native
 module without changing its scoring.
 
 <a id="recorded-native-checks"></a>
@@ -169,7 +169,7 @@ ariax forge logs "$SESSION" COMMAND_ID --tail 1000 --json
 For an explicitly chosen reduced execution check, use the same invocation with
 `--out-dir /workspace/mol1/smoke-001 --profile smoke`. This retains 20 cycles
 and 200 steps and reduces only samples from five to one. The
-[runner source](examples/mol1/run.py) shows all native argv and saves them with
+runner source (`run.py`) shows all native argv and saves them with
 the result. The native command for the same sampling and conditioning is:
 
 ```sh

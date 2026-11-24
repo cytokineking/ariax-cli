@@ -2,6 +2,148 @@
  * Output helpers: data -> stdout, diagnostics/progress -> stderr.
  * JSON mode when stdout is piped or --json is passed. Human mode otherwise.
  */
+import { usageError } from './args.js';
+
+const FORBIDDEN_FIELD_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+const PRIMARY_ARRAY_KEYS = [
+  'projects',
+  'tools',
+  'candidates',
+  'artifacts',
+  'jobs',
+  'sessions',
+  'commands',
+  'entries',
+  'operations',
+  'events',
+  'rates',
+];
+
+let activeOutputFields = null;
+
+/**
+ * Parse and validate a comma-separated list of dot-path field selectors.
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+export function parseFieldsOption(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    throw usageError('--fields requires a comma-separated list of field paths (e.g. --fields id,name,status).');
+  }
+  const seen = new Set();
+  const fields = [];
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim();
+    if (!trimmed) {
+      throw usageError(`--fields contains an empty field selector (got "${raw}").`);
+    }
+    const segments = trimmed.split('.');
+    for (const seg of segments) {
+      if (!seg || !/^[A-Za-z0-9_-]+$/.test(seg) || FORBIDDEN_FIELD_SEGMENTS.has(seg)) {
+        throw usageError(`--fields contains an invalid field path "${trimmed}".`);
+      }
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      fields.push(trimmed);
+    }
+  }
+  if (!fields.length) {
+    throw usageError('--fields requires at least one field path.');
+  }
+  return fields;
+}
+
+/** Configure global field projection applied by printJson. Pass null to clear. */
+export function setOutputFields(fields) {
+  if (fields === null || fields === undefined) {
+    activeOutputFields = null;
+    return;
+  }
+  activeOutputFields = Array.isArray(fields) ? fields : parseFieldsOption(fields);
+}
+
+function getDotPath(obj, segments) {
+  let cur = obj;
+  for (const seg of segments) {
+    if (cur === null || cur === undefined || typeof cur !== 'object' || Array.isArray(cur)) {
+      return { found: false, value: undefined };
+    }
+    if (!Object.prototype.hasOwnProperty.call(cur, seg)) {
+      return { found: false, value: undefined };
+    }
+    cur = cur[seg];
+  }
+  return { found: true, value: cur };
+}
+
+function setDotPath(target, segments, value) {
+  let cur = target;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i];
+    if (!Object.prototype.hasOwnProperty.call(cur, seg) || typeof cur[seg] !== 'object' || cur[seg] === null || Array.isArray(cur[seg])) {
+      cur[seg] = {};
+    }
+    cur = cur[seg];
+  }
+  cur[segments[segments.length - 1]] = value;
+}
+
+function pickObjectFields(item, parsedPaths) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+  const out = {};
+  for (const segments of parsedPaths) {
+    const { found, value } = getDotPath(item, segments);
+    if (found && value !== undefined) {
+      setDotPath(out, segments, value);
+    }
+  }
+  return out;
+}
+
+/**
+ * Non-destructively project an envelope or value using dot-path field selectors.
+ * Preserves top-level `meta` and `request_id`; never alters error envelopes.
+ * @param {unknown} obj
+ * @param {string[]|string|null|undefined} fields
+ */
+export function projectFields(obj, fields) {
+  if (!fields || (Array.isArray(fields) && fields.length === 0)) return obj;
+  const list = Array.isArray(fields) ? fields : parseFieldsOption(fields);
+  const parsedPaths = list.map((f) => f.split('.'));
+  const topLevelRequested = new Set(parsedPaths.map((segs) => segs[0]));
+
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => pickObjectFields(item, parsedPaths));
+  }
+  if (Object.prototype.hasOwnProperty.call(obj, 'error') && !Object.prototype.hasOwnProperty.call(obj, 'data')) {
+    return obj;
+  }
+  if (Object.prototype.hasOwnProperty.call(obj, 'data')) {
+    const data = obj.data;
+    if (Array.isArray(data)) {
+      return { ...obj, data: data.map((item) => pickObjectFields(item, parsedPaths)) };
+    }
+    if (data && typeof data === 'object') {
+      const arrayKey = PRIMARY_ARRAY_KEYS.find(
+        (key) => Object.prototype.hasOwnProperty.call(data, key) && Array.isArray(data[key]),
+      );
+      if (arrayKey && !topLevelRequested.has(arrayKey)) {
+        return {
+          ...obj,
+          data: {
+            ...data,
+            [arrayKey]: data[arrayKey].map((item) => pickObjectFields(item, parsedPaths)),
+          },
+        };
+      }
+      return { ...obj, data: pickObjectFields(data, parsedPaths) };
+    }
+    return obj;
+  }
+  return pickObjectFields(obj, parsedPaths);
+}
 
 export function isJsonMode(flags) {
   if (flags.json === true) return true;
@@ -19,9 +161,10 @@ export function printProgress(text) {
   process.stderr.write(text.endsWith('\n') ? text : text + '\n');
 }
 
-/** Emit an object as JSON to stdout. */
+/** Emit an object as JSON to stdout (applying any active --fields projection). */
 export function printJson(obj) {
-  printData(JSON.stringify(obj));
+  const payload = activeOutputFields ? projectFields(obj, activeOutputFields) : obj;
+  printData(JSON.stringify(payload));
 }
 
 /**

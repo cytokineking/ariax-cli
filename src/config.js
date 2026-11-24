@@ -1,5 +1,6 @@
 /** Runtime config from env + global flags. Never logs the API key. */
 import path from 'node:path';
+import { defaultStateDir } from './state-dir.js';
 
 export const DEFAULT_BASE_URL = 'https://www.ariax.bio';
 const OFFICIAL_API_ORIGINS = new Set([
@@ -47,9 +48,14 @@ export function loadConfig(flags, env = process.env) {
   const rawBase =
     flags['base-url'] || env.ARIAX_BASE_URL || DEFAULT_BASE_URL;
   const baseUrl = parseBaseUrl(rawBase);
+  const rootDirExplicit = Boolean(flags['root-dir'] || env.ARIAX_ROOT_DIR);
   const rootDir = flags['root-dir']
     ? path.resolve(String(flags['root-dir']))
-    : path.resolve(env.ARIAX_ROOT_DIR || process.cwd());
+    : env.ARIAX_ROOT_DIR
+      ? path.resolve(env.ARIAX_ROOT_DIR)
+      : path.resolve(defaultStateDir({ env }));
+  const cwdRoot = path.resolve(process.cwd());
+  const legacyRootDir = !rootDirExplicit && cwdRoot !== rootDir ? cwdRoot : null;
   const jsonForced = flags.json === true;
   const jsonDisabled = flags.json === false;
   const piped = !process.stdout.isTTY;
@@ -61,6 +67,8 @@ export function loadConfig(flags, env = process.env) {
     apiKeySource: apiKey ? 'environment' : null,
     baseUrl,
     rootDir,
+    rootDirExplicit,
+    legacyRootDir,
     jsonMode,
     jsonForced,
     allowCustomOrigin,

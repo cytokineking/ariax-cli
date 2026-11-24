@@ -8,13 +8,13 @@ complete sync/close flow.
 
 | File | Exact purpose |
 | --- | --- |
-| [monomer.json](monomer.json) | `protein-monomer`: one 76-residue ubiquitin, chain A, job `ubiquitin` |
-| [protein-atp.json](protein-atp.json) | `ligand-ccd`: the same chain plus one `CCD_ATP`, chain B, job `ubiquitin_atp` |
-| [run.py](run.py) | Standard-library remote launcher; copies input and invocation, sets scratch caches, runs the pinned native module and saves full logs/exit status |
+| `monomer.json` | `protein-monomer`: one 76-residue ubiquitin, chain A, job `ubiquitin` |
+| `protein-atp.json` | `ligand-ccd`: the same chain plus one `CCD_ATP`, chain B, job `ubiquitin_atp` |
+| `run.py` | Standard-library remote launcher; copies input and invocation, sets scratch caches, runs the pinned native module and saves full logs/exit status |
 | [NOTICE.md](NOTICE.md) | Public provenance and separate code/weight/data/service terms |
 
 The exact ubiquitin sequence, shared with the CLI's existing
-[Chai-1 monomer fixture](../chai1/monomer.fasta), is:
+Chai-1 monomer fixture (`monomer.fasta`), is:
 
 ```text
 MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG

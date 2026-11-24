@@ -1,6 +1,27 @@
 /** Stable compact views for campaign and candidate commands. */
 
 const TERMINAL = new Set(['completed', 'failed', 'aborted', 'cancelled']);
+const MANAGED_PROTOCOLS = new Set([
+  'bindcraft2',
+  'bindcraft-v1.5',
+  'bindcraft',
+  'boltzgen',
+  'pxdesign',
+  'esmfold2-pipeline',
+  'esmfold2',
+]);
+
+function normalizeProtocol(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isBindcraft2Protocol(value) {
+  return normalizeProtocol(value) === 'bindcraft2';
+}
+
+function isManagedProtocol(value) {
+  return MANAGED_PROTOCOLS.has(normalizeProtocol(value));
+}
 
 const PHASE_LABELS = Object.freeze({
   planning: 'Preparing campaign',
@@ -60,13 +81,28 @@ function firstKnown(...values) {
   return null;
 }
 
-function compactTargets(config) {
-  if (!Array.isArray(config.targets)) return [];
-  return config.targets.map((target) => ({
-    name: typeof target?.name === 'string' ? target.name : null,
-    objective: typeof target?.objective === 'string' ? target.objective : null,
-    chains: Array.isArray(target?.chains) ? target.chains.filter((chain) => typeof chain === 'string') : [],
-  }));
+function compactTargets(source, config) {
+  if (Array.isArray(config.targets)) {
+    return config.targets.map((target) => ({
+      name: typeof target?.name === 'string' ? target.name : null,
+      objective: typeof target?.objective === 'string' ? target.objective : null,
+      chains: Array.isArray(target?.chains) ? target.chains.filter((chain) => typeof chain === 'string') : [],
+    }));
+  }
+  const chainList = (raw) => {
+    if (Array.isArray(raw)) return raw.filter((c) => typeof c === 'string' && c.trim());
+    if (typeof raw === 'string' && raw.trim()) return raw.split(',').map((c) => c.trim()).filter(Boolean);
+    return [];
+  };
+  const targetObj = object(config.target);
+  const chains = chainList(
+    targetObj.chains ?? config.target_chains ?? config.chains ?? source.target_chains ?? source.chains,
+  );
+  const name = typeof targetObj.name === 'string'
+    ? targetObj.name
+    : (typeof source.target_name === 'string' ? source.target_name : null);
+  if (chains.length || name) return [{ name, objective: null, chains }];
+  return [];
 }
 
 export function compactScientificSettings(value) {
@@ -76,30 +112,50 @@ export function compactScientificSettings(value) {
   const modality = Array.isArray(config.modality) && typeof config.modality[0] === 'string'
     ? config.modality[0]
     : null;
+  const protocol = firstKnown(source.protocol, source.protocol_id);
+  const isBc2 = isBindcraft2Protocol(protocol);
   return {
-    protocol: firstKnown(source.protocol, source.protocol_id),
-    binder_format: firstKnown(source.project_type, modality),
-    targets: compactTargets(config),
-    requested_designs: count(firstKnown(campaign.num_designs, source.num_designs)),
-    attempt_limit: count(firstKnown(campaign.max_trajectories, source.max_trajectories)),
+    protocol,
+    binder_format: firstKnown(
+      source.project_type,
+      modality,
+      config.design_type,
+      typeof config.protocol === 'string' ? config.protocol : null,
+    ),
+    targets: compactTargets(source, config),
+    requested_designs: count(firstKnown(
+      campaign.num_designs,
+      config.num_designs,
+      config.number_of_final_designs,
+      config.design_count,
+      config.budget,
+      source.num_designs,
+    )),
+    attempt_limit: count(firstKnown(
+      campaign.max_trajectories,
+      config.max_trajectories,
+      config.num_samples,
+      source.max_trajectories,
+    )),
     compute: {
       priority_mode: firstKnown(source.priority_mode, config.priority_mode),
       turbo_mode: firstKnown(source.turbo_mode, config.turbo_mode),
       allowed_gpus: Array.isArray(source.allowed_gpus) ? source.allowed_gpus : null,
+      ...(!isBc2 && typeof source.gpu_type === 'string' ? { gpu_type: source.gpu_type } : {}),
     },
   };
 }
 
 export function usesCompactCampaignPresentation(value) {
   const source = object(value?.project ?? value);
-  return String(firstKnown(source.protocol, source.protocol_id, '')).toLowerCase() === 'bindcraft2';
+  return isManagedProtocol(firstKnown(source.protocol, source.protocol_id, ''));
 }
 
-/** Compact candidate semantics are currently defined only for BindCraft2. */
+/** Compact candidate semantics apply across all five managed protocols. */
 export function usesCompactCandidatePresentation(data, meta = {}) {
-  if (String(meta?.engine ?? '').toLowerCase() === 'bindcraft2') return true;
+  if (isManagedProtocol(meta?.engine) || isManagedProtocol(meta?.protocol)) return true;
   return Array.isArray(data) && data.length > 0
-    && data.every((candidate) => String(candidate?.engine ?? '').toLowerCase() === 'bindcraft2');
+    && data.every((candidate) => isManagedProtocol(candidate?.engine ?? candidate?.protocol));
 }
 
 function scientificOutcome(lifecycle, accepted, requested) {
@@ -184,11 +240,71 @@ function rejectionSummary(progress) {
 
 export function compactCampaign(project, fallbackId = null) {
   const source = object(project?.project ?? project);
-  const progress = object(source.bindcraft2_progress);
-  const rawCounts = object(progress.counts);
   const settings = compactScientificSettings(source);
   const lifecycle = String(firstKnown(source.status, source.state, 'unknown')).toLowerCase();
   const projectId = String(firstKnown(source.id, source.project_id, fallbackId, 'unknown'));
+
+  if (!isBindcraft2Protocol(settings.protocol)) {
+    const tested = count(firstKnown(source.tested_designs, source.total_designs));
+    const accepted = count(source.accepted_designs);
+    const requested = settings.requested_designs;
+    const jobsList = Array.isArray(source.jobs) ? source.jobs : [];
+    const latestJobId = firstKnown(source.latest_job_id, jobsList[0]?.id);
+    const jobCount = count(firstKnown(source.job_count, jobsList.length || null));
+    const warnings = Array.isArray(source.warnings) ? source.warnings.filter((w) => typeof w === 'string') : [];
+    const action = !TERMINAL.has(lifecycle) && lifecycle !== 'paused'
+      ? { code: 'wait', command: `ariax status ${projectId} --wait`, reason: 'Wait for a terminal lifecycle state.' }
+      : (lifecycle === 'failed' || lifecycle === 'aborted' || lifecycle === 'cancelled')
+        ? { code: 'inspect_results_and_logs', command: `ariax results ${projectId}`, reason: 'Inspect saved results and logs from the stopped execution.' }
+        : (accepted !== null && accepted > 0)
+          ? { code: 'review_final_candidates', command: `ariax candidates ${projectId} --view final`, reason: 'Review the accepted ranked designs.' }
+          : { code: 'review_candidates', command: `ariax candidates ${projectId} --view all`, reason: 'Inspect candidate records or saved results.' };
+    return {
+      schema_version: 1,
+      kind: 'ariax_campaign_status',
+      project_id: projectId,
+      name: typeof source.name === 'string' ? source.name : null,
+      protocol: settings.protocol,
+      binder_format: settings.binder_format,
+      targets: settings.targets,
+      lifecycle: {
+        state: lifecycle,
+        terminal: TERMINAL.has(lifecycle),
+        ...(typeof source.created_at === 'string' ? { created_at: source.created_at } : {}),
+        ...(typeof source.updated_at === 'string' ? { updated_at: source.updated_at } : {}),
+        ...(typeof source.completed_at === 'string' ? { completed_at: source.completed_at } : {}),
+      },
+      designs: {
+        tested,
+        accepted,
+        requested,
+        ...(typeof source.design_count_source === 'string' ? { source: source.design_count_source } : {}),
+      },
+      ...(latestJobId !== null || jobCount !== null ? {
+        jobs: { latest_job_id: latestJobId, count: jobCount },
+      } : {}),
+      scientific_outcome: scientificOutcome(lifecycle, accepted, requested),
+      results: {
+        final_candidates: recordState(accepted),
+        command: `ariax results ${projectId}`,
+        candidates_command: `ariax candidates ${projectId} --view final`,
+      },
+      compute: {
+        ...settings.compute,
+        elapsed_seconds: amount(firstKnown(source.elapsed_seconds, source.total_runtime_seconds)),
+      },
+      cost: {
+        estimate_usd: amount(firstKnown(source.cost_estimate_usd, source.estimated_cost_usd, source.cost_estimate)),
+        recorded_spend_usd: amount(firstKnown(source.recorded_spend_usd, source.total_cost_usd, source.cost_usd, source.cost)),
+        spend_limit_usd: amount(firstKnown(source.spend_limit_usd, source.spend_limit)),
+      },
+      warnings,
+      action,
+    };
+  }
+
+  const progress = object(source.bindcraft2_progress);
+  const rawCounts = object(progress.counts);
   const counts = {
     attempted: count(rawCounts.attempted),
     trajectories: count(rawCounts.trajectories),
@@ -283,32 +399,41 @@ export function campaignStatusLines(campaign) {
   // The executable next action already carries the project ID. Keep the
   // scientific context with the title instead of repeating an identity block.
   const lines = [[title, ...context].join(' · ')];
-  lines.push(
-    `Accepted: ${shown(campaign.designs.accepted)}/${shown(campaign.designs.requested)} · Attempts: ${shown(campaign.budget.attempts_used)}/${shown(campaign.budget.attempt_limit)} · Records: ${shown(campaign.records.trajectories)} trajectories, ${shown(campaign.records.refolded)} refolded, ${shown(campaign.records.ranked)} ranked`,
-  );
+  if (campaign.records && campaign.budget) {
+    lines.push(
+      `Accepted: ${shown(campaign.designs.accepted)}/${shown(campaign.designs.requested)} · Attempts: ${shown(campaign.budget.attempts_used)}/${shown(campaign.budget.attempt_limit)} · Records: ${shown(campaign.records.trajectories)} trajectories, ${shown(campaign.records.refolded)} refolded, ${shown(campaign.records.ranked)} ranked`,
+    );
+  } else {
+    const parts = [`Accepted: ${shown(campaign.designs.accepted)}/${shown(campaign.designs.requested)}`];
+    if (campaign.designs.tested !== undefined && campaign.designs.tested !== null) parts.push(`Tested: ${campaign.designs.tested}`);
+    if (campaign.jobs?.count !== undefined && campaign.jobs?.count !== null) parts.push(`Jobs: ${campaign.jobs.count}`);
+    lines.push(parts.join(' · '));
+  }
   const shortStop = {
     attempt_limit_reached: 'Attempt limit reached.',
     target_reached: 'Requested accepted-design count reached.',
-  }[campaign.stop.code];
-  if (campaign.stop.summary) lines.push(`Stopped: ${shortStop ?? campaign.stop.summary}`);
+  }[campaign.stop?.code];
+  if (campaign.stop?.summary) lines.push(`Stopped: ${shortStop ?? campaign.stop.summary}`);
   else if (campaign.scheduling?.summary) lines.push(`Scheduling: ${campaign.scheduling.summary}`);
   else if (campaign.scientific_outcome.code !== 'completed_no_accepted_designs') lines.push(`Outcome: ${campaign.scientific_outcome.summary}`);
-  const terminated = campaign.rejections.native_stage_terminations
+  const terminated = (campaign.rejections?.native_stage_terminations ?? [])
     .map(({ stage, count: value }) => `${stage} (${value})`);
-  const filters = campaign.rejections.final_filter_failures
+  const filters = (campaign.rejections?.final_filter_failures ?? [])
     .map(({ filter, count: value }) => `${filter} (${value})`);
   const evidence = [];
   if (terminated.length) evidence.push(`native exits: ${terminated.join(', ')}`);
   if (filters.length) evidence.push(`final-filter failures: ${filters.join(', ')}`);
-  else if (campaign.rejections.final_filter_state === 'not_evaluated') evidence.push('final filters: not evaluated (0 candidates scored)');
+  else if (campaign.rejections?.final_filter_state === 'not_evaluated') evidence.push('final filters: not evaluated (0 candidates scored)');
   if (evidence.length) {
     // A single outcome line keeps native exits and final filters together.
-    if (campaign.stop.summary) lines[lines.length - 1] += ` ${evidence.join(' · ')}`;
+    if (campaign.stop?.summary) lines[lines.length - 1] += ` ${evidence.join(' · ')}`;
     else lines.push(`Evidence: ${evidence.join(' · ')}`);
   }
-  const recordPrefix = `${campaign.budget.attempts_used} attempts; ${campaign.records.trajectories} saved trajectory records. `;
-  for (const warning of campaign.warnings) {
-    lines.push(`Warning: ${warning.startsWith(recordPrefix) ? warning.slice(recordPrefix.length) : warning}`);
+  const recordPrefix = campaign.budget && campaign.records
+    ? `${campaign.budget.attempts_used} attempts; ${campaign.records.trajectories} saved trajectory records. `
+    : null;
+  for (const warning of campaign.warnings ?? []) {
+    lines.push(`Warning: ${recordPrefix && warning.startsWith(recordPrefix) ? warning.slice(recordPrefix.length) : warning}`);
   }
   const compute = [];
   if (campaign.compute.priority_mode !== null) compute.push(`priority=${shown(campaign.compute.priority_mode)}`);
@@ -332,8 +457,7 @@ function recordedList(value) {
 
 export function compactCandidate(candidate) {
   const source = object(candidate);
-  const bc2 = object(source.bindcraft2);
-  const recorded = object(bc2.recorded_fields);
+  const isBc2 = isBindcraft2Protocol(source.engine ?? source.protocol) || Boolean(source.bindcraft2);
   const metrics = Array.isArray(source.metrics)
     ? source.metrics.filter((metric) => typeof metric?.name === 'string' && metric.value !== undefined)
       .map((metric) => ({ name: metric.name, value: metric.value ?? null, unit: metric.unit ?? null, direction: metric.direction ?? null }))
@@ -342,14 +466,42 @@ export function compactCandidate(candidate) {
     ? source.filters.filter((filter) => filter?.passed === false && typeof filter?.name === 'string' && filter.name !== 'pass_filters')
       .map((filter) => filter.name)
     : [];
-  const failedFilters = [...new Set([...recordedList(recorded.failed_filters), ...explicitFailedFilters])];
-  const recordedTermination = typeof recorded.terminated === 'string' && recorded.terminated ? recorded.terminated : null;
-  const optimizationCompleted = recordedTermination === 'completed';
-  const terminatedStage = optimizationCompleted ? null : recordedTermination;
   const overallFilter = Array.isArray(source.filters)
     ? source.filters.find((filter) => filter?.name === 'pass_filters')
     : null;
   const selected = source.selection?.selected ?? null;
+  const structures = Array.isArray(source.structures)
+    ? source.structures.map((structure) => ({ path: structure?.path ?? null, role: structure?.role ?? null }))
+    : [];
+
+  if (!isBc2) {
+    const sequences = Array.isArray(source.binder_sequences)
+      ? source.binder_sequences.filter((seq) => typeof seq === 'string' && seq)
+      : (typeof source.sequence === 'string' && source.sequence ? [source.sequence] : []);
+    return {
+      id: source.id ?? null,
+      native_id: source.native_id ?? null,
+      rank: source.rank ?? null,
+      view_stage: source.selection?.stage ?? null,
+      selected,
+      native_filter_pass: overallFilter?.passed === true ? true : (overallFilter?.passed === false ? false : null),
+      ranking: {
+        eligible: source.ranking_eligible ?? null,
+        reasons: Array.isArray(source.ranking_reasons) ? source.ranking_reasons.filter((reason) => typeof reason === 'string') : [],
+      },
+      metrics,
+      ...(explicitFailedFilters.length ? { failed_filters: [...new Set(explicitFailedFilters)] } : {}),
+      binder_sequences: sequences,
+      structures,
+    };
+  }
+
+  const bc2 = object(source.bindcraft2);
+  const recorded = object(bc2.recorded_fields);
+  const failedFilters = [...new Set([...recordedList(recorded.failed_filters), ...explicitFailedFilters])];
+  const recordedTermination = typeof recorded.terminated === 'string' && recorded.terminated ? recorded.terminated : null;
+  const optimizationCompleted = recordedTermination === 'completed';
+  const terminatedStage = optimizationCompleted ? null : recordedTermination;
   const nativeOutcome = firstKnown(bc2.outcome, source.outcome);
   let explanation = null;
   if (terminatedStage) explanation = `Native optimization terminated at stage ${terminatedStage}.`;
@@ -392,9 +544,7 @@ export function compactCandidate(candidate) {
     binder_sequences: Array.isArray(bc2.binder_sequences)
       ? bc2.binder_sequences.filter((sequence) => typeof sequence === 'string' && sequence)
       : (typeof source.sequence === 'string' && source.sequence ? [source.sequence] : []),
-    structures: Array.isArray(source.structures)
-      ? source.structures.map((structure) => ({ path: structure?.path ?? null, role: structure?.role ?? null }))
-      : [],
+    structures,
   };
 }
 
@@ -408,6 +558,9 @@ export function compactCandidateResult(data, meta = {}, filter = null) {
       candidate.ranking.reasons = candidate.ranking.reasons.filter((reason) => !commonReasons.includes(reason));
     }
   }
+  const hoistedSources = Array.isArray(meta.sources) && meta.sources.length
+    ? meta.sources
+    : [...new Set(data.map((row) => row?.source).filter((src) => typeof src === 'string' && src))];
   const state = typeof meta.state === 'string' ? meta.state : 'unknown';
   let availability = 'unknown';
   let explanation = 'Candidate publication state is unknown.';
@@ -428,6 +581,7 @@ export function compactCandidateResult(data, meta = {}, filter = null) {
     data: candidates,
     meta: {
       schema_version: 1,
+      ...(typeof meta.engine === 'string' ? { engine: meta.engine } : {}),
       view: meta.view ?? null,
       state,
       availability,
@@ -437,6 +591,8 @@ export function compactCandidateResult(data, meta = {}, filter = null) {
       total: count(meta.total),
       next_cursor: meta.next_cursor ?? null,
       has_more: typeof meta.next_cursor === 'string' && meta.next_cursor.length > 0,
+      ...(meta.truncated_by_page_limit ? { truncated_by_page_limit: true, max_pages: meta.max_pages } : {}),
+      ...(hoistedSources.length ? { sources: hoistedSources } : {}),
       ...(commonReasons.length ? { notes: commonReasons } : {}),
       ...(filter ? { eligibility_filter: filter } : {}),
     },

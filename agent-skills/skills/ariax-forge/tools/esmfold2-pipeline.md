@@ -53,7 +53,7 @@ ready Forge session and save required results through Files.
 
 The accompanying `esmfold2-pipeline/campaign.yaml` proposes full 1UBQ ubiquitin
 chain A, a 40-residue miniprotein, `num_designs: 2`, `seed_start: 7` (seeds 7/8) and eight optimization steps.
-It reuses the existing [1UBQ source fixture](boltzgen/1ubq.cif).
+It reuses the existing 1UBQ source fixture (`1ubq.cif`).
 This is a small execution case, with no binding or hit-rate evidence.
 The normal 150-step design setting remains unqualified.
 Native design folds use one loop and one sampling step, or fifty when design

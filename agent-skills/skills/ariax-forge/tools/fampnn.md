@@ -24,8 +24,8 @@ Original one-character chain IDs and residue numbers survive in `structures/`;
 records both, with a zero-based position in concatenated chain order.
 
 Find examples with `ariax skills forge --tool fampnn --json`, field
-`data.examples.fampnn`. Copy [ubq.pdb](examples/fampnn/ubq.pdb) and
-[mutations.csv](examples/fampnn/mutations.csv) into the project's inputs with `forge inputs add SESSION --file FILE --path NAME`.
+`data.examples.fampnn`. Copy `examples/fampnn/ubq.pdb` and
+`examples/fampnn/mutations.csv` into the project's inputs with `forge inputs add SESSION --file FILE --path NAME`.
 Require each returned input ID ready using `forge inputs status SESSION INPUT_ID`.
 The fixture contains ubiquitin coordinates with
 chain Z and numbering 101–176. Use a fresh output directory for each invocation.
@@ -65,8 +65,8 @@ packing to those positions under upstream semantics; other sequence positions
 are not provided as conditioning context. Do not interpret it as a list of
 sidechains to leave frozen. Use `--fixed-sidechains` for retained sidechain coordinates.
 
-The [two-chain fixture](examples/fampnn/two-chain.pdb) and
-[its mutation list](examples/fampnn/two-chain-mutations.csv) illustrate author IDs
+The two-chain fixture (`two-chain.pdb`) and
+its mutation list (`two-chain-mutations.csv`) illustrate author IDs
 Y101–132/Z201–232 and concatenated indexing across chains. The tested conditional
 selection is `--fixed-sequence Y101-110,Z201-210 --fixed-sidechains Y101-105,Z201-205`,
 with ten sequence steps, twenty sidechain steps and seed 7. Twenty of its 44
@@ -135,7 +135,7 @@ two-chain conditional case. Other checkpoint/operation pairs have measured scope
 only where listed. Lengths above 494, batches above eight and sample counts above
 eight have no current capacity evidence.
 
-The [profile recipe](examples/fampnn/prepare_profiles.py) takes the public 1TIM PDB
+The profile recipe (`prepare_profiles.py`) takes the public 1TIM PDB
 and explicitly selects its protein chains, removes heterogens/OXT and records the
 source-to-input residue map. It preserves author numbering gaps while renaming
 A/B to Y/Z and adding 1000/2000 to author numbers. Its `profiles.json` lists exact

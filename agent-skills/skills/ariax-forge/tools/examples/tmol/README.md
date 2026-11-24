@@ -1,7 +1,7 @@
 # Tmol adapter
 
 `data.examples.tmol` from `ariax skills forge --tool tmol --json` locates this
-installed directory. Upload [run.py](run.py) and the user's explicitly selected
+installed directory. Upload `run.py` and the user's explicitly selected
 PDB/mmCIF to a qualified `tmol` session; it runs with the installed Tmol Python
 API and needs no model bundle. See the [Tmol guide](../../tmol.md) for complete
 input, command, output and recovery instructions.

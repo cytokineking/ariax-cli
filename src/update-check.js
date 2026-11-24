@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { isCiEnv } from './agent-env.js';
+import { detectAgentShell, isCiEnv } from './agent-env.js';
 
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const NPM_LATEST_URL = 'https://registry.npmjs.org/ariax-cli/latest';
@@ -64,6 +64,31 @@ export function compareVersions(a, b) {
 
 export function isUpdateAvailable(currentVersion, latestVersion) {
   return compareVersions(currentVersion, latestVersion) === -1;
+}
+
+// Agent sandboxes can have a read-only home. Claim the daily check in the user's
+// temp directory so parallel CLI calls produce a single recommendation.
+async function claimAgentCheck(agent, channel, now, intervalMs) {
+  const uid = process.getuid?.();
+  const directory = path.join(os.tmpdir(), `ariax-cli-updates-${uid ?? 'user'}`);
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  const stat = await fs.lstat(directory);
+  if (!stat.isDirectory() || (uid !== undefined && (stat.uid !== uid || (stat.mode & 0o077) !== 0))) return false;
+
+  const period = Math.floor(now / intervalMs);
+  const prefix = `${agent}-${channel}-`;
+  try {
+    await fs.writeFile(path.join(directory, prefix + period), '', { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    throw error;
+  }
+  for (const name of await fs.readdir(directory)) {
+    if (name.startsWith(prefix) && Number(name.slice(prefix.length)) < period) {
+      await fs.unlink(path.join(directory, name)).catch(() => {});
+    }
+  }
+  return true;
 }
 
 /** Use the operating system's normal per-user cache location. */
@@ -155,8 +180,17 @@ export function releaseUpdateAvailable({ currentVersion, currentChannel, current
     && (currentChannel !== 'npm' || isUpdateAvailable(currentVersion, release.latest_version));
 }
 
+function updateNoticeFor(build, release) {
+  if (!releaseUpdateAvailable({ ...build, release })) return null;
+  if (release.channel === 'github') {
+    return { channel: 'github', currentVersion: build.currentVersion,
+      currentRevision: build.currentRevision, latestRevision: release.latest_revision };
+  }
+  return { currentVersion: build.currentVersion, latestVersion: release.latest_version };
+}
+
 export function shouldRunAutomaticUpdateCheck({ command, jsonMode, env = process.env, interactive } = {}) {
-  if (!interactive || jsonMode) return false;
+  if ((!interactive || jsonMode) && !detectAgentShell(env)) return false;
   if (!command || ['help', 'upgrade', 'login', 'logout', 'inputs'].includes(command)) return false;
   if (env.NO_UPDATE_NOTIFIER === '1') return false;
   if (isCiEnv(env)) return false;
@@ -172,7 +206,8 @@ export async function automaticUpdateNotice({
   currentChannel = 'npm',
   currentRevision = null,
   fetchImpl = globalThis.fetch,
-  cacheFile = updateCachePath(),
+  env = process.env,
+  cacheFile = updateCachePath({ env }),
   now = Date.now(),
   intervalMs = UPDATE_CHECK_INTERVAL_MS,
   timeoutMs = 750,
@@ -180,6 +215,13 @@ export async function automaticUpdateNotice({
   try {
     const nowIso = new Date(now).toISOString();
     const channel = updateChannel(currentChannel);
+    const buildIdentity = { currentVersion, currentChannel, currentRevision };
+    const agent = detectAgentShell(env);
+    if (agent) {
+      if (!await claimAgentCheck(agent, channel, now, intervalMs)) return null;
+      const release = await fetchLatestRelease({ channel, fetchImpl, timeoutMs });
+      return updateNoticeFor(buildIdentity, release);
+    }
     const stored = await readUpdateCache(cacheFile);
     const cached = stored?.channel === channel ? stored : null;
     const checkedAt = cached ? Date.parse(cached.checked_at) : Number.NaN;
@@ -207,7 +249,8 @@ export async function automaticUpdateNotice({
       };
     }
 
-    if (!releaseUpdateAvailable({ currentVersion, currentChannel, currentRevision, release: next })) {
+    const notice = updateNoticeFor(buildIdentity, next);
+    if (!notice) {
       if (!fresh) await writeUpdateCache(cacheFile, next);
       return null;
     }
@@ -227,17 +270,26 @@ export async function automaticUpdateNotice({
       notified_at: nowIso,
       notified_build: build,
     });
-    return channel === 'github'
-      ? { channel, currentVersion, currentRevision, latestRevision: next.latest_revision }
-      : { currentVersion, latestVersion: next.latest_version };
+    return notice;
   } catch {
     return null;
   }
 }
 
-export function formatUpdateNotice({ channel, currentVersion, latestVersion, currentRevision, latestRevision }) {
-  if (channel === 'github') {
-    return `Ariax CLI GitHub main is at ${latestRevision.slice(0, 12)}; you have ${currentRevision?.slice(0, 12) || 'an unknown revision'}. Run: ariax upgrade`;
+export function formatUpdateNotice({ channel, currentVersion, latestVersion, currentRevision, latestRevision }, env = process.env) {
+  const message = channel === 'github'
+    ? `Ariax CLI GitHub main is at ${latestRevision.slice(0, 12)}. You have ${currentRevision?.slice(0, 12) || 'an unknown revision'}.`
+    : `Ariax CLI ${latestVersion} is available. You have ${currentVersion}.`;
+  if (detectAgentShell(env)) {
+    return JSON.stringify({
+      notice: {
+        code: 'cli_update_available', channel: channel ?? 'npm', message,
+        current_version: currentVersion, latest_version: latestVersion,
+        current_revision: currentRevision, latest_revision: latestRevision,
+        action: 'Recommend upgrading the Ariax CLI to the user. Install the update only if requested.',
+        command: 'ariax upgrade',
+      },
+    });
   }
-  return `Ariax CLI ${latestVersion} is available; you have ${currentVersion}. Run: ariax upgrade`;
+  return `${message} Run ariax upgrade to install it.`;
 }

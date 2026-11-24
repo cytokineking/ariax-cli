@@ -7,7 +7,7 @@ source `8bb8684b2d3185381f4812c286e044d5679bfd6f`.
 
 Choose the [native controller](examples/opendde-harness/controller.md) for the
 documented deterministic CRLF2/VHH ABAG workflow and explicit optimizer
-continuation. Choose the [saved-batch bridge](examples/opendde-harness/bridge.mjs)
+continuation. Choose the saved-batch bridge (`bridge.mjs`)
 to execute an already prepared native fold batch using standalone
 [OpenDDE](opendde.md). The bridge does not restore the optimizer or run native
 loss, quality gates or population admission. Run either on a trusted remote GPU

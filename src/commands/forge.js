@@ -7,15 +7,18 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
 import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
-import { ApiError, NetworkError, backoffDelay } from '../http.js';
+import { ApiError, NetworkError, backoffDelay, createClient } from '../http.js';
+import { requireTrustedApiOrigin, supportsStoredCredentials } from '../config.js';
 import { EXIT } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
+import { isForgeOperationTerminal, pruneExpiredRecords } from '../state-dir.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
 import { readSync, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
 
 import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js';
+import { readForgeToolGuide } from './skills.js';
 
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
@@ -24,17 +27,17 @@ const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority'
 const OPTIONS = {
   create: [['name', ...SESSION_OPTIONS], 1],
   resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS], 2],
-  project: [['limit', 'cursor'], 2],
-  activity: [['limit', 'cursor'], 2],
+  project: [['limit', 'cursor', 'details'], 2],
+  activity: [['limit', 'cursor', 'details'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
-  catalog: [['details', 'task', 'tool', 'compact', 'model', 'mode'], 1],
-  list: [[], 1], status: [[], 2], tools: [['details'], 2],
+  catalog: [['details', 'full', 'all', 'task', 'tool', 'compact', 'model', 'mode', 'query', 'search', 'modality', 'tier', 'with-guide'], 1],
+  list: [['details'], 1], status: [[], 2], tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
   'tools wait': [['timeout', 'wait-timeout'], 4],
   run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout'], 2],
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
   finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
-  commands: [['retained'], 2], command: [['retained'], 3], watch: [['timeout', 'wait-timeout'], 3],
+  commands: [['retained', 'details'], 2], command: [['retained', 'details'], 3], watch: [['timeout', 'wait-timeout'], 3],
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
@@ -45,12 +48,12 @@ const OPTIONS = {
 
 export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID]
   ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID]
-  ariax forge project PROJECT [--limit 50] [--cursor CURSOR]
-  ariax forge activity PROJECT [--limit 50] [--cursor CURSOR]
+  ariax forge project PROJECT [--limit 50] [--cursor CURSOR] [--details]
+  ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
-  ariax forge catalog [--details | --compact] [--task FAMILY] [--tool TOOL]
-  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--json]
-  ariax forge list
+  ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
+  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]
+  ariax forge list [--details]
   ariax forge status SESSION
   ariax forge tools SESSION [--details]
   ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
@@ -59,8 +62,8 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge operations
   ariax forge recover OPERATION_ID [--wait] [--wait-timeout SECONDS]
   ariax forge finish SESSION [--timeout-seconds SECONDS] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
-  ariax forge commands SESSION [--retained]
-  ariax forge command SESSION COMMAND_ID [--retained]
+  ariax forge commands SESSION [--retained] [--details]
+  ariax forge command SESSION COMMAND_ID [--retained] [--details]
   ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS]
   ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]
   ariax forge cancel SESSION COMMAND_ID
@@ -86,8 +89,8 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   For tools wait, watch and sync, --wait-timeout is in seconds; omission or 0 waits indefinitely. Their older --timeout option also uses seconds.
   Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40S, or RTX6000PRO.
-  Use catalog --compact to find tools; --model/--mode select exact IDs and their requirements.
-  --model/--mode require --tool and cannot combine with --compact/--details. Omit them for the full tool record.`;
+  forge catalog is public and returns compact summaries by default (use --all for experimental/legacy, --full for the complete catalog).
+  Use --tool TOOL --with-guide to inspect one tool's full requirements and bundled guide in a single call; --model/--mode narrow to exact IDs.`;
 
 function actionOf(positionals) {
   if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
@@ -191,8 +194,9 @@ function selection(flags, adding = false) {
   return { tools, priority };
 }
 
-export function recordPath(ctx, id, create = false) {
-  let dir = path.resolve(ctx.config.rootDir);
+function forgeRecordDir(rootDir, create = false) {
+  let dir = path.resolve(rootDir);
+  if (create) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   for (const name of ['.ariax', 'forge']) {
     dir = path.join(dir, name);
     if (create) {
@@ -203,7 +207,52 @@ export function recordPath(ctx, id, create = false) {
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw usageError('Forge request storage must use real directories, not symlinks.');
     if (create) fs.chmodSync(dir, 0o700);
   }
-  return path.join(dir, `${uuid(id, 'request ID')}.json`);
+  return dir;
+}
+
+export function recordPath(ctx, id, create = false) {
+  const dir = forgeRecordDir(ctx.config.rootDir, create);
+  return dir ? path.join(dir, `${uuid(id, 'request ID')}.json`) : null;
+}
+
+export function findRecord(ctx, id) {
+  const primary = recordPath(ctx, id, false);
+  const primaryRecord = readRecord(primary);
+  if (primaryRecord) return { file: primary, record: primaryRecord, legacy: false };
+  const legacyRoot = !ctx.config.rootDirExplicit ? ctx.config.legacyRootDir : null;
+  if (legacyRoot && path.resolve(legacyRoot) !== path.resolve(ctx.config.rootDir)) {
+    const legacyDir = forgeRecordDir(legacyRoot, false);
+    if (legacyDir) {
+      const legacyFile = path.join(legacyDir, `${uuid(id, 'request ID')}.json`);
+      const legacyRecord = readRecord(legacyFile);
+      if (legacyRecord) return { file: legacyFile, record: legacyRecord, legacy: true };
+    }
+  }
+  return { file: primary, record: null, legacy: false };
+}
+
+export function readRecordFor(ctx, id) {
+  return findRecord(ctx, id).record;
+}
+
+export function listRecordFiles(ctx) {
+  const seen = new Set();
+  const entries = [];
+  const roots = [ctx.config.rootDir];
+  const legacyRoot = !ctx.config.rootDirExplicit ? ctx.config.legacyRootDir : null;
+  if (legacyRoot && path.resolve(legacyRoot) !== path.resolve(ctx.config.rootDir)) roots.push(legacyRoot);
+  for (const root of roots) {
+    const dir = forgeRecordDir(root, false);
+    if (!dir) continue;
+    for (const name of fs.readdirSync(dir).filter(entry => entry.endsWith('.json') && isUUID(entry.slice(0, -5))).sort()) {
+      const id = name.slice(0, -5);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      entries.push({ id, name, file: path.join(dir, name) });
+    }
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  return entries;
 }
 
 export function readRecord(file) {
@@ -218,9 +267,12 @@ export function readRecord(file) {
 }
 
 export function saveResult(file, record, result) {
-  const next = { ...record, result: redactForgeOutput(result),
+  const next = { ...record, updated_at: new Date().toISOString(), result: redactForgeOutput(result),
     ...(isUUID(result?.project_id) ? { project_id: result.project_id } : {}) };
   atomicWrite(file, JSON.stringify(next, null, 2) + '\n');
+  if (isForgeOperationTerminal(next)) {
+    pruneExpiredRecords(path.dirname(file), { isTerminal: isForgeOperationTerminal });
+  }
 }
 
 export function localWaitSeconds(value, fallback, { allowZero = false } = {}) {
@@ -239,13 +291,13 @@ export async function controlled(ctx, id, seconds, operation, {resume} = {}) {
   catch (error) {
     if (!controller.signal.aborted) {
       if (!error.action) {
-        try { if (readRecord(recordPath(ctx,id))) error.action = `Inspect or recover the same operation with ariax forge recover ${id}.`; }
+        try { if (readRecordFor(ctx,id)) error.action = `Inspect or recover the same operation with ariax forge recover ${id}.`; }
         catch { /* Preserve the original error. */ }
       }
       throw error;
     }
     let saved;
-    try { saved = readRecord(recordPath(ctx,id)); } catch { /* Preserve the interruption. */ }
+    try { saved = readRecordFor(ctx,id); } catch { /* Preserve the interruption. */ }
     const next = saved ? `ariax forge recover ${id}` : resume;
     const stopped = new Error(next
       ? `${expired ? 'Local wait timed out' : 'Interrupted'}; remote work may continue. Continue with: ${next}`
@@ -468,7 +520,8 @@ export async function submit(ctx, id, request, label, recovery, options = {}) {
   const file = recordPath(ctx, id, true);
   if (label === 'session_id') request = sessionGpuIntent(request);
   const candidate = { id, ...account, request, result: null, ...(options.readiness ? { readiness: options.readiness } : {}) };
-  let record = readRecord(file);
+  const found = findRecord(ctx, id);
+  let record = found.record;
   let previous = !!record;
   if (!record) {
     // New-admission policy must not block authenticated, identical recovery of
@@ -477,8 +530,14 @@ export async function submit(ctx, id, request, label, recovery, options = {}) {
     if (label === 'session_id') {
       await checkGpuPolicy(ctx, { protocol: 'forge', allowed_gpus: request.body.allowed_gpus ?? [request.body.gpu_type] }, { source: 'Forge session' });
     }
-    try { atomicWrite(file, JSON.stringify(candidate, null, 2) + '\n', true); record = candidate; }
+    try {
+      atomicWrite(file, JSON.stringify(candidate, null, 2) + '\n', true);
+      record = candidate;
+      pruneExpiredRecords(path.dirname(file), { isTerminal: isForgeOperationTerminal });
+    }
     catch (error) { if (error.code !== 'EEXIST') throw error; record = readRecord(file); previous = true; }
+  } else if (found.legacy) {
+    atomicWrite(file, JSON.stringify(record, null, 2) + '\n');
   }
   if (label === 'session_id' && record?.id === id && record.request?.body?.files_contract !== 2) {
     throw new ApiError({ status: 409, code: 'upgrade_required', message: `Saved session request ${id} uses the legacy file contract. Inspect the original session; it cannot be replayed as a current-workspace request.` });
@@ -506,12 +565,15 @@ export async function submit(ctx, id, request, label, recovery, options = {}) {
 
 // Reads can refresh a local record, but never create a request or replay work.
 function remember(ctx, id, resourcePath, result) {
-  const file = recordPath(ctx, id);
-  const record = readRecord(file);
+  const found = findRecord(ctx, id);
+  const record = found.record;
   const directRead = record?.request?.session_id && resourcePath.startsWith('/v1/') && `${record.request?.path}/${id}` === resourcePath;
   const sessionRead = resourcePath === `${API}/sessions/${id}` && record?.request?.body?.session_id === id;
   if (record?.id === id && (sessionRead || directRead || `${record.request?.path}/${id}` === resourcePath)
-      && record.api_origin === new URL(ctx.config.baseUrl).origin) saveResult(file, record, result);
+      && record.api_origin === new URL(ctx.config.baseUrl).origin) {
+    const targetFile = found.legacy ? recordPath(ctx, id, true) : found.file;
+    saveResult(targetFile, record, result);
+  }
 }
 
 export function report(ctx, res, kind) {
@@ -536,8 +598,28 @@ export function report(ctx, res, kind) {
   else if (kind === 'tools' || kind === 'catalog') {
     if (ctx.flags.details || (kind === 'catalog' && (ctx.flags.compact || ctx.flags.tool !== undefined))) {
       for (const tool of data.tools) printKv(tool);
+      if (kind === 'catalog' && typeof data.guide_content === 'string') {
+        printData('');
+        printData(`--- Guide (${data.guide_id ?? ctx.flags.tool}) ---`);
+        printData(data.guide_content);
+      }
     }
-    else if (kind === 'catalog') printTable(['tool', 'name', 'gpu', 'tasks', 'guide'], data.tools.map(t => [t.tool, t.name, t.gpu, t.capabilities?.tasks?.join(',') || 'unknown', t.capabilities?.guide || 'unknown']));
+    else if (kind === 'catalog') {
+      const hasSummary = data.tools.some(t => typeof t.summary === 'string' && t.summary);
+      if (hasSummary) {
+        printTable(
+          ['tool', 'tier', 'gpu', 'tasks', 'summary'],
+          data.tools.map(t => [t.tool, t.tier ?? '-', t.gpu, t.capabilities?.tasks?.join(',') || '-', t.summary || t.name || '-']),
+        );
+      } else {
+        printTable(['tool', 'name', 'gpu', 'tasks', 'guide'], data.tools.map(t => [t.tool, t.name, t.gpu, t.capabilities?.tasks?.join(',') || 'unknown', t.capabilities?.guide || 'unknown']));
+      }
+      const hiddenExp = res.meta?.hidden_experimental_count ?? 0;
+      const hiddenLeg = res.meta?.hidden_legacy_count ?? 0;
+      if (hiddenExp || hiddenLeg) {
+        printProgress(`Hidden: ${hiddenExp} experimental, ${hiddenLeg} legacy (pass --all to include).`);
+      }
+    }
     else printTable(['tool', 'state', 'error'], data.tools.map(t => [t.tool, t.state, t.error?.message]));
   }
   else if (kind === 'inputs') printTable(['input_id', 'path', 'state', 'size_bytes'], data.inputs.map(i => [i.input_id, i.path, i.state, i.size_bytes]));
@@ -565,18 +647,35 @@ export function report(ctx, res, kind) {
 // Summary is for routing only. Keep all observed qualification states visible,
 // including unknown/missing values. Inspect the selected model/mode before use.
 function compactCatalogTool(tool) {
-  const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
+  const qual = tool.capabilities?.qualification;
+  const alreadyCompactQual = qual && !Array.isArray(qual) && typeof qual === 'object' && Object.hasOwn(qual, 'rows');
+  const rows = Array.isArray(qual) ? qual : [];
   const states = field => [...new Set(rows.length ? rows.map(row => row?.[field] ?? 'unknown') : ['unknown'])];
   return {
     tool: tool.tool,
     name: tool.name,
     gpu: tool.gpu,
+    ...(tool.tier !== undefined ? { tier: tool.tier } : {}),
+    ...(tool.summary !== undefined ? { summary: tool.summary } : {}),
+    ...(Array.isArray(tool.modalities) ? { modalities: tool.modalities } : {}),
+    ...(Array.isArray(tool.inputs) ? { inputs: tool.inputs } : {}),
+    ...(Array.isArray(tool.outputs) ? { outputs: tool.outputs } : {}),
+    ...(tool.superseded_by !== undefined ? { superseded_by: tool.superseded_by } : {}),
+    ...(tool.pairs_with !== undefined ? { pairs_with: tool.pairs_with } : {}),
     resources: tool.resources ?? null,
-    models: Array.isArray(tool.models) ? tool.models.map(model => ({ id: model.id, resources: model.resources ?? null })) : null,
+    models: Array.isArray(tool.models)
+      ? tool.models.map(model => ({
+        id: model.id,
+        ...(Array.isArray(model.modes) ? { modes: model.modes } : {}),
+        resources: model.resources ?? null,
+      }))
+      : null,
     capabilities: {
       tasks: tool.capabilities?.tasks ?? null,
       guide: tool.capabilities?.guide ?? null,
-      qualification: { rows: rows.length, native: states('native'), installation: states('installation'), restoration: states('restoration') },
+      qualification: alreadyCompactQual
+        ? qual
+        : { rows: rows.length, native: states('native'), installation: states('installation'), restoration: states('restoration') },
     },
   };
 }
@@ -614,6 +713,27 @@ function selectedCatalogTool(tool, model, mode) {
       qualification,
     },
   };
+}
+
+async function catalogGet(ctx, routePath, options = {}) {
+  try {
+    return await ctx.client.get(routePath, options);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    let apiKey = ctx.config.apiKey;
+    if (!apiKey && ctx.credentialStore && supportsStoredCredentials(ctx.config.baseUrl)) {
+      try { apiKey = (await ctx.credentialStore.read())?.apiKey || ''; } catch { apiKey = ''; }
+    }
+    if (!apiKey) throw error;
+    try { requireTrustedApiOrigin(ctx.config); } catch { throw error; }
+    const authClient = createClient({
+      baseUrl: ctx.config.baseUrl,
+      apiKey,
+      timeoutMs: ctx.timeoutMs,
+      fetchImpl: ctx.fetchImpl,
+    });
+    return authClient.get(routePath, options);
+  }
 }
 
 export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, readResult) {
@@ -761,7 +881,7 @@ async function waitFinish(ctx, id, session, initial, signal, file, record) {
 
 async function waitRecovered(ctx, record, result, kind, account, signal) {
   const id = record.id, session = record.request.session_id;
-  if (kind === 'finish') return waitFinish(ctx,id,record.request.path.split('/')[5],result,signal,recordPath(ctx,id),record);
+  if (kind === 'finish') return waitFinish(ctx,id,record.request.path.split('/')[5],result,signal,recordPath(ctx,id,true),record);
   if (kind === 'command') return waitCommandResult(ctx, session, id, signal, result);
   if (kind === 'cancel') return watchCommand(ctx, session, record.request.path.split('/')[3], {signal});
   if (kind === 'input' && result.retained) {
@@ -783,7 +903,9 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
       if (failure) failed('tool_failed', `Tool ${failure.tool} failed`, failure.error);
       if (tools.every(tool => tool?.state === 'ready')) return result;
     } else if (kind === 'file-deletion') {
-      if (data.state === 'failed' || data.cleanup_state === 'attention') failed('file_delete_failed', `File deletion ${id} needs attention`, undefined, 'Inspect the file and cleanup status before another action.');
+      if (data.state === 'failed' || data.cleanup_state === 'attention') failed('file_delete_failed', `File deletion ${id} needs attention`,
+        data.error ?? data.failures?.[0]?.error ?? (data.failure_code ? {message:data.failure_code} : undefined),
+        'Inspect the file and cleanup status before another action.');
       if (data.state === 'deleted' && ['complete','unknown'].includes(data.cleanup_state)) return result;
     } else if (kind === 'file-hydration') {
       if (data.state === 'failed') failed('file_hydration_failed', `File hydration ${id} failed`, data.error, 'Inspect the local path and saved file before retrying.');
@@ -804,10 +926,10 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
     else if (kind === 'close') result = await ctx.client.get(record.request.path.slice(0,-'/close'.length), {signal});
     else if (kind === 'selection') result = await forgeRequest(ctx,session,'GET','/v1/session',{signal});
     else if (kind === 'input') result = await inputStatus(ctx,session,id,{signal,account});
-    else if (kind === 'file-recovery' || kind === 'file-deletion') result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal,account});
+    else if (kind === 'file-recovery' || kind === 'file-deletion') result = await recoverFile(ctx,id,readRecordFor(ctx,id) ?? record,{signal,account});
     else if (kind === 'file-hydration') result = await forgeRequest(ctx,session,'GET',`/v1/files/hydrate/${id}`,{signal});
     else result = await readSync(ctx,session,id,{signal});
-    saveResult(recordPath(ctx,id), readRecord(recordPath(ctx,id)) ?? record, result.data);
+    saveResult(recordPath(ctx,id,true), readRecordFor(ctx,id) ?? record, result.data);
   }
 }
 
@@ -828,7 +950,7 @@ async function runAction(ctx) {
     if (resuming) {
       if (flags['control-revision'] !== undefined) revision = number(flags['control-revision'], 'control-revision', { integer: true, zero: true });
       else {
-        const prior = readRecord(recordPath(ctx,sessionId));
+        const prior = readRecordFor(ctx,sessionId);
         if (prior) {
           if (prior.request?.path !== `${API}/projects/${projectId}/sessions`
               || !Number.isSafeInteger(prior.request.body?.expected_control_revision) || prior.request.body.expected_control_revision < 0) {
@@ -857,28 +979,119 @@ async function runAction(ctx) {
       `Inspect ariax forge status ${sessionId}; retry the same ${action} request with --session-id ${sessionId}, identical fields, and the same --root-dir, account, and API origin.`));
   }
   if (action === 'catalog') {
-    const task = ctx.flags.task;
-    if (flags.compact && flags.details) throw usageError('forge catalog: --compact and --details cannot be combined.');
+    const task = flags.task === undefined ? undefined : required(flags.task, 'task');
+    if (flags.compact && (flags.details || flags.full)) {
+      throw usageError('forge catalog: --compact cannot be combined with --full or --details.');
+    }
     const selectedTool = flags.tool === undefined ? undefined : required(flags.tool, 'tool');
     const model = flags.model === undefined ? undefined : required(flags.model, 'model');
     const mode = flags.mode === undefined ? undefined : required(flags.mode, 'mode');
     const selected = model !== undefined || mode !== undefined;
     if (selected && selectedTool === undefined) throw usageError('forge catalog: --model/--mode require --tool.');
-    if (selected && (flags.compact || flags.details)) throw usageError('forge catalog: --model/--mode cannot be combined with --compact or --details.');
-    if (task !== undefined && !['binder-design', 'antibodies', 'molecular-prediction',
-      'sequence-optimization', 'validation-search'].includes(task)) {
-      throw usageError('Use --task binder-design, antibodies, molecular-prediction, sequence-optimization, or validation-search.');
+    if (selected && (flags.compact || flags.details || flags.full)) {
+      throw usageError('forge catalog: --model/--mode cannot be combined with --compact, --full, or --details.');
     }
-    const response = await ctx.client.get(`${API}/catalog`);
-    let tools = response.data.tools;
+    if (flags['with-guide'] && selectedTool === undefined) {
+      throw usageError('forge catalog: --with-guide requires --tool.');
+    }
+    if (flags.query !== undefined && flags.search !== undefined && String(flags.query) !== String(flags.search)) {
+      throw usageError('forge catalog: pass only one of --query or --search.');
+    }
+    const q = flags.query !== undefined ? required(flags.query, 'query')
+      : (flags.search !== undefined ? required(flags.search, 'search') : undefined);
+    const modality = flags.modality === undefined ? undefined : required(flags.modality, 'modality');
+    const tier = flags.tier === undefined ? undefined : required(flags.tier, 'tier');
+    const isFull = flags.full === true || flags.details === true;
+    const includeAll = flags.all === true;
+
+    let response;
+    let tools;
     if (selectedTool !== undefined) {
-      tools = tools.filter(tool => tool.tool === selectedTool);
+      let usedFallback = false;
+      try {
+        response = await catalogGet(ctx, `${API}/catalog/${encodeURIComponent(selectedTool)}`, {
+          query: {
+            ...(model !== undefined ? { model } : {}),
+            ...(mode !== undefined ? { mode } : {}),
+            dedupe: 1,
+          },
+        });
+        const raw = response.data;
+        if (Array.isArray(raw?.tools)) tools = raw.tools;
+        else if (raw?.tool && typeof raw.tool === 'object') tools = [raw.tool];
+        else if (raw && typeof raw === 'object' && typeof raw.tool === 'string') tools = [raw];
+        else tools = [];
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404
+            && !['unknown_tool', 'unknown_model', 'unknown_mode'].includes(error.code)) {
+          usedFallback = true;
+          response = await catalogGet(ctx, `${API}/catalog`);
+          tools = (Array.isArray(response.data?.tools) ? response.data.tools : [])
+            .filter(tool => tool.tool === selectedTool);
+        } else {
+          throw error;
+        }
+      }
       if (!tools.length) throw usageError(`forge catalog: tool "${selectedTool}" is not in the current catalog.`);
+      if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
+      if (selected && usedFallback) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
+      if (flags.compact) tools = tools.map(compactCatalogTool);
+      response.data = { tools };
+      if (flags['with-guide'] && tools.length === 1) {
+        const guideId = tools[0].capabilities?.guide || tools[0].tool;
+        try {
+          const guide = readForgeToolGuide(guideId);
+          response.data.guide_id = guide.id;
+          response.data.guide_path = guide.path;
+          response.data.guide_size_bytes = guide.size_bytes;
+          response.data.guide_content = guide.content;
+        } catch (err) {
+          response.data.guide_error = err?.message || `No bundled guide found for "${guideId}".`;
+        }
+      }
+      return report(ctx, response, 'catalog');
     }
-    if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
-    if (flags.compact) tools = tools.map(compactCatalogTool);
-    if (selected) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
-    if (selectedTool !== undefined || task !== undefined || flags.compact) response.data = { ...response.data, tools };
+
+    const catalogQuery = {
+      view: isFull ? 'full' : 'summary',
+      ...(task !== undefined ? { task } : {}),
+      ...(q !== undefined ? { q } : {}),
+      ...(modality !== undefined ? { modality } : {}),
+      ...(tier !== undefined ? { tier } : {}),
+      ...(includeAll ? { include_all: 'true' } : {}),
+    };
+    response = await catalogGet(ctx, `${API}/catalog`, { query: catalogQuery });
+    tools = Array.isArray(response.data?.tools) ? response.data.tools : [];
+    const serverFiltered = response.meta?.view === 'summary' || response.meta?.view === 'full';
+    if (!serverFiltered) {
+      if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
+      if (tier !== undefined) tools = tools.filter(tool => tool.tier === tier);
+      if (!includeAll && tier === undefined) {
+        tools = tools.filter(tool => !['experimental', 'legacy'].includes(tool.tier));
+      }
+      if (modality !== undefined) {
+        const needle = modality.toLowerCase();
+        tools = tools.filter(tool =>
+          (Array.isArray(tool.modalities) && tool.modalities.some(m => String(m).toLowerCase().includes(needle)))
+          || (Array.isArray(tool.capabilities?.tasks) && tool.capabilities.tasks.some(tk => String(tk).toLowerCase().includes(needle)))
+          || String(tool.summary || tool.name || '').toLowerCase().includes(needle));
+      }
+      if (q !== undefined) {
+        const needle = q.toLowerCase();
+        tools = tools.filter(tool => {
+          const hay = [
+            tool.tool, tool.name, tool.summary,
+            ...(Array.isArray(tool.modalities) ? tool.modalities : []),
+            ...(Array.isArray(tool.inputs) ? tool.inputs : []),
+            ...(Array.isArray(tool.outputs) ? tool.outputs : []),
+            ...(Array.isArray(tool.capabilities?.tasks) ? tool.capabilities.tasks : []),
+          ].filter(Boolean).join(' ').toLowerCase();
+          return hay.includes(needle);
+        });
+      }
+    }
+    if (!isFull) tools = tools.map(compactCatalogTool);
+    response.data = { ...response.data, tools };
     return report(ctx, response, 'catalog');
   }
   if (action === 'project' || action === 'activity') {
@@ -886,23 +1099,25 @@ async function runAction(ctx) {
     const limit = flags.limit === undefined ? undefined : number(flags.limit, 'limit', { integer: true });
     if (limit > 100) throw usageError(`forge ${action}: --limit must be an integer 1..100.`);
     const res = await ctx.client.get(`${API}/projects/${id}${action === 'activity' ? '/activity' : ''}`, { query: {
-      limit, cursor: flags.cursor === undefined ? undefined : required(flags.cursor, 'cursor'),
+      limit,
+      cursor: flags.cursor === undefined ? undefined : required(flags.cursor, 'cursor'),
+      ...(flags.details ? {} : { view: 'summary' }),
     } });
     return action === 'activity' ? report(ctx, res, 'activity')
       : report(ctx, { ...res, data: { ...res.data, project_url: projectUrl(ctx, id) } });
   }
-  if (action === 'list') return report(ctx, await ctx.client.get(`${API}/sessions`), 'sessions');
+  if (action === 'list') {
+    return report(ctx, await ctx.client.get(`${API}/sessions`, { query: flags.details ? undefined : { view: 'summary' } }), 'sessions');
+  }
   if (action === 'operations') {
     const account = await accountIdentity(ctx);
-    const sample = recordPath(ctx,'00000000-0000-4000-8000-000000000000');
-    const names = sample ? fs.readdirSync(path.dirname(sample))
-      .filter(name => name.endsWith('.json') && isUUID(name.slice(0,-5))).sort() : [];
+    const entries = listRecordFiles(ctx);
     let unreadable = 0;
     const operations = [];
-    for (const name of names.slice(0,10000)) {
+    for (const entry of entries.slice(0,10000)) {
       try {
-        const record = readRecord(path.join(path.dirname(sample),name));
-        const id = name.slice(0,-5), kind = savedKind(id,record?.request);
+        const record = readRecord(entry.file);
+        const id = entry.id, kind = savedKind(id,record?.request);
         if (record?.id !== id || !kind || Object.keys(account).some(field => record[field] !== account[field])) continue;
         const session = kind === 'session' ? id : record.request.session_id
           ?? new RegExp(`^${API}/sessions/([0-9a-f-]{36})/`).exec(record.request.path)?.[1];
@@ -910,11 +1125,11 @@ async function runAction(ctx) {
           last_observed_state:typeof record.result?.state === 'string' ? record.result.state : record.result ? 'recorded' : 'unconfirmed' });
       } catch { unreadable++; }
     }
-    return report(ctx,{data:{operations,truncated:names.length > 10000,unreadable}},'operations');
+    return report(ctx,{data:{operations,truncated:entries.length > 10000,unreadable}},'operations');
   }
   if (action === 'recover') {
     const id = uuid(ctx.positionals[1], 'operation ID');
-    const file = recordPath(ctx,id), record = readRecord(file);
+    const found = findRecord(ctx,id), record = found.record;
     if (!record || record.id !== id) throw usageError(`No saved Forge operation ${id} was found in this root directory.`);
     const kind = savedKind(id,record.request);
     if (!kind) throw usageError(`Forge operation ${id} has no supported idempotent recovery. Inspect the session and saved request before another action.`);
@@ -933,10 +1148,11 @@ async function runAction(ctx) {
       const account = await accountIdentity(ctx,{signal});
       checkIdentity(record,account,id);
       printProgress(`Recovering saved operation: ${id}`);
+      const writeFile = found.legacy ? recordPath(ctx,id,true) : found.file;
       try {
         let result = ['sync','input','file-recovery','file-deletion'].includes(kind)
           ? await recoverFile(ctx,id,record,{signal,account,retryFailedSync:kind === 'sync'})
-          : await dispatchSaved(ctx,file,record,account,{previous:true,signal});
+          : await dispatchSaved(ctx,writeFile,record,account,{previous:true,signal});
         if (kind === 'sync' && result.data?.state === 'failed') failedSync(id,record.request.session_id,result.data);
         if (kind === 'file-recovery' && result.data?.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,result.data.error,
           `Inspect the destination and operation ${id} before another action.`);
@@ -982,7 +1198,7 @@ async function runAction(ctx) {
     let revision;
     if (flags['limit-revision'] !== undefined) revision = number(flags['limit-revision'], 'limit-revision', { integer: true, zero: true });
     else {
-      const prior = readRecord(recordPath(ctx,id));
+      const prior = readRecordFor(ctx,id);
       if (prior) {
         if (prior.request?.path !== `${sessionPath}/limit` || !Number.isSafeInteger(prior.request.body?.expected_limit_revision)
             || prior.request.body.expected_limit_revision < 0) {
@@ -1004,7 +1220,7 @@ async function runAction(ctx) {
   if (action === 'finish') {
     if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge finish: --wait-timeout requires --wait.');
     const suppliedId = flags['operation-id'] === undefined ? undefined : uuid(flags['operation-id'],'operation ID');
-    const prior = suppliedId ? readRecord(recordPath(ctx,suppliedId)) : null;
+    const prior = suppliedId ? readRecordFor(ctx,suppliedId) : null;
     if (prior && prior.request?.path !== `${sessionPath}/finish`) throw new ApiError({status:409,code:'request_conflict',message:`Saved operation ${suppliedId} is not this finish request.`});
     const duration = flags['timeout-seconds'] === undefined
       ? prior?.request?.body?.timeout_seconds ?? 3600 : number(flags['timeout-seconds'],'timeout-seconds',{integer:true});
@@ -1040,7 +1256,7 @@ async function runAction(ctx) {
   if (action === 'status') {
     const res = await ctx.client.get(sessionPath);
     remember(ctx, sessionId, sessionPath, res.data);
-    const project = await ctx.client.get(`${API}/projects/${uuid(res.data.project_id, 'project ID')}`);
+    const project = await ctx.client.get(`${API}/projects/${uuid(res.data.project_id, 'project ID')}`, { query: { view: 'summary' } });
     return report(ctx, { ...res, data: { ...res.data, project_status: project.data.status,
       control: project.data.control, project_url: projectUrl(ctx, res.data.project_id) } }, action);
   }
@@ -1085,7 +1301,12 @@ async function runAction(ctx) {
     remember(ctx, sessionId, sessionPath, res.data);
     return report(ctx, res);
   }
-  if (action === 'commands') return report(ctx, flags.retained ? await ctx.client.get(`${sessionPath}/commands`) : await forgeRequest(ctx, sessionId, 'GET', '/v1/commands'), 'commands');
+  if (action === 'commands') {
+    const res = flags.retained
+      ? await ctx.client.get(`${sessionPath}/commands`, { query: flags.details ? undefined : { view: 'summary' } })
+      : await forgeRequest(ctx, sessionId, 'GET', '/v1/commands');
+    return report(ctx, res, 'commands');
+  }
   const commandId = uuid(ctx.positionals[2], 'command ID');
   const commandPath = `/v1/commands/${commandId}`;
   if (action === 'watch') {
@@ -1108,7 +1329,9 @@ async function runAction(ctx) {
     if (wait > 25) throw usageError('forge logs: --wait-seconds must be within 0..25.');
     return report(ctx, await forgeRequest(ctx, sessionId, 'GET', `${commandPath}/logs`, { query: { tail, wait_seconds: wait, ...(flags.cursor === undefined ? {} : { cursor: required(flags.cursor, 'cursor') }) } }), 'logs');
   }
-  const res = flags.retained ? await ctx.client.get(`${sessionPath}/commands/${commandId}`) : await forgeRequest(ctx, sessionId, 'GET', commandPath);
+  const res = flags.retained
+    ? await ctx.client.get(`${sessionPath}/commands/${commandId}`, { query: flags.details ? undefined : { view: 'summary' } })
+    : await forgeRequest(ctx, sessionId, 'GET', commandPath);
   remember(ctx, commandId, commandPath, res.data);
   return report(ctx, res);
 }
@@ -1119,7 +1342,7 @@ export async function run(ctx) {
     const action = actionOf(ctx.positionals);
     let recovered;
     try {
-      if (action === 'recover' && isUUID(ctx.positionals[1])) recovered = readRecord(recordPath(ctx,ctx.positionals[1]));
+      if (action === 'recover' && isUUID(ctx.positionals[1])) recovered = readRecordFor(ctx,ctx.positionals[1]);
     } catch { /* Keep the original error. */ }
     const recoveredSession = recovered?.request?.session_id
       ?? new RegExp(`^${API}/sessions/([0-9a-f-]{36})/`).exec(recovered?.request?.path ?? '')?.[1];

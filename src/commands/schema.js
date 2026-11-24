@@ -13,16 +13,27 @@ export async function run(ctx) {
     throw err;
   }
   if (ctx.positionals.length !== 1) throw usageError('schema: expected one protocol id');
-  const unknown = Object.keys(ctx.flags).find((name) => !['raw', 'kind', 'output', 'o'].includes(name));
+  const unknown = Object.keys(ctx.flags).find((name) => !['raw', 'kind', 'output', 'o', 'details'].includes(name));
   if (unknown) throw usageError(`schema: unknown flag --${unknown}`);
   const kind = ctx.flags.kind || 'job';
   if (!['job', 'submission'].includes(kind)) throw usageError('schema: --kind must be job or submission');
   const raw = ctx.flags.raw === true;
-  if (ctx.flags.kind && !raw) throw usageError('schema: --kind requires --raw');
+  const details = ctx.flags.details === true;
+  if (raw && details) throw usageError('schema: --raw and --details cannot be combined');
   const res = await ctx.client.get(`/api/v1/protocols/${encodeURIComponent(protocol)}/schema`, {
     auth: true, query: raw ? { format: 'raw', kind } : undefined,
   });
-  const schema = res.data && typeof res.data === 'object' && 'schema' in res.data ? res.data.schema : res.data;
+  let schema = res.data && typeof res.data === 'object' && 'schema' in res.data ? res.data.schema : res.data;
+  if (!raw && !details && schema && typeof schema === 'object' && !Array.isArray(schema)) {
+    const lean = { ...schema };
+    if (kind !== 'submission' && Object.prototype.hasOwnProperty.call(lean, 'submission_schema')) {
+      delete lean.submission_schema;
+    }
+    if (protocol.toLowerCase() !== 'boltzgen' && Object.prototype.hasOwnProperty.call(lean, 'binding_rule_schema')) {
+      delete lean.binding_rule_schema;
+    }
+    schema = lean;
+  }
   const outFile = ctx.flags.output || ctx.flags.o;
   if (outFile) {
     fs.writeFileSync(String(outFile), JSON.stringify(schema, null, 2) + '\n');

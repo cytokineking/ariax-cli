@@ -1,315 +1,81 @@
 ---
 name: ariax-forge
-description: Create and operate Ariax Forge compute sessions, select tools, run native commands, recover submissions, and cancel or close work through the Ariax CLI.
+description: Create and operate Ariax Forge compute sessions, discover tools, run native commands, sync files, and finish or close work through the Ariax CLI.
 ---
 
 # Ariax Forge
 
-Use Forge for native commands and custom workflows. You choose tools and
-inputs, run commands, save outputs and close the session. If a managed project
-fits the goal, compare it with [engine choice](../../core/engine-choice.md).
-Managed and native settings can differ for the same engine.
+Use Forge for native scientific tools (prediction, inverse folding, scoring/QC,
+search, antibody/all-atom design) and custom multi-stage workflows. Compare
+with managed protocols in [engine choice](../../core/engine-choice.md); settings
+differ even for shared engine names. Keep one scientific campaign in one Forge
+project — use `--gpu-count N` and `--gpus` in one session rather than spawning
+separate projects, and reuse or `resume` the same project after closure.
 
-Keep one scientific campaign in one Forge project. Request multiple GPUs with
-`--gpu-count N` in one session and assign workers with `--gpus`. Do not silently
-replace an unavailable multi-GPU allocation with separate `forge create` calls;
-resolve allocation or discuss the topology change with the user first. Separate
-projects have independent storage and checkpoint histories, so staged inputs,
-restored files and results can be duplicated. If cross-project execution is
-explicitly chosen, define the canonical project, replication limits, verified
-consolidation and cleanup before allocating. Reuse the active session, or
-`resume` its existing project after closure.
-
-## Discover, plan, run and close
-
-1. Find the tool with [capability discovery](tools/capabilities.md), inspect
-   its model/mode's current workload and resource limits, and read its guide.
-2. Check `ariax pricing --json` and choose hardware and a GPU-hour limit within
-   the user's authorization. Extra GPUs need a supported parallel workflow.
-3. Stage inputs, wait for the tool, run commands and inspect their results.
-   Use [campaign guidance](references/campaign-recipes.md) to compose stages
-   or size a pilot; example sizes are not campaign recommendations.
-4. Finish the session when done, then inspect execution, saved files and
-   confirmed resource release separately.
-
-Creating or resuming a session starts paid resource allocation. Preparation and
-idle time consume the GPU-hour allowance; an omitted limit leaves the session
-open-ended. A successful command does not close the session. A local wait or
-interruption leaves remote work running. After an uncertain response, inspect
-the same session or command ID and reconcile its saved request before retrying;
-a fresh ID can duplicate work or allocate another session.
-
-If a read returns `network_error`, check the client's network connection and
-retry the same read after connectivity returns. Remote jobs may still be
-running; their status is unknown until observed again. Keep the original IDs
-when reconciling admitted work. A connectivity error does not by itself call
-for cancellation, restart, reauthentication, or a new submission.
+## 1. Discover tools & read a guide in one call (no auth needed)
 
 ```sh
-ariax forge catalog --task binder-design --compact --json
-ariax forge catalog --tool TOOL --model MODEL --json
-ariax skills forge --tool GUIDE_ID --json
-ariax skills forge --reference GUIDE_ID --read --json
+ariax discover --query "<goal>" --execution forge --json
+ariax forge catalog --task binder-design --json          # compact summary by default (--all for experimental/legacy)
+ariax forge catalog --tool TOOL --with-guide --json      # full tool record + bundled guide in 1 call
 ariax pricing --json
-ariax forge create --name "My workspace" --gpu GPU --gpu-count COUNT --tools TOOL --max-gpu-hours LIMIT --json
-ariax forge list --json
-ariax forge status SESSION --json
-ariax forge tools SESSION --json
-ariax forge tools wait SESSION TOOL --timeout 1800 --json
-# Run and inspect the selected native commands; then finish and release:
-ariax forge finish SESSION --wait --json
-ariax forge files PROJECT --json
-ariax forge status SESSION --json
 ```
 
-Copy `TOOL`, `MODEL` and `GUIDE_ID` from the compact result's `tool`,
-`models[].id` and `capabilities.guide` fields. Add `--mode MODE` for a listed
-mode; omit `--model` for a tool without model IDs. Scoped skill discovery returns that guide's references and example
-paths; `ariax skills forge --json` returns the complete index. The `ariax-forge`
-alias uses the same guides. Upload required input files and companions before
-executing examples, following their scientific provenance and license conditions.
+Use `--model MODEL` / `--mode MODE` with `--tool TOOL` to inspect exact resource
+floors and qualification rows. Browse methods in the
+[tool index](tools/capabilities/matrix.md) or [capability discovery](tools/capabilities.md).
 
-JSON results are in `data`; progress goes to stderr. Run `ariax help forge`
-for complete syntax or use the [tool index](tools/capabilities/matrix.md) to
-compare methods.
+## 2. Create a session & wait for tools
 
-## Select and prepare tools
-
-Omit `--tools` for a base workspace; base is always included. Use tool keys
-from `ariax forge catalog`. `--priority` names a subset of selected tools;
-the rest prepare in selection order.
-
-Session `available` means the host and base workspace accept commands. Each
-scientific tool separately reports `queued`, `installing`, `ready`, or `failed`.
-Wait for the requested tool to be ready. A tool failure does not revoke host
-availability. Ready tools remain usable while preparation runs in the background.
-
-`--min-ram-gib`, `--min-cpu-count` and `--min-disk-gib` request hardware minima.
-Ariax tries `--gpu` first. Use `--allowed-gpus RTX5090,L40S` to permit
-fallbacks; the list must include the preferred GPU and at least one core GPU
-(H100, A100_80GB, L40S, or RTX6000PRO). An omitted
-list permits only `--gpu`, which must then be a core GPU. Fallbacks preserve
-the requested device count and resource minima. Inspect returned `hardware`
-for the selected resources.
-
-If a tool-selection response is uncertain, use `ariax forge recover ID` with
-the original root directory, account and API origin. After a confirmed
-preparation failure, submit a new selection; omitting `--selection-id`
-generates one. Use status and wait to observe preparation.
-
-## Execute and observe
+Creating or resuming a session starts paid compute; preparation and idle time
+consume `--max-gpu-hours` (omitting it leaves the session open-ended). Always
+include a core GPU (`H100`, `A100_80GB`, `L40S`, or `RTX6000PRO`) in
+`--allowed-gpus` (or `--gpu` if `--allowed-gpus` is omitted). `base` is always
+included; omit it from `--tools`.
 
 ```sh
-ariax forge run SESSION --tool TOOL --wait-ready --input-ids INPUT_ID --wait --wait-timeout 1800 -- NATIVE_EXECUTABLE NATIVE_ARGUMENTS
-ariax forge commands SESSION --json
-ariax forge command SESSION COMMAND_ID --json
-ariax forge watch SESSION COMMAND_ID --timeout 600 --json
+ariax forge create --name "My workspace" --gpu L40S --allowed-gpus L40S,H100 --gpu-count 1 --tools boltz2,interface-scores --priority boltz2 --max-gpu-hours 4 --json
+ariax forge status SESSION --json
+ariax forge tools wait SESSION base --wait-timeout 1800 --json
+ariax forge tools wait SESSION boltz2 --wait-timeout 1800 --json
+```
+
+Use `--min-ram-gib`, `--min-cpu-count`, and `--min-disk-gib` for hardware
+minima. Session `available` means `base` accepts commands; each scientific tool
+reports `queued`, `installing`, `ready`, or `failed` independently. Add more
+tools later with `ariax forge tools add SESSION --tools TOOL`.
+
+## 3. Stage inputs & run native commands
+
+```sh
+ariax forge inputs add SESSION --file ./target.yaml --path targets/target.yaml --json   # mounted at /inputs/targets/target.yaml
+ariax forge inputs status SESSION INPUT_ID --json                                       # wait for state=ready
+ariax forge run SESSION --tool boltz2 --gpus 0 --wait-ready --input-ids INPUT_ID --wait --wait-timeout 1800 -- boltz predict /inputs/targets/target.yaml --out_dir /workspace/out
 ariax forge logs SESSION COMMAND_ID --tail 1000 --no-json
-ariax forge logs SESSION COMMAND_ID --cursor CURSOR --wait-seconds 25 --json
-ariax forge logs SESSION COMMAND_ID --retained --json
-ariax forge activity PROJECT --limit 50 --json
+ariax forge command SESSION COMMAND_ID --json
 ```
 
-Active output reads return the current command, incremental text, `next_cursor`
-and `gap`. Keep the returned cursor for the next read. A gap reports an interval
-lost to rotation or reconnection; save fuller output in workspace files when
-needed. `watch` shares the same bounded cursor protocol. Cancellation first
-reports `stopping` while the host enforces the saved intent.
+- Put the native executable and arguments after `--`; `--cwd` defaults to `/workspace` and must stay under it.
+- Multi-GPU sessions require explicit `--gpus 0` / `--gpus 1,0` for GPU tools (CPU tools omit `--gpus`). Overlapping GPU reservations return `gpu_busy`; use distinct output directories for concurrent commands.
+- `--wait` exits nonzero on failed/interrupted/cancelled commands, but exit `0` does not verify scientific validity — always inspect native outputs and files.
+- Use `--retained` with `commands`, `command`, `logs`, or `inputs list/status` after session closure. `ariax forge list`, `project`, `activity`, `commands`, and `command` return lean summary payloads by default (add `--details` for full metadata).
 
-Use `--retained` with commands, command, logs or inputs list/status
-reads to inspect saved history after closure or host loss. Retained records
-may lag live commands; keep the original ID while an outcome is uncertain.
+## 4. Save files, finish & release compute
 
-Put the native executable and arguments after `--`. Include an explicit shell
-when needed. Native examples run inside the selected ready tool's container.
-Check its help with, for example, `ariax forge run SESSION --tool boltz2
---gpus 0 -- boltz predict --help`.
-
-`--cwd` defaults to `/workspace` and must stay under it.
-`--timeout-seconds` limits remote execution (default 86400 seconds).
-`--wait-ready` waits locally for the session, selected tool and available
-command resources. List the input IDs the command needs with `--input-ids`
-(comma-separated); omit that option when none are required. Local file inputs
-must have confirmed installation in the active workspace. `--wait` follows the
-command and returns an error for failed, interrupted or cancelled work. It
-does not inspect the scientific meaning of a successful result: read native
-output and check the files as well.
-
-GPU commands reserve their selected devices; overlapping requests receive
-`gpu_busy`. The installed CLI supports `--gpu-count` at creation and `--gpus`
-on commands. CPU commands have a small concurrency limit and share writable
-workspace paths. Use distinct
-output paths when work overlaps. `unknown` keeps its GPU reservation until
-reconciliation establishes an outcome. Read the command's state, exit code,
-error, and logs. `watch` reports failed or interrupted work as an error;
-`command` remains available to inspect its full record.
-
-Use `--gpus 1,0` to reserve those devices in that supplied order. Multi-GPU
-sessions require an explicit selection for GPU tools. A one-GPU session can
-omit the flag for a GPU command. CPU commands omit it. Command timeouts and
-cancellation retain devices until reconciliation confirms the container stopped.
-
-`activity PROJECT` lists command and project-control history. Pass its
-`next_cursor` to `--cursor` for older pages; `--limit` accepts 1–100. Session
-command lists contain the newest 100 records. Retained logs are bounded and
-may omit earlier output; save fuller logs in workspace files and flush them.
-
-## Recover a lost response
-
-Create prints `session_id` and run prints `command_id` before the POST. Each
-request is saved under `.ariax/forge/ID.json` in the chosen `--root-dir`.
-Retain the ID, root directory, account, and API origin. Transient failures are
-retried a bounded number of times using that request and identity. Ordinary
-session, command and control submissions have a 60-second local retry deadline.
-
-After a lost acknowledgment, recover the printed identity:
+A completed command does **not** close the session. Write durable outputs under
+`/workspace` (keep heavy scratch intermediates in `/scratch`), then finish and
+confirm release:
 
 ```sh
-ariax forge operations --json
-ariax forge recover OPERATION_ID --json
-ariax forge recover COMMAND_ID --wait --wait-timeout 1800 --json
+ariax forge sync SESSION --wait --wait-timeout 900 --json
+ariax forge files PROJECT --path /workspace --json
+ariax forge finish SESSION --wait --json      # drains commands + flushes + closes
+ariax forge status SESSION --json             # confirm state=closed
 ```
 
-`operations` lists this root's account-bound records and their last locally
-observed states; it is not a live inventory.
-Recovery supports session admission, tool selection, commands, inputs, file
-copies, sync, finish, cancellation, closure, and limit edits. It checks live and retained command
-records before any retry. A pending, unstarted command can continue with its
-same ID; an uncertain, failed, interrupted or cancelled command is not started
-again. If a previously observed operation is absent from current history,
-recovery stops and reports the uncertainty instead of submitting it again.
-A limit-revision conflict requires inspection: it does not establish
-whether an earlier edit took effect. URL imports keep the URL out of the saved
-record. If there is no saved successful result, repeat the original input
-request with its URL and ID so the server can compare the source. A local upload
-can resume only with the unchanged source file;
-a published input can be inspected without that file. Changing an ID can
-allocate another VM or execute another command. A new science run after a
-confirmed failure or interruption requires an explicit new action.
+Use `ariax forge close SESSION` for immediate teardown, `ariax forge cancel SESSION COMMAND_ID`
+to cancel one command, `ariax forge limit SESSION --gpu-hours H` to edit a
+session cap, and `ariax forge resume PROJECT --gpu GPU ...` to reopen the same
+project's saved files (`--hydrate PATH` selects a subset).
 
-`run --wait-ready` and `run --wait` use `--wait-timeout SECONDS` for the whole
-local operation (default 1800, maximum 86400); `recover` defaults to 60 seconds.
-`finish --wait` defaults to a 7200-second local deadline. Its separate
-`--timeout-seconds` fixes the remote finish deadline at admission, default 3600
-seconds; repeats cannot extend it. `finish` observes an existing finish rather
-than starting another, and reports execution, pre-stop save, final durability,
-termination and verified release separately. A completed finish with failed
-work or saving exits nonzero. Immediate human stops and the existing GPU-hour
-deadline still take precedence. A local timeout or Ctrl-C does not stop it.
-`tools wait`, `watch` and `sync --wait` accept `--wait-timeout SECONDS`, with
-zero or omission meaning no local deadline. Their older `--timeout` spelling
-also means seconds; elsewhere global `--timeout` is a per-request limit in
-milliseconds. A local timeout or Ctrl-C does not cancel remote work. Use
-`recover` with the same ID, or resume a wait/watch with the same operands.
-
-## Project controls and resume
-
-The CLI resume example creates an allocation only when no session is active
-and no human hold blocks it. After **Resume workspace**, use the session the
-page started instead.
-
-```sh
-ariax forge project PROJECT --limit 50 --json
-ariax forge status SESSION --json
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --gpu-count 2 --tools boltz2 --max-gpu-hours 8 --json
-ariax forge limit SESSION --gpu-hours 12 --json
-ariax forge limit SESSION --clear --json
-```
-
-`project` returns the project's status, control snapshot, session history and
-current active/latest session IDs. Older history uses `--cursor`. `status`
-reports the session's compute and persistence state with its `limit_revision`
-and the project's current `control.revision` and hold.
-When omitted, the CLI reads the current revision before saving a new resume or
-limit request. Recovery retains that original revision and ID; a later pause or
-edit is a conflict, not permission to refresh the request or clear a human hold.
-
-A human pause sets `human_resume_required`. Stop the project's work and ask
-the user to open the supplied project page. **Resume workspace** shows the
-saved hardware and budget, then clears the hold and allocates a same-project
-session atomically. After the user resumes there, inspect `project` for its
-`active_session_id` and inspect that session; continue there without creating
-another session or automatically replaying scientific work. If it is not yet
-visible, inspect for a failure or wait and check again. Alternatively,
-**Allow agent to resume later** in the dropdown clears the hold and leaves
-compute stopped.
-Await the user's direction, inspect cleanup and the current control revision,
-then explicitly resume that same project if authorized. API-key requests cannot
-clear the hold. Do not bypass it with a replacement project.
-
-An explicit CLI resume loads the current saved files of the same project by
-default. Repeat `--hydrate PATH` to load selected saved files or directories;
-omitted paths remain saved and count toward the project's 1 TiB and
-one-million-entry limits. Wait
-for confirmed prior-session cleanup and inspect `project` for an active session.
-A newer pause invalidates an observed control revision.
-A stale-revision rejection permits a new explicit request with the newly
-observed revision and a fresh session ID once any human hold has been cleared
-through the authenticated web flow and inspection confirms no session is active.
-A lost acknowledgment requires the original ID and fields. Local saved requests
-remain immutable.
-
-An explicit CLI resume starts a new allocation in the same project and loads
-its current saved files. Choose hardware, tools, priority and an optional new
-cap; the old session's allowance is separate. Run the next scientific command
-explicitly.
-
-Limits count preparation and idle time. Eight GPU-hours on four GPUs allow
-two wall-clock hours. An edit replaces the total allowance from the original
-`allocated_at`, not the remaining allowance. Use the current `limit_revision`;
-stale revisions reject the edit. `--clear` removes the cap. Reducing it can
-stop work immediately; closing sessions reject edits.
-
-A saved limit can be pending on the host. Wait for `applied_limit_revision`
-to equal `limit_revision` before relying on an extension or cleared cap;
-the previous deadline applies until delivery. An edit cannot revive a stopped
-session. Check cleanup, then use explicit same-project resume if authorized.
-
-## Pause, terminal controls and close
-
-Use `ariax pause PROJECT --json` for an agent-requested project pause.
-An authenticated human page pause establishes a human hold. Inspect the
-project control and session cleanup after either action; acknowledgment means
-stop intent is durable while compute may still be stopping. For a requested
-terminal stop, `ariax abort PROJECT --json` retains saved files and prevents
-resume. The project's web **Delete** action also removes saved artifacts after
-cleanup. Aborted/deleted work stays terminal; approval cannot reopen it.
-
-```sh
-ariax forge cancel SESSION COMMAND_ID --json
-ariax forge close SESSION --json
-ariax forge status SESSION --json
-```
-
-Cancellation targets one command. It returns cancellation requested; inspect
-the command until its final state is known. Repeated cancellation is harmless.
-Close stops the session and releases its allocation. Poll session status until
-`closed`, which confirms resource release. A cleanup problem leaves `closing`
-with an error. A failed HTTP request does not establish VM loss or cleanup.
-Repeated close observes the same closure.
-
-## Inputs and durable outputs
-
-Before active file operations, wait for the workspace with `ariax forge tools wait SESSION base --timeout 1800`; `session_unready` means inspect that session's lifecycle and retain the original operation IDs.
-
-Stage a local file, an authorized Ariax artifact, or an individual public HTTPS object with `ariax forge inputs add SESSION --file FILE --path targets/input.yaml`. Use `--artifact PROJECT_ID:PATH` or `--url URL` for the other sources. `--path` is relative to `/inputs` (for example `targets/input.yaml`); commands read the absolute `/inputs/targets/input.yaml`. Inspect readiness with `inputs status SESSION INPUT_ID` before a command reads them. Local files use the project workspace multipart API and keep their input and attempt IDs in the original CLI root for safe recovery. Storage publication alone does not confirm installation in the active workspace: without daemon-backed confirmation the input reports `pending` with `installation_status: unconfirmed`. Wait for `ready` before dispatching a dependent command. Local input entries in `inputs list` come from the current CLI root and are not an account-wide inventory.
-
-Run `ariax forge sync SESSION --wait` to flush changed files, then use
-`ariax forge files PROJECT`, `download PROJECT PATH`, or `link PROJECT PATH`
-with the session's `project_id`. `files` returns one page; follow `next_cursor`
-with `--cursor` to see the rest. Use `ariax forge files hydrate SESSION --path
-PATH --wait` for an additional saved file, or `ariax forge files delete PROJECT
---path PATH [--recursive] --wait` to permanently delete a saved path. Preserve
-the deletion operation ID for recovery: interrupted recursive deletion must be
-continued with `ariax forge recover ID --wait`. Input deletion can temporarily
-block new commands, and local directory removal waits for running commands to stop.
-Sync reports saved, pending or failed work;
-it is not an atomic multi-file snapshot. Files changed after the flush can remain
-pending. Inspect synchronization and errors after close or expiry; abrupt loss
-can leave unsaved changes unavailable. Links identify the current path and do
-not pin an earlier version.
-
-Use `resume PROJECT` to continue the same project's saved work. It loads current
-files without replaying scientific commands. Read the [outputs reference](outputs.md)
-and [project-local code](references/custom-code.md) for file operations and
-explicit environment recreation after resume.
+**Deep references:** [outputs & file ops](outputs.md) · [recovery, holds & deletions](references/recovery.md) · [campaign recipes](references/campaign-recipes.md) · [custom code](references/custom-code.md) · [Adaptyv ordering](references/adaptyv-ordering.md)

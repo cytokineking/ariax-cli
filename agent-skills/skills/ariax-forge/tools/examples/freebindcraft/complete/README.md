@@ -13,7 +13,7 @@ monomers and MPNN FASTA when those stages run. Rejection can prevent later
 stages and leave no accepted design. These settings do not guarantee a useful
 binder or define a scientific search budget for other targets.
 
-Stage the bundled [PD-L1 structure](../PDL1.pdb) as
+Stage the bundled PD-L1 structure (`PDL1.pdb`) as
 `/inputs/freebindcraft/PDL1.pdb`. Its selected target chain A has 115 residues
 numbered 18–132, with hotspot A56. Each family has matching `advanced-*.json`
 and `filters-*.json` files:
@@ -34,7 +34,7 @@ filters before the run.
 
 ## Check saved outputs
 
-The bundled [check.py](check.py) is specific to these PD-L1 examples. It
+The bundled `check.py` is specific to these PD-L1 examples. It
 requires `/inputs/freebindcraft/PDL1.pdb` and the native export layout. Stage
 the checker as `/inputs/freebindcraft/complete/check.py`, then set `RUN_DIR`
 to the selected settings file's remote `design_path`:

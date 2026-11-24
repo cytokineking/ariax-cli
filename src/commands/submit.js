@@ -25,7 +25,7 @@ export async function run(ctx) {
   const { flags } = ctx;
 
   if (flags.resume === true) {
-    const saved = await loadResume(ctx.config.rootDir);
+    const saved = await loadResume(ctx.config.rootDir, { legacyRootDir: ctx.config.legacyRootDir });
     if (!saved || !saved.projectId) {
       throw usageError(
         `submit: --resume found no saved legacy wait state under ${ctx.config.rootDir}. Use ariax operations and ariax recover <operation-id> --wait for journaled submissions.`,
@@ -228,7 +228,7 @@ export async function run(ctx) {
     throw error;
   }
   const res = await sendOperation(ctx, operation);
-  const compactDefault = isBindcraft2(body) && flags.details !== true;
+  const compactDefault = usesCompactCampaignPresentation(body) && flags.details !== true;
   if (operation.state === 'in_progress') {
     if (flags.wait === true) {
       await waitForOperation(ctx, operation);
@@ -383,14 +383,14 @@ export async function waitAndReport(ctx, projectId, operation) {
     });
     if (stopped || out.stopped) {
       printProgress('Interrupted. Remote work continues (SIGINT never aborts).');
-      printProgress(resumeHint({ projectId, rootDir: ctx.config.rootDir }));
+      printProgress(resumeHint({ projectId, rootDir: ctx.config.rootDir, rootDirExplicit: ctx.config.rootDirExplicit }));
       const err = new Error('Interrupted; remote work continues.');
       err.exitCode = EXIT.INTERRUPTED;
       throw err;
     }
     if (out.timedOut) {
       printProgress(`Wait timed out (last status: ${out.status ?? 'unknown'}). Remote work continues.`);
-      printProgress(resumeHint({ projectId, rootDir: ctx.config.rootDir }));
+      printProgress(resumeHint({ projectId, rootDir: ctx.config.rootDir, rootDirExplicit: ctx.config.rootDirExplicit }));
       const err = new Error('Wait timed out; remote work continues.');
       err.exitCode = EXIT.NETWORK;
       throw err;

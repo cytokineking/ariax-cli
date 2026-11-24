@@ -15,8 +15,8 @@ ariax forge tools "$SESSION" --json
 
 ## Stage and execute the small example
 
-The [text input](examples/base/message.txt), [Python program](examples/base/run.py),
-and [result checker](examples/base/check.py) produce a one-line JSON result.
+The text input (`message.txt`), Python program (`run.py`),
+and result checker (`check.py`) produce a one-line JSON result.
 Use relative import destinations, published under read-only inputs:
 
 ```sh

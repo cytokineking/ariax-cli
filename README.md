@@ -66,7 +66,7 @@ ariax help
 
 ## Updates
 
-During interactive use, the CLI checks for updates at most once per day. npm
+During interactive use and in agent shells, the CLI checks for updates on a daily schedule. npm
 installs check the latest npm release; script installs check GitHub `main` for a
 new commit, even when the version number stays the same. It shows a notice when
 an update is available. Updates are installed only when you request them:
@@ -77,8 +77,14 @@ ariax upgrade            # Update your current channel, with confirmation
 ariax upgrade --yes      # Update without a prompt
 ```
 
-Automatic checks are skipped in CI, noninteractive commands, and JSON output.
-Set `NO_UPDATE_NOTIFIER=1` to disable them.
+Codex and Claude Code receive a `cli_update_available` notice on stderr during
+ordinary commands such as `ariax skills --json`, including noninteractive
+runs. It recommends `ariax upgrade` on the current install channel. Each agent
+and the interactive terminal have their own notification cache. Other agent
+launchers can opt in with `ARIAX_AGENT=1`. JSON results stay on stdout.
+CI and ordinary piped scripts skip automatic checks. Use
+`NO_UPDATE_NOTIFIER=1` to disable them or `ariax upgrade --check --json` for
+an explicit check.
 
 ### Switch between npm and the script install
 
@@ -246,9 +252,9 @@ required. Run `ariax login` once on the machine where the agent uses the CLI,
 then give the agent this:
 
 ```text
-Use the Ariax CLI for my scientific goal. Verify `ariax --version`, run
-`ariax upgrade --check --json`, and tell me if an update is available; do not
-upgrade without my approval. Read `ariax skills --reference engine-choice --read --json`
+Use the Ariax CLI for my scientific goal. Verify `ariax --version` and tell me
+if the CLI recommends an update. Install it only if I ask.
+Read `ariax skills --reference engine-choice --read --json`
 and choose a managed project or Forge for my goal, preserving my
 chosen engine and existing compute authorization. Read the selected guide and
 the relevant live schema or exact Forge tool and mode qualification. Check
@@ -263,7 +269,11 @@ conversation or pass one as a command-line argument.
 
 The [shared agent workflow](agent-skills/SKILL.md) covers safe submission,
 recovery, monitoring, and downloads. Each protocol guide adds its scientific
-capabilities and input rules.
+capabilities and input rules. Install the bundled agent skill into Claude Code,
+Codex, Cursor, or Antigravity with `ariax skills install` (check with
+`ariax skills status`), and route across managed protocols and Forge without
+authentication using `ariax discover --query "<goal>"` or
+`ariax forge catalog --tool TOOL --with-guide`.
 
 ## Command overview
 

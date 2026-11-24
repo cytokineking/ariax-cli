@@ -4,13 +4,14 @@ import { listOperations, loadOperation, verifyAccount, lookupOperation, operatio
 
 export async function run(ctx) {
   const id = ctx.positionals[0];
+  const opts = { legacyRootDir: ctx.config.legacyRootDir };
   if (!id) {
-    const summaries = listOperations(ctx.config.rootDir).map(operationSummary);
+    const summaries = listOperations(ctx.config.rootDir, opts).map(operationSummary);
     if (ctx.json) printJson({ data: summaries });
     else printTable(['id', 'action', 'state', 'project_id'], summaries.map((item) => [item.id, item.action, item.state, item.project_id ?? '-']));
     return summaries;
   }
-  const operation = loadOperation(ctx.config.rootDir, id);
+  const operation = loadOperation(ctx.config.rootDir, id, opts);
   await verifyAccount(ctx, operation);
   const remote = await lookupOperation(ctx, operation);
   const data = { ...operationSummary(operation), recorded_on_server: remote !== null };

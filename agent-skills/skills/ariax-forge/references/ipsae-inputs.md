@@ -31,7 +31,7 @@ The standalone `ipsae` tool does not provide Protenix, RF3, OpenDDE, or OpenFold
 
 ## Check the recorded handoff
 
-Use the [preflight helper](../scripts/ipsae-preflight.py) with a local JSON
+Use the preflight helper (`ipsae-preflight.py`) with a local JSON
 record. Its format belongs to this helper and is neither native ipSAE input
 nor a Forge API body. Resolve its installed path through reference
 `ipsae-preflight`. File paths are relative to the record. Supply `run_id`,

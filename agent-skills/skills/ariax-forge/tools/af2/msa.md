@@ -91,7 +91,7 @@ large MSA databases or public/private sequence caches into shared model
 assets. Save campaign alignments in the project, flush them and
 explicitly reuse them after restoration.
 
-The [service runner](../examples/af2/run_services.sh) takes one selected
+The service runner (`run_services.sh`) takes one selected
 case (`monomer`, `unpaired`, `paired`, `unpaired_paired`) and an explicit
 stage (`search` or `predict`). Upload its fixture, matching manifest,
 `af2_features.py`, `af2_outputs.py` and `af2_handoff.py`. Run searches serially

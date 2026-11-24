@@ -54,7 +54,7 @@ billing and closure, and [file synchronization instructions](../../outputs.md) t
 outputs. Run scientific helpers and native commands inside the Forge session
 with the required image dependencies.
 
-The separate [`science/`](science/) directory contains synthetic preflight and
+The separate `science/` directory contains synthetic preflight and
 mapping cases plus a toy affinity output. Locate it with `data.examples.science`
 in the complete index and read [scientific checks](../../references/science-checks.md)
 through reference `science-checks`. These cases establish format constraints

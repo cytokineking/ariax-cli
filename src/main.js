@@ -14,7 +14,7 @@ import {
 } from './config.js';
 import { createCredentialStore } from './credentials.js';
 import { ConnectivityError, createClient } from './http.js';
-import { printData, printJson, printProgress } from './output.js';
+import { parseFieldsOption, printData, printJson, printProgress, setOutputFields } from './output.js';
 import { EXIT } from './exit-codes.js';
 import {
   automaticUpdateNotice,
@@ -47,8 +47,10 @@ import * as gpuPreferences from './commands/gpu-preferences.js';
 import * as inputs from './commands/inputs.js';
 import * as feedback from './commands/feedback.js';
 import * as forge from './commands/forge.js';
+import * as discover from './commands/discover.js';
 
 const COMMANDS = {
+  discover,
   me, protocols, pricing, schema, validate, submit,
   projects, jobs, status, logs, pause, restart, abort, results, upgrade,
   login, logout,
@@ -60,14 +62,15 @@ const COMMANDS = {
 // Validate the command surface before config, credential access, or any command work.
 // Value/content validation remains with each command.
 const COMMAND_OPTIONS = {
+  discover: [['query', 'task', 'modality', 'execution', 'all'], 0],
   me: [[], 0],
   protocols: [[], 0],
   pricing: [[], 0],
-  schema: [['raw', 'kind', 'output', 'o'], 1],
-  skills: [['read', 'reference', 'tool'], 1],
+  schema: [['raw', 'kind', 'output', 'o', 'details'], 1],
+  skills: [['read', 'reference', 'tool', 'paths', 'details'], 1],
   validate: [['file', 'f', 'input', 'input-dir', 'details'], 0],
   submit: [['file', 'f', 'name', 'input', 'input-dir', 'input-upload-intent-id', 'wait', 'resume', 'poll-interval', 'wait-timeout', 'details'], 0],
-  projects: [['status', 'protocol', 'name', 'limit', 'cursor', 'all'], 0],
+  projects: [['status', 'protocol', 'name', 'limit', 'cursor', 'all', 'details'], 0],
   jobs: [['project', 'status', 'limit', 'cursor', 'all'], 0],
   status: [['wait', 'resume', 'poll-interval', 'wait-timeout', 'details'], 1],
   logs: [['tail', 'log-ref', 'list'], 1],
@@ -95,6 +98,14 @@ function validateCommandArguments({ command, positionals, flags }) {
     options = [['output'], 2];
     label = 'projects export';
   }
+  if (command === 'skills' && positionals[0] === 'install') {
+    options = [['target', 'scope', 'dry-run', 'yes'], 1];
+    label = 'skills install';
+  }
+  if (command === 'skills' && positionals[0] === 'status') {
+    options = [['target', 'scope'], 1];
+    label = 'skills status';
+  }
   if (command === 'inputs') {
     const action = positionals[0];
     if (!['inspect', 'prepare'].includes(action)) {
@@ -114,7 +125,14 @@ function validateCommandArguments({ command, positionals, flags }) {
 }
 
 /** Commands that work without an API key. Credentials are never sent for them. */
-const PUBLIC_COMMANDS = new Set(['protocols', 'pricing', 'schema', 'skills', 'upgrade', 'login', 'logout', 'inputs']);
+const PUBLIC_COMMANDS = new Set(['discover', 'protocols', 'pricing', 'schema', 'skills', 'upgrade', 'login', 'logout', 'inputs']);
+
+/** Whether an invocation runs unauthenticated without requiring an API key. */
+export function isPublicInvocation(command, positionals = []) {
+  if (PUBLIC_COMMANDS.has(command)) return true;
+  if (command === 'forge' && positionals[0] === 'catalog') return true;
+  return false;
+}
 
 export function packageVersion() {
   return buildInfo().version;
@@ -194,18 +212,19 @@ function reportError(err, jsonMode, authContext) {
 }
 
 const HELP_TOPICS = {
+  discover: 'ariax discover [--query TEXT] [--task TASK] [--modality MODALITY] [--execution managed|forge|all] [--all]',
   forge: forge.help,
   me: 'ariax me',
   protocols: 'ariax protocols',
   pricing: 'ariax pricing',
-  schema: 'ariax schema <protocol> [--raw] [--kind job|submission] [-o, --output FILE]',
-  skills: 'ariax skills [protocol|forge] [--read] [--reference NAME] [--tool GUIDE_ID]\nUse --tool with forge to discover one guide and its references/examples; omit it for the full index.',
+  schema: 'ariax schema <protocol> [--raw] [--details] [--kind job|submission] [-o, --output FILE]',
+  skills: 'ariax skills [protocol|forge] [--read] [--reference NAME] [--tool GUIDE_ID] [--paths] | ariax skills install [--target claude|codex|cursor|antigravity|all] [--scope user|project] [--dry-run] [--yes] | ariax skills status',
   inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
   validate: 'ariax validate -f job.json [--input FILE | --input-dir DIR] [--details]',
   submit: 'ariax submit -f job.json --name <name> [--input FILE | --input-dir DIR] [--wait] [--details]',
   operations: 'ariax operations [operation-id]',
   recover: 'ariax recover <operation-id> [--wait]',
-  projects: 'ariax projects [--status s] [--protocol p] [--name n] [--limit N] [--cursor C] [--all] | ariax projects export <project-id> [-o, --output job.json]',
+  projects: 'ariax projects [--status s] [--protocol p] [--name n] [--limit N] [--cursor C] [--all] [--details] | ariax projects export <project-id> [-o, --output job.json]',
   jobs: 'ariax jobs [--project <id>] [--status s] [--limit N] [--cursor C] [--all]',
   status: 'ariax status <project-id> [--wait] [--resume] [--details]',
   logs: 'ariax logs <job-id> [--list | [--tail N] [--log-ref PATH]]',
@@ -226,7 +245,7 @@ function printHelp(topic) {
   if (topic && HELP_TOPICS[topic]) {
     printData(`usage: ${HELP_TOPICS[topic]}`);
     printData('');
-    printData('Global flags: --json, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --timeout <ms>');
+    printData('Global flags: --json, --fields <paths>, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --timeout <ms>');
     if (topic === 'forge') printData('Forge local waits use --wait-timeout SECONDS; --timeout-seconds limits remote execution. For legacy tools wait/watch/sync, --timeout also means local seconds.');
     return;
   }
@@ -239,9 +258,10 @@ function printHelp(topic) {
   printData('');
   printData('Global flags:');
   printData('  --json / --no-json      Force JSON or human output (default: JSON when piped)');
+  printData('  --fields <a,b.c>        Project JSON output to specific dot-path fields');
   printData('  --base-url <url>        API base URL (default: https://www.ariax.bio)');
   printData('  --allow-custom-origin   Permit API-key use with a non-Ariax HTTPS origin');
-  printData('  --root-dir <dir>        Resume-state directory (default: cwd)');
+  printData('  --root-dir <dir>        Resume-state directory (default: OS state dir)');
   printData('  --timeout <ms>          Per-request timeout (default: 30000)');
   printData('  -h, --help              Show help (optionally: ariax help <command>)');
   printData('  --version               Show version');
@@ -341,6 +361,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   const fetchImpl = runtime.fetchImpl ?? globalThis.fetch;
   const credentialStore = runtime.credentialStore ?? createCredentialStore();
 
+  let outputFields = null;
+  if (globals.fields !== undefined) {
+    try {
+      outputFields = parseFieldsOption(globals.fields);
+    } catch (err) {
+      return reportError(err, jsonMode);
+    }
+  }
+
   let timeoutMs = 30_000;
   if (globals.timeout !== undefined) {
     timeoutMs = Number(globals.timeout);
@@ -349,7 +378,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     }
   }
 
-  const authenticated = !PUBLIC_COMMANDS.has(command);
+  const authenticated = !isPublicInvocation(command, positionals);
   if (authenticated) {
     if (!config.apiKey && supportsStoredCredentials(config.baseUrl)) {
       try {
@@ -398,14 +427,21 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     }
   }
 
-  const updateNoticePromise = shouldRunAutomaticUpdateCheck({
-    command,
-    jsonMode,
-    env,
-    interactive,
-  })
-    ? automaticUpdateNotice({ currentVersion, currentChannel: currentBuild.channel, currentRevision: currentBuild.source_revision, fetchImpl })
-    : Promise.resolve(null);
+  // Report to agents during long waits. Defer terminal notices until prompts have finished.
+  const pendingTerminalNotice = shouldRunAutomaticUpdateCheck({ command, jsonMode, env, interactive })
+    ? automaticUpdateNotice({
+      currentVersion,
+      currentChannel: currentBuild.channel,
+      currentRevision: currentBuild.source_revision,
+      fetchImpl,
+      env,
+    }).then((notice) => {
+      if (!notice) return;
+      const message = formatUpdateNotice(notice, env);
+      if (interactive && !jsonMode) return message;
+      printProgress(message);
+    })
+    : undefined;
 
   const client = createClient({
     baseUrl: config.baseUrl,
@@ -440,11 +476,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     interactive,
   };
   try {
+    setOutputFields(outputFields);
     await COMMANDS[command].run(ctx);
-    const notice = await updateNoticePromise;
-    if (notice) printProgress(formatUpdateNotice(notice));
     return EXIT.OK;
   } catch (err) {
+    setOutputFields(null);
     return reportError(err, jsonMode, { command, positionals, apiKeySource: config.apiKeySource });
+  } finally {
+    setOutputFields(null);
+    const message = await pendingTerminalNotice;
+    if (message) printProgress(message);
   }
 }

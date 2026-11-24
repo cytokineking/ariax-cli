@@ -35,7 +35,7 @@ structure-only requests. Forge prepares this directory before readiness;
 commands use the existing mount, without per-command asset inspections.
 A missing asset/read-only-write error is a preparation failure to report.
 
-The [example YAML](examples/boltz2/complex.yaml) has protein A `AGSTAGST` and
+The example YAML (`complex.yaml`) has protein A `AGSTAGST` and
 protein B `GSTAGSTA`, each with `msa: empty`. It does not contact an MSA server
 and requests no affinity property. These short sequences are synthetic, not
 validated binders. For real work establish the user's exact constructs,
@@ -90,7 +90,7 @@ ariax forge run "$SESSION" --tool boltz2 --timeout-seconds 60 --json -- python3 
 ariax forge watch "$SESSION" "$CHECK_COMMAND_ID" --timeout 120 --json
 ```
 
-The [checker](examples/boltz2/check.py) parses the actual CIF, requires chains
+The checker (`check.py`) parses the actual CIF, requires chains
 A/B with the requested sequences and finite coordinates, checks finite
 confidence fields on 0–1, and requires finite nonnegative PAE shape 16×16
 and pLDDT shape 16 on 0–1. This protein-only case has one token per residue.

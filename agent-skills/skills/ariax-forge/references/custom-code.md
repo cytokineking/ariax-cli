@@ -45,7 +45,7 @@ An observed `pip freeze --all` is useful context; review image packages and
 scratch path entries before using it as reinstall input. Source metadata
 describes that saved checkout; arbitrary argv can run other code.
 
-[source_bundle.py](../tools/custom-code/source_bundle.py) saves tracked and
+`../tools/custom-code/source_bundle.py` saves tracked and
 nonignored untracked files, with local edits, deletions and internal relative
 symlinks. It excludes `.git`, ignored files and empty directories. Track an
 essential ignored source file explicitly. Archive submodules separately.
@@ -175,8 +175,8 @@ native options and requested-versus-produced counts with the outputs. Keep
 shipped installations and shared model assets read-only. Each new prediction
 needs a fresh workspace output directory.
 
-The [Boltz source preparation](../tools/examples/custom-code/native/prepare_boltz.py)
-and [bootstrap](../tools/examples/custom-code/native/bootstrap_boltz.py) scripts
+The Boltz source preparation (`prepare_boltz.py`)
+and bootstrap (`bootstrap_boltz.py`) scripts
 illustrate Boltz v2.2.1 source at commit
 `cb04aeccdd480fd4db707f0bbafde538397fa2ac` with the named `boltz2` asset at
 `/models/boltz2`. The bootstrap expects Torch `2.9.0+cu128` and compatible

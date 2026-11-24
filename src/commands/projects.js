@@ -5,6 +5,39 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveProjectId } from '../resolve.js';
 
+const PROJECT_SUMMARY_KEYS = [
+  'id',
+  'name',
+  'protocol',
+  'status',
+  'created_at',
+  'updated_at',
+  'completed_at',
+  'latest_job_id',
+  'job_count',
+  'design_count_source',
+  'tested_designs',
+  'accepted_designs',
+  'total_runtime_seconds',
+  'total_cost_usd',
+  'project_url',
+];
+
+function compactProjectRow(p) {
+  if (!p || typeof p !== 'object') return p;
+  const out = {};
+  for (const key of PROJECT_SUMMARY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(p, key)) out[key] = p[key];
+  }
+  if (out.protocol === undefined && p.protocol_id !== undefined) out.protocol = p.protocol_id;
+  if (out.status === undefined && p.state !== undefined) out.status = p.state;
+  if (out.job_count === undefined && Array.isArray(p.jobs)) out.job_count = p.jobs.length;
+  if (out.latest_job_id === undefined && Array.isArray(p.jobs) && p.jobs.length) {
+    out.latest_job_id = p.jobs[0]?.id ?? null;
+  }
+  return out;
+}
+
 /** @param {{ client: any, flags: Record<string, any>, json: boolean }} ctx */
 export async function run(ctx) {
   const { flags } = ctx;
@@ -25,7 +58,7 @@ export async function run(ctx) {
     return;
   }
   if (ctx.positionals?.length) throw usageError('projects: unknown subcommand. Use projects export <project-id> or projects with list filters.');
-  for (const key of Object.keys(flags)) if (!['status', 'protocol', 'name', 'limit', 'cursor', 'all'].includes(key)) throw usageError(`projects: unknown flag --${key}.`);
+  for (const key of Object.keys(flags)) if (!['status', 'protocol', 'name', 'limit', 'cursor', 'all', 'details'].includes(key)) throw usageError(`projects: unknown flag --${key}.`);
   let limit;
   if (flags.limit !== undefined) {
     limit = Number(flags.limit);
@@ -33,12 +66,14 @@ export async function run(ctx) {
       throw usageError(`projects: --limit must be an integer 1..100 (got "${flags.limit}").`);
     }
   }
+  const view = flags.details === true ? 'full' : 'summary';
   const baseQuery = {
     status: flags.status,
     protocol: flags.protocol,
     name: flags.name,
     limit,
     cursor: flags.cursor,
+    view,
   };
   const items = [];
   let cursor = flags.cursor;
@@ -55,17 +90,18 @@ export async function run(ctx) {
     cursor = typeof next === 'string' && next ? next : undefined;
     if (flags.all !== true || !cursor) break;
   }
+  const presented = view === 'summary' ? items.map(compactProjectRow) : items;
   if (ctx.json) {
-    printJson({ data: { projects: items }, meta: cursor ? { next_cursor: cursor } : meta, request_id: requestId });
+    printJson({ data: { projects: presented }, meta: cursor ? { ...meta, view, next_cursor: cursor } : { ...meta, view }, request_id: requestId });
     return;
   }
-  if (items.length === 0) {
+  if (presented.length === 0) {
     printData('No projects found.');
     return;
   }
   printTable(
     ['id', 'name', 'protocol', 'status'],
-    items.map((p) => [p.id ?? '-', p.name ?? '-', p.protocol ?? p.protocol_id ?? '-', p.status ?? p.state ?? '-']),
+    presented.map((p) => [p.id ?? '-', p.name ?? '-', p.protocol ?? p.protocol_id ?? '-', p.status ?? p.state ?? '-']),
   );
   if (cursor) printProgress(`More results available — re-run with --cursor ${cursor} (or --all).`);
 }

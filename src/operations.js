@@ -8,9 +8,23 @@ import { isUUID } from './uuid.js';
 import { ApiError } from './http.js';
 import { EXIT } from './exit-codes.js';
 import { printProgress } from './output.js';
+import { isManagedOperationTerminal, pruneExpiredRecords } from './state-dir.js';
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // claim_agent_idempotency retention
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+function existingDirectory(rootDir) {
+  let dir = path.resolve(rootDir);
+  for (const name of ['.ariax', 'operations']) {
+    dir = path.join(dir, name);
+    let stat;
+    try { stat = fs.lstatSync(dir); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw usageError('Operation storage must use real directories, not symlinks.');
+    }
+  }
+  return dir;
+}
 
 function directory(rootDir) {
   let dir = path.resolve(rootDir);
@@ -129,11 +143,11 @@ export function createOperation(ctx, { action, request, account, sources = [], p
   };
   if (preparedBytes !== undefined) atomicWrite(path.join(path.dirname(file), `${id}.input`), preparedBytes, true);
   atomicWrite(file, JSON.stringify(record, null, 2) + '\n', true);
+  pruneExpiredRecords(path.dirname(file), { isTerminal: isManagedOperationTerminal });
   return record;
 }
 
-export function loadOperation(rootDir, id) {
-  const file = operationPath(rootDir, id);
+function loadOperationFromFile(file, id) {
   let record;
   try { record = JSON.parse(readRegular(file)); }
   catch (error) { throw usageError(`Cannot read operation ${id}: ${error.message}. The record was left unchanged.`); }
@@ -163,15 +177,50 @@ export function loadOperation(rootDir, id) {
   return record;
 }
 
-export function listOperations(rootDir) {
-  return fs.readdirSync(directory(rootDir)).filter((name) => /^[0-9a-f-]{36}\.json$/i.test(name))
-    .map((name) => loadOperation(rootDir, name.slice(0, -5)));
+export function loadOperation(rootDir, id, { legacyRootDir } = {}) {
+  if (!isUUID(id)) throw usageError('Operation ID must be a UUID from ariax operations.');
+  const primaryDir = existingDirectory(rootDir);
+  if (primaryDir) {
+    const primaryFile = path.join(primaryDir, `${id}.json`);
+    if (fs.existsSync(primaryFile)) return loadOperationFromFile(primaryFile, id);
+  }
+  if (legacyRootDir && path.resolve(legacyRootDir) !== path.resolve(rootDir)) {
+    const legacyDir = existingDirectory(legacyRootDir);
+    if (legacyDir) {
+      const legacyFile = path.join(legacyDir, `${id}.json`);
+      if (fs.existsSync(legacyFile)) return loadOperationFromFile(legacyFile, id);
+    }
+  }
+  const file = primaryDir ? path.join(primaryDir, `${id}.json`) : path.join(path.resolve(rootDir), '.ariax', 'operations', `${id}.json`);
+  return loadOperationFromFile(file, id);
+}
+
+export function listOperations(rootDir, { legacyRootDir } = {}) {
+  const seen = new Set();
+  const operations = [];
+  const roots = [rootDir];
+  if (legacyRootDir && path.resolve(legacyRootDir) !== path.resolve(rootDir)) roots.push(legacyRootDir);
+  for (const root of roots) {
+    const dir = existingDirectory(root);
+    if (!dir) continue;
+    for (const name of fs.readdirSync(dir).filter((entry) => /^[0-9a-f-]{36}\.json$/i.test(entry)).sort()) {
+      const id = name.slice(0, -5);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      operations.push(loadOperationFromFile(path.join(dir, name), id));
+    }
+  }
+  return operations;
 }
 
 export function updateOperation(ctx, operation, patch) {
   const next = { ...operation, ...patch, updated_at: new Date().toISOString() };
-  atomicWrite(operationPath(ctx.config.rootDir, operation.id), JSON.stringify(next, null, 2) + '\n');
+  const file = operationPath(ctx.config.rootDir, operation.id);
+  atomicWrite(file, JSON.stringify(next, null, 2) + '\n');
   Object.assign(operation, next);
+  if (isManagedOperationTerminal(next)) {
+    pruneExpiredRecords(path.dirname(file), { isTerminal: isManagedOperationTerminal });
+  }
   return operation;
 }
 
@@ -199,15 +248,30 @@ export function verifyReplayInputs(ctx, operation) {
       throw usageError('Operation source files changed. Restore the original files to recover, or submit changed inputs as a new operation.');
     }
   }
+  function readSnapshot(filename) {
+    const primaryDir = existingDirectory(ctx.config.rootDir);
+    if (primaryDir) {
+      const candidate = path.join(primaryDir, filename);
+      if (fs.existsSync(candidate)) return readRegular(candidate);
+    }
+    if (ctx.config.legacyRootDir && path.resolve(ctx.config.legacyRootDir) !== path.resolve(ctx.config.rootDir)) {
+      const legacyDir = existingDirectory(ctx.config.legacyRootDir);
+      if (legacyDir) {
+        const candidate = path.join(legacyDir, filename);
+        if (fs.existsSync(candidate)) return readRegular(candidate);
+      }
+    }
+    return readRegular(path.join(directory(ctx.config.rootDir), filename));
+  }
   if (operation.prepared_input) {
     const prepared = operation.prepared_input;
     if (prepared.filename !== `${operation.id}.input`
-        || sha256(readRegular(path.join(directory(ctx.config.rootDir), prepared.filename))) !== prepared.sha256) {
+        || sha256(readSnapshot(prepared.filename)) !== prepared.sha256) {
       throw usageError('Prepared input changed or is corrupt. No mutation was sent.');
     }
   }
   for (const prepared of operation.prepared_inputs ?? []) {
-    const bytes = readRegular(path.join(directory(ctx.config.rootDir), prepared.snapshot));
+    const bytes = readSnapshot(prepared.snapshot);
     if (bytes.length !== prepared.bytes || sha256(bytes) !== prepared.sha256) {
       throw usageError('Prepared input bundle changed or is corrupt. No mutation was sent.');
     }

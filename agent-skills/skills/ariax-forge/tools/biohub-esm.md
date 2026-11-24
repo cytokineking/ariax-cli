@@ -38,7 +38,7 @@ must exactly match the chain sequence. The adapter reads the supplied A3M;
 it does not contact an MSA server. Paired alignments, MSA generation, DNA/RNA,
 ligands, modifications and design optimization are outside this adapter.
 
-[Pair CSV](examples/biohub-esm/pairs.csv) uses exact columns
+Pair CSV (`pairs.csv`) uses exact columns
 `binder_name,binder_sequence,target_name,target_sequence`, with optional
 `decoy_name,decoy_sequence,decoy2_name,decoy2_sequence,...`. Each row/partner
 slot is an independent complex: chain A is the binder and chain B is its
@@ -88,7 +88,7 @@ this small example. For full ESMFold2, select
 and `target.a3m` under the same input directory to exercise its MSA case.
 
 ESMC examples, after selecting the matching tool and uploading
-[sequences.fasta](examples/biohub-esm/sequences.fasta):
+`examples/biohub-esm/sequences.fasta`:
 
 ```sh
 ariax forge run "$SESSION" --tool esmc-300m --gpus 0 --timeout-seconds 3600 --json -- biohub-esm esmc --model esmc-300m --mode embeddings --input /inputs/biohub-esm/sequences.fasta --output /workspace/biohub-esm/esmc-300m-embeddings
@@ -208,8 +208,8 @@ The [ESMC continuation example](biohub-esm/esmc-capacity.md#explicit-continuatio
 uses the eight-item hidden-state batch and the same explicit resume contract.
 
 The adapter handles Docker SIGTERM and retains unfinished attempt records.
-The [larger pair fixture](examples/biohub-esm/pairs-interrupt.csv) and
-[layer-state fixture](examples/biohub-esm/sequences-interrupt.fasta) are
+The larger pair fixture (`pairs-interrupt.csv`) and
+layer-state fixture (`sequences-interrupt.fasta`) are
 interruption examples without a biological accuracy claim.
 
 Use [saved results](../outputs.md) for current project `forge link` paths,

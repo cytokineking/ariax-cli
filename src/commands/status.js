@@ -12,7 +12,7 @@ export async function run(ctx) {
   const { flags } = ctx;
   let operand = ctx.positionals[0];
   if (flags.resume === true && !operand) {
-    const saved = await loadResume(ctx.config.rootDir);
+    const saved = await loadResume(ctx.config.rootDir, { legacyRootDir: ctx.config.legacyRootDir });
     if (!saved || !saved.projectId) {
       throw usageError('status: --resume found no saved wait state.');
     }

@@ -1,194 +1,77 @@
-# Forge inputs, current files, and resume
+# Forge outputs, file operations, and resume
 
-Read this reference with `ariax skills forge --reference outputs --read --json`
-(alias `ariax-forge`). [Base](tools/base.md), [ipSAE](tools/ipsae.md),
-[Boltz2](tools/boltz2.md), [BindCraft2](tools/bindcraft2.md) and
-[FreeBindCraft](tools/freebindcraft.md) cover native inputs, commands and output
-checks. Use `ariax skills forge --tool GUIDE --json` to locate the selected guide's
-references and bundled examples. The [tool index](tools/capabilities/matrix.md)
-compares methods. Use the selected guide's source/model/settings and
-requested-versus-produced item checks before interpreting native outputs.
+Read this guide with `ariax skills forge --reference outputs --read --json`.
+Browse tools in the [tool index](tools/capabilities/matrix.md); for lost
+responses, human holds, revision conflicts, `files recover`, and recursive
+deletion fencing/recovery, see [Forge recovery](references/recovery.md).
 
 ## Interpret native results
 
-Read command state, native stage records and saved scientific artifacts together.
-A succeeded command can contain failed items, missing samples, or zero designs
-passing the original filters. Retain partial stages, original rejection reasons,
-unavailable metrics and exact settings. A ranked or exported candidate can still
-be rejected. Report planned, attempted, completed and accepted counts separately.
+Read command state, native stage records, and saved scientific artifacts
+together. Exit `0` can still contain failed items, missing samples, or zero
+designs passing native filters. Report planned, attempted, completed, and
+accepted counts separately, preserving rejection reasons and unavailable metrics.
 
 | Result family | Interpretation boundary |
 | --- | --- |
-| AF2, Boltz-2, RF3, Protenix, Biohub ESMFold2, OpenDDE, OpenFold3 | Pair structure, raw confidence, native token/atom map, model, seed and sample/rank from one attempt. pLDDT scales differ by writer; PAE axes may include atomized chemicals and remain directional. Use each guide's units and chain map. Plain AF2 monomer lacks PAE/pTM; absent monomer interfaces remain unavailable or native zero as documented. |
-| Interface scores / ipSAE | Use an admitted predictor adapter and the selected standard-protein residue map. Missing or split-token inputs can leave metrics unavailable. Preserve directional scores and original predictor summaries. |
-| MPNN / FAMPNN / JMS / ESMC | Likelihood scores, logits, masked protocol outputs and learned stability estimates have separate conditioning and units. FAMPNN PDB B-factors are PSCE, not pLDDT. JMS half-mask and complete-constituent requirements cannot be filled by ESMFold2/ESMC. |
-| Foundry / Proteina-Complexa | Generated sequence, coordinates, input chemistry and output topology are distinct evidence. Preserve fixed-atom misses, unavailable generated bonds and predictor sentinel rewards. RF3 `chain_ptm` at the shipped source is mean chain pLDDT. |
-| BoltzGen / BindCraft2 / FreeBindCraft / RFantibody | Keep generation, sequence design, complex refold, binder-only prediction, relaxation and selection stages distinct. Unreached stages stay absent; FreeBindCraft's OpenMM placeholder fields are uncomputed. RFantibody confidence uses T/H/L order while its PDB uses H/L/T. |
-| Absolute stability / structure tools | DG_AB estimates full-complex stability. Ensemble spread is model disagreement. RMSD/TM-score, SASA, geometry overlaps and explicitly configured relaxation energy describe different quantities. |
+| AF2, Boltz-2, RF3, Protenix, Biohub ESMFold2, OpenDDE, OpenFold3 | Pair structure, raw confidence, native token/atom map, model, seed, and sample/rank from one attempt. pLDDT scales differ by writer; PAE axes may include atomized chemicals and remain directional. Plain AF2 monomer lacks PAE/pTM. |
+| Interface scores / ipSAE | Use an admitted predictor adapter and standard-protein residue map. Missing or split-token inputs leave metrics unavailable. Preserve directional scores and original predictor summaries. |
+| MPNN / FAMPNN / JMS / ESMC | Likelihoods, logits, masked outputs, and stability estimates have separate conditioning and units. FAMPNN PDB B-factors are PSCE, not pLDDT. JMS constituents cannot be substituted with ESMFold2/ESMC. |
+| Foundry / Proteina-Complexa | Generated sequence, coordinates, input chemistry, and topology are distinct evidence. Preserve fixed-atom misses and sentinel rewards. RF3 `chain_ptm` at shipped source is mean chain pLDDT. |
+| BoltzGen / BindCraft2 / FreeBindCraft / RFantibody | Keep generation, sequence design, complex refold, binder-only refold, relaxation, and selection distinct. FreeBindCraft OpenMM placeholder fields are uncomputed. RFantibody arrays use T/H/L while PDBs use H/L/T. |
+| Absolute stability / structure tools | `DG_AB` estimates full-complex stability; ensemble spread is model disagreement. RMSD/TM-score, SASA, overlaps, and relaxation energies are distinct quantities. |
 
-Computational confidence, ranking and consistent exports establish their stated
-computational result. They do not establish experimental binding, specificity,
-expression or affinity. Use [shared interpretation](../../core/interpretation.md)
-and the package's result reference for a scientifically valid comparison.
+Computational confidence and rank do not establish wet-lab binding, affinity, or
+specificity (see [shared interpretation](../../core/interpretation.md)).
 
-## Save and inspect files
+## Workspace files, sync, download & links
 
-Write native outputs under `/workspace`. `/scratch` is disposable and `/inputs`
-contains read-only staged inputs. The project has one current saved workspace.
-Use the session's `project_id` for file operations and its `session_id` for sync.
+Write durable files under `/workspace`; `/scratch` is disposable and `/inputs`
+is read-only. Limits: 20 GiB per file, 1 TiB and 1M entries per project
+(including paths omitted from selective `--hydrate`).
 
 ```sh
-ariax forge inputs add SESSION --file target.yaml --path targets/target.yaml --json
-ariax forge inputs add SESSION --artifact PROJECT_ID:output/result.cif --path structures/result.cif --json
-ariax forge inputs add SESSION --url 'https://example.org/target.fasta' --path target.fasta --json
-ariax forge inputs list SESSION --json
-ariax forge inputs status SESSION INPUT_ID --json
-ariax forge run SESSION --tool base -- python3 -c 'from pathlib import Path; Path("result.txt").write_text(Path("/inputs/target.fasta").read_text())'
-ariax forge sync SESSION --wait --wait-timeout 900 --json
-ariax forge files PROJECT --path /workspace --json
-ariax forge files PROJECT --path /workspace --cursor NEXT_CURSOR --json
-ariax forge files hydrate SESSION --path /workspace/result.txt --wait --json
-ariax forge files delete PROJECT --path /workspace/unneeded --recursive --wait --json
-ariax forge files recover PROJECT --path /workspace/copied.cif --catalog SOURCE_PROJECT:/workspace/original.cif --version VERSION --wait --json
-ariax forge files recover PROJECT --path /workspace/old.cif --archive SOURCE_PROJECT:CHECKPOINT_ID:/workspace/old.cif --wait --json
-ariax forge files recover PROJECT --path /workspace/artifact.cif --artifact SOURCE_PROJECT:output/result.cif --wait --json
-ariax forge download PROJECT /workspace/result.txt --dest ./result.txt --json
-ariax forge link PROJECT /workspace/result.txt --json
+ariax forge inputs add SESSION --file target.yaml --path targets/target.yaml --json   # or --artifact PROJ:PATH / --url HTTPS
+ariax forge inputs status SESSION INPUT_ID --json                                     # wait for state=ready before forge run
+ariax forge sync SESSION --wait --wait-timeout 900 --json                             # flush changed /workspace files
+ariax forge files PROJECT --path /workspace --json                                    # paginated; follow next_cursor
+ariax forge files hydrate SESSION --path /workspace/result.txt --wait --json          # load a saved file into active session
+ariax forge files delete PROJECT --path /workspace/old --recursive --wait --json      # permanent (see references/recovery.md)
+ariax forge download PROJECT /workspace/result.txt --dest ./result.txt --json         # atomic + checksum-verified
+ariax forge link PROJECT /workspace/result.txt --json                                 # project-page URL (uncompressed <=10 MB PDB/CIF previews)
 ```
 
-Choose exactly one input source. Input `--path` is a relative POSIX file path;
-file operations use absolute `/workspace` or `/inputs` paths. Empty components,
-dot segments, traversal, control characters and backslashes are rejected. An
-input publishes after transfer completes and Ariax retains a durable copy.
-Completed input paths are immutable until explicitly deleted. Saved files are
-limited to 20 GiB each, with 1 TiB and one million file and directory entries
-per project. These limits include files omitted from a selective restore.
-Input transfers have a 900-second limit. Public URLs undergo network and
-redirect checks. Artifact imports require access to the source project.
+- **Inputs:** `--path` is relative to `/inputs` (commands read `/inputs/<path>`).
+  Completed input paths are immutable until deleted. Local multipart uploads
+  report `ready` only after daemon-backed workspace confirmation (not storage
+  publication alone).
+- **Sync:** flushes changed files (`saved`, `pending`, or `failed`); it is not
+  an atomic multi-file snapshot — stop writers when a coherent set is needed.
+- **Links & previews:** Links point to the current path (not a pinned historical
+  version). Only uncompressed `.pdb`/`.cif`/`.mmcif` ≤10 MB preview on the web
+  page; create an uncompressed copy on the VM if needed. Keep heavy
+  intermediates in `/scratch` or pack bulk directories into `/workspace/archives/`.
+- **Permanent deletions & server-side copies:** `files delete` permanently
+  removes saved paths without a trash copy (and `files recover` copies from
+  catalog versions, archives, or managed artifacts). See
+  [recovery, holds & deletions](references/recovery.md) for recursive-delete
+  fencing, `progress` vs `cleanup_remaining`, conflict preservation, and recovery.
 
-The CLI prints and saves `input_id` or `sync_id` before mutation. After a lost
-reply, use `ariax forge recover ID` with the original root directory, account
-and API origin. Accepted inputs and syncs are observed before submission. A
-local upload can resume from its unchanged source; an already published input
-does not require that source. When only retained input history is available,
-`recover` identifies its source in the response metadata; that history does not
-confirm installation in an active workspace. When an import has no saved
-successful result, repeat a URL input with its original URL and ID so the server
-can compare the source. Request records exclude URLs and transfer grants.
-
-`files recover` copies an authorized catalog version, archived checkpoint file,
-or managed-project artifact within storage. It records the source, destination,
-writer epoch and revisions before sending the operation; recover the same ID
-after uncertainty. An existing destination requires `--overwrite`. A published
-copy is `ready` only after active-workspace installation is confirmed; `saved`
-with `installation_status: not_applicable` means the copy is stored for a future
-workspace, not installed. Server-side copying does not pass file bytes through
-the CLI. Archive and managed-artifact sources are pinned to their observed
-storage ETag because their legacy metadata lacks the current-file checksum.
-
-`sync --wait` waits locally; `--wait-timeout SECONDS` or Ctrl-C leaves an accepted
-flush running. Inspect its returned state: `pending` or `queued` means
-unfinished, `saved` means the flush completed, and `failed` includes bounded
-file diagnostics. After resolving the cause, retry the same ID with `forge
-recover ID --wait` or `forge sync SESSION --sync-id ID --wait`. A final-save
-deadline failure cannot be reopened. A flush covers its changed files and is not an atomic multi-file
-snapshot; later changes can remain pending. Stop writers when a coherent set
-is required, and inspect synchronization failures. A successful scientific
-command alone does not prove its output is durable.
-
-Files lists one bounded page of immediate children of the current saved project
-namespace. Pass `next_cursor` as `--cursor` until it is absent; do not treat one
-page as a complete listing. The listing includes saved files omitted from a
-selective restore. Downloads require project access, stream through a private
-temporary file, and publish only after the declared byte count and multipart checksum match. Use a
-fresh destination path. Pages and file bytes can change while the project is
-active; neither a listing nor a link pins a historical version.
-
-`files delete` permanently removes the selected saved path and, with
-`--recursive`, its saved descendants; it does not create an archive or trash
-copy. It frees catalog file and byte capacity when the deletion is committed,
-while object cleanup proceeds separately. `--wait` also observes cleanup.
-Inspect `cleanup_state` for `complete`, `pending`, `attention`, or `unknown`.
-An accepted request can remain pending during session startup or shutdown.
-Recursive deletion is driven by the CLI: after an interruption, submitted
-batches may finish, but remaining paths require `ariax forge recover ID --wait`
-with the original operation ID, CLI root, account, and API origin. Recovery
-continues the deletion; it does not restore deleted files.
-
-A saved file changed locally before deletion reports a conflict and stays in
-place. If a running command replaces a file during removal, the replacement may
-be preserved at the reported `ariax-recovered-...` workspace path. Running
-commands can lose access to deleted files; pending input deletion can block new
-commands. Local directory removal waits for running commands to stop. Unsaved
-local entries can prevent recursive removal; delete those entries, then start a
-new deletion with a new operation ID.
+## Finish, close, resume & retained logs
 
 ```sh
-ariax forge finish SESSION --wait --json
-ariax forge status SESSION --json
-ariax forge project PROJECT --json
+ariax forge finish SESSION --wait --json       # drains commands + pre-stop flush + closes
+ariax forge status SESSION --json              # confirm state=closed
+ariax forge project PROJECT --json             # status, control.revision, session history
+ariax forge activity PROJECT --limit 50 --json # command & control timeline
+ariax forge logs SESSION COMMAND_ID --tail 1000 --retained --json
 ```
 
-Finish waits for accepted commands and a pre-stop flush within its fixed
-deadline, then requests normal closure. Check its `execution`, `drain`,
-`durability`, `release` and `termination` fields separately. `close` remains an
-immediate stop. Close stops writers and drains pending files within the existing 75-second
-maximum close opportunity. Compute release and file durability are separate
-outcomes: inspect synchronization errors and confirm `closed`. Abrupt VM loss
-can leave unsaved changes unavailable. Saved project files remain available
-after closure.
-
-An explicit CLI resume needs the observed control revision and confirmed
-prior-session cleanup. By default it loads the same project's current saved
-inputs and workspace files before commands are admitted. Repeat `--hydrate`
-with up to 64 absolute file or directory paths to load only those paths and
-their required parent directories. Omitted files remain saved and count toward
-the project limit. The selected files determine the restore's storage requirement.
-During a running session, `files hydrate SESSION --path PATH --wait` loads one
-additional saved file; it refuses to replace different local bytes. Retain its
-operation ID and use `ariax forge recover ID --wait` after an interruption.
-For a human hold, the project
-page's **Resume workspace** clears the hold and starts a same-project session;
-inspect and continue in that active session without allocating another or
-automatically replaying science. **Allow agent to resume later** clears the
-hold with compute stopped; await the user's direction before an authorized
-explicit resume. Restored custom source/bootstrap files require explicit
-environment recreation and a new command; resume never replays scientific
-commands.
-
-When no session is active and no hold blocks a new explicit CLI resume, use the
-current revision. After **Allow agent to resume later**, first await the user's
-direction. For an uncertain earlier request, recover its original ID, fields
-and revision instead of replacing it:
-
-```sh
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --control-revision N --max-gpu-hours 2 --json
-ariax forge resume PROJECT --session-id NEW_SESSION_UUID --gpu L40S --control-revision N --max-gpu-hours 2 --hydrate /inputs/target.yaml --hydrate /workspace/results --json
-```
-
-`link` authorizes the current regular file and returns a project-page URL with
-its encoded path. The link can show newer bytes if that path changes; it is not
-a historical version. Transfer grants remain private. Only uncompressed `.pdb`,
-`.cif` and `.mmcif` up to 10,000,000 bytes preview on the page. Create any uncompressed preview copy on the VM and flush it alongside the original.
-Download needed files locally with `ariax forge download`, and keep heavy
-intermediates in `/scratch` or pack bulk directories into archives under
-`/workspace/archives/` before syncing and finishing.
-Link rejection reports or partial-stage records when no accepted structure
-exists, and preserve the scientific provenance needed to interpret each file.
-
-```sh
-ariax forge activity PROJECT --limit 50 --json
-ariax forge activity PROJECT --cursor NEXT_CURSOR --json
-ariax forge command SESSION COMMAND_ID --json
-ariax forge logs SESSION COMMAND_ID --tail 1000 --json
-```
-
-Activity and command detail/output survive teardown. Output is retained within
-256 KiB UTF-8 and the requested 1–5000-line tail. `output_available=true` with
-empty `text` means captured empty output. False means unavailable; an omitted
-field remains unspecified. `output_complete=true` identifies a captured terminal
-tail and can coexist with `output_truncated=true`. A partial tail can remain
-readable with an `output_error` after final capture fails. Confirmed release can
-report `final_output_unavailable`. Read the fields together before interpreting
-missing output. Fuller useful logs belong in regular workspace files saved
-through project file synchronization. `output_files` currently returns an empty list.
+- Check `finish`'s `execution`, `drain`, `durability`, `release`, and
+  `termination` separately; `close` is an immediate stop (up to 75s drain).
+- `ariax forge resume PROJECT --gpu GPU [--hydrate PATH ...]` opens a new
+  allocation in the same project with its saved files (never replays commands;
+  recreate custom scratch environments explicitly per [custom code](references/custom-code.md)).
+- Retained command logs cap at 256 KiB UTF-8 / 1–5000 lines (`output_available`,
+  `output_complete`, `output_truncated`, `output_error`). Save full logs in
+  `/workspace` files when complete traces matter.

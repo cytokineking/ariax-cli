@@ -20,6 +20,7 @@ export const GLOBAL_FLAG_NAMES = new Set([
   'allow-custom-origin',
   'root-dir',
   'timeout',
+  'fields',
   'help',
   'version',
 ]);
@@ -56,6 +57,9 @@ const BOOLEAN_FLAGS = new Set([
   'read',
   'details',
   'compact',
+  'with-guide',
+  'paths',
+  'dry-run',
 ]);
 
 /**

@@ -1,42 +1,46 @@
 # Choose an execution model and engine
 
-Start with the scientific goal, inputs, modality and required stages. Preserve
-the user's chosen engine when the selected execution path supports the intended
-experiment. If several engines fit, compare their workflows and input needs;
-there is no universal best engine or comparable cross-engine score.
+Start with `ariax discover --query "<goal>" --json` (public, no auth required).
+Preserve an explicit user choice when the selected path supports the experiment.
+Cross-engine scores are not interchangeable; compare workflows, inputs, and live
+schemas rather than looking for a single universal score.
 
-Use a **managed project** when its live protocol schema supports the experiment.
-Ariax provisions compute, runs the defined stages, reports engine-specific
-progress and results, persists artifacts, and cleans up. Use **Forge** for a
-native command or a composed workflow: the agent plans commands,
-inputs, workspace checks, saves and session closure, while Ariax enforces
-access, isolation, billing and the resource lifecycle. A shared engine name does
-not make their settings or supported modes interchangeable.
+## 1. Managed vs. Forge boundary
 
-| Scientific need | Managed choice and tradeoff |
-| --- | --- |
-| AF2-guided miniprotein hallucination with an accepted-design target | BindCraft; explicit filter/preset selection and PyRosetta or FreeBindCraft scoring |
-| Native AF2-guided design across miniprotein, protein, peptide, VHH, scFv, Fab, ARP, oligomer, or multidomain formats | BindCraft2; accepted-design target, optional multi-state/detarget objectives, and modality-specific scaffolds |
-| Diffusion miniproteins with AF2-IG and Protenix evaluation | PXDesign Extended; full target sequence and stricter coordinate/register requirements |
-| ESMFold2 inversion with independent Protenix v2 validation | ESMFold2-pipeline; author-indexed partial structure conditioning, fixed production steps |
-| VHH design | BindCraft2, BoltzGen scaffold-based workflow, or ESMFold2 framework/CDR design; use the requested mechanism and framework policy |
-| scFv design | BindCraft2 two-chain variable-domain design or ESMFold2 paired framework/CDR design; neither choice implies a designed linker |
-| Linear alpha-helical peptide | BindCraft peptide presets; BoltzGen also supports linear peptide design |
-| Ordinary cyclic peptide | BindCraft2 or BoltzGen; compare design mechanism and inputs |
-| Stapled Helicon or miniprotein against one ligand | BoltzGen; each is a distinct hosted modality with its own inputs |
+| Task type | Execution model | Why |
+| --- | --- | --- |
+| Standard de novo binder design (miniprotein, linear/cyclic peptide, VHH, scFv, Fab, ARP, helicon, small-molecule binder) | **Managed first** | Turnkey provisioning, checkpointing, ranked outputs, artifact storage, and automatic teardown. |
+| Structure prediction, docking/affinity, inverse folding (MPNN/FAMPNN/Caliby), stability/ΔΔG, QC/ipSAE scoring, Foldseek/MMseqs2 search | **Forge only** | Dedicated native tools (`boltz2`, `protenix-models`, `af2`, `proteinmpnn`, `interface-scores`, `foldseek`, `mol1`, etc.). |
+| Custom multi-stage pipelines, custom scripts/checkpoints, native RFdiffusion4 (`rfd4`/`rfd4-antibody`), RFantibody, Genie3, or custom filters | **Forge** | Full control over stage order, `/workspace` files, custom Python, and multi-GPU worker placement. |
 
-Ordinary miniprotein design fits all five. Resolve only choices that matter to
-the experiment: design mechanism, modality, scoring/filter policy, target
-context, campaign size, and compute authorization. Do not infer a large screen
-or Turbo merely from “find a good binder.”
+## 2. Managed protocol decision matrix
 
-Consider the [Forge guide](../skills/ariax-forge/SKILL.md) for native settings,
-additional tools or a custom sequence of stages. Use
-[capability discovery](../skills/ariax-forge/tools/capabilities.md) to select
-the exact live tool/model/mode and read its guide. Upstream options may exceed
-the supported managed or native contract.
+| Protocol | Default / best fit | Modalities | Key constraints & notes |
+| --- | --- | --- | --- |
+| **`bindcraft2`** | **Default** for most protein, peptide, multi-target, and scaffold binder campaigns | `miniprotein`, `protein`, `peptide`, `cyclic-peptide`, `vhh`, `scfv`, `fab`, `arp`, `homo_oligomer`, `multidomain` | PDB/mmCIF primary target (up to 8 targets including FASTA secondary/detarget); author numbering; hotspots/coldspots; multi-state/detargeting; AF2 + MPNN. |
+| **`boltzgen`** | **Default** for VHH/nanobody CDRs, small-molecule targets, and stapled helicons | `vhh`, `miniprotein-small-molecule`, `helicon`, `cyclic-peptide`, `peptide`, `miniprotein` | Canonical 1-based / mmCIF `label_seq_id` rules; SMILES or CCD ligand; requires `--input` for structure-backed runs; all-atom diffusion + refolding. |
+| **`pxdesign`** | Diffusion miniproteins with dual AF2-IG + Protenix validation | `miniprotein` only | Extended pipeline only; rejects gapped PDBs (use canonical mmCIF); excludes Blackwell & `RTX6000PRO`. |
+| **`esmfold2-pipeline`** | ESMFold2 inversion + mandatory Protenix v2 validation; bundled VHH/scFv frameworks | `miniprotein`, `vhh`, `scfv` | Fixed 150 steps; requires ≥80 GB VRAM (`H100`/`A100_80GB`/`RTX6000PRO`); scFv targets <400 aa recommended. |
+| **`bindcraft-v1.5`** | Classic AF2 hallucination (use when explicitly requested; prefer `bindcraft2` for new campaigns) | `miniprotein`, `peptide` (linear) | PDB input only; single target; explicit `use_pyrosetta: false` (FreeBindCraft) or licensed PyRosetta. |
 
-Use [campaign planning](campaigns.md) for pilot sizing, scaling and compute
-tradeoffs. Check `ariax pricing --json`, memory requirements and supported
-parallel execution against the user's budget, deadline and saved preferences.
-When runtime is unknown, plan a bounded pilot and review point.
+Resolve only choices that affect the experiment: modality, target register/context,
+filter/scoring policy, campaign size, and compute authorization. Do not infer a
+large screen or Turbo from "find a good binder."
+
+## 3. Forge capability routing
+
+Use live public discovery to narrow Forge tools and read a guide in one call:
+
+```sh
+ariax discover --query "<goal>" --execution forge --json
+ariax forge catalog --task binder-design --json
+ariax forge catalog --tool TOOL --with-guide --json
+```
+
+Key native routes beyond managed protocols:
+- **VHH / antibody generation:** [RFd4 antibody checkpoint](../skills/ariax-forge/tools/rfd4-antibody.md) for native VHH sequence + structure generation; [RFantibody](../skills/ariax-forge/tools/rfantibody.md) for paired VH/VL or VHH CDR loops; [IgDesign](../skills/ariax-forge/tools/igdesign.md) for CDR redesign; [Antibody QC](../skills/ariax-forge/tools/antibody-qc.md) and [ImmuneBuilder](../skills/ariax-forge/tools/immunebuilder.md).
+- **All-atom design & scaffolding:** [RFd4](../skills/ariax-forge/tools/rfd4.md), [Foundry (RFD3/RF3)](../skills/ariax-forge/tools/foundry.md), [Genie3](../skills/ariax-forge/tools/genie3.md), [Proteina-Complexa](../skills/ariax-forge/tools/proteina-complexa.md).
+- **Prediction, sequence design & scoring:** see the [Forge tool index](../skills/ariax-forge/tools/capabilities/matrix.md) and [Forge guide](../skills/ariax-forge/SKILL.md).
+
+Check `ariax pricing --json` and [campaign planning](campaigns.md) for pilot sizing
+and compute tradeoffs before starting paid runs.

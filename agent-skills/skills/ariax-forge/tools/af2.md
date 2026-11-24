@@ -73,7 +73,7 @@ require the output check for every requested job/model/seed.
 
 For plain monomer inference use `alphafold2` with its matching manifest.
 For a complex upload `insulin.a3m` and `alphafold2_multimer_v3.json`, and use
-that input and selector. The [remote mode script](examples/af2/run_modes.sh)
+that input and selector. The remote mode script (`run_modes.sh`)
 prepares all fifteen model checks. For ordinary scientific work choose
 recycles, MSA depth and sampling for the question, then retain those exact
 settings. `--msa-mode single_sequence` on 1.6.3 discards supplied homologs
@@ -203,10 +203,10 @@ handoff with the scorer result because the scorer does not copy all added
 lineage fields. Preserve the original native files and handoff alongside
 scorer results.
 
-The [ordered runner](examples/af2/run_native.sh) and
-[matrix](examples/af2/matrix.json) cover all fifteen checkpoints and selected
+The ordered runner (`run_native.sh`) and
+matrix (`matrix.json`) cover all fifteen checkpoints and selected
 template families at reduced settings. The
-[service runner](examples/af2/run_services.sh) takes one selected case and
+service runner (`run_services.sh`) takes one selected case and
 an explicit search/predict stage. A CUDA initialization failure remains a
 failed command; preserve completed outputs and inspect the runtime before
 explicitly submitting unfinished work. Broader capacity and host-reload

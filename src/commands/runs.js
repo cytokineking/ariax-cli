@@ -24,9 +24,11 @@ export async function run(ctx) {
     return;
   }
   const data = [], seen = new Set(flags.cursor ? [flags.cursor] : []);
-  let cursor = flags.cursor, result;
+  const maxPages = flags.all === true ? 20 : 1;
+  let cursor = flags.cursor, result, pages = 0;
   do {
     result = await ctx.client.get(base, { query: { limit, cursor }, signal: ctx.signal });
+    pages += 1;
     const next = result.meta?.next_cursor;
     if (!Array.isArray(result.data) || (next != null && (typeof next !== 'string' || !next || seen.has(next)))) {
       const error = new Error('Run endpoint returned an invalid page or repeated cursor.');
@@ -36,10 +38,21 @@ export async function run(ctx) {
     data.push(...result.data);
     cursor = next;
     if (cursor) seen.add(cursor);
-  } while (flags.all && cursor);
-  if (ctx.json) printJson({ data, meta: { ...result.meta, next_cursor: cursor ?? null }, request_id: result.requestId });
-  else {
+  } while (flags.all && cursor && pages < maxPages);
+  const capped = Boolean(flags.all && cursor && pages >= maxPages);
+  if (ctx.json) {
+    printJson({
+      data,
+      meta: {
+        ...result.meta,
+        next_cursor: cursor ?? null,
+        ...(capped ? { truncated_by_page_limit: true, max_pages: maxPages } : {}),
+      },
+      request_id: result.requestId,
+    });
+  } else {
     printTable(['job_id', 'status', 'provenance_status'], data.map(row => [row.job_id, row.status, row.provenance_status]));
-    if (cursor) printProgress('More runs are available; use --all or --cursor with the JSON next_cursor.');
+    if (capped) printProgress(`Stopped after ${maxPages} pages; pass --cursor ${cursor} to continue.`);
+    else if (cursor) printProgress('More runs are available; use --all or --cursor with the JSON next_cursor.');
   }
 }

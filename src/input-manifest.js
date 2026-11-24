@@ -137,19 +137,30 @@ export function inputManifest(input, prepared, sourceSpec, sourceJobBytes, build
   };
 }
 
-/** Bound default console output; full mappings remain in the written manifest. */
+/** Bound default console output; full per-residue mappings require --full or the written manifest. */
 export function compactInspection(value, full = false) {
   if (full) return value;
-  let remaining = 200;
-  return {...value, warning_count:value.warnings.length, warnings:value.warnings.slice(0,50), warnings_truncated:value.warnings.length > 50,
-    chain_count:value.chains.length, chains_truncated:value.chains.length > 50,
-    chains:value.chains.slice(0, 50).map(chain => {
-      const residues = chain.residues.slice(0, remaining);
-      remaining -= residues.length;
-      return {...chain, sequence:undefined, sequence_sha256:chain.sequence ? sha256(chain.sequence) : null,
-        unresolved_region_count:chain.unresolved_regions?.length ?? null,
-        unresolved_regions:chain.unresolved_regions?.slice(0,100) ?? null, unresolved_regions_truncated:(chain.unresolved_regions?.length || 0) > 100,
-        residue_count:chain.residues.length, residues, residues_truncated:residues.length < chain.residues.length};
+  return {
+    ...value,
+    warning_count: value.warnings.length,
+    warnings: value.warnings.slice(0, 50),
+    warnings_truncated: value.warnings.length > 50,
+    chain_count: value.chains.length,
+    chains_truncated: value.chains.length > 50,
+    chains: value.chains.slice(0, 50).map((chain) => {
+      const { residues, sequence, ...rest } = chain;
+      const list = Array.isArray(residues) ? residues : [];
+      return {
+        ...rest,
+        sequence_sha256: sequence ? sha256(sequence) : null,
+        unresolved_region_count: chain.unresolved_regions?.length ?? null,
+        unresolved_regions: chain.unresolved_regions?.slice(0, 100) ?? null,
+        unresolved_regions_truncated: (chain.unresolved_regions?.length || 0) > 100,
+        residue_count: list.length,
+        first_residue: list[0] ?? null,
+        last_residue: list.length ? list[list.length - 1] : null,
+        residues_omitted: list.length > 0,
+      };
     }),
   };
 }

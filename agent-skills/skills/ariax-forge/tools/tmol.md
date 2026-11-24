@@ -23,7 +23,7 @@ ariax skills forge --tool tmol --json
 ariax skills forge --reference tmol --read --json
 ```
 
-The first interface is the single uploadable [Python adapter](examples/tmol/run.py),
+The first interface is the single uploadable Python adapter (`run.py`),
 not a native `tmol` executable. The [example inventory](examples/tmol/README.md)
 identifies its installed path. Upstream also documents
 [packing](https://github.com/uw-ipd/tmol/blob/33fd3e9eed8b497638d8a7bf32955dcde0c181fd/docs/workflows/packing.md),

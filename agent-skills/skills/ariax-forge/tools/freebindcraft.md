@@ -60,7 +60,7 @@ evaluation criteria before editing settings. Preserve complete effective
 target, advanced and filter JSON files. Use the preflight workflow in the
 [inputs reference](../references/freebindcraft-inputs.md) for a new target.
 
-The bundled [PD-L1 structure](examples/freebindcraft/PDL1.pdb) has target
+The bundled PD-L1 structure (`PDL1.pdb`) has target
 chain A with 115 residues numbered 18–132 and hotspot A56. The
 [complete examples](examples/freebindcraft/complete/README.md) retain native
 filters and save FASTA, structures and native arrays:
@@ -157,7 +157,7 @@ ariax forge logs "$SESSION" "$CHECK_COMMAND_ID" --tail 1000 --json
 ```
 
 Record the checker ID and require it to pass. Inspect command logs for completed
-relaxation. The optional [packaged fixture checker](examples/freebindcraft/complete/check.py)
+relaxation. The optional packaged fixture checker (`check.py`)
 expects PD-L1 at `/inputs/freebindcraft/PDL1.pdb`; use target-specific checks for
 your own construct.
 

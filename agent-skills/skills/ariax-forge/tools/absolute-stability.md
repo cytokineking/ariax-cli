@@ -40,10 +40,10 @@ tool scores the selected protein construct. Missing side-chain coordinates
 retain upstream ESM3's zero-fill behavior. Complex SaProt preparation also
 uses upstream's isolated-chain temporary PDB serialization.
 
-The [domain PDB](examples/absolute-stability/stability_1998469.pdb) and
-[matched CIF](examples/absolute-stability/stability_1998469.cif) have chain A
-and 60 residues. The [nanobody CIF](examples/absolute-stability/nanobody_1zvh.cif)
-has chain A and 125 residues. The [TrkA complex](examples/absolute-stability/Trka_binder_AF2_10.pdb)
+The domain PDB (`stability_1998469.pdb`) and
+matched CIF (`stability_1998469.cif`) have chain A
+and 60 residues. The nanobody CIF (`nanobody_1zvh.cif`)
+has chain A and 125 residues. The TrkA complex (`Trka_binder_AF2_10.pdb`)
 uses binder A and target B. These are retained upstream structures under the
 adjacent MIT license. Their provenance is in
 [the fixture notes](examples/absolute-stability/README.md).

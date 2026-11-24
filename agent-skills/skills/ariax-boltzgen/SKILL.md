@@ -1,213 +1,64 @@
 ---
 name: ariax-boltzgen
-description: Design VHH nanobodies, miniproteins, linear or cyclic peptides, helicons, and miniproteins against one small molecule with BoltzGen on Ariax. Use for configuring, validating, launching, monitoring, or retrieving an Ariax BoltzGen campaign; not for generic structure prediction or upstream-only BoltzGen features.
+description: Design VHH nanobodies, miniproteins, linear or cyclic peptides, stapled helicons, and small-molecule binders with hosted BoltzGen on Ariax.
 ---
 
 # BoltzGen on Ariax
 
-For this managed protocol, use the Ariax CLI and public `/api/v1` API rather
-than native BoltzGen argv or internal YAML. Ariax translates the public job
-specification into the installed workflow and manages compute, recovery, logs,
-and object storage.
+All-atom diffusion + inverse-folding + refolding/filtering binder protocol.
+Default managed choice for VHH/nanobodies, small-molecule targets, and stapled
+helicons (see [engine choice](../../core/engine-choice.md)). For shared auth,
+GPU/pricing policy, direct upload, recovery, logs, and results, see
+[managed lifecycle](../../core/managed-projects.md) and
+[recovery](../../core/recovery.md). Native Forge BoltzGen is separate
+([Forge BoltzGen](../ariax-forge/tools/boltzgen.md)).
 
-The [Forge BoltzGen guide](../ariax-forge/tools/boltzgen.md) covers native
-commands and separate bounded modes. Check the exact live tool, model and mode
-qualification; a native option is not automatically available or qualified.
+## Supported project types
 
-Use the [shared workflow](../../SKILL.md) for account access, existing user
-authorization, durable recovery, and downloads.
-
-## Choose BoltzGen deliberately
-
-BoltzGen is Ariax's all-atom, multi-stage binder-design engine. Prefer it when
-the requested modality is VHH, cyclic peptide, helicon, or a miniprotein that
-binds a small molecule. It is also available for ordinary miniprotein and
-linear-peptide design when the user wants an alternative to BindCraft.
-
-This managed protocol exposes these BoltzGen project types:
-
-| `project_type` | Ariax behavior | Length input | Target input |
+| `project_type` | Behavior | `lengths` | Target input |
 | --- | --- | --- | --- |
-| `miniprotein` | Variable-length protein binder | Required; minimum at least 31 | PDB or mmCIF plus selected protein chains |
-| `peptide` | Linear peptide | Required; 8–30 | PDB or mmCIF plus selected protein chains |
-| `cyclic-peptide` | N-to-C cyclic peptide | Required; 8–30 | PDB or mmCIF plus selected protein chains |
-| `helicon` | Fixed stapled-helical peptide construction | Omit | PDB or mmCIF plus selected protein chains |
-| `vhh` | Installed VHH scaffold set | Omit | PDB or mmCIF plus selected protein chains |
-| `miniprotein-small-molecule` | Miniprotein against one ligand | Required; minimum at least 31 | Exactly one CCD code or SMILES; no structure file or `chains` |
+| `vhh` | Bundled VHH scaffold set | Omit | PDB/mmCIF + `chains` |
+| `miniprotein-small-molecule` | Miniprotein vs. one ligand | `[min, max]` (`min >= 31`) | Exactly one of `ligand_ccd` (CCD code) or `ligand_smiles`; omit `chains` and `--input` |
+| `helicon` | Fixed stapled-helical peptide | Omit | PDB/mmCIF + `chains` |
+| `cyclic-peptide` | N-to-C cyclic peptide | `[min, max]` (`8–30`) | PDB/mmCIF + `chains` |
+| `peptide` | Linear peptide | `[min, max]` (`8–30`) | PDB/mmCIF + `chains` |
+| `miniprotein` | Variable-length miniprotein | `[min, max]` (`min >= 31`) | PDB/mmCIF + `chains` |
 
-Do not promise upstream-only modes through this managed protocol. Its public contract does not
-accept arbitrary BoltzGen YAML, Fab/whole-antibody design, protein redesign,
-nucleic-acid targets, or arbitrary bond, insertion, secondary-structure, or
-residue constraints.
+Not supported in managed BoltzGen: arbitrary upstream YAML, Fab/whole-antibody
+design, protein redesign, nucleic-acid targets, or custom bond/secondary-structure
+constraints. Core GPUs: `H100`, `A100_80GB`, `L40S`, `RTX6000PRO` (scale VRAM
+with target + binder size; see [GPU policy](../../core/managed-projects.md#3-pricing-and-gpu-policy)).
 
-## Plan the campaign and GPU
+## Job spec & canonical `binding_rules`
 
-Check `ariax pricing --json` for current hourly rates. Pick a range of compatible
-GPU models within the user's hourly price preferences to maximize availability,
-while meeting the memory requirements below. Follow the [shared pricing
-guidance](../../core/managed-projects.md#check-prices-and-choose-gpus).
-Include at least one compatible core GPU from `H100`, `A100_80GB`, `L40S`,
-`RTX6000PRO`. Add every compatible class within the memory and authorized hourly
-budget limits; one core choice is allowed but reduces availability. Supplemental
-classes alone do not qualify, and `allowed_gpus` alternatives do not enable Turbo.
+Fetch `ariax schema boltzgen --json` and start from
+[`boltzgen.json`](../../examples/boltzgen.json). `num_designs` is generated
+volume; `budget` (`1..num_designs`) is the quality-and-diversity final set size
+(not a dollar cap or guaranteed pass count).
 
-Use [campaign planning](../../core/campaigns.md) for pilot size, cost forecasts,
-and evidence before scaling. Inspect generated and refolded poses, native filter
-outcomes, and objective-respecting yield. `num_designs` sets generated volume;
-`budget` sets the final selected-set size, not a dollar limit.
+`binding_rules` is a list of `{id, binding?, not_binding?}` using **canonical
+1-based sequence positions** (not PDB author numbers):
 
-BoltzGen's diffusion workflow has less stringent GPU requirements than the
-inversion workflows, but increase GPU capability and VRAM as target size grows.
-Include binder size and downstream refolding in that decision. Use current
-hourly prices and the live schema to choose a range of eligible GPU classes.
-Treat canonical `RTX6000PRO` as a primary/core eligible option when advertised,
-not as an additional fallback; it is distinct from `RTX6000ADA` and `A6000`.
-Trim targets when helpful while preserving the intended site's fold and physical context.
+- Masks use commas, `..` inclusive ranges, and `all` (e.g., `{"id": "A", "binding": "5..7,13", "not_binding": "30..40"}`). Never use `-` or chain prefixes inside masks; never overlap `binding` and `not_binding`.
+- **mmCIF:** uses `label_asym_id` chain IDs and absolute `label_seq_id` positions (avoid solvent label chains).
+- **PDB:** first observed residue maps to canonical `1` (the CLI reports shifts). Gapped PDBs without `SEQRES` or gapped mmCIFs without polymer metadata are rejected — repair or supply complete mmCIF metadata rather than guessing across gaps.
 
-## Build a job specification
-
-Discover the current contract before preparing a job. The live schema wins over
-this skill and the bundled example:
+## Validate, submit & outputs
 
 ```sh
-ariax protocols --json
-ariax schema boltzgen --json
-```
-
-Start from [`../../examples/boltzgen.json`](../../examples/boltzgen.json) if
-useful, then adapt it to the user's scientific intent. Do not include `user_id`
-or a project name in the job file; authentication supplies identity and
-`ariax submit --name` supplies the name.
-
-For protein-target modes:
-
-- Set `chains` to the comma-separated target-chain IDs found in the input.
-- Supply `lengths: [min, max]` for miniprotein, peptide, and cyclic-peptide.
-  Ariax requires miniprotein minimum length at least 31 and
-  peptide/cyclic-peptide lengths within 8–30.
-- Omit `lengths` for `vhh` and `helicon`; Ariax constructs those modalities from
-  its installed scaffold or staple recipe.
-
-For `miniprotein-small-molecule`, omit `chains` and `--input`, provide
-miniprotein `lengths`, and set exactly one of `ligand_ccd` or `ligand_smiles`.
-Do not provide both. A CCD value is a Chemical Component Dictionary code, not a
-free-form ligand name.
-
-`num_designs` is the number of candidates generated through the pipeline.
-`budget` is the number selected into the final quality-and-diversity set; keep
-it positive and no larger than `num_designs`. Neither field is a guaranteed
-count of designs that pass filters or satisfy the biological objective.
-
-## Select chains and binding regions
-
-`binding_rules` is a list of per-chain rules. Each item names the chain in `id`
-and may contain `binding`, `not_binding`, or both:
-
-- `binding` identifies canonical target positions the binder should contact.
-- `not_binding` identifies canonical target positions it should avoid.
-- Masks accept positive positions separated by commas, inclusive ranges using
-  `..`, and `all`. For example: `5..7,13`.
-- Do not use `-` for a BoltzGen range and do not prefix positions with a chain;
-  the rule's `id` supplies the chain.
-- Do not overlap `binding` and `not_binding`. Omit a rule to leave that chain
-  unconstrained; use `binding: all` only when the user explicitly wants the
-  whole selected chain available as the binding region.
-
-Example:
-
-```json
-{
-  "binding_rules": [
-    {"id": "A", "binding": "5..7,13", "not_binding": "30..40"}
-  ]
-}
-```
-
-BoltzGen selectors are canonical, 1-based sequence positions—not displayed PDB
-author residue numbers:
-
-- For mmCIF, BoltzGen expects `label_asym_id` chain IDs and absolute
-  `label_seq_id` residue positions. The CLI preserves those absolute positions
-  when validating binding rules. Select protein chains, not solvent chains;
-  an `auth_asym_id` that names a protein may also be a solvent `label_asym_id`.
-- For PDB, the first observed author residue maps to canonical position 1. The
-  CLI reports the shift when author numbering does not begin at 1.
-- Missing residues still occupy canonical sequence positions. A gapped PDB
-  without `SEQRES`, or a gapped mmCIF without polymer sequence metadata, cannot
-  establish those positions safely; the CLI rejects it before upload. Repair it
-  with Ariax Prep Inputs or use an mmCIF containing polymer metadata.
-
-Never translate author hotspots by guesswork. Run local validation and resolve
-every reported chain, numbering, gap, mask, water, or ligand-residue error.
-
-## Validate, launch, and wait
-
-Protein-target campaign:
-
-`--input` is required for both `validate` and `submit` so the CLI can check
-selected chains and masks against the structure before upload.
-
-```sh
+# Protein-target mode (--input required on both validate and submit):
+ariax inputs inspect --input ./target.cif -f job.json --json
 ariax validate -f job.json --input ./target.cif --json
-ariax submit -f job.json --input ./target.cif --name my-boltzgen-run \
-  --wait --root-dir "$PWD"
-```
+ariax submit -f job.json --input ./target.cif --name my-boltzgen-run --wait
 
-Small-molecule campaign:
-
-```sh
+# Small-molecule mode (omit --input):
 ariax validate -f job.json --json
-ariax submit -f job.json --name my-boltzgen-run \
-  --wait --root-dir "$PWD"
+ariax submit -f job.json --name my-boltzgen-run --wait
 ```
 
-For an uncertain submission or interrupted wait, follow the shared
-[operation recovery workflow](../../core/managed-projects.md#submit-and-recover). Reuse the
-original operation with `ariax recover OPERATION_ID --wait`.
-
-The CLI parses protein structures and validates canonical selectors locally,
-then uploads the bytes directly to object storage. User file bytes do not pass
-through Ariax application servers. The raw API verifies only object existence
-and size, so prefer the CLI for structure-backed BoltzGen submissions.
-
-GPU fields are an eligibility policy, not a reservation. Use the current schema
-and known Ariax GPU identifiers; `priority_mode` chooses performance or cost
-ordering. Turbo is genuinely exposed: set `turbo_mode: true` and an acceptable
-subset of `turbo_multiples` from 2, 4, and 8 only when the user has chosen the
-additional parallel compute. Do not infer Turbo authorization from a desire for
-fast results.
-
-Submission and restart can incur real compute charges and remain subject to
-credit and compute admission. Ariax has no compute-quote endpoint. Validate
-freely, but submit or restart only with clear user authorization for the job's
-campaign size and compute policy. Pause or abort within the user's existing campaign authorization.
-Interrupting a local `--wait` leaves the remote job running.
-
-## Monitor and retrieve results
-
-```sh
-ariax status "$PROJECT_ID" --wait
-ariax jobs --project "$PROJECT_ID" --json
-ariax logs "$JOB_ID" --tail 200
-ariax results "$PROJECT_ID" --json
-ariax results "$PROJECT_ID" --download ./boltzgen-results
-```
-
-BoltzGen progresses through generation, inverse folding, folding/refolding,
-analysis, and filtering; exact stages vary by modality, with affinity analysis
-enabled for the Ariax small-molecule mode. `ariax logs` returns only the
-campaign's retained compute log, never Ariax application or worker logs.
-
-Under the `output` artifact tree, expect intermediate designs,
-inverse-folded/refolded outputs and metrics, and a timestamped
-`final_ranked_designs-*` directory. Its `final_<budget>_designs` set is the main
-quality-and-diversity-selected output. Inverse-folded intermediate CIFs can
-contain placeholder zero coordinates for designed sidechains; use refolded or
-final-ranked complexes for structural inspection.
-
-If the CLI is unavailable, read
-[`../../core/raw-curl.md`](../../core/raw-curl.md) and preserve the same
-canonical-numbering, direct-upload, idempotency, and authorization boundaries.
-Use REST, not MCP; Ariax MCP support is deferred.
-
-Read [output interpretation](outputs.md) before choosing candidates or interpreting ranks.
+Outputs live under `output/` (intermediates, refolds, and
+`final_ranked_designs-*/final_<budget>_designs`; small-molecule mode adds
+affinity analysis). Inverse-folded intermediate CIFs can hold zero-placeholder
+sidechains — inspect refolded or final-ranked complexes. Read
+[output interpretation](outputs.md) before shortlisting; fallback REST guidance
+is in [raw REST](../../core/raw-curl.md).
