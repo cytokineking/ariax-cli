@@ -5,8 +5,9 @@
  * Exits 0 on pass; exits 1 listing every violation found.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -448,12 +449,155 @@ function checkJsSyntax() {
   metrics.js_files_checked = `${okCount}/${jsFiles.length}`;
 }
 
+// 8. Phase 6 CLI & skills surface checks (offline/deterministic)
+function checkPhase6Surface() {
+  const runCapture = (args, opts = {}) => spawnSync(process.execPath, [BIN_PATH, ...args], {
+    cwd: opts.cwd || REPO_ROOT,
+    encoding: 'utf8',
+    env: { ...CLI_ENV, ...(opts.env || {}) },
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  // 8a. skills --reference implies --read, skills <protocol> --doc outputs, and skills --list
+  try {
+    const refRes = JSON.parse(runCli(['skills', '--reference', 'managed-projects', '--json']));
+    if (!refRes?.data?.content || !refRes.data.content.includes('./prepared/input.pdb')) {
+      fail('phase6-skills', 'skills --reference managed-projects without --read must return content referencing ./prepared/input.pdb.');
+    }
+    const docRes = JSON.parse(runCli(['skills', 'boltzgen', '--doc', 'outputs', '--json']));
+    const expectedDoc = path.join(REPO_ROOT, 'agent-skills', 'skills', 'ariax-boltzgen', 'outputs.md');
+    if (docRes?.data?.path !== expectedDoc || !docRes?.data?.content) {
+      fail('phase6-skills', `skills boltzgen --doc outputs resolved to "${docRes?.data?.path}", expected "${expectedDoc}".`);
+    }
+    const listRes = JSON.parse(runCli(['skills', '--list', '--json']));
+    if (!Array.isArray(listRes?.data?.protocols) || !listRes.data.protocols.length) {
+      fail('phase6-skills', 'skills --list --json must list protocols.');
+    }
+  } catch (err) {
+    fail('phase6-skills', `skills sub-doc / --reference / --list check failed: ${err.message}`);
+  }
+
+  // 8b. skills install copies core/*.md alongside SKILL.md and skills status tracks them
+  const tmpSkillRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ariax-surface-skills-'));
+  try {
+    const inst = runCapture(['skills', 'install', '--target', 'codex', '--scope', 'project', '--json'], { cwd: tmpSkillRoot });
+    if (inst.status !== 0) {
+      fail('phase6-skills-install', `skills install exited ${inst.status}: ${inst.stderr || inst.stdout}`);
+    } else {
+      const payload = JSON.parse(inst.stdout);
+      const target = payload?.data?.targets?.[0];
+      const coreDir = path.join(tmpSkillRoot, '.codex', 'skills', 'ariax', 'core');
+      const expectedCoreFiles = fs.readdirSync(path.join(REPO_ROOT, 'agent-skills', 'core')).filter((f) => f.endsWith('.md'));
+      if (!target?.written || !fs.existsSync(path.join(coreDir, 'interpretation.md')) || target.core_files_written !== expectedCoreFiles.length) {
+        fail('phase6-skills-install', `skills install did not copy all ${expectedCoreFiles.length} core/*.md files alongside SKILL.md.`);
+      }
+      const statusOk = JSON.parse(runCapture(['skills', 'status', '--target', 'codex', '--scope', 'project', '--json'], { cwd: tmpSkillRoot }).stdout);
+      if (statusOk?.data?.targets?.[0]?.status !== 'installed' || statusOk?.data?.targets?.[0]?.core_files_synced !== true) {
+        fail('phase6-skills-install', `skills status expected installed+synced after install, got ${JSON.stringify(statusOk?.data?.targets?.[0])}`);
+      }
+      fs.rmSync(path.join(coreDir, 'interpretation.md'));
+      const statusDrift = JSON.parse(runCapture(['skills', 'status', '--target', 'codex', '--scope', 'project', '--json'], { cwd: tmpSkillRoot }).stdout);
+      if (statusDrift?.data?.targets?.[0]?.status !== 'outdated') {
+        fail('phase6-skills-install', `skills status should report outdated when a core/*.md file is missing, got ${statusDrift?.data?.targets?.[0]?.status}`);
+      }
+    }
+  } catch (err) {
+    fail('phase6-skills-install', `skills install check failed: ${err.message}`);
+  } finally {
+    fs.rmSync(tmpSkillRoot, { recursive: true, force: true });
+  }
+
+  // 8c. schema --example [project_type] works offline from bundled examples
+  try {
+    const exVhh = JSON.parse(runCli(['schema', 'boltzgen', '--example', 'vhh', '--json']));
+    if (exVhh?.data?.example?.protocol !== 'boltzgen' || exVhh?.data?.example?.project_type !== 'vhh') {
+      fail('phase6-schema', `schema boltzgen --example vhh returned unexpected example: ${JSON.stringify(exVhh?.data)}`);
+    }
+    const exDef = JSON.parse(runCli(['schema', 'boltzgen', '--example', '--json']));
+    if (exDef?.data?.example?.protocol !== 'boltzgen') {
+      fail('phase6-schema', 'schema boltzgen --example (default) did not return a boltzgen starter JSON.');
+    }
+  } catch (err) {
+    fail('phase6-schema', `schema --example check failed: ${err.message}`);
+  }
+
+  // 8d. help <unknown> exits 1 with clear error; nested forge subcommand help is concise
+  const unknownHelp = runCapture(['help', 'nonexistent-cmd', '--json']);
+  if (unknownHelp.status !== 1 || !unknownHelp.stdout.includes("Unknown command 'nonexistent-cmd'")) {
+    fail('phase6-help', `help nonexistent-cmd expected exit 1 with Unknown command error, got status=${unknownHelp.status} stdout=${unknownHelp.stdout}`);
+  }
+  for (const sub of ['inputs', 'files', 'tools', 'pack', 'run', 'resume', 'finish']) {
+    const subHelp = runCapture(['forge', sub, '--help', '--no-json']);
+    if (subHelp.status !== 0 || Buffer.byteLength(subHelp.stdout, 'utf8') > 1200 || !subHelp.stdout.includes(`ariax forge ${sub}`)) {
+      fail('phase6-help', `forge ${sub} --help expected concise subcommand usage (exit 0, <=1200B), got status=${subHelp.status} bytes=${Buffer.byteLength(subHelp.stdout, 'utf8')}`);
+    }
+  }
+
+  // 8e. inputs inspect --residues and resolved_binding_rules + prepare_required
+  try {
+    const pdbFixture = path.join(REPO_ROOT, 'agent-skills', 'examples', 'fixtures', 'synthetic-target.pdb');
+    const cifFixture = path.join(REPO_ROOT, 'agent-skills', 'examples', 'fixtures', 'synthetic-target.cif');
+    const boltzJob = path.join(REPO_ROOT, 'agent-skills', 'examples', 'boltzgen-vhh.json');
+    const resInspect = JSON.parse(runCli(['inputs', 'inspect', '--input', pdbFixture, '--residues', 'A:10,12-14,999', '--json']));
+    const matched = resInspect?.data?.matched_residues;
+    if (!Array.isArray(matched) || matched.length !== 5
+        || matched[0].author_residue !== 10 || matched[0].amino_acid !== 'L' || matched[0].missing !== false
+        || matched[4].author_residue !== 999 || matched[4].missing !== true) {
+      fail('phase6-inputs', `inputs inspect --residues returned unexpected matched_residues: ${JSON.stringify(matched)}`);
+    }
+    const jobInspect = JSON.parse(runCli(['inputs', 'inspect', '--input', cifFixture, '-f', boltzJob, '--json']));
+    if (typeof jobInspect?.data?.prepare_required !== 'boolean'
+        || !Array.isArray(jobInspect?.data?.resolved_binding_rules)
+        || jobInspect.data.resolved_binding_rules[0]?.canonical_position !== 10
+        || jobInspect.data.resolved_binding_rules[0]?.amino_acid !== 'L') {
+      fail('phase6-inputs', `inputs inspect -f boltzgen-vhh.json missing prepare_required or resolved_binding_rules: ${JSON.stringify(jobInspect?.data)}`);
+    }
+  } catch (err) {
+    fail('phase6-inputs', `inputs inspect --residues / resolved_binding_rules check failed: ${err.message}`);
+  }
+
+  // 8f. discover VHH/nanobody managed ranking & recommended_project_type
+  try {
+    const vhhDisc = JSON.parse(runCli([
+      'discover', '--query', 'de novo vhh nanobody binder', '--json',
+      '--base-url', 'http://127.0.0.1:1', '--allow-custom-origin', '--timeout', '1000',
+    ]));
+    if (vhhDisc?.data?.recommended_execution !== 'managed'
+        || vhhDisc?.data?.managed_protocols?.[0]?.id !== 'boltzgen'
+        || vhhDisc?.data?.recommended_project_type !== 'vhh') {
+      fail('phase6-discover', `discover VHH expected managed/boltzgen/vhh, got ${JSON.stringify({ exec: vhhDisc?.data?.recommended_execution, top: vhhDisc?.data?.managed_protocols?.[0]?.id, type: vhhDisc?.data?.recommended_project_type })}`);
+    }
+    const forgeVhh = JSON.parse(runCli([
+      'discover', '--query', 'humanize nanobody imgt numbering', '--json',
+      '--base-url', 'http://127.0.0.1:1', '--allow-custom-origin', '--timeout', '1000',
+    ]));
+    if (forgeVhh?.data?.recommended_execution !== 'forge') {
+      fail('phase6-discover', `discover humanize/numbering expected forge, got ${forgeVhh?.data?.recommended_execution}`);
+    }
+  } catch (err) {
+    fail('phase6-discover', `discover VHH check failed: ${err.message}`);
+  }
+
+  // 8g. Clean EPIPE exit when downstream consumer closes stdout early
+  const epipeCheck = spawnSync(
+    'sh',
+    ['-c', `"${process.execPath}" "${BIN_PATH}" skills --paths --json | head -c 16 >/dev/null`],
+    { cwd: REPO_ROOT, encoding: 'utf8', env: CLI_ENV },
+  );
+  if (epipeCheck.status !== 0 || /EPIPE/i.test(epipeCheck.stderr || '')) {
+    fail('phase6-epipe', `Piped command triggered EPIPE error: status=${epipeCheck.status} stderr=${epipeCheck.stderr}`);
+  }
+
+  metrics.phase6_surface_checks = 'verified';
+}
+
 checkManifestsAndSize();
 checkContextBudgets();
 checkStaleFlagsAndLeaks();
 checkMarkdownLinksAndAnchors();
 checkGuideAndCoreResolution();
 checkJsSyntax();
+checkPhase6Surface();
 
 console.log('Agent surface gate metrics:');
 for (const [k, v] of Object.entries(metrics)) {

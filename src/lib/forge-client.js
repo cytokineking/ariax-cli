@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { credentialFilePath } from '../credentials.js';
 import { accountIdentity } from '../operations.js';
 import { createClient, ApiError, NetworkError } from '../http.js';
+import { isReadOnlyFsError } from '../state-dir.js';
 import { isUUID } from '../uuid.js';
 import { EXIT } from '../exit-codes.js';
 import { usageError } from '../args.js';
@@ -45,27 +46,99 @@ async function identity(ctx, signal) {
   } finally { if (abort) signal.removeEventListener('abort', abort); }
 }
 
-function cacheFile(ctx, account, sessionId) {
-  const parent = path.dirname(credentialFilePath());
-  const directory = path.join(parent, 'forge-connections');
-  const project = path.resolve(ctx.config.rootDir);
+function normalizeSystemTmpPrefix(candidate) {
+  const resolved = path.resolve(candidate);
+  if (process.platform !== 'darwin') return resolved;
+  // On macOS, os.tmpdir() lives under /var -> /private/var and /tmp -> /private/tmp.
+  // Normalize only those OS-managed root aliases so explicit cache dirs under os.tmpdir()
+  // do not fail the symlink walk while still rejecting symlinks in any user component.
+  const rawTmp = path.resolve(os.tmpdir());
+  let realTmp = rawTmp;
+  try { realTmp = fs.realpathSync(rawTmp); } catch { /* ignore */ }
+  if (realTmp !== rawTmp && (resolved === rawTmp || resolved.startsWith(rawTmp + path.sep))) {
+    return realTmp + resolved.slice(rawTmp.length);
+  }
+  if (resolved === '/tmp' || resolved.startsWith('/tmp/')) {
+    try {
+      const realSlashTmp = fs.realpathSync('/tmp');
+      if (realSlashTmp !== '/tmp') return realSlashTmp + resolved.slice('/tmp'.length);
+    } catch { /* ignore */ }
+  }
+  return resolved;
+}
+
+function ensureSafeCacheDirectory(ctx, directory, protectedDirs) {
   const inside = (root, candidate) => candidate === root || candidate.startsWith(root + path.sep);
-  if ((project !== path.resolve(os.homedir()) && inside(project, directory)) || ['/workspace', '/scratch', '/inputs', '/models'].some(root => inside(root, directory))) {
+  const project = path.resolve(ctx.config.rootDir);
+  let realProject = project;
+  try { realProject = fs.realpathSync(project); } catch { /* ignore */ }
+  const home = path.resolve(ctx.env?.HOME || os.homedir());
+  let realHome = home;
+  try { realHome = fs.realpathSync(home); } catch { /* ignore */ }
+  const insideProject = (project !== home && project !== realHome && inside(project, directory))
+    || (realProject !== home && realProject !== realHome && inside(realProject, directory));
+  if (insideProject || ['/workspace', '/scratch', '/inputs', '/models'].some(root => inside(root, directory))) {
     throw usageError('Session credentials require protected user configuration outside workload and request storage.');
   }
   // Never traverse a symlink in the configuration path. Protect only the
   // application's own directories, leaving shared system directories alone.
   let current = path.parse(directory).root;
-  for (const component of directory.slice(current.length).split(path.sep)) {
+  const parts = directory.slice(current.length).split(path.sep).filter(Boolean);
+  for (const component of parts) {
     current = path.join(current, component);
     try { fs.mkdirSync(current, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw error; }
     const info = fs.lstatSync(current);
     if (!info.isDirectory() || info.isSymbolicLink()) throw usageError('Session credential storage must use real directories.');
-    if (current === parent || current === directory) {
+    if (protectedDirs.has(current)) {
       if (process.getuid && info.uid !== process.getuid()) throw usageError('Session credential directory has another owner.');
-      fs.chmodSync(current, 0o700);
+      if (process.platform !== 'win32') fs.chmodSync(current, 0o700);
     }
   }
+  // Probe writability so read-only / sandboxed directories trigger fallback deterministically.
+  const probe = path.join(directory, `.ariax-conn-probe-${process.pid}-${randomUUID()}`);
+  let fd;
+  try {
+    fd = fs.openSync(probe, 'wx', 0o600);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    try { fs.rmSync(probe, { force: true }); } catch { /* ignore */ }
+  }
+  return directory;
+}
+
+function resolveConnectionCacheDir(ctx) {
+  const rawExplicit = ctx.config?.connectionCacheDir
+    ?? (typeof ctx.env?.ARIAX_CONNECTION_CACHE_DIR === 'string' && ctx.env.ARIAX_CONNECTION_CACHE_DIR.trim()
+      ? ctx.env.ARIAX_CONNECTION_CACHE_DIR.trim()
+      : null);
+  if (rawExplicit) {
+    const directory = normalizeSystemTmpPrefix(rawExplicit);
+    return ensureSafeCacheDirectory(ctx, directory, new Set([directory]));
+  }
+  const credEnv = ctx.env ?? process.env;
+  const customHome = process.platform === 'win32'
+    ? (credEnv !== process.env && credEnv.USERPROFILE && credEnv.USERPROFILE !== process.env.USERPROFILE ? credEnv.USERPROFILE : os.homedir())
+    : (credEnv !== process.env && credEnv.HOME && credEnv.HOME !== process.env.HOME ? credEnv.HOME : os.homedir());
+  const defaultParent = normalizeSystemTmpPrefix(path.dirname(credentialFilePath({
+    env: credEnv,
+    home: customHome,
+  })));
+  const defaultDir = path.join(defaultParent, 'forge-connections');
+  try {
+    return ensureSafeCacheDirectory(ctx, defaultDir, new Set([defaultParent, defaultDir]));
+  } catch (error) {
+    if (!isReadOnlyFsError(error)) throw error;
+    let realTmp = path.resolve(os.tmpdir());
+    try { realTmp = fs.realpathSync(realTmp); } catch { /* ignore */ }
+    const uid = process.getuid?.() ?? 'user';
+    const fallbackParent = path.join(realTmp, `ariax-cli-conn-${uid}`);
+    const fallbackDir = path.join(fallbackParent, 'forge-connections');
+    return ensureSafeCacheDirectory(ctx, fallbackDir, new Set([fallbackParent, fallbackDir]));
+  }
+}
+
+function cacheFile(ctx, account, sessionId) {
+  const directory = resolveConnectionCacheDir(ctx);
   // An auth-secret fingerprint prevents a second API key for the same account
   // from reusing a more privileged cached connection. It is never transmitted.
   const key = createHash('sha256').update(ctx.config.apiKey).digest('hex');

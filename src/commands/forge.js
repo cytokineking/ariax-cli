@@ -12,6 +12,7 @@ import { requireTrustedApiOrigin, supportsStoredCredentials } from '../config.js
 import { EXIT } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
+import { resolveProjectId } from '../resolve.js';
 import { isForgeOperationTerminal, pruneExpiredRecords } from '../state-dir.js';
 import { detectAgentShell } from '../agent-env.js';
 
@@ -32,28 +33,94 @@ const CLOSE_PENDING_BYTES_LIMIT = 500 * 1024 * 1024;
 const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
   'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id'];
 const OPTIONS = {
-  create: [['name', ...SESSION_OPTIONS, 'wait', 'wait-timeout'], 1],
-  resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS, 'wait', 'wait-timeout'], 2],
+  create: [['name', ...SESSION_OPTIONS, 'wait', 'wait-timeout', 'details'], 1],
+  resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS, 'wait', 'wait-timeout', 'details'], 2],
   project: [['limit', 'cursor', 'details'], 2],
   summary: [['top'], 2],
   activity: [['limit', 'cursor', 'details'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
   catalog: [['details', 'full', 'all', 'task', 'tool', 'compact', 'model', 'mode', 'query', 'search', 'modality', 'tier', 'with-guide'], 1],
-  list: [['details'], 1], status: [[], 2], tools: [['details'], 2],
+  list: [['details', 'active', 'state', 'name', 'project', 'limit'], 1],
+  status: [['details'], 2],
+  tools: [['details'], 2],
   'tools add': [['tools', 'priority', 'selection-id'], 3],
-  'tools wait': [['timeout', 'wait-timeout'], 4],
+  'tools wait': [['timeout', 'wait-timeout', 'details'], 4],
   run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout', 'tail'], 2],
-  pack: [['src', 'dest', 'format', 'max-shard-gib', 'remove-src', 'no-manifest', 'wait', 'wait-timeout', 'wait-ready', 'tail', 'operation-id'], 2],
+  pack: [['src', 'dest', 'format', 'max-shard-gib', 'remove-src', 'no-manifest', 'wait', 'wait-timeout', 'wait-ready', 'tail', 'operation-id', 'details'], 2],
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
   finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
   commands: [['retained', 'details'], 2], command: [['retained', 'details'], 3], watch: [['timeout', 'wait-timeout', 'tail'], 3],
   'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
-  files: [['path', 'cursor'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
+  files: [['path', 'cursor', 'recursive'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
   download: [['dest'], 3], link: [[], 3],
   logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [['force', 'wait', 'wait-timeout'], 2],
 };
+
+const SUBCOMMAND_HELP = Object.freeze({
+  create: `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools TOOL,...] [--priority TOOL,...] [--max-gpu-hours H] [--min-ram-gib N] [--min-cpu-count N] [--min-disk-gib N] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
+  Include a compatible core GPU (H100, A100_80GB, L40S, or RTX6000PRO). base is always included.`,
+  resume: `ariax forge resume PROJECT [--control-revision N] --gpu GPU [--allowed-gpus ...] [--gpu-count N] [--tools TOOL,...] [--hydrate PATH ...] [--max-gpu-hours H] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
+  Reopens saved /workspace and /inputs in the same project. Prior /inputs remain remotely; inspect with ariax forge files PROJECT --path /inputs.`,
+  project: `ariax forge project <PROJECT_UUID_OR_NAME> [--limit 50] [--cursor CURSOR] [--details]
+  Inspect project status, control revision, and session history.`,
+  summary: `ariax forge summary PROJECT [--top 5]
+  Compact Forge workspace, session accounting, hygiene warnings, and handoff summary.`,
+  activity: `ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]`,
+  limit: `ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]`,
+  catalog: `ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
+  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]`,
+  list: `ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
+  Returns compact session summaries by default; add --details for full tool metadata.`,
+  status: `ariax forge status SESSION [--details]`,
+  tools: `ariax forge tools SESSION [--details]
+  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
+  ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS] [--details]`,
+  'tools add': `ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]`,
+  'tools wait': `ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS] [--details]`,
+  run: `ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] [--tail N] -- COMMAND ARG...
+  Put the native command and arguments after --. Remote script failures exit with code 11 and include output_tail.`,
+  pack: `ariax forge pack SESSION --src PATH --dest /workspace/archives/NAME.tar.zst [--format tar.zst|tar.gz] [--max-shard-gib 10] [--remove-src] [--no-manifest] [--wait] [--wait-timeout SECONDS] [--wait-ready] [--tail N] [--operation-id UUID] [--details]
+  Stages in /scratch, verifies archive integrity, auto-shards >--max-shard-gib, and emits structured data.pack when --wait is used.`,
+  operations: `ariax forge operations`,
+  recover: `ariax forge recover OPERATION_ID [--wait] [--wait-timeout SECONDS]`,
+  finish: `ariax forge finish SESSION [--timeout-seconds SECONDS] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
+  Drains active commands, flushes durable /workspace files, and releases the GPU cleanly (--timeout-seconds defaults to 3600; --wait-timeout defaults to 7200).`,
+  commands: `ariax forge commands SESSION [--retained] [--details]`,
+  command: `ariax forge command SESSION COMMAND_ID [--retained] [--details]`,
+  watch: `ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS] [--tail N]`,
+  logs: `ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]`,
+  cancel: `ariax forge cancel SESSION COMMAND_ID`,
+  close: `ariax forge close SESSION [--force] [--wait] [--wait-timeout SECONDS]
+  Emergency teardown (75s sync ceiling). Prefer ariax forge finish --wait for normal completion.`,
+  inputs: `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID]
+  ariax forge inputs list SESSION [--retained]
+  ariax forge inputs status SESSION INPUT_ID [--retained]
+  --path is relative to /inputs (immutable once published; use a new --path for updates).`,
+  'inputs add': `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID]
+  --path is relative to /inputs (immutable once published; use a new --path for updated files).`,
+  'inputs list': `ariax forge inputs list SESSION [--retained]`,
+  'inputs status': `ariax forge inputs status SESSION INPUT_ID [--retained]`,
+  sync: `ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]`,
+  files: `ariax forge files PROJECT [--path /workspace] [--recursive] [--cursor CURSOR]
+  ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax forge files hydrate SESSION --path PATH [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
+  'files delete': `ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
+  'files hydrate': `ariax forge files hydrate SESSION --path PATH [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
+  'files recover': `ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
+  download: `ariax forge download PROJECT PATH --dest LOCAL`,
+  link: `ariax forge link PROJECT PATH`,
+});
+
+export function helpFor(positionals = []) {
+  const action = actionOf(positionals);
+  if (action && Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, action)) {
+    return SUBCOMMAND_HELP[action];
+  }
+  return help;
+}
 
 export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
@@ -63,8 +130,8 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
   ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
   ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]
-  ariax forge list [--details]
-  ariax forge status SESSION
+  ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
+  ariax forge status SESSION [--details]
   ariax forge tools SESSION [--details]
   ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
   ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS]
@@ -85,7 +152,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
   ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
-  ariax forge files PROJECT [--path /workspace] [--cursor CURSOR]
+  ariax forge files PROJECT [--path /workspace] [--recursive] [--cursor CURSOR]
   ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge files hydrate SESSION --path PATH [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
@@ -118,6 +185,9 @@ export function validateArguments({ positionals, flags, passthrough, globals }) 
   if (['checkpoint', 'checkpoints'].includes(action)
       || ['checkpoint', 'checkpoint-id', 'restore-session'].some(name => Object.hasOwn(flags, name))) {
     throw usageError('Forge checkpoints and restore selectors are no longer supported. Use the current project workspace; upgrade the CLI and server together. Run: ariax forge --help');
+  }
+  if (globals.help && Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, action) && !Object.keys(flags).length) {
+    return;
   }
   if (!Object.hasOwn(OPTIONS, action)) throw usageError('forge: unknown action. Run: ariax forge --help');
   const [allowed, operands] = OPTIONS[action];
@@ -442,6 +512,7 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
   const { id, request } = record, kind = savedKind(id, request);
   const retrySafe = ['session', 'command', 'selection', 'cancel', 'close', 'limit', 'finish', 'file-hydration'].includes(kind);
   let failures = 0;
+  let lastCapacityCode;
   for (;;) {
     try {
       // Session and tool-selection POSTs compare the complete saved fields on
@@ -480,7 +551,11 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
       }
       const res = request.session_id
         ? await forgeRequest(ctx, request.session_id, 'POST', request.path, { body: request.body, signal })
-        : await ctx.client.post(request.path, { body: request.body, signal });
+        : await ctx.client.post(request.path, {
+          body: request.body,
+          ...(kind === 'session' && ctx.flags?.details !== true ? { query: { view: 'summary' } } : {}),
+          signal,
+        });
       const label = { session: 'session_id', command: 'command_id', selection: 'selection_id' }[kind];
       if (label && res.data?.[label] !== id) throw new NetworkError(`Forge response has no matching ${label}.`);
       if (kind === 'command') checkCommand(record, res);
@@ -492,7 +567,10 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
       const capacity = kind === 'command' && record.readiness &&
         ['gpu_busy', 'cpu_busy', 'command_capacity', 'tool_unready', 'session_unready', 'hydration_pending', 'file_mutation_pending'].includes(error.code);
       if (capacity) {
-        printProgress(`Waiting for command readiness: ${error.code}`);
+        if (error.code !== lastCapacityCode) {
+          printProgress(`Waiting for command readiness: ${error.code}`);
+          lastCapacityCode = error.code;
+        }
         previous = true;
         await delay(3000, undefined, { signal });
         continue;
@@ -600,7 +678,12 @@ export function report(ctx, res, kind) {
       && ['provisioning', 'starting', 'available'].includes(data.state)) {
     printProgress(`Limit revision ${data.limit_revision} is saved; host application is pending. The host retains its previous deadline until delivery. Inspect ariax forge status ${data.session_id} for applied_limit_revision.`);
   }
-  if (kind === 'sessions') printTable(['session_id', 'name', 'state', 'gpu', 'gpu_count'], data.sessions.map(s => [s.session_id, s.name, s.state, s.gpu_type, s.gpu_count]));
+  if (kind === 'sessions') {
+    printTable(
+      ['session_id', 'project_id', 'name', 'state', 'gpu', 'gpu_count'],
+      data.sessions.map(s => [s.session_id, s.project_id ?? '-', s.name, s.state, s.gpu_type, s.gpu_count]),
+    );
+  }
   else if (kind === 'operations') {
     printTable(['operation_id', 'kind', 'session_id', 'last_observed_state'], data.operations.map(item =>
       [item.operation_id, item.kind, item.session_id, item.last_observed_state]));
@@ -632,12 +715,18 @@ export function report(ctx, res, kind) {
       if (hiddenExp || hiddenLeg) {
         printProgress(`Hidden: ${hiddenExp} experimental, ${hiddenLeg} legacy (pass --all to include).`);
       }
+      if (data.tools.length === 0 && Array.isArray(res.meta?.available_tasks) && res.meta.available_tasks.length) {
+        printProgress(`No Forge tools matched task "${ctx.flags.task ?? ''}". Available tasks: ${res.meta.available_tasks.join(', ')}.`);
+      }
     }
     else printTable(['tool', 'state', 'error'], data.tools.map(t => [t.tool, t.state, t.error?.message]));
   }
-  else if (kind === 'inputs') printTable(['input_id', 'path', 'state', 'size_bytes'], data.inputs.map(i => [i.input_id, i.path, i.state, i.size_bytes]));
+  else if (kind === 'inputs') printTable(['input_id', 'path', 'state', 'size_bytes'], data.inputs.map(i => [i.input_id ?? '-', i.path, i.state, i.size_bytes ?? '-']));
   else if (kind === 'files') {
     printTable(['path', 'kind', 'size_bytes'], data.entries.map(e => [e.path, e.kind, e.size_bytes]));
+    if (data.recursive) {
+      printKv({ file_count: data.file_count, total_bytes: data.total_bytes, truncated: data.truncated });
+    }
     if (data.next_cursor) printKv({ next_cursor: data.next_cursor });
   }
   else if (kind === 'activity') {
@@ -655,6 +744,82 @@ export function report(ctx, res, kind) {
     if (data.output_complete === true) printProgress('The terminal tail was captured. Earlier output may still be truncated.');
   }
   else printKv(data);
+}
+
+const KNOWN_CATALOG_TASKS = Object.freeze([
+  'antibodies',
+  'binder-design',
+  'molecular-prediction',
+  'sequence-optimization',
+  'validation-search',
+]);
+
+function compactSessionTool(tool) {
+  if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return tool;
+  const out = {};
+  for (const key of ['tool', 'state', 'error', 'version', 'started_at', 'ready_at', 'updated_at']) {
+    if (Object.prototype.hasOwnProperty.call(tool, key) && tool[key] !== undefined) {
+      out[key] = tool[key];
+    }
+  }
+  return Object.keys(out).length ? out : tool;
+}
+
+function compactSessionPayload(data, details = false) {
+  if (details || !data || typeof data !== 'object' || Array.isArray(data)) return data;
+  if (!Array.isArray(data.tools)) return data;
+  return { ...data, tools: data.tools.map(compactSessionTool) };
+}
+
+function parsePackOutput(outputTail, { src, requestedDest, format, removeSrc, noManifest }) {
+  const text = typeof outputTail === 'string' ? outputTail : '';
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  let parsed = null;
+  let noticeLine = null;
+  for (const line of lines) {
+    if (!noticeLine && /^pack notice:/i.test(line)) {
+      noticeLine = line.replace(/^pack notice:\s*/i, '').trim();
+    }
+  }
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i];
+    if (line.startsWith('{') && line.endsWith('}')) {
+      try {
+        const candidate = JSON.parse(line);
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          parsed = candidate;
+          break;
+        }
+      } catch { /* keep scanning */ }
+    }
+  }
+  const actualDest = typeof parsed?.dest === 'string' && parsed.dest
+    ? parsed.dest
+    : (typeof parsed?.archive === 'string' && parsed.archive ? parsed.archive : requestedDest);
+  const actualFormat = typeof parsed?.format === 'string' && parsed.format
+    ? parsed.format
+    : (actualDest.endsWith('.tar.gz') || actualDest.endsWith('.tgz') ? 'tar.gz' : format);
+  const fallbackNotice = noticeLine
+    ?? (actualDest !== requestedDest || actualFormat !== format
+      ? `Fell back from ${format} (${requestedDest}) to ${actualFormat} (${actualDest}).`
+      : null);
+  const manifestPath = parsed && Object.prototype.hasOwnProperty.call(parsed, 'manifest_path')
+    ? parsed.manifest_path
+    : (noManifest ? null : `${actualDest}.manifest.json`);
+  return {
+    src: typeof parsed?.src === 'string' && parsed.src ? parsed.src : src,
+    requested_dest: requestedDest,
+    actual_dest: actualDest,
+    manifest_path: manifestPath,
+    format: actualFormat,
+    ...(typeof parsed?.sharded === 'boolean' ? { sharded: parsed.sharded } : {}),
+    ...(Array.isArray(parsed?.shards) && parsed.shards.length ? { shards: parsed.shards } : {}),
+    file_count: typeof parsed?.file_count === 'number' && Number.isFinite(parsed.file_count) ? parsed.file_count : null,
+    uncompressed_bytes: typeof parsed?.uncompressed_bytes === 'number' && Number.isFinite(parsed.uncompressed_bytes) ? parsed.uncompressed_bytes : null,
+    compressed_bytes: typeof parsed?.compressed_bytes === 'number' && Number.isFinite(parsed.compressed_bytes) ? parsed.compressed_bytes : null,
+    removed_src: typeof parsed?.removed_src === 'boolean' ? parsed.removed_src : Boolean(removeSrc),
+    fallback_notice: fallbackNotice,
+  };
 }
 
 // Summary is for routing only. Keep all observed qualification states visible,
@@ -771,7 +936,10 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, re
     // before connecting; an existing protected connection stays independent.
     if (sessionId && resourcePath === '/v1/session' && !hasCachedForgeConnection(ctx, sessionId)) {
       for (;;) {
-        const lifecycle = await ctx.client.get(`${API}/sessions/${sessionId}`, { signal: controller.signal });
+        const lifecycle = await ctx.client.get(`${API}/sessions/${sessionId}`, {
+          query: ctx.flags?.details ? undefined : { view: 'summary' },
+          signal: controller.signal,
+        });
         if (['closing', 'closed', 'failed'].includes(lifecycle.data.state)) {
           failed('session_unavailable', `Session ${sessionId} is ${lifecycle.data.state}`, lifecycle.data.error);
         }
@@ -785,7 +953,10 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, re
     }
     for (;;) {
       const res = readResult ? await readResult({ signal: controller.signal }) : sessionId
-        ? await forgeRequest(ctx, sessionId, 'GET', resourcePath, { signal: controller.signal })
+        ? await forgeRequest(ctx, sessionId, 'GET', resourcePath, {
+          ...(resourcePath === '/v1/session' && !ctx.flags?.details ? { query: { view: 'summary' } } : {}),
+          signal: controller.signal,
+        })
         : await ctx.client.get(resourcePath, { signal: controller.signal });
       remember(ctx, id, resourcePath, res.data);
       const { state, done } = inspect(res.data);
@@ -1083,10 +1254,15 @@ function finishOutcome(data) {
 
 async function waitFinish(ctx, id, session, initial, signal, file, record) {
   let result = initial;
+  let lastLine;
   for (;;) {
     validateFinish(result.data,id,session);
     if (result.data.phase === 'completed') { finishOutcome(result.data); return result; }
-    printProgress(`Finish ${id}: ${result.data.phase}; execution ${result.data.execution}; save ${result.data.durability}; release ${result.data.release}`);
+    const line = `Finish ${id}: ${result.data.phase}; execution ${result.data.execution}; save ${result.data.durability}; release ${result.data.release}`;
+    if (line !== lastLine) {
+      printProgress(line);
+      lastLine = line;
+    }
     await delay(3000,undefined,{signal});
     result = await ctx.client.get(`${API}/sessions/${session}/finish`,{signal});
     validateFinish(result.data,id,session);
@@ -1104,6 +1280,7 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
     error.action = `Inspect ariax forge inputs status ${session} ${id} --retained. Retained history does not confirm installation in an active workspace.`;
     throw error;
   }
+  let lastLine;
   for (;;) {
     const data = result.data;
     if (kind === 'session') {
@@ -1135,7 +1312,11 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
         `Inspect the same input ID before starting a new operation.`);
       if (data.state === (kind === 'sync' ? 'saved' : 'ready')) return result;
     } else throw usageError(`Waiting is not supported for saved operation ${id}.`);
-    printProgress(`Waiting for saved operation ${id}: ${data.state ?? 'pending'}`);
+    const line = `Waiting for saved operation ${id}: ${data.state ?? 'pending'}`;
+    if (line !== lastLine) {
+      printProgress(line);
+      lastLine = line;
+    }
     await delay(kind === 'file-recovery' ? Math.max(1000,(data.retry_after ?? 3)*1000) : 3000, undefined, {signal});
     if (kind === 'session') result = await ctx.client.get(`${API}/sessions/${id}`, {signal});
     else if (kind === 'close') result = await ctx.client.get(record.request.path.slice(0,-'/close'.length), {signal});
@@ -1385,7 +1566,10 @@ async function waitSessionReady(ctx, sessionId, initialResult, signal) {
     const waitMs = Math.min(3000, Math.round(1000 * Math.pow(1.5, attempt)));
     attempt += 1;
     await delay(waitMs, undefined, { signal });
-    result = await ctx.client.get(`${API}/sessions/${sessionId}`, { signal });
+    result = await ctx.client.get(`${API}/sessions/${sessionId}`, {
+      query: ctx.flags?.details ? undefined : { view: 'summary' },
+      signal,
+    });
     if (record && writeFile) saveResult(writeFile, record, result.data);
   }
 }
@@ -1456,12 +1640,15 @@ async function runAction(ctx) {
     const destination = resuming ? `${API}/projects/${projectId}/sessions` : `${API}/sessions`;
     const request = { method: 'POST', path: destination, body };
     const recovery = `Inspect ariax forge status ${sessionId}; retry the same ${action} request with --session-id ${sessionId}, identical fields, and the same --root-dir, account, and API origin.`;
-    if (!flags.wait) return report(ctx, await submit(ctx, sessionId, request, 'session_id', recovery));
+    if (!flags.wait) {
+      const created = await submit(ctx, sessionId, request, 'session_id', recovery);
+      return report(ctx, { ...created, data: compactSessionPayload(created.data, flags.details) });
+    }
     const seconds = localWaitSeconds(flags['wait-timeout'], 1800);
     return controlled(ctx, sessionId, seconds, async (signal) => {
       const created = await submit(ctx, sessionId, request, 'session_id', recovery, { signal });
       const ready = await waitSessionReady(ctx, sessionId, created, signal);
-      return report(ctx, ready);
+      return report(ctx, { ...ready, data: compactSessionPayload(ready.data, flags.details) });
     }, { resume: `ariax forge status ${sessionId}` });
   }
   if (action === 'catalog') {
@@ -1547,7 +1734,8 @@ async function runAction(ctx) {
       ...(includeAll ? { include_all: 'true' } : {}),
     };
     response = await catalogGet(ctx, `${API}/catalog`, { query: catalogQuery });
-    tools = Array.isArray(response.data?.tools) ? response.data.tools : [];
+    const rawToolsBeforeFilter = Array.isArray(response.data?.tools) ? response.data.tools : [];
+    tools = rawToolsBeforeFilter;
     const serverFiltered = response.meta?.view === 'summary' || response.meta?.view === 'full';
     if (!serverFiltered) {
       if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
@@ -1577,7 +1765,34 @@ async function runAction(ctx) {
       }
     }
     if (!isFull) tools = tools.map(compactCatalogTool);
-    response.data = { ...response.data, tools };
+    let availableTasks;
+    if (task !== undefined && tools.length === 0) {
+      if (Array.isArray(response.meta?.available_tasks) && response.meta.available_tasks.length) {
+        availableTasks = [...new Set(response.meta.available_tasks.filter(v => typeof v === 'string' && v.trim()))].sort();
+      } else {
+        let taskSource = rawToolsBeforeFilter;
+        if (serverFiltered || !taskSource.length) {
+          try {
+            const fullCat = await catalogGet(ctx, `${API}/catalog`, { query: { view: 'summary', include_all: 'true' }, attempts: 1 });
+            if (Array.isArray(fullCat.data?.tools) && fullCat.data.tools.length) taskSource = fullCat.data.tools;
+          } catch { /* fallback below */ }
+        }
+        const discovered = [...new Set(taskSource.flatMap(t => Array.isArray(t?.capabilities?.tasks) ? t.capabilities.tasks : []).filter(v => typeof v === 'string' && v.trim()))].sort();
+        availableTasks = discovered.length ? discovered : [...KNOWN_CATALOG_TASKS];
+      }
+      response.meta = {
+        ...(response.meta || {}),
+        available_tasks: availableTasks,
+      };
+    }
+    response.data = {
+      ...response.data,
+      tools,
+      ...(availableTasks ? {
+        available_tasks: availableTasks,
+        hint: `No Forge tools matched task "${task}". Available tasks: ${availableTasks.join(', ')}.`,
+      } : {}),
+    };
     return report(ctx, response, 'catalog');
   }
   if (action === 'summary') {
@@ -1585,7 +1800,9 @@ async function runAction(ctx) {
     return runForgeSummary(ctx, id);
   }
   if (action === 'project' || action === 'activity') {
-    const id = uuid(ctx.positionals[1], 'project ID');
+    const id = action === 'project'
+      ? await resolveProjectId(ctx.client, ctx.positionals[1])
+      : uuid(ctx.positionals[1], 'project ID');
     const limit = flags.limit === undefined ? undefined : number(flags.limit, 'limit', { integer: true });
     if (limit > 100) throw usageError(`forge ${action}: --limit must be an integer 1..100.`);
     const res = await ctx.client.get(`${API}/projects/${id}${action === 'activity' ? '/activity' : ''}`, { query: {
@@ -1597,7 +1814,42 @@ async function runAction(ctx) {
       : report(ctx, { ...res, data: { ...res.data, project_url: projectUrl(ctx, id) } });
   }
   if (action === 'list') {
-    return report(ctx, await ctx.client.get(`${API}/sessions`, { query: flags.details ? undefined : { view: 'summary' } }), 'sessions');
+    const stateFilter = flags.state === undefined ? undefined : required(flags.state, 'state');
+    const nameFilter = flags.name === undefined ? undefined : required(flags.name, 'name');
+    const projectFilter = flags.project === undefined ? undefined : uuid(flags.project, 'project ID');
+    const limit = flags.limit === undefined ? undefined : number(flags.limit, 'limit', { integer: true });
+    if (limit !== undefined && limit > 100) throw usageError('forge list: --limit must be an integer 1..100.');
+    const query = {
+      ...(flags.details ? {} : { view: 'summary' }),
+      ...(flags.active === true ? { active: 'true' } : {}),
+      ...(stateFilter !== undefined ? { state: stateFilter } : {}),
+      ...(nameFilter !== undefined ? { name: nameFilter } : {}),
+      ...(projectFilter !== undefined ? { project_id: projectFilter } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+    };
+    const res = await ctx.client.get(`${API}/sessions`, { query: Object.keys(query).length ? query : undefined });
+    let sessions = Array.isArray(res.data?.sessions) ? res.data.sessions : [];
+    if (flags.active === true) {
+      sessions = sessions.filter(s => !['closed', 'failed'].includes(String(s?.state ?? '').toLowerCase()));
+    }
+    if (stateFilter !== undefined) {
+      const targetState = stateFilter.toLowerCase();
+      sessions = sessions.filter(s => String(s?.state ?? '').toLowerCase() === targetState);
+    }
+    if (nameFilter !== undefined) {
+      const needle = nameFilter.toLowerCase();
+      sessions = sessions.filter(s => String(s?.name ?? '').toLowerCase().includes(needle));
+    }
+    if (projectFilter !== undefined) {
+      sessions = sessions.filter(s => String(s?.project_id ?? '').toLowerCase() === projectFilter);
+    }
+    if (limit !== undefined) {
+      sessions = sessions.slice(0, limit);
+    }
+    if (!flags.details) {
+      sessions = sessions.map(s => compactSessionPayload(s, false));
+    }
+    return report(ctx, { ...res, data: { ...res.data, sessions } }, 'sessions');
   }
   if (action === 'operations') {
     const account = await accountIdentity(ctx);
@@ -1746,12 +1998,13 @@ async function runAction(ctx) {
   }
   if (action === 'tools') return report(ctx, await forgeRequest(ctx, sessionId, 'GET', '/v1/tools'), 'tools');
   if (action === 'status') {
-    const res = await ctx.client.get(sessionPath);
+    const res = await ctx.client.get(sessionPath, { query: flags.details ? undefined : { view: 'summary' } });
     remember(ctx, sessionId, sessionPath, res.data);
     const project = await ctx.client.get(`${API}/projects/${uuid(res.data.project_id, 'project ID')}`, { query: { view: 'summary' } });
     const syncInfo = await observeSessionSync(ctx, sessionId, sessionPath, res.data, { tryDirect: false });
     if (syncInfo) emitHygieneNotices(ctx, syncInfo, { sessionId, includeScratch: false });
-    return report(ctx, { ...res, data: { ...res.data, project_status: project.data.status,
+    const sessionData = compactSessionPayload(res.data, flags.details);
+    return report(ctx, { ...res, data: { ...sessionData, project_status: project.data.status,
       control: project.data.control, project_url: projectUrl(ctx, res.data.project_id) } }, action);
   }
   if (action === 'tools wait') {
@@ -1763,7 +2016,9 @@ async function runAction(ctx) {
       if (tool.state === 'failed') failed('tool_failed', `Tool ${toolName} failed`, tool.error);
       return { state: tool.state, done: session.state === 'available' && tool.state === 'ready' };
     }, `ariax forge tools wait ${sessionId} ${toolName}`, sessionId);
-    return report(ctx, { ...res, data: { session_id: sessionId, ...res.data.tools.find(t => t.tool === toolName) } });
+    const matchedTool = res.data.tools.find(t => t.tool === toolName);
+    const projectedTool = flags.details ? matchedTool : compactSessionTool(matchedTool);
+    return report(ctx, { ...res, data: { session_id: sessionId, ...projectedTool } });
   }
   if (action === 'run') {
     if (flags.tail !== undefined && !flags.wait) throw usageError('forge run: --tail requires --wait.');
@@ -1836,12 +2091,26 @@ async function runAction(ctx) {
     const readiness = flags['wait-ready'] ? { input_ids: [] } : undefined;
     const request = { method: 'POST', session_id: sessionId, path: '/v1/commands', body };
     const recovery = `Inspect ariax forge command ${sessionId} ${commandId}. Keep operation ID ${commandId} while its outcome is uncertain; a fresh pack could duplicate work.`;
-    if (!flags.wait && !readiness) return report(ctx, await submit(ctx, commandId, request, 'command_id', recovery));
+    const presentPackResult = (result, waited) => {
+      const baseData = result?.data && typeof result.data === 'object' ? { ...result.data } : {};
+      if (!flags.details) delete baseData.argv;
+      if (waited) {
+        baseData.pack = parsePackOutput(baseData.output_tail, {
+          src,
+          requestedDest: dest,
+          format,
+          removeSrc: flags['remove-src'] === true,
+          noManifest: flags['no-manifest'] === true,
+        });
+      }
+      return report(ctx, { ...result, data: baseData });
+    };
+    if (!flags.wait && !readiness) return presentPackResult(await submit(ctx, commandId, request, 'command_id', recovery), false);
     const seconds = localWaitSeconds(flags['wait-timeout'], 1800);
     return controlled(ctx, commandId, seconds, async (signal) => {
       let result = await submit(ctx, commandId, request, 'command_id', recovery, { signal, readiness });
       if (flags.wait) result = await waitCommandResult(ctx, sessionId, commandId, signal, result);
-      return report(ctx, result);
+      return presentPackResult(result, flags.wait === true);
     });
   }
   if (action === 'close') {
@@ -1936,7 +2205,7 @@ export async function run(ctx) {
     if (error.code === 'human_resume_required' || error.code === 'control_revision_conflict') {
       let projectId = isUUID(error.details?.project_id) ? uuid(error.details.project_id, 'project ID') : undefined;
       try {
-        if (!projectId && ['resume', 'project', 'summary'].includes(action)) projectId = uuid(ctx.positionals[1], 'project ID');
+        if (!projectId && ['resume', 'project', 'summary'].includes(action) && isUUID(ctx.positionals[1])) projectId = uuid(ctx.positionals[1], 'project ID');
         else if (!projectId && action === 'files recover') projectId = uuid(ctx.positionals[2], 'project ID');
         else if (!projectId && action === 'recover' && isUUID(recovered?.request?.project_id)) projectId = recovered.request.project_id;
         else if (!projectId && action === 'inputs add' && ctx.flags.artifact !== undefined) projectId = uuid(ctx.flags.artifact.split(':')[0], 'project ID');

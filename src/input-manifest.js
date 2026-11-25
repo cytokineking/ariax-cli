@@ -1,4 +1,5 @@
 /** Scientific provenance over the existing preparation parser, without file mutation. */
+import { usageError } from './args.js';
 import { parseStructureInput, protocolId, selectedChains } from './structure-input.js';
 import { structureRecordsError } from './structure-validation.js';
 import { sha256 } from './input-source.js';
@@ -163,4 +164,285 @@ export function compactInspection(value, full = false) {
       };
     }),
   };
+}
+
+const MAX_INSPECTED_RESIDUES = 500;
+const MAX_RESOLVED_POSITIONS = 200;
+
+function expandRangeToken(token, maxRemaining, label) {
+  const trimmed = String(token || '').trim();
+  if (!trimmed) return [];
+  if (/^-?\d+$/.test(trimmed)) return [Number(trimmed)];
+  const range = /^(\d+)(?:-|\.\.)(\d+)$/.exec(trimmed);
+  if (!range) throw usageError(`${label}: invalid residue token "${trimmed}". Use e.g. A:56,115,121-123 or A:121..123.`);
+  const first = Number(range[1]);
+  const last = Number(range[2]);
+  if (last < first) throw usageError(`${label}: descending residue range "${trimmed}".`);
+  if (last - first + 1 > maxRemaining) {
+    throw usageError(`${label}: selection exceeds the ${MAX_INSPECTED_RESIDUES}-residue inspection limit.`);
+  }
+  const out = [];
+  for (let n = first; n <= last; n += 1) out.push(n);
+  return out;
+}
+
+function parseResidueSpec(rawSpec, defaultChain) {
+  const text = String(rawSpec ?? '').trim();
+  if (!text) throw usageError('inputs inspect: --residues requires a nonempty residue specification (e.g. A:56,115,121-123).');
+  const tokens = text.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+  if (!tokens.length) throw usageError('inputs inspect: --residues requires at least one residue.');
+  const requests = [];
+  const seen = new Set();
+  let currentChain = null;
+  for (const token of tokens) {
+    let chain = null;
+    let body = token;
+    const colon = /^([A-Za-z0-9]+):(.+)$/.exec(token);
+    if (colon) {
+      chain = colon[1];
+      body = colon[2].trim();
+      currentChain = chain;
+    } else {
+      const compact = /^([A-Za-z])(\d+(?:(?:-|\.\.)\d+)?)$/.exec(token);
+      if (compact) {
+        chain = compact[1];
+        body = compact[2];
+        currentChain = chain;
+      } else {
+        chain = currentChain ?? defaultChain;
+      }
+    }
+    if (!chain) {
+      throw usageError('inputs inspect: --residues requires a chain prefix (e.g. A:56,115,121-123) when the structure has multiple chains.');
+    }
+    const nums = expandRangeToken(body, MAX_INSPECTED_RESIDUES - requests.length, 'inputs inspect --residues');
+    for (const num of nums) {
+      const key = `${chain}:${num}`;
+      if (seen.has(key)) continue;
+      if (requests.length >= MAX_INSPECTED_RESIDUES) {
+        throw usageError(`inputs inspect --residues: selection exceeds the ${MAX_INSPECTED_RESIDUES}-residue limit.`);
+      }
+      seen.add(key);
+      requests.push({ chain, author_residue: num });
+    }
+  }
+  return requests;
+}
+
+function findCanonicalPositionForAuthor(parsed, authorChain, residue) {
+  if (!residue) return null;
+  if (parsed.format === 'cif') {
+    const labelToAuth = parsed.cif?.labelToAuth || {};
+    const matchingLabel = Object.keys(labelToAuth).find((label) => labelToAuth[label] === authorChain) ?? authorChain;
+    const labelView = parsed.canonical?.[matchingLabel];
+    const mapped = labelView?.authorToCanonical?.[residue.author];
+    if (Number.isSafeInteger(mapped)) return mapped;
+    return Number.isSafeInteger(residue.register) ? residue.register : null;
+  }
+  const authorView = parsed.author?.[authorChain];
+  const mapped = authorView?.authorToCanonical?.[residue.author];
+  return Number.isSafeInteger(mapped) ? mapped : null;
+}
+
+/** Targeted author-to-canonical residue lookup without dumping full residue arrays. */
+export function inspectResidues(input, residueSpec, { spec } = {}) {
+  const protocol = protocolId(spec?.protocol);
+  const parsed = parseStructureInput(input.text, input.targetFilename, protocol === 'esmfold2-pipeline');
+  const selected = spec ? selectedChains(spec, protocol) : [];
+  const availableAuthorChains = Object.keys(parsed.author);
+  const defaultChain = selected.length === 1
+    ? selected[0]
+    : (availableAuthorChains.length === 1 ? availableAuthorChains[0] : null);
+  const requests = parseResidueSpec(residueSpec, defaultChain);
+
+  return requests.map(({ chain, author_residue }) => {
+    const authorView = parsed.author[chain] ?? null;
+    const residue = authorView?.residues?.find((r) => r.author === author_residue) ?? null;
+    if (residue) {
+      return {
+        author_chain: chain,
+        author_residue,
+        canonical_position: findCanonicalPositionForAuthor(parsed, chain, residue),
+        amino_acid: residue.aminoAcid ?? null,
+        missing: false,
+      };
+    }
+    return {
+      author_chain: chain,
+      author_residue,
+      canonical_position: null,
+      amino_acid: null,
+      missing: true,
+    };
+  });
+}
+
+function expandBoltzMaskPositions(value, available) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return [];
+  if (text === 'all') return (available || []).slice(0, MAX_RESOLVED_POSITIONS);
+  const out = [];
+  const seen = new Set();
+  for (const raw of text.split(',')) {
+    const token = raw.trim();
+    if (!token) continue;
+    const range = /^(\d+)\.\.(\d+)$/.exec(token);
+    if (range) {
+      const start = Math.min(Number(range[1]), Number(range[2]));
+      const end = Math.max(Number(range[1]), Number(range[2]));
+      for (let pos = start; pos <= end && out.length < MAX_RESOLVED_POSITIONS; pos += 1) {
+        if (!seen.has(pos)) { seen.add(pos); out.push(pos); }
+      }
+    } else if (/^\d+$/.test(token)) {
+      const pos = Number(token);
+      if (!seen.has(pos) && out.length < MAX_RESOLVED_POSITIONS) { seen.add(pos); out.push(pos); }
+    }
+  }
+  return out;
+}
+
+function expandSimpleDashMask(raw) {
+  const out = [];
+  const seen = new Set();
+  const tokens = Array.isArray(raw) ? raw : String(raw || '').split(',');
+  for (const item of tokens) {
+    if (out.length >= MAX_RESOLVED_POSITIONS) break;
+    if (Number.isSafeInteger(item)) {
+      if (!seen.has(item)) { seen.add(item); out.push(item); }
+      continue;
+    }
+    const token = String(item || '').trim();
+    if (!token) continue;
+    if (/^-?\d+$/.test(token)) {
+      const n = Number(token);
+      if (!seen.has(n)) { seen.add(n); out.push(n); }
+      continue;
+    }
+    const m = /^(\d+)-(\d+)$/.exec(token);
+    if (m) {
+      const start = Math.min(Number(m[1]), Number(m[2]));
+      const end = Math.max(Number(m[1]), Number(m[2]));
+      for (let n = start; n <= end && out.length < MAX_RESOLVED_POSITIONS; n += 1) {
+        if (!seen.has(n)) { seen.add(n); out.push(n); }
+      }
+    }
+  }
+  return out;
+}
+
+/** Resolve configured BoltzGen binding_rules or protocol hotspots to exact residue mappings. */
+export function resolveSpecResidueMappings(spec, text, targetFilename) {
+  if (!spec || typeof spec !== 'object' || typeof text !== 'string') return {};
+  const protocol = protocolId(spec.protocol);
+  if (!protocol) return {};
+  let parsed;
+  try {
+    parsed = parseStructureInput(text, targetFilename, protocol === 'esmfold2-pipeline');
+  } catch {
+    return {};
+  }
+
+  const lookupAuthor = (chain, authorRes) => {
+    const view = parsed.author?.[chain];
+    const residue = view?.residues?.find((r) => r.author === authorRes) ?? null;
+    return {
+      chain,
+      canonical_position: residue ? findCanonicalPositionForAuthor(parsed, chain, residue) : null,
+      author_residue: authorRes,
+      amino_acid: residue?.aminoAcid ?? null,
+    };
+  };
+
+  if (protocol === 'boltzgen') {
+    const rules = Array.isArray(spec.binding_rules) ? spec.binding_rules : [];
+    if (!rules.length) return {};
+    const resolved = [];
+    for (const rule of rules) {
+      const chain = String(rule?.id || '').trim();
+      const view = parsed.canonical?.[chain];
+      if (!chain || !view) continue;
+      const byCanonical = new Map();
+      const firstRegister = view.firstRegister ?? 1;
+      const rebased = parsed.format !== 'cif';
+      for (const r of view.residues || []) {
+        const canonicalPos = rebased ? (r.register - firstRegister + 1) : r.register;
+        if (!byCanonical.has(canonicalPos)) byCanonical.set(canonicalPos, r);
+      }
+      for (const [fieldName, role] of [['binding', 'binding'], ['not_binding', 'not_binding']]) {
+        if (!rule[fieldName]) continue;
+        const positions = expandBoltzMaskPositions(rule[fieldName], view.canonicalResidues);
+        for (const pos of positions) {
+          if (resolved.length >= MAX_RESOLVED_POSITIONS) break;
+          const r = byCanonical.get(pos) ?? null;
+          resolved.push({
+            chain,
+            canonical_position: pos,
+            author_residue: r?.author ?? (Number.isSafeInteger(view.canonicalToAuthor?.[pos]) ? view.canonicalToAuthor[pos] : null),
+            amino_acid: r?.aminoAcid ?? null,
+            ...(role === 'not_binding' ? { rule: 'not_binding' } : {}),
+          });
+        }
+      }
+    }
+    return resolved.length ? { resolved_binding_rules: resolved } : {};
+  }
+
+  const hotspots = [];
+  const pushHotspot = (entry) => {
+    if (hotspots.length < MAX_RESOLVED_POSITIONS) hotspots.push(entry);
+  };
+
+  if (protocol === 'bindcraft') {
+    const raw = String(spec.hotspots || '').trim();
+    for (const token of raw.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean)) {
+      const m = /^([A-Z0-9])(\d+)(?:-(\d+))?$/.exec(token);
+      if (!m) continue;
+      const chain = m[1];
+      const start = Number(m[2]);
+      const end = m[3] ? Number(m[3]) : start;
+      for (let pos = start; pos <= end && hotspots.length < MAX_RESOLVED_POSITIONS; pos += 1) {
+        pushHotspot(lookupAuthor(chain, pos));
+      }
+    }
+  } else if (protocol === 'bindcraft2') {
+    const targets = Array.isArray(spec.protocol_config?.targets) ? spec.protocol_config.targets : [];
+    for (const target of targets) {
+      if (!target || typeof target.hotspots !== 'string' || !target.hotspots.trim()) continue;
+      if (target.input_file && targetFilename && target.input_file !== targetFilename) continue;
+      const defaultChain = Array.isArray(target.chains) && target.chains.length ? String(target.chains[0]) : null;
+      for (const rawTok of target.hotspots.split(',').map((t) => t.trim()).filter(Boolean)) {
+        const tok = /^[A-Za-z]/.test(rawTok) ? rawTok : (defaultChain ? `${defaultChain}${rawTok}` : rawTok);
+        const m = /^([A-Za-z]+)(\d+)(?:-(\d+))?$/.exec(tok);
+        if (!m) continue;
+        const chain = m[1];
+        const start = Math.min(Number(m[2]), Number(m[3] || m[2]));
+        const end = Math.max(Number(m[2]), Number(m[3] || m[2]));
+        for (let pos = start; pos <= end && hotspots.length < MAX_RESOLVED_POSITIONS; pos += 1) {
+          pushHotspot(lookupAuthor(chain, pos));
+        }
+      }
+    }
+  } else if (protocol === 'pxdesign') {
+    for (const [chain, raw] of Object.entries(spec.hotspots_by_chain || {})) {
+      for (const pos of expandSimpleDashMask(raw)) pushHotspot(lookupAuthor(chain, pos));
+    }
+  } else if (protocol === 'esmfold2-pipeline') {
+    const target = spec.protocol_config?.target;
+    const chains = selectedChains(spec, protocol);
+    const selectors = Array.isArray(target?.hotspots)
+      ? target.hotspots
+      : String(target?.hotspots || '').split(';').filter(Boolean);
+    for (const sel of selectors) {
+      const textSel = String(sel).trim();
+      const colon = textSel.indexOf(':');
+      const chain = colon >= 0
+        ? textSel.slice(0, colon)
+        : [...chains].sort((a, b) => b.length - a.length).find((c) => textSel.startsWith(c));
+      const mask = colon >= 0 ? textSel.slice(colon + 1) : textSel.slice(chain?.length || 0);
+      if (!chain) continue;
+      for (const pos of expandSimpleDashMask(mask)) pushHotspot(lookupAuthor(chain, pos));
+    }
+  }
+
+  return hotspots.length ? { resolved_hotspots: hotspots } : {};
 }

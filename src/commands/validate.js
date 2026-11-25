@@ -5,6 +5,7 @@ import { EXIT } from '../exit-codes.js';
 import { readAndValidateInput } from '../input.js';
 import { createSequencePrompt } from '../sequence-prompt.js';
 import { prepareStructureInput, protocolId } from '../structure-input.js';
+import { resolveSpecResidueMappings } from '../input-manifest.js';
 import { isBindcraft2, prepareBindcraft2Bundle } from '../bindcraft2-inputs.js';
 import { compactScientificSettings, usesCompactCampaignPresentation } from '../campaign-presentation.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
@@ -30,17 +31,24 @@ export async function run(ctx) {
     err.exitCode = EXIT.USAGE;
     throw err;
   }
+  let preparationNotes = [];
+  let resolvedMappings = {};
   if (isBindcraft2(body)) {
     if (ctx.flags.input === undefined && ctx.flags['input-dir'] === undefined) {
       const err = new Error('BindCraft2 validation requires --input FILE or --input-dir DIR for local bundle validation.');
       err.exitCode = EXIT.USAGE;
       throw err;
     }
-    body = prepareBindcraft2Bundle({
+    const bundle = prepareBindcraft2Bundle({
       spec: body,
       inputFile: ctx.flags.input,
       inputDir: ctx.flags['input-dir'],
-    }).spec;
+    });
+    body = bundle.spec;
+    const primaryEntry = bundle.files.find((entry) => entry.filename === bundle.primaryFilename);
+    if (primaryEntry) {
+      resolvedMappings = resolveSpecResidueMappings(bundle.spec, primaryEntry.text, primaryEntry.filename);
+    }
   } else if (ctx.flags['input-dir'] !== undefined) {
     const err = new Error('--input-dir is supported only for BindCraft2 jobs.');
     err.exitCode = EXIT.USAGE;
@@ -60,7 +68,11 @@ export async function run(ctx) {
       prompt.close();
     }
     body = prepared.spec;
-    for (const message of prepared.messages) printProgress(message);
+    preparationNotes = Array.isArray(prepared.messages) ? prepared.messages : [];
+    resolvedMappings = resolveSpecResidueMappings(prepared.spec, prepared.text, input.targetFilename);
+    if (!ctx.json) {
+      for (const message of preparationNotes) printProgress(message);
+    }
   }
   await checkGpuPolicy(ctx, body, { source: 'validate' });
   const res = await ctx.client.post('/api/v1/validate', { body });
@@ -68,13 +80,22 @@ export async function run(ctx) {
   if (normalized && Object.hasOwn(normalized, 'allowed_gpus')) {
     await checkGpuPolicy(ctx, { ...body, ...normalized }, { source: 'validate normalized spec', advise: false });
   }
+  const d = res.data && typeof res.data === 'object' && !Array.isArray(res.data) ? res.data : {};
+  const valid = d.valid ?? d.ok ?? res.status < 300;
   const compactDefault = usesCompactCampaignPresentation(body) && ctx.flags.details !== true;
   if (!compactDefault && ctx.json) {
-    printJson({ data: res.data, meta: res.meta, request_id: res.requestId });
+    printJson({
+      data: {
+        ...d,
+        valid: Boolean(valid),
+        preparation_notes: preparationNotes,
+        ...resolvedMappings,
+      },
+      meta: res.meta,
+      request_id: res.requestId,
+    });
     return;
   }
-  const d = res.data ?? {};
-  const valid = d.valid ?? d.ok ?? res.status < 300;
   const errors = d.errors ?? d.field_errors ?? d.details;
   if (compactDefault) {
     const issues = Array.isArray(errors) ? errors : (errors ? [errors] : []);
@@ -87,6 +108,8 @@ export async function run(ctx) {
       accepted_settings: compactScientificSettings(d.normalized_job_spec ?? body),
       issues,
       warnings,
+      preparation_notes: preparationNotes,
+      ...resolvedMappings,
       action: valid ? null : 'Correct the listed fields and run validation again before submitting.',
     };
     if (ctx.json) printJson({ data: compact });

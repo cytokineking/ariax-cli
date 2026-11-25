@@ -8,7 +8,14 @@ import { printData, printJson } from '../output.js';
 import { MAX_INPUT_SIZE } from '../input.js';
 import { loadInputSource, sha256 } from '../input-source.js';
 import { prepareStructureInput, protocolId, selectedChains } from '../structure-input.js';
-import { compactInspection, inputManifest, inspectChains, stableJson } from '../input-manifest.js';
+import {
+  compactInspection,
+  inputManifest,
+  inspectChains,
+  inspectResidues,
+  resolveSpecResidueMappings,
+  stableJson,
+} from '../input-manifest.js';
 import { inspectBindcraft2Bundle, isBindcraft2, prepareBindcraft2Bundle, writeBindcraft2Bundle } from '../bindcraft2-inputs.js';
 
 function invalid(message) {
@@ -114,9 +121,9 @@ function outputBindcraft2Inspection(ctx, inspection) {
 export async function run(ctx) {
   const [action, ...extra] = ctx.positionals;
   if (!['inspect', 'prepare'].includes(action) || extra.length) {
-    throw usageError('Usage: ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR');
+    throw usageError('Usage: ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--residues SPEC] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR');
   }
-  const allowed = action === 'inspect' ? ['input','input-dir','pdb','file','full','details'] : ['input','input-dir','pdb','file','output'];
+  const allowed = action === 'inspect' ? ['input','input-dir','pdb','file','residues','full','details'] : ['input','input-dir','pdb','file','output'];
   for (const flag of Object.keys(ctx.flags)) if (!allowed.includes(flag)) throw usageError(`inputs ${action}: unsupported flag --${flag}.`);
   if (action === 'prepare' && (!ctx.flags.file || !ctx.flags.output)) throw usageError('inputs prepare requires -f job.json and --output DIR.');
   const job = ctx.flags.file !== undefined ? readJob(String(ctx.flags.file)) : null;
@@ -132,10 +139,28 @@ export async function run(ctx) {
       source_revision: ctx.currentBuild.source_revision, source_dirty: ctx.currentBuild.source_dirty,
     };
     if (action === 'inspect') {
-      outputBindcraft2Inspection(ctx, inspectBindcraft2Bundle(bundle, {
+      const inspection = inspectBindcraft2Bundle(bundle, {
         full: ctx.flags.full === true,
         details: ctx.flags.details === true,
-      }));
+      });
+      const primaryEntry = bundle.files.find((entry) => entry.filename === bundle.primaryFilename);
+      const matchedResidues = ctx.flags.residues !== undefined && primaryEntry
+        ? inspectResidues(
+          { text: primaryEntry.text, targetFilename: `input.${primaryEntry.format}` },
+          String(ctx.flags.residues),
+          { spec: bundle.spec },
+        )
+        : undefined;
+      const resolvedMappings = primaryEntry
+        ? resolveSpecResidueMappings(bundle.spec, primaryEntry.text, primaryEntry.filename)
+        : {};
+      const prepareRequired = stableJson(bundle.spec) !== stableJson(job.spec);
+      outputBindcraft2Inspection(ctx, {
+        ...inspection,
+        prepare_required: prepareRequired,
+        ...(matchedResidues ? { matched_residues: matchedResidues } : {}),
+        ...resolvedMappings,
+      });
       return;
     }
     const directory = writeBindcraft2Bundle(String(ctx.flags.output), bundle);
@@ -154,18 +179,45 @@ export async function run(ctx) {
     protocolId(job?.spec.protocol) === 'bindcraft' ? 'pdb' : 'cif');
   if (action === 'inspect') {
     const inspection = inspectChains(input, {spec:job?.spec});
+    const matchedResidues = ctx.flags.residues !== undefined
+      ? inspectResidues(input, String(ctx.flags.residues), { spec: job?.spec })
+      : undefined;
     let preparation = null;
+    let prepareRequired = false;
+    let resolvedMappings = {};
     if (job) {
       try {
         const prepared = await prepareStructureInput({spec:job.spec, text:input.text, targetFilename:input.targetFilename});
-        preparation = {ready:true, prepared_sha256:sha256(Buffer.from(prepared.text)), job_sha256:sha256(stableJson(prepared.spec)),
-          transforms:prepared.transforms, preparation_notes:prepared.messages};
+        prepareRequired = Boolean(
+          (Array.isArray(prepared.transforms) && prepared.transforms.length > 0)
+          || prepared.text !== input.text
+          || stableJson(prepared.spec) !== stableJson(job.spec),
+        );
+        preparation = {
+          ready: true,
+          prepare_required: prepareRequired,
+          prepared_sha256: sha256(Buffer.from(prepared.text)),
+          job_sha256: sha256(stableJson(prepared.spec)),
+          transforms: prepared.transforms,
+          preparation_notes: prepared.messages,
+        };
+        resolvedMappings = resolveSpecResidueMappings(prepared.spec, prepared.text, input.targetFilename);
       } catch (error) {
-        preparation = {ready:false, error:{code:error.code || 'validation_failed', message:error.message}};
+        preparation = {ready:false, prepare_required:true, error:{code:error.code || 'validation_failed', message:error.message}};
+        prepareRequired = true;
+        resolvedMappings = resolveSpecResidueMappings(job.spec, input.text, input.targetFilename);
       }
     }
-    output(ctx, compactInspection({schema_version:1, kind:'ariax_input_inspection', source:input.source,
-      ...inspection, preparation}, ctx.flags.full === true));
+    output(ctx, compactInspection({
+      schema_version: 1,
+      kind: 'ariax_input_inspection',
+      source: input.source,
+      ...inspection,
+      ...(matchedResidues ? { matched_residues: matchedResidues } : {}),
+      ...(job ? { prepare_required: prepareRequired } : {}),
+      ...resolvedMappings,
+      preparation,
+    }, ctx.flags.full === true));
     return;
   }
 

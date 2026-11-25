@@ -1,6 +1,6 @@
 /** Runtime config from env + global flags. Never logs the API key. */
 import path from 'node:path';
-import { defaultStateDir } from './state-dir.js';
+import { resolveWritableStateDir } from './state-dir.js';
 
 export const DEFAULT_BASE_URL = 'https://www.ariax.bio';
 const OFFICIAL_API_ORIGINS = new Set([
@@ -53,7 +53,11 @@ export function loadConfig(flags, env = process.env) {
     ? path.resolve(String(flags['root-dir']))
     : env.ARIAX_ROOT_DIR
       ? path.resolve(env.ARIAX_ROOT_DIR)
-      : path.resolve(defaultStateDir({ env }));
+      : path.resolve(resolveWritableStateDir({ env }));
+  const rawConnCache = flags['connection-cache-dir'] ?? env.ARIAX_CONNECTION_CACHE_DIR;
+  const connectionCacheDir = typeof rawConnCache === 'string' && rawConnCache.trim()
+    ? path.resolve(rawConnCache.trim())
+    : null;
   const cwdRoot = path.resolve(process.cwd());
   const legacyRootDir = !rootDirExplicit && cwdRoot !== rootDir ? cwdRoot : null;
   const jsonForced = flags.json === true;
@@ -68,6 +72,7 @@ export function loadConfig(flags, env = process.env) {
     baseUrl,
     rootDir,
     rootDirExplicit,
+    connectionCacheDir,
     legacyRootDir,
     jsonMode,
     jsonForced,

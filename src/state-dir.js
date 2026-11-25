@@ -2,9 +2,29 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { isUUID } from './uuid.js';
 
 export const DEFAULT_RECORD_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const READ_ONLY_FS_CODES = new Set(['EPERM', 'EACCES', 'EROFS']);
+
+/** Whether a filesystem error indicates a read-only or sandbox-blocked path. */
+export function isReadOnlyFsError(err) {
+  return Boolean(err && typeof err === 'object' && READ_ONLY_FS_CODES.has(err.code));
+}
+
+function defaultHomeFor(env, platform) {
+  if (platform === 'win32') {
+    if (env && env !== process.env && env.USERPROFILE && env.USERPROFILE !== process.env.USERPROFILE) {
+      return env.USERPROFILE;
+    }
+    return os.homedir();
+  }
+  if (env && env !== process.env && env.HOME && env.HOME !== process.env.HOME) {
+    return env.HOME;
+  }
+  return os.homedir();
+}
 
 /**
  * Resolve the platform-standard state directory for durable CLI journals.
@@ -13,7 +33,7 @@ export const DEFAULT_RECORD_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 export function defaultStateDir({
   env = process.env,
   platform = process.platform,
-  home = os.homedir(),
+  home = defaultHomeFor(env, platform),
 } = {}) {
   if (platform === 'darwin') {
     return path.join(home, 'Library', 'Application Support', 'ariax-cli', 'state');
@@ -22,6 +42,80 @@ export function defaultStateDir({
     return path.join(env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'ariax-cli', 'state');
   }
   return path.join(env.XDG_STATE_HOME || path.join(home, '.local', 'state'), 'ariax-cli');
+}
+
+/** Per-user private temp fallback directory used when the OS state dir is read-only/sandboxed. */
+export function fallbackStateDir({
+  uid = process.getuid?.(),
+  tmpdir = os.tmpdir(),
+} = {}) {
+  let resolvedTmp = tmpdir;
+  try {
+    resolvedTmp = fs.realpathSync(tmpdir);
+  } catch {
+    // Keep raw tmpdir if realpath fails.
+  }
+  return path.join(resolvedTmp, `ariax-cli-state-${uid ?? 'user'}`);
+}
+
+/**
+ * Probe whether `dir` is creatable, non-symlink, owned by current uid, 0700, and writable.
+ * @param {string} dir
+ * @returns {{ ok: boolean, reason?: string, readOnly?: boolean, error?: Error }}
+ */
+export function probeWritablePrivateDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const stat = fs.lstatSync(dir);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      return { ok: false, reason: 'unsafe_dir', readOnly: false };
+    }
+    if (process.getuid && stat.uid !== process.getuid()) {
+      return { ok: false, reason: 'wrong_owner', readOnly: false };
+    }
+    if (process.platform !== 'win32') {
+      fs.chmodSync(dir, 0o700);
+    }
+    const probe = path.join(dir, `.ariax-probe-${process.pid}-${randomUUID()}`);
+    let fd;
+    try {
+      fd = fs.openSync(probe, 'wx', 0o600);
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd);
+      try { fs.rmSync(probe, { force: true }); } catch { /* ignore */ }
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error, readOnly: isReadOnlyFsError(error) };
+  }
+}
+
+/**
+ * Resolve the default state directory, transparently falling back to a private per-user
+ * temp directory when the OS default state dir fails with EPERM, EACCES, or EROFS.
+ * @param {{ env?: NodeJS.ProcessEnv, platform?: string, home?: string, tmpdir?: string }} [options]
+ */
+export function resolveWritableStateDir({
+  env = process.env,
+  platform = process.platform,
+  home = defaultHomeFor(env, platform),
+  tmpdir = os.tmpdir(),
+} = {}) {
+  const primary = path.resolve(defaultStateDir({ env, platform, home }));
+  const primaryCheck = probeWritablePrivateDir(primary);
+  if (primaryCheck.ok) return primary;
+  if (!primaryCheck.readOnly) return primary;
+
+  const fallback = path.resolve(fallbackStateDir({ tmpdir }));
+  const fallbackCheck = probeWritablePrivateDir(fallback);
+  if (fallbackCheck.ok) return fallback;
+  if (fallbackCheck.reason === 'unsafe_dir' || fallbackCheck.reason === 'wrong_owner') {
+    const err = new Error('Fallback state directory must be a private non-symlink directory owned by the current user.');
+    err.code = 'ARIAX_USAGE';
+    err.exitCode = 1;
+    throw err;
+  }
+  return fallback;
 }
 
 /** Conservative terminal predicate for managed operation journals. */

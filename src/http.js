@@ -223,7 +223,7 @@ export class NetworkError extends Error {
   }
 }
 
-/** An API request failed at the client transport boundary or timed out. */
+/** An API request failed at the client DNS/TCP/TLS transport boundary. */
 export class ConnectivityError extends NetworkError {
   constructor(message, { cause, method } = {}) {
     super(`Unable to reach Ariax from this client. ${message}`, { cause });
@@ -231,6 +231,40 @@ export class ConnectivityError extends NetworkError {
     this.code = 'network_error';
     this.method = method;
   }
+}
+
+/** An API request timed out waiting for an upstream HTTP response or body. */
+export class ServerTimeoutError extends NetworkError {
+  constructor({ timeoutMs, method, path, cause } = {}) {
+    const label = Number.isFinite(timeoutMs) ? `${timeoutMs}ms` : 'the configured timeout';
+    const target = method && path ? `: ${method} ${path}` : '';
+    super(
+      `Ariax API request timed out after ${label}${target} (upstream server/database delay, not necessarily a client network outage). Retry shortly or check status.`,
+      { cause },
+    );
+    this.name = 'ServerTimeoutError';
+    this.code = 'server_timeout';
+    this.method = method;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+const TIMEOUT_ERROR_CODES = new Set(['UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT']);
+const CONNECTION_ERROR_CODES = new Set([
+  'ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'CERT_HAS_EXPIRED',
+]);
+
+function isPostConnectReadTimeout(err, controllerAborted) {
+  const causeCode = err?.cause?.code;
+  const errCode = err?.code;
+  if (CONNECTION_ERROR_CODES.has(errCode) || CONNECTION_ERROR_CODES.has(causeCode)) return false;
+  if (controllerAborted) return true;
+  if (err?.name === 'AbortError' || err?.name === 'TimeoutError') return true;
+  if (TIMEOUT_ERROR_CODES.has(errCode) || TIMEOUT_ERROR_CODES.has(causeCode)) return true;
+  if (err?.cause?.name === 'TimeoutError' || err?.cause?.name === 'AbortError') return true;
+  return false;
 }
 
 /**
@@ -401,15 +435,15 @@ export function createClient({
       responseReceived = true;
       const result = await parseResponse(res, { method, path });
       if (signal?.aborted) throw interrupted(signal);
-      if (controller.signal.aborted) throw new ConnectivityError(`Request timed out after ${ms}ms: ${method} ${path}`, { method });
+      if (controller.signal.aborted) {
+        throw new ServerTimeoutError({ timeoutMs: ms, method, path });
+      }
       return result;
     } catch (err) {
       if (signal?.aborted) throw interrupted(signal);
       if (err instanceof ApiError || err instanceof NetworkError) throw err;
-      if (err && err.name === 'AbortError') {
-        const message = `Request timed out after ${ms}ms: ${method} ${path}`;
-        if (responseReceived) throw new NetworkError(message);
-        throw new ConnectivityError(message, { method, cause: err });
+      if (isPostConnectReadTimeout(err, controller.signal.aborted)) {
+        throw new ServerTimeoutError({ timeoutMs: ms, method, path, cause: err });
       }
       const message = `${method} ${path}: ${err?.message || err}`;
       if (responseReceived) throw new NetworkError(`Network failure: ${message}`, { cause: err });

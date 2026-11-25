@@ -28,7 +28,7 @@ const MANAGED_CATALOG = Object.freeze([
     constraints: 'mmCIF/PDB target (or SMILES/CCD ligand); nanobody/Fab scaffolds.',
     modalities: ['nanobody', 'antibody', 'vhh', 'small-molecule', 'cyclic-peptide', 'peptide', 'miniprotein', 'protein-binder'],
     tasks: ['binder-design', 'antibodies'],
-    keywords: ['boltzgen', 'nanobody', 'vhh', 'antibody', 'cdr', 'fab', 'small-molecule', 'ligand', 'cyclic', 'peptide', 'miniprotein', 'binder', 'all-atom', 'diffusion'],
+    keywords: ['boltzgen', 'de novo', 'nanobody', 'nanobodies', 'vhh', 'antibody', 'cdr', 'fab', 'small-molecule', 'ligand', 'cyclic', 'peptide', 'miniprotein', 'binder', 'all-atom', 'diffusion'],
   },
   {
     id: 'pxdesign',
@@ -90,9 +90,22 @@ const OFFLINE_FORGE_TOOLS = Object.freeze([
 ]);
 
 const FORGE_ONLY_TASKS = new Set(['molecular-prediction', 'sequence-optimization', 'validation-search']);
-const FORGE_ONLY_RE = /\b(fold|refold|predict|prediction|structure prediction|dock|docking|affinity|ic50|pic50|mpnn|inverse fold|sequence design|sequence optimization|stability|ddg|thermostability|ipsae|scoring|score|qc|humanness|developability|foldseek|msa|mmseqs|search|cluster|custom|pipeline|multi-stage|rfd3|rfd4|rfdiffusion|rfantibody|boltz2|boltz-2|protenix|chai|af2|alphafold|esmfold|esm-c|mol1|mol-1|immunebuilder|fampnn|caliby|spurs|motif|enzyme|dna|rna|nucleic)\b/i;
-const MANAGED_FRIENDLY_RE = /\b(binder|miniprotein|peptide|cyclic|nanobody|vhh|antibody|de novo|design|campaign|bindcraft|boltzgen|pxdesign)\b/i;
-const ANTIBODY_RE = /\b(nanobody|vhh|antibody|cdr|fab|scfv|ig)\b/i;
+const FORGE_ONLY_RE = /\b(fold|refold|predict|prediction|structure prediction|dock|docking|affinity|ic50|pic50|mpnn|abmpnn|inverse fold|sequence design|sequence optimization|stability|ddg|thermostability|ipsae|scoring|score|qc|humanness|humanize|humanization|numbering|imgt|kabat|chothia|developability|foldseek|msa|mmseqs|search|cluster|custom|pipeline|multi-stage|rfd3|rfd4|rfdiffusion|rfantibody|boltz2|boltz-2|protenix|chai|af2|alphafold|esmfold|esm-c|mol1|mol-1|immunebuilder|fampnn|caliby|spurs|motif|enzyme|dna|rna|nucleic)\b/i;
+const MANAGED_FRIENDLY_RE = /\b(binder|miniprotein|peptide|cyclic|nanobody|nanobodies|vhh|antibody|de novo|design|campaign|bindcraft|boltzgen|pxdesign)\b/i;
+const VHH_NANOBODY_RE = /\b(nanobody|nanobodies|vhh|single[- ]domain antibody)\b/i;
+const ANTIBODY_RE = /\b(nanobody|nanobodies|vhh|antibody|cdr|fab|scfv|ig)\b/i;
+
+function inferRecommendedProjectType(combined, topManagedId) {
+  if (!combined) return null;
+  if (VHH_NANOBODY_RE.test(combined)) return 'vhh';
+  if (/\bcyclic[- ]?peptides?\b/i.test(combined)) return 'cyclic-peptide';
+  if (/\b(small[- ]?molecule|ligand)\b/i.test(combined) && topManagedId === 'boltzgen') return 'miniprotein-small-molecule';
+  if (/\bscfv\b/i.test(combined)) return 'scfv';
+  if (/\bfab\b/i.test(combined)) return 'fab';
+  if (/\bpeptides?\b/i.test(combined)) return 'peptide';
+  if (/\bminiproteins?\b/i.test(combined)) return 'miniprotein';
+  return null;
+}
 
 function tokenize(text) {
   return String(text || '')
@@ -226,6 +239,12 @@ function recommendExecution({ execution, query, task, modality, managedCount, fo
       rationale: 'Combining design with custom prediction, scoring, or specialized Forge tools is best run in a Forge workspace.',
     };
   }
+  if (managedCount > 0 && VHH_NANOBODY_RE.test(combined) && !FORGE_ONLY_RE.test(combined)) {
+    return {
+      recommended_execution: 'managed',
+      rationale: 'Turnkey VHH/nanobody de novo binder campaigns fit managed BoltzGen (project_type: "vhh") or BindCraft2 first; use Forge for humanization, IMGT numbering, AbMPNN, ImmuneBuilder, or custom CDR grafting.',
+    };
+  }
   if (ANTIBODY_RE.test(combined) || task === 'antibodies') {
     return {
       recommended_execution: 'either',
@@ -347,22 +366,27 @@ export async function run(ctx) {
       || p.recommended_for.toLowerCase().includes(modality)
       || p.id.toLowerCase().includes(modality));
   }
+  const combinedQuery = `${query || ''} ${modality || ''}`.trim();
+  const preferBoltzgenVhh = VHH_NANOBODY_RE.test(combinedQuery) && !/\bbindcraft/i.test(combinedQuery);
   if (tokens.length) {
     let scored = managed
-      .map((p) => ({
-        item: p,
-        ...scoreTextMatch(
+      .map((p) => {
+        const match = scoreTextMatch(
           tokens,
           [p.id, p.display_name, p.recommended_for, p.constraints, ...p._modalities, ...p._keywords],
           { id: p.id, primary: p.recommended_for },
-        ),
-      }))
+        );
+        const modalityBoost = preferBoltzgenVhh && p.id === 'boltzgen' ? 8 : 0;
+        return { item: p, ...match, score: match.score + modalityBoost };
+      })
       .filter((entry) => entry.score > 0);
     if (scored.some((entry) => entry.specificHits > 0)) {
       scored = scored.filter((entry) => entry.specificHits > 0);
     }
     scored.sort((a, b) => b.exactId - a.exactId || b.specificHits - a.specificHits || b.score - a.score);
     managed = scored.map((entry) => entry.item);
+  } else if (preferBoltzgenVhh) {
+    managed.sort((a, b) => (a.id === 'boltzgen' ? -1 : b.id === 'boltzgen' ? 1 : 0));
   }
   const managedOut = managed.map(({ id, display_name, recommended_for, constraints, next_command }) => ({
     id, display_name, recommended_for, constraints, next_command,
@@ -437,9 +461,11 @@ export async function run(ctx) {
     forgeCount: forgeOut.length,
   });
 
+  const recommendedProjectType = inferRecommendedProjectType(combinedQuery, managedOut[0]?.id);
   const payload = {
     data: {
       recommended_execution: routing.recommended_execution,
+      ...(recommendedProjectType ? { recommended_project_type: recommendedProjectType } : {}),
       rationale: routing.rationale,
       managed_protocols: managedOut,
       forge_tools: forgeOut,

@@ -50,9 +50,11 @@ ariax forge link PROJECT /workspace/result.txt --json                           
 ```
 
 - **Inputs:** `--path` is relative to `/inputs` (commands read `/inputs/<path>`).
-  Completed input paths are immutable until deleted. Local multipart uploads
-  report `ready` only after daemon-backed workspace confirmation (not storage
-  publication alone).
+  Resumed Forge projects retain prior `/inputs` remotely (inspect with
+  `ariax forge files PROJECT --path /inputs`). Completed `/inputs` paths are
+  immutable until deleted — upload updated scripts/files under a new `--path`
+  (e.g. `fixed/script.py`). Local multipart uploads report `ready` only after
+  daemon-backed workspace confirmation (not storage publication alone).
 - **Pack & Hygiene notices:** `forge pack` stages under `/scratch/.ariax-pack-<id>/`,
   dereferences valid symlinks while skipping broken symlinks/sockets, verifies
   integrity, shards archives larger than `--max-shard-gib` (1–18, default 10),

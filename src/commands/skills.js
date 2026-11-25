@@ -408,23 +408,47 @@ function readTarget(requested, reference, all) {
       }
       : { id: 'shared', scope: 'shared', path: all.shared };
   }
-  if (reference === 'shared') return { id: reference, scope: 'shared', path: all.shared };
-  if (Object.hasOwn(PLATFORMS, requested) && Object.hasOwn(forgeRefs, reference)) {
-    return { id: reference, scope: 'platform', platform: 'forge', path: forgeRefs[reference] };
+  const raw = String(reference).trim();
+  const normalized = raw.endsWith('.md') ? raw.slice(0, -3) : raw;
+  const candidates = raw === normalized ? [raw] : [raw, normalized];
+  if (candidates.includes('shared')) return { id: 'shared', scope: 'shared', path: all.shared };
+  if (Object.hasOwn(PLATFORMS, requested)) {
+    for (const key of candidates) {
+      if (Object.hasOwn(forgeRefs, key)) {
+        return { id: key, scope: 'platform', platform: 'forge', path: forgeRefs[key] };
+      }
+    }
   }
-  if (reference === 'outputs') {
+  if (requested && Object.hasOwn(PROTOCOLS, requested)) {
+    for (const key of candidates) {
+      if (/^[A-Za-z0-9_-]+$/.test(key)) {
+        const subDocPath = join(ROOT, 'skills', PROTOCOLS[requested], `${key}.md`);
+        if (fs.existsSync(subDocPath)) {
+          return {
+            id: key,
+            scope: 'protocol',
+            protocol: requested,
+            path: subDocPath,
+          };
+        }
+      }
+    }
+  }
+  if (candidates.includes('outputs')) {
     if (!requested) {
-      throw usageError('Reference "outputs" requires a protocol or platform, for example: ariax skills boltzgen --reference outputs --read');
+      throw usageError('Reference "outputs" requires a protocol or platform, for example: ariax skills boltzgen --doc outputs');
     }
     return {
-      id: reference,
+      id: 'outputs',
       scope: 'protocol',
       protocol: requested,
       path: join(ROOT, 'skills', PROTOCOLS[requested], 'outputs.md'),
     };
   }
-  if (Object.hasOwn(coreRefs, reference)) {
-    return { id: reference, scope: 'core', path: coreRefs[reference] };
+  for (const key of candidates) {
+    if (Object.hasOwn(coreRefs, key)) {
+      return { id: key, scope: 'core', path: coreRefs[key] };
+    }
   }
   const names = Object.keys({
     ...all.references,
@@ -632,6 +656,40 @@ function resolveScope(rawScope) {
   return s;
 }
 
+function inspectCoreBundle(destPath, coreRefs) {
+  const coreDir = join(dirname(destPath), 'core');
+  const entries = Object.entries(coreRefs);
+  let synced = 0;
+  for (const [id, srcPath] of entries) {
+    const destFile = join(coreDir, `${id}.md`);
+    try {
+      const expected = fs.readFileSync(srcPath, 'utf8');
+      const existing = fs.readFileSync(destFile, 'utf8');
+      if (existing === expected) synced += 1;
+    } catch {
+      // Missing or unreadable file counts as unsynced.
+    }
+  }
+  return {
+    coreDir,
+    total: entries.length,
+    synced,
+    allSynced: synced === entries.length,
+  };
+}
+
+function writeCoreBundle(destPath, coreRefs) {
+  const coreDir = join(dirname(destPath), 'core');
+  fs.mkdirSync(coreDir, { recursive: true });
+  let count = 0;
+  for (const [id, srcPath] of Object.entries(coreRefs)) {
+    const destFile = join(coreDir, `${id}.md`);
+    fs.writeFileSync(destFile, fs.readFileSync(srcPath, 'utf8'), 'utf8');
+    count += 1;
+  }
+  return { coreDir, count };
+}
+
 function runSkillsInstall(ctx) {
   const version = ctx.currentVersion || buildInfo().version;
   const targets = resolveTargets(ctx.flags.target);
@@ -640,19 +698,23 @@ function runSkillsInstall(ctx) {
   const yes = ctx.flags.yes === true;
   const home = ctx.env?.HOME || os.homedir();
   const cwd = process.cwd();
+  const coreRefs = discoverCoreReferences();
 
   const results = [];
   for (const target of targets) {
     const dest = targetDestination(target, scope, { home, cwd });
     const content = renderInstallContent(target, version);
     const current = inspectInstalledFile(dest.path, content);
+    const supportsCoreDir = dest.target !== 'cursor';
+    const coreInfo = supportsCoreDir ? inspectCoreBundle(dest.path, coreRefs) : null;
     let action;
     let written = false;
+    let coreFilesWritten = 0;
 
     if (current.status === 'missing') {
       action = 'create';
     } else if (current.status === 'installed') {
-      action = 'unchanged';
+      action = supportsCoreDir && !coreInfo.allSynced ? 'update' : 'unchanged';
     } else if (current.status === 'outdated') {
       action = 'update';
     } else if (current.status === 'unmanaged') {
@@ -665,6 +727,9 @@ function runSkillsInstall(ctx) {
       fs.mkdirSync(dirname(dest.path), { recursive: true });
       fs.writeFileSync(dest.path, content, 'utf8');
       written = true;
+      if (supportsCoreDir) {
+        coreFilesWritten = writeCoreBundle(dest.path, coreRefs).count;
+      }
     }
 
     results.push({
@@ -675,6 +740,11 @@ function runSkillsInstall(ctx) {
       action: dryRun && ['create', 'update', 'overwrite'].includes(action) ? `would_${action}` : action,
       written,
       size_bytes: Buffer.byteLength(content),
+      ...(supportsCoreDir ? {
+        core_dir: coreInfo.coreDir,
+        core_files: coreInfo.total,
+        core_files_written: coreFilesWritten,
+      } : {}),
       ...(action === 'skipped_unmanaged' ? { note: 'Existing file is not managed by ariax-cli; pass --yes to overwrite.' } : {}),
     });
   }
@@ -706,19 +776,30 @@ function runSkillsStatus(ctx) {
   const scope = resolveScope(ctx.flags.scope);
   const home = ctx.env?.HOME || os.homedir();
   const cwd = process.cwd();
+  const coreRefs = discoverCoreReferences();
 
   const entries = targets.map((target) => {
     const dest = targetDestination(target, scope, { home, cwd });
     const expected = renderInstallContent(target, version);
     const info = inspectInstalledFile(dest.path, expected);
+    const supportsCoreDir = dest.target !== 'cursor';
+    const coreInfo = supportsCoreDir ? inspectCoreBundle(dest.path, coreRefs) : null;
+    const status = info.status === 'installed' && supportsCoreDir && !coreInfo.allSynced
+      ? 'outdated'
+      : info.status;
     return {
       target: dest.target,
       scope: dest.scope,
       path: dest.path,
-      status: info.status,
+      status,
       managed: info.managed,
       installed_version: info.installed_version,
       current_version: version,
+      ...(supportsCoreDir ? {
+        core_dir: coreInfo.coreDir,
+        core_files_synced: coreInfo.allSynced,
+        core_files: coreInfo.total,
+      } : {}),
     };
   });
 
@@ -755,7 +836,7 @@ export async function run(ctx) {
     return runSkillsStatus(ctx);
   }
   for (const key of Object.keys(ctx.flags)) {
-    if (!['read', 'reference', 'tool', 'paths', 'details'].includes(key)) {
+    if (!['read', 'reference', 'doc', 'tool', 'paths', 'details', 'list'].includes(key)) {
       throw usageError(`skills: unsupported flag --${key}.`);
     }
   }
@@ -768,13 +849,18 @@ export async function run(ctx) {
   if (requested) {
     protocolSkill(requested);
   }
-  if (ctx.flags.reference !== undefined && !ctx.flags.read) {
-    throw usageError('skills: --reference requires --read.');
+  if (ctx.flags.doc !== undefined && ctx.flags.reference !== undefined) {
+    throw usageError('skills: use either --doc NAME or --reference NAME, not both.');
+  }
+  const docOrRef = ctx.flags.doc !== undefined ? ctx.flags.doc : ctx.flags.reference;
+  const shouldRead = ctx.flags.read === true || docOrRef !== undefined;
+  if (ctx.flags.list === true && (shouldRead || ctx.flags.tool !== undefined)) {
+    throw usageError('skills: --list cannot be combined with --read, --reference, --doc, or --tool.');
   }
   if (ctx.flags.tool !== undefined) {
     if (!Object.hasOwn(PLATFORMS, requested)) throw usageError('skills: --tool requires the forge platform.');
-    if (ctx.flags.reference !== undefined) {
-      throw usageError('skills forge: use either --tool ID [--read] or --reference ID --read, not both.');
+    if (docOrRef !== undefined) {
+      throw usageError('skills forge: use either --tool ID [--read] or --reference/--doc ID, not both.');
     }
     if (ctx.flags.read) {
       const data = readForgeToolGuide(ctx.flags.tool);
@@ -791,8 +877,8 @@ export async function run(ctx) {
     }
     return data;
   }
-  if (ctx.flags.read) {
-    const data = readGuide(readTarget(requested, ctx.flags.reference, all));
+  if (shouldRead) {
+    const data = readGuide(readTarget(requested, docOrRef, all));
     if (ctx.json) printJson({ data });
     else printData(data.content);
     return data;

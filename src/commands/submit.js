@@ -165,7 +165,9 @@ export async function run(ctx) {
     body = { ...prepared.spec, name: projectName };
     await checkGpuPolicy(ctx, body, { source: 'submit' });
     preparedBytes = Buffer.from(prepared.text, 'utf8');
-    for (const message of prepared.messages) printProgress(message);
+    if (!ctx.json) {
+      for (const message of prepared.messages) printProgress(message);
+    }
 
     if (recoveryIntentId !== undefined) {
       body.input_upload_intent_id = String(recoveryIntentId);

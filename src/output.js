@@ -20,6 +20,19 @@ const PRIMARY_ARRAY_KEYS = [
 ];
 
 let activeOutputFields = null;
+let epipeInstalled = false;
+
+/** Exit cleanly when downstream pipes (e.g. `| head`) close stdout early. */
+export function installStdoutEpipeHandler() {
+  if (epipeInstalled) return;
+  epipeInstalled = true;
+  process.stdout.on('error', (err) => {
+    if (err?.code === 'EPIPE') process.exit(0);
+    throw err;
+  });
+}
+
+installStdoutEpipeHandler();
 
 /**
  * Parse and validate a comma-separated list of dot-path field selectors.

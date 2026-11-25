@@ -172,8 +172,89 @@ async function projectInputStatus(ctx, record, knownAccount, signal) {
   return projectInputResult(record, operation, applied, removed);
 }
 
+function inputExistsAction(target, projectId) {
+  const baseName = path.posix.basename(String(target || 'file'));
+  const suggestedPath = `fixed/${baseName}`;
+  const projectRef = projectId || '<project-id>';
+  return `Path already exists in /inputs (immutable). Upload under a new --path (e.g. ${suggestedPath}) or inspect existing inputs with: ariax forge files ${projectRef} --path /inputs`;
+}
+
+async function listProjectFilesRecursive(ctx, projectId, rootPath, { maxFiles = 500, maxPages = 100 } = {}) {
+  const queue = [rootPath];
+  const visitedDirs = new Set([rootPath]);
+  const seenFiles = new Set();
+  const files = [];
+  let totalBytes = 0;
+  let pagesFetched = 0;
+  let truncated = false;
+  let rootMeta = null;
+
+  while (queue.length > 0 && !truncated) {
+    const dir = queue.shift();
+    let cursor;
+    const seenCursors = new Set();
+    for (;;) {
+      if (pagesFetched >= maxPages) {
+        truncated = true;
+        break;
+      }
+      pagesFetched += 1;
+      const res = await listProjectFiles(ctx, projectId, dir, cursor);
+      if (!rootMeta) {
+        rootMeta = res;
+      }
+      const data = res.data;
+      for (const entry of data.entries) {
+        if (entry.kind === 'directory') {
+          if (!visitedDirs.has(entry.path)) {
+            visitedDirs.add(entry.path);
+            queue.push(entry.path);
+          }
+        } else if (entry.kind === 'file') {
+          if (seenFiles.has(entry.path)) continue;
+          if (files.length >= maxFiles) {
+            truncated = true;
+            break;
+          }
+          seenFiles.add(entry.path);
+          files.push(entry);
+          if (typeof entry.size_bytes === 'number' && Number.isSafeInteger(entry.size_bytes) && entry.size_bytes >= 0) {
+            totalBytes += entry.size_bytes;
+          }
+        }
+      }
+      if (truncated || !data.next_cursor) break;
+      if (seenCursors.has(data.next_cursor)) {
+        throw new NetworkError('Project file listing repeated a pagination cursor.');
+      }
+      seenCursors.add(data.next_cursor);
+      cursor = data.next_cursor;
+    }
+  }
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  const baseData = rootMeta?.data ?? {};
+  return {
+    ...(rootMeta || {}),
+    data: {
+      project_id: projectId,
+      path: rootPath,
+      recursive: true,
+      entries: files,
+      file_count: files.length,
+      total_bytes: totalBytes,
+      truncated,
+      next_cursor: null,
+      mutation_revision: baseData.mutation_revision ?? 0,
+      sync_state: baseData.sync_state ?? 'saved',
+      last_synced_at: baseData.last_synced_at ?? null,
+      durability_gap: baseData.durability_gap ?? false,
+    },
+  };
+}
+
 async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal) {
   const fd = fs.openSync(localFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  let resolvedProjectId = null;
   try {
     const metadata = fileSnapshot(fd, localFile);
     const digests = await checksums(fd, metadata, signal);
@@ -182,6 +263,7 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
     if (prior) {
       request = prior.request;
       const savedProject = uuid(request?.project_id, 'project ID');
+      resolvedProjectId = savedProject;
       if (request?.type !== PROJECT_INPUT || request.session_id !== sessionId
           || request.body?.operation_id !== id || request.body?.path !== `/inputs/${target}`
           || request.path !== `${API}/projects/${savedProject}/files/intents`
@@ -192,6 +274,7 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
     } else {
       const session = (await ctx.client.get(sessionPath, {signal})).data;
       const projectId = uuid(session.project_id, 'project ID');
+      resolvedProjectId = projectId;
       const base = `${API}/projects/${projectId}/files`;
       const context = (await ctx.client.get(`${base}/status`, {signal})).data;
       if (context.session_id !== sessionId || context.writer_session_id !== sessionId
@@ -202,7 +285,9 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
       }
       const remote = (await ctx.client.get(`${base}/metadata`,{query:{path:`/inputs/${target}`},signal})).data;
       if (remote.kind !== 'absent' || remote.version !== 0 || !Number.isSafeInteger(remote.mutation_revision) || remote.mutation_revision < 0) {
-        throw new ApiError({status:409,code:'input_exists',message:'This project input path already exists; choose a new path.'});
+        const existsErr = new ApiError({status:409,code:'input_exists',message:'This project input path already exists; choose a new path.'});
+        existsErr.action = inputExistsAction(target, projectId);
+        throw existsErr;
       }
       request = {type:PROJECT_INPUT,method:'POST',session_id:sessionId,project_id:projectId,path:`${base}/intents`,
         body:{operation_id:id,session_id:sessionId,path:`/inputs/${target}`,operation_started_at:new Date().toISOString(),
@@ -265,7 +350,11 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
     saveResult(file,record,data);
     return {...result,data};
   } catch (error) {
-    error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id}, the original source, account and root directory.`;
+    if (error?.code === 'input_exists' || error?.code === 'input_path_exists') {
+      error.action = inputExistsAction(target, resolvedProjectId);
+    } else if (!error.action) {
+      error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id}, the original source, account and root directory.`;
+    }
     throw error;
   } finally { fs.closeSync(fd); }
 }
@@ -626,6 +715,7 @@ async function recoverDeleteTree(ctx, record, signal) {
     return {data:await cleanupStatus(record.result)};
   }
   async function settlePending() {
+    let lastProgressLine;
     for (;;) {
       const saved = readRecord(file), pending = saved.pending ?? [];
       if (!Array.isArray(pending) || pending.length > 128) throw usageError(`Saved directory deletion ${id} has invalid pending work.`);
@@ -661,7 +751,11 @@ async function recoverDeleteTree(ctx, record, signal) {
         : {state:'pending',deleted_count,failed_count:failures.length};
       write({...saved,pending:remaining,failures,result});
       if (remaining.length) {
-        printProgress(`Directory deletion ${id}: ${deleted_count} completed, ${failures.length} failed, ${remaining.length} pending`);
+        const line = `Directory deletion ${id}: ${deleted_count} completed, ${failures.length} failed, ${remaining.length} pending`;
+        if (line !== lastProgressLine) {
+          printProgress(line);
+          lastProgressLine = line;
+        }
         await delay(3000,undefined,{signal});
         continue;
       }
@@ -771,9 +865,14 @@ async function runDelete(ctx, projectId) {
     const {file,record} = await fileRecord(ctx,id,request,'operation_id',signal);
     let result = request.type === FILE_DELETE_TREE ? await recoverDeleteTree(ctx,record,signal) : await recoverDelete(ctx,record,signal);
     saveResult(file,readRecord(file) ?? record,result.data);
+    let lastDeleteLine;
     while (flags.wait && result.data.state !== 'failed' && result.data.cleanup_state !== 'attention'
         && (result.data.state !== 'deleted' || result.data.cleanup_state === 'pending')) {
-      printProgress(`Deletion ${id}: ${result.data.state}, storage cleanup ${result.data.cleanup_state}`);
+      const line = `Deletion ${id}: ${result.data.state}, storage cleanup ${result.data.cleanup_state}`;
+      if (line !== lastDeleteLine) {
+        printProgress(line);
+        lastDeleteLine = line;
+      }
       await delay(3000,undefined,{signal});
       result = request.type === FILE_DELETE_TREE ? await recoverDeleteTree(ctx,readRecord(file),signal) : await recoverDelete(ctx,readRecord(file),signal);
       saveResult(file,readRecord(file),result.data);
@@ -820,8 +919,13 @@ async function runCopy(ctx, projectId) {
     }
     const {record} = await fileRecord(ctx,id,request,'operation_id',signal);
     let result = await recoverFile(ctx,id,record,{signal});
+    let lastCopyLine;
     while (flags.wait && result.data.state === 'pending') {
-      printProgress(`Waiting for file recovery ${id}: ${result.data.storage_state}, installation ${result.data.installation_status}`);
+      const line = `Waiting for file recovery ${id}: ${result.data.storage_state}, installation ${result.data.installation_status}`;
+      if (line !== lastCopyLine) {
+        printProgress(line);
+        lastCopyLine = line;
+      }
       await delay(Math.max(1000,(result.data.retry_after ?? 3)*1000),undefined,{signal});
       result = await recoverFile(ctx,id,readRecord(recordPath(ctx,id)),{signal});
     }
@@ -881,11 +985,22 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     const {record} = await fileRecord(ctx,id,request,'input_id');
     try {
       return report(ctx,await recoverFile(ctx,id,record,{body}));
-    } catch (error) { error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id} and the original source if no accepted operation exists.`; throw error; }
+    } catch (error) {
+      if (error?.code === 'input_exists' || error?.code === 'input_path_exists') {
+        let resolvedPid = null;
+        try { resolvedPid = (await ctx.client.get(sessionPath, { attempts: 1 })).data?.project_id ?? null; } catch { /* ignore */ }
+        error.action = inputExistsAction(target, resolvedPid);
+      } else {
+        error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id} and the original source if no accepted operation exists.`;
+      }
+      throw error;
+    }
   }
   if (action === 'inputs list') {
     const result = await read(`${direct}/inputs`);
+    if (!Array.isArray(result.data.inputs)) result.data.inputs = [];
     const entries = listRecordFiles(ctx);
+    let resolvedProjectId = null;
     if (entries.length) {
       const account = await accountIdentity(ctx);
       const records = entries.slice(0,10000);
@@ -894,6 +1009,7 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
         const record = readRecord(entry.file);
         if (record?.request?.type !== PROJECT_INPUT || record.request.session_id !== sessionId
             || Object.keys(account).some(field => record[field] !== account[field])) continue;
+        if (!resolvedProjectId && isUUID(record.request.project_id)) resolvedProjectId = record.request.project_id;
         local.push(record);
       }
       for (let offset = 0; offset < local.length; offset += 8) {
@@ -901,8 +1017,47 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
           .map(record => projectInputStatus(ctx,record,account)));
         result.data.inputs.push(...observed.map(item => ({...item,visibility:'local_journal'})));
       }
-      result.data.local_input_journals_only = true;
       if (entries.length > records.length) result.data.local_input_journals_truncated = true;
+    }
+    let remoteInputsChecked = false;
+    try {
+      if (!resolvedProjectId) {
+        const sess = await ctx.client.get(sessionPath, { query: { view: 'summary' }, attempts: 1 });
+        if (isUUID(sess.data?.project_id)) resolvedProjectId = sess.data.project_id;
+      }
+      if (resolvedProjectId) {
+        const remote = await listProjectFilesRecursive(ctx, resolvedProjectId, '/inputs', { maxFiles: 200, maxPages: 40 });
+        remoteInputsChecked = true;
+        const existingPaths = new Set(
+          result.data.inputs
+            .map(item => (typeof item?.path === 'string' ? item.path.replace(/^\/inputs\//, '') : ''))
+            .filter(Boolean),
+        );
+        for (const entry of remote.data.entries) {
+          const relPath = entry.path.startsWith('/inputs/') ? entry.path.slice('/inputs/'.length) : entry.path;
+          if (!relPath || existingPaths.has(relPath)) continue;
+          existingPaths.add(relPath);
+          result.data.inputs.push({
+            input_id: null,
+            path: relPath,
+            state: 'ready',
+            size_bytes: entry.size_bytes,
+            version: entry.version,
+            project_id: resolvedProjectId,
+            source: 'project_inputs',
+            visibility: 'remote',
+          });
+        }
+        if (remote.data.truncated) result.data.remote_inputs_truncated = true;
+      }
+    } catch {
+      // Remote /inputs listing is best-effort; retain live/local journal items.
+    }
+    if (!remoteInputsChecked && entries.length) {
+      result.data.local_input_journals_only = true;
+    } else if (remoteInputsChecked) {
+      result.data.remote_inputs_checked = true;
+      result.data.project_id = resolvedProjectId;
     }
     return report(ctx,result,'inputs');
   }
@@ -944,6 +1099,11 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   }
   if (action === 'files') {
     const target = workspacePath(flags.path === undefined ? '/workspace' : flags.path, true);
+    if (flags.recursive === true) {
+      if (flags.cursor !== undefined) throw usageError('forge files: --recursive cannot be combined with --cursor.');
+      const result = await listProjectFilesRecursive(ctx, projectId, target, { maxFiles: 500, maxPages: 100 });
+      return report(ctx, result, 'files');
+    }
     const result = await listProjectFiles(ctx,projectId,target,flags.cursor === undefined ? undefined : required(flags.cursor,'cursor'));
     return report(ctx,result,'files');
   }

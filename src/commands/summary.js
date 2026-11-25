@@ -77,9 +77,21 @@ function nonNegInt(...values) {
   return null;
 }
 
+const DIAGNOSTICS_PROTOCOLS = new Set(['bindcraft', 'bindcraft-v1.5', 'bindcraft2']);
+
+function parseNonNegNum(v) {
+  if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v.trim());
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
 function nonNegNum(...values) {
   for (const v of values) {
-    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+    const parsed = parseNonNegNum(v);
+    if (parsed !== null) return parsed;
   }
   return null;
 }
@@ -210,7 +222,7 @@ function summarizeCandidate(rawCandidate, includeSequences) {
   };
 }
 
-function collectManagedGpus(project, compact) {
+function collectExecutedManagedGpus(project) {
   const seen = new Set();
   const add = (val) => {
     if (typeof val === 'string' && val.trim()) seen.add(val.trim());
@@ -221,12 +233,94 @@ function collectManagedGpus(project, compact) {
     for (const job of project.jobs) {
       add(job?.gpu_type);
       add(job?.gpu);
+      if (Array.isArray(job?.allocations)) {
+        for (const alloc of job.allocations) {
+          add(alloc?.gpu_type);
+          add(alloc?.gpu);
+        }
+      }
     }
   }
-  if (!seen.size && Array.isArray(compact.compute?.allowed_gpus)) {
-    for (const g of compact.compute.allowed_gpus) add(g);
-  }
   return [...seen];
+}
+
+function extractJobsList(data) {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.jobs)) return data.jobs;
+    if (Array.isArray(data.items)) return data.items;
+  }
+  return [];
+}
+
+function durationBetweenIso(startIso, endIso) {
+  if (typeof startIso !== 'string' || typeof endIso !== 'string') return null;
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return (end - start) / 1000;
+}
+
+function summarizeJobsAccounting(jobs) {
+  let runtimeSum = 0;
+  let hasRuntime = false;
+  let costSum = 0;
+  let hasCost = false;
+  const gpus = new Set();
+  const addGpu = (val) => {
+    if (typeof val === 'string' && val.trim()) gpus.add(val.trim());
+  };
+  for (const job of jobs) {
+    if (!job || typeof job !== 'object') continue;
+    const allocations = Array.isArray(job.allocations) ? job.allocations : [];
+    let jobAllocRuntime = false;
+    let jobAllocCost = false;
+    for (const alloc of allocations) {
+      if (!alloc || typeof alloc !== 'object') continue;
+      addGpu(alloc.gpu_type);
+      addGpu(alloc.gpu);
+      const rt = nonNegNum(
+        alloc.total_runtime,
+        alloc.total_runtime_seconds,
+        alloc.runtime_seconds,
+        alloc.elapsed_seconds,
+        durationBetweenIso(alloc.allocated_at ?? alloc.started_at, alloc.stopped_at ?? alloc.ended_at),
+      );
+      if (rt !== null) {
+        runtimeSum += rt;
+        hasRuntime = true;
+        jobAllocRuntime = true;
+      }
+      const c = nonNegNum(alloc.total_cost, alloc.total_cost_usd, alloc.cost_usd, alloc.recorded_spend_usd);
+      if (c !== null) {
+        costSum += c;
+        hasCost = true;
+        jobAllocCost = true;
+      }
+    }
+    addGpu(job.gpu_type);
+    addGpu(job.gpu);
+    if (!jobAllocRuntime) {
+      const rt = nonNegNum(job.total_runtime_seconds, job.total_runtime, job.runtime_seconds, job.elapsed_seconds);
+      if (rt !== null) {
+        runtimeSum += rt;
+        hasRuntime = true;
+      }
+    }
+    if (!jobAllocCost) {
+      const c = nonNegNum(job.total_cost_usd, job.total_cost, job.cost_usd, job.recorded_spend_usd);
+      if (c !== null) {
+        costSum += c;
+        hasCost = true;
+      }
+    }
+  }
+  return {
+    totalRuntimeSeconds: hasRuntime ? Math.round(runtimeSum * 1000) / 1000 : null,
+    totalCostUsd: hasCost ? Math.round(costSum * 1_000_000) / 1_000_000 : null,
+    gpus: [...gpus],
+    jobCount: jobs.length,
+  };
 }
 
 function addUniqueWarning(warnings, seen, code, message) {
@@ -260,11 +354,19 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
   const protocol = compact.protocol ?? project.protocol ?? project.protocol_id ?? null;
   const projectUrlValue = firstString(project.project_url) ?? managedProjectUrl(ctx, protocol, projectId);
 
-  const [candidatesRes, storageRes, cleanupRes] = await Promise.all([
+  const executedGpus = collectExecutedManagedGpus(project);
+  let totalRuntimeSeconds = nonNegNum(project.total_runtime_seconds, project.elapsed_seconds, compact.compute?.elapsed_seconds);
+  let totalCostUsd = nonNegNum(project.total_cost_usd, compact.cost?.recorded_spend_usd);
+  const needJobsAccounting = totalRuntimeSeconds === null || totalCostUsd === null || executedGpus.length === 0;
+
+  const [candidatesRes, storageRes, cleanupRes, jobsRes] = await Promise.all([
     bestEffortGet(ctx.client, `/api/v1/projects/${encodeURIComponent(projectId)}/candidates`, { view: 'final', limit: top }),
     bestEffortGet(ctx.client, `/api/v1/projects/${encodeURIComponent(projectId)}/storage`),
     status === 'completed'
       ? bestEffortGet(ctx.client, `/api/v1/projects/${encodeURIComponent(projectId)}/storage/cleanup-suggestions`)
+      : Promise.resolve({ ok: false, skipped: true }),
+    needJobsAccounting
+      ? bestEffortGet(ctx.client, '/api/v1/jobs', { project_id: projectId, limit: 20 })
       : Promise.resolve({ ok: false, skipped: true }),
   ]);
 
@@ -289,13 +391,37 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
       stop_reason: firstString(project.stop_reason),
     };
 
+  if (status === 'completed' && candidatesRes.ok && !isBc2) {
+    const candidatesCount = nonNegInt(candidatesRes.meta?.total)
+      ?? (Array.isArray(candidatesRes.data) ? candidatesRes.data.length : 0);
+    if (candidatesCount > 0 && ((funnel.attempted ?? 0) === 0 || (funnel.evaluated ?? 0) === 0)) {
+      funnel.evaluated = Math.max(funnel.evaluated ?? 0, candidatesCount);
+      funnel.attempted = Math.max(funnel.attempted ?? 0, funnel.evaluated);
+      funnel.count_source = 'candidate_evidence';
+    }
+  }
+
+  const fetchedJobs = jobsRes.ok ? extractJobsList(jobsRes.data) : [];
+  const jobsAccounting = fetchedJobs.length > 0 ? summarizeJobsAccounting(fetchedJobs) : null;
+  if (totalRuntimeSeconds === null && jobsAccounting?.totalRuntimeSeconds !== null && jobsAccounting?.totalRuntimeSeconds !== undefined) {
+    totalRuntimeSeconds = jobsAccounting.totalRuntimeSeconds;
+  }
+  if (totalCostUsd === null && jobsAccounting?.totalCostUsd !== null && jobsAccounting?.totalCostUsd !== undefined) {
+    totalCostUsd = jobsAccounting.totalCostUsd;
+  }
+  const resolvedGpus = executedGpus.length > 0
+    ? executedGpus
+    : (jobsAccounting?.gpus?.length
+      ? jobsAccounting.gpus
+      : (Array.isArray(compact.compute?.allowed_gpus) ? [...new Set(compact.compute.allowed_gpus.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim()))] : []));
+
   const storageUsage = storageRes.ok ? (storageRes.data?.usage ?? null) : null;
   const jobsList = Array.isArray(project.jobs) ? project.jobs : [];
   const resources = {
-    gpus: collectManagedGpus(project, compact),
-    job_count: nonNegInt(project.job_count, compact.jobs?.count, jobsList.length > 0 ? jobsList.length : null),
-    total_runtime_seconds: nonNegNum(project.total_runtime_seconds, project.elapsed_seconds, compact.compute?.elapsed_seconds),
-    total_cost_usd: nonNegNum(project.total_cost_usd, compact.cost?.recorded_spend_usd),
+    gpus: resolvedGpus,
+    job_count: nonNegInt(project.job_count, compact.jobs?.count, jobsList.length > 0 ? jobsList.length : null, jobsAccounting?.jobCount > 0 ? jobsAccounting.jobCount : null),
+    total_runtime_seconds: totalRuntimeSeconds,
+    total_cost_usd: totalCostUsd,
     storage_bytes: nonNegInt(storageUsage?.bytes),
     storage_files: nonNegInt(storageUsage?.object_count, storageUsage?.file_count),
   };
@@ -359,6 +485,14 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
       `Project requires human approval at ${projectUrlValue ?? 'the project page'} before resuming.`,
     );
   }
+  if (status === 'completed' && resources.storage_files !== null && resources.storage_files <= 1) {
+    addUniqueWarning(
+      warnings,
+      seenWarnings,
+      'storage_stale_hint',
+      `Completed project storage shows only ${resources.storage_files} object(s); measurement may be stale. Refresh with: ariax storage project ${projectId} --refresh`,
+    );
+  }
   const cleanupItems = cleanupRes.ok && Array.isArray(cleanupRes.data?.items) ? cleanupRes.data.items : [];
   if (cleanupItems.length > 0) {
     addUniqueWarning(
@@ -374,6 +508,7 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
     }
   }
 
+  const supportsDiagnostics = DIAGNOSTICS_PROTOCOLS.has(String(protocol ?? '').trim().toLowerCase());
   if (!['completed', 'failed', 'aborted', 'cancelled', 'paused'].includes(status)) {
     addUniqueAction(nextActions, seenActions, `ariax status ${projectId} --wait`, 'Wait for the project to reach a terminal state.');
   } else if (status === 'paused') {
@@ -383,7 +518,9 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
     addUniqueAction(nextActions, seenActions, `ariax results ${projectId} --download ./results`, 'Download selected structures and output tables.');
   } else if (status === 'completed' && funnel.accepted === 0) {
     addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view all --json`, 'Review rejected/refolded candidates and native filter failure reasons.');
-    addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view diagnostics --json`, 'Inspect trajectory diagnostics if no refolded candidates exist.');
+    if (supportsDiagnostics) {
+      addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view diagnostics --json`, 'Inspect trajectory diagnostics if no refolded candidates exist.');
+    }
   } else {
     addUniqueAction(nextActions, seenActions, `ariax results ${projectId}`, 'Inspect any saved artifacts from the stopped execution.');
     addUniqueAction(nextActions, seenActions, `ariax jobs --project ${projectId}`, 'Find job IDs to inspect native execution logs.');
@@ -453,17 +590,114 @@ function sumKnownNumbers(values) {
   return found ? total : null;
 }
 
+async function walkForgeTreeSummary(client, projectId, rootPath, initialRes, { maxFiles = 200, maxPages = 25 } = {}) {
+  if (!initialRes?.ok || !initialRes.data || !Array.isArray(initialRes.data.entries)) {
+    return { ok: false, complete: false, fileCount: null, totalBytes: null, truncated: false };
+  }
+  const route = `${FORGE_API}/projects/${encodeURIComponent(projectId)}/files`;
+  const visitedDirs = new Set([rootPath]);
+  const seenFiles = new Set();
+  const queue = [{ dir: rootPath, firstPage: initialRes.data }];
+  let fileCount = 0;
+  let totalBytes = 0;
+  let pagesFetched = 0;
+  let truncated = false;
+  let complete = true;
+
+  while (queue.length > 0 && !truncated) {
+    const { dir, firstPage } = queue.shift();
+    const prefix = `${dir}/`;
+    let cursor = null;
+    let pageData = firstPage ?? null;
+    const seenCursors = new Set();
+
+    for (;;) {
+      if (!pageData) {
+        if (pagesFetched >= maxPages) {
+          truncated = true;
+          complete = false;
+          break;
+        }
+        pagesFetched += 1;
+        const res = await bestEffortGet(client, route, { path: dir, ...(cursor ? { cursor } : {}) });
+        if (!res.ok || !res.data || !Array.isArray(res.data.entries)) {
+          complete = false;
+          break;
+        }
+        pageData = res.data;
+      }
+
+      const entries = Array.isArray(pageData.entries) ? pageData.entries : [];
+      for (const entry of entries) {
+        const entryPath = typeof entry?.path === 'string' ? entry.path : '';
+        if (!entryPath.startsWith(prefix)) {
+          // Server ignored path filter or returned non-child entries; avoid miscounting.
+          complete = false;
+          continue;
+        }
+        if (entry.kind === 'directory') {
+          if (!visitedDirs.has(entryPath)) {
+            visitedDirs.add(entryPath);
+            queue.push({ dir: entryPath, firstPage: null });
+          }
+        } else if (entry.kind === 'file') {
+          if (seenFiles.has(entryPath)) continue;
+          seenFiles.add(entryPath);
+          if (fileCount >= maxFiles) {
+            truncated = true;
+            complete = false;
+            break;
+          }
+          fileCount += 1;
+          const sz = nonNegInt(entry.size_bytes);
+          if (sz !== null) totalBytes += sz;
+          else complete = false;
+        }
+      }
+
+      const nextCursor = typeof pageData.next_cursor === 'string' && pageData.next_cursor ? pageData.next_cursor : null;
+      pageData = null;
+      if (!nextCursor || truncated) break;
+      if (seenCursors.has(nextCursor)) {
+        complete = false;
+        break;
+      }
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    }
+  }
+
+  return { ok: true, complete, fileCount, totalBytes, truncated };
+}
+
 export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fallbackProject = null } = {}) {
   const projRes = await ctx.client.get(`${FORGE_API}/projects/${encodeURIComponent(projectId)}`, {
     query: { view: 'summary' },
   });
   const proj = projRes.data ?? {};
+  const sessionsList = Array.isArray(proj.sessions) ? proj.sessions : [];
 
-  const [filesStatusRes, filesListRes, storageRes, cleanupRes] = await Promise.all([
+  let totalRuntimeSeconds = nonNegNum(
+    proj.total_runtime_seconds,
+    fallbackProject?.total_runtime_seconds,
+    sumKnownNumbers(sessionsList.map((s) => nonNegNum(s?.runtime_seconds, s?.elapsed_seconds))),
+  );
+  let totalCostUsd = nonNegNum(
+    proj.total_cost_usd,
+    fallbackProject?.total_cost_usd,
+    sumKnownNumbers(sessionsList.map((s) => nonNegNum(s?.total_cost_usd, s?.cost_usd, s?.recorded_spend_usd))),
+  );
+  const needJobsAccounting = totalRuntimeSeconds === null || totalCostUsd === null;
+
+  const [filesStatusRes, filesListRes, inputsListRes, storageRes, cleanupRes, jobsRes] = await Promise.all([
     bestEffortGet(ctx.client, `${FORGE_API}/projects/${encodeURIComponent(projectId)}/files/status`),
     bestEffortGet(ctx.client, `${FORGE_API}/projects/${encodeURIComponent(projectId)}/files`, { path: '/workspace' }),
+    bestEffortGet(ctx.client, `${FORGE_API}/projects/${encodeURIComponent(projectId)}/files`, { path: '/inputs' }),
     bestEffortGet(ctx.client, `/api/v1/projects/${encodeURIComponent(projectId)}/storage`),
     bestEffortGet(ctx.client, `/api/v1/projects/${encodeURIComponent(projectId)}/storage/cleanup-suggestions`),
+    needJobsAccounting
+      ? bestEffortGet(ctx.client, '/api/v1/jobs', { project_id: projectId, limit: 20 })
+      : Promise.resolve({ ok: false, skipped: true }),
   ]);
 
   const filesStatus = filesStatusRes.ok ? (filesStatusRes.data ?? null) : null;
@@ -471,7 +705,6 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
   const storageUsage = storageRes.ok ? (storageRes.data?.usage ?? null) : null;
   const rawCleanupItems = cleanupRes.ok && Array.isArray(cleanupRes.data?.items) ? cleanupRes.data.items : [];
 
-  const sessionsList = Array.isArray(proj.sessions) ? proj.sessions : [];
   const activeSessionId = firstString(proj.active_session_id) ?? null;
   const latestSessionId = firstString(proj.latest_session_id, sessionsList[0]?.session_id) ?? null;
   const activeSession = activeSessionId
@@ -480,21 +713,36 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
   const activeSessionState = activeSessionId
     ? firstString(activeSession?.state, filesStatus?.session_state)
     : null;
+  const computeActive = Boolean(
+    activeSessionId && !['closed', 'failed'].includes(String(activeSessionState ?? '').toLowerCase()),
+  );
 
-  const gpusUsed = [...new Set(
-    sessionsList.map((s) => (typeof s?.gpu_type === 'string' && s.gpu_type.trim() ? s.gpu_type.trim() : null)).filter(Boolean),
-  )];
+  const fetchedJobs = jobsRes.ok ? extractJobsList(jobsRes.data) : [];
+  const jobsAccounting = fetchedJobs.length > 0 ? summarizeJobsAccounting(fetchedJobs) : null;
+  if (totalRuntimeSeconds === null && jobsAccounting?.totalRuntimeSeconds !== null && jobsAccounting?.totalRuntimeSeconds !== undefined) {
+    totalRuntimeSeconds = jobsAccounting.totalRuntimeSeconds;
+  }
+  if (totalCostUsd === null && jobsAccounting?.totalCostUsd !== null && jobsAccounting?.totalCostUsd !== undefined) {
+    totalCostUsd = jobsAccounting.totalCostUsd;
+  }
+  if (totalRuntimeSeconds === null) {
+    const closedSessionDurations = sessionsList
+      .filter((s) => ['closed', 'failed'].includes(String(s?.state ?? '').toLowerCase()) || typeof s?.stopped_at === 'string')
+      .map((s) => durationBetweenIso(s?.allocated_at ?? s?.started_at, s?.stopped_at ?? s?.closed_at ?? s?.ended_at));
+    const fallbackDuration = sumKnownNumbers(closedSessionDurations);
+    if (fallbackDuration !== null) totalRuntimeSeconds = Math.round(fallbackDuration * 1000) / 1000;
+  }
+
+  const gpusUsed = [...new Set([
+    ...sessionsList.map((s) => (typeof s?.gpu_type === 'string' && s.gpu_type.trim() ? s.gpu_type.trim() : null)).filter(Boolean),
+    ...(jobsAccounting?.gpus ?? []),
+  ])];
   const toolsUsed = collectForgeTools(sessionsList);
-  const totalRuntimeSeconds = nonNegNum(
-    proj.total_runtime_seconds,
-    fallbackProject?.total_runtime_seconds,
-    sumKnownNumbers(sessionsList.map((s) => nonNegNum(s?.runtime_seconds, s?.elapsed_seconds))),
-  );
-  const totalCostUsd = nonNegNum(
-    proj.total_cost_usd,
-    fallbackProject?.total_cost_usd,
-    sumKnownNumbers(sessionsList.map((s) => nonNegNum(s?.total_cost_usd, s?.cost_usd, s?.recorded_spend_usd))),
-  );
+
+  const [wsWalk, inputsWalk] = await Promise.all([
+    walkForgeTreeSummary(ctx.client, projectId, '/workspace', filesListRes, { maxFiles: 200, maxPages: 25 }),
+    walkForgeTreeSummary(ctx.client, projectId, '/inputs', inputsListRes, { maxFiles: 200, maxPages: 25 }),
+  ]);
 
   const rawEntries = Array.isArray(filesList?.entries) ? filesList.entries : [];
   const topEntries = rawEntries.slice(0, top).map((entry) => redactForgeOutput({
@@ -507,6 +755,17 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
     && rawEntries.every((e) => e?.kind === 'file' && typeof e?.size_bytes === 'number' && Number.isSafeInteger(e.size_bytes) && e.size_bytes >= 0)
     ? rawEntries.reduce((sum, e) => sum + e.size_bytes, 0)
     : null;
+
+  const catalogObjectCount = nonNegInt(storageUsage?.object_count, storageUsage?.file_count);
+  const catalogBytes = nonNegInt(storageUsage?.bytes);
+  const inputsFileCount = inputsWalk.ok && inputsWalk.complete ? inputsWalk.fileCount : null;
+  const inputsBytes = inputsWalk.ok && inputsWalk.complete ? inputsWalk.totalBytes : null;
+  const workspaceFileCount = wsWalk.ok && wsWalk.complete && !wsWalk.truncated
+    ? wsWalk.fileCount
+    : nonNegInt(catalogObjectCount, filesList ? rawEntries.length : null);
+  const workspaceTotalBytes = wsWalk.ok && wsWalk.complete && !wsWalk.truncated
+    ? wsWalk.totalBytes
+    : nonNegInt(catalogBytes, exactListBytes);
 
   const syncState = firstString(filesStatus?.sync_state, filesList?.sync_state);
   const durabilityGap = typeof filesStatus?.durability_gap === 'boolean'
@@ -645,6 +904,7 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
 
   return {
     kind: 'forge',
+    compute_active: computeActive,
     project: {
       id: projectId,
       name: firstString(proj.name, fallbackProject?.name),
@@ -659,6 +919,7 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
     sessions: {
       total_sessions: nonNegInt(proj.total_sessions, proj.session_count, sessionsList.length),
       active_session_state: activeSessionState,
+      compute_active: computeActive,
       gpus_used: gpusUsed,
       tools_used: toolsUsed,
       total_runtime_seconds: totalRuntimeSeconds,
@@ -668,8 +929,12 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
       sync_state: syncState,
       durability_gap: durabilityGap,
       last_synced_at: lastSyncedAt,
-      file_count: nonNegInt(storageUsage?.object_count, storageUsage?.file_count, filesList ? rawEntries.length : null),
-      total_bytes: nonNegInt(storageUsage?.bytes, exactListBytes),
+      file_count: workspaceFileCount,
+      total_bytes: workspaceTotalBytes,
+      inputs_file_count: inputsFileCount,
+      inputs_bytes: inputsBytes,
+      catalog_object_count: catalogObjectCount,
+      catalog_bytes: catalogBytes,
       top_entries: topEntries,
       hygiene_warnings: hygieneWarnings,
     },

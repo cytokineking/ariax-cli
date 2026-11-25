@@ -20,9 +20,9 @@ import {
   recordCliError,
   recordFeedbackAdvisory,
 } from './error-ring.js';
-import { ConnectivityError, createClient } from './http.js';
-import { parseFieldsOption, printData, printJson, printProgress, setOutputFields } from './output.js';
-import { defaultStateDir } from './state-dir.js';
+import { ConnectivityError, ServerTimeoutError, createClient } from './http.js';
+import { installStdoutEpipeHandler, parseFieldsOption, printData, printJson, printProgress, setOutputFields } from './output.js';
+import { defaultStateDir, resolveWritableStateDir } from './state-dir.js';
 import { EXIT } from './exit-codes.js';
 import { isUUID } from './uuid.js';
 import {
@@ -76,9 +76,9 @@ const COMMAND_OPTIONS = {
   discover: [['query', 'task', 'modality', 'execution', 'all'], 0],
   me: [[], 0],
   protocols: [[], 0],
-  pricing: [[], 0],
-  schema: [['raw', 'kind', 'output', 'o', 'details'], 1],
-  skills: [['read', 'reference', 'tool', 'paths', 'details'], 1],
+  pricing: [['details', 'gpu', 'gpu-count'], 0],
+  schema: [['raw', 'kind', 'output', 'o', 'details', 'example'], 1],
+  skills: [['read', 'reference', 'doc', 'tool', 'paths', 'details', 'list'], 1],
   validate: [['file', 'f', 'input', 'input-dir', 'details'], 0],
   submit: [['file', 'f', 'name', 'input', 'input-dir', 'input-upload-intent-id', 'wait', 'resume', 'poll-interval', 'wait-timeout', 'details'], 0],
   projects: [['status', 'protocol', 'name', 'limit', 'cursor', 'all', 'details'], 0],
@@ -128,7 +128,7 @@ function validateCommandArguments({ command, positionals, flags }) {
     if (!['inspect', 'prepare'].includes(action)) {
       throw usageError('inputs: expected inspect or prepare.');
     }
-    options = [action === 'inspect' ? ['input', 'input-dir', 'pdb', 'file', 'full', 'details'] : ['input', 'input-dir', 'pdb', 'file', 'output'], 1];
+    options = [action === 'inspect' ? ['input', 'input-dir', 'pdb', 'file', 'residues', 'full', 'details'] : ['input', 'input-dir', 'pdb', 'file', 'output'], 1];
     label = `inputs ${action}`;
   }
   if (!options) return; // Unknown commands are reported by the dispatcher.
@@ -208,7 +208,11 @@ function resolveErrorRootDir(context = {}) {
   if (typeof env?.ARIAX_ROOT_DIR === 'string' && env.ARIAX_ROOT_DIR.trim()) {
     return path.resolve(env.ARIAX_ROOT_DIR);
   }
-  return path.resolve(defaultStateDir({ env }));
+  try {
+    return path.resolve(resolveWritableStateDir({ env }));
+  } catch {
+    return path.resolve(defaultStateDir({ env }));
+  }
 }
 
 function reportError(err, jsonMode, authContext) {
@@ -221,7 +225,15 @@ function reportError(err, jsonMode, authContext) {
   const apiCode = typeof err?.code === 'string' ? err.code
     : (rejectedApiKey ? 'invalid_api_key' : undefined);
   let action = err?.action ?? (rejectedApiKey ? rejectedApiKeyAction(authContext) : undefined);
-  if (err instanceof ConnectivityError) {
+  if (err instanceof ServerTimeoutError) {
+    const guidance = err.method === 'GET' || isForgeRead(authContext)
+      ? 'Retry shortly or check status; this timeout usually indicates an upstream server/database delay rather than a client network outage.'
+      : 'Retry shortly only after checking status or operations to confirm whether the upstream request completed; keep the original operation ID.';
+    const forgeGuidance = authContext?.command === 'forge'
+      ? 'Remote Forge jobs may still be running; preserve original operation IDs when reconciling admitted work.'
+      : undefined;
+    action = [guidance, forgeGuidance, action].filter(Boolean).join(' ');
+  } else if (err instanceof ConnectivityError) {
     const guidance = err.method === 'GET' || isForgeRead(authContext)
       ? "Check this client's network connection and retry the same read after connectivity returns."
       : "Check this client's network connection. After connectivity returns, inspect the outcome before retrying; keep the original operation ID if work may have been submitted.";
@@ -286,10 +298,10 @@ const HELP_TOPICS = {
   forge: forge.help,
   me: 'ariax me',
   protocols: 'ariax protocols',
-  pricing: 'ariax pricing',
-  schema: 'ariax schema <protocol> [--raw] [--details] [--kind job|submission] [-o, --output FILE]',
-  skills: 'ariax skills [protocol|forge] [--read] [--reference NAME] [--tool GUIDE_ID] [--paths] | ariax skills install [--target claude|codex|cursor|antigravity|all] [--scope user|project] [--dry-run] [--yes] | ariax skills status',
-  inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
+  pricing: 'ariax pricing [--gpu GPU_ID] [--gpu-count 1|2|4|8] [--details]',
+  schema: 'ariax schema <protocol> [--raw] [--details] [--example [TYPE]] [--kind job|submission] [-o, --output FILE]',
+  skills: 'ariax skills [protocol|forge] [--list] [--read] [--reference NAME] [--doc NAME] [--tool GUIDE_ID] [--paths] | ariax skills install [--target claude|codex|cursor|antigravity|all] [--scope user|project] [--dry-run] [--yes] | ariax skills status',
+  inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--residues SPEC] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
   validate: 'ariax validate -f job.json [--input FILE | --input-dir DIR] [--details]',
   submit: 'ariax submit -f job.json --name <name> [--input FILE | --input-dir DIR] [--wait] [--details]',
   operations: 'ariax operations [operation-id]',
@@ -313,11 +325,17 @@ const HELP_TOPICS = {
   logout: 'ariax logout',
 };
 
-function printHelp(topic) {
+function printHelp(topic, subPositionals = []) {
+  if (topic === 'forge' && Array.isArray(subPositionals) && subPositionals.length > 0 && typeof forge.helpFor === 'function') {
+    printData(`usage: ${forge.helpFor(subPositionals)}`);
+    printData('');
+    printData('Global flags: --json, --fields <paths>, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --connection-cache-dir <dir>, --timeout <ms>');
+    return;
+  }
   if (topic && HELP_TOPICS[topic]) {
     printData(`usage: ${HELP_TOPICS[topic]}`);
     printData('');
-    printData('Global flags: --json, --fields <paths>, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --timeout <ms>');
+    printData('Global flags: --json, --fields <paths>, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --connection-cache-dir <dir>, --timeout <ms>');
     if (topic === 'forge') printData('Forge local waits use --wait-timeout SECONDS; --timeout-seconds limits remote execution. For legacy tools wait/watch/sync, --timeout also means local seconds.');
     return;
   }
@@ -338,8 +356,9 @@ function printHelp(topic) {
   printData('  --fields <a,b.c>        Project JSON output to specific dot-path fields');
   printData('  --base-url <url>        API base URL (default: https://www.ariax.bio)');
   printData('  --allow-custom-origin   Permit API-key use with a non-Ariax HTTPS origin');
-  printData('  --root-dir <dir>        Resume-state directory (default: OS state dir)');
-  printData('  --timeout <ms>          Per-request timeout (default: 30000)');
+  printData('  --root-dir <dir>              Resume-state directory (default: OS state dir)');
+  printData('  --connection-cache-dir <dir>  Forge session connection cache dir (private 0700)');
+  printData('  --timeout <ms>                Per-request timeout (default: 30000)');
   printData('  -h, --help              Show help (optionally: ariax help <command>)');
   printData('  --version               Show version');
   printData('');
@@ -367,6 +386,7 @@ function detectRawJsonMode(argv) {
 
 /** Run the CLI. Returns a process exit code (never throws). */
 export async function main(argv = process.argv.slice(2), env = process.env, runtime = {}) {
+  installStdoutEpipeHandler();
   let parsed;
   try {
     parsed = parseArgv(argv);
@@ -404,7 +424,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     return EXIT.OK;
   }
   if (globals.help === true || command === undefined || command === 'help') {
-    printHelp(command === 'help' ? positionals[0] : command);
+    const topic = command === 'help' ? positionals[0] : command;
+    if (topic && !Object.prototype.hasOwnProperty.call(HELP_TOPICS, topic)) {
+      return reportError(
+        usageError(`Unknown command '${topic}'. Run 'ariax --help' to list available commands.`),
+        argumentJsonMode,
+        earlyContext,
+      );
+    }
+    printHelp(topic, command === 'help' ? positionals.slice(1) : positionals);
     return EXIT.OK;
   }
   if (!Object.prototype.hasOwnProperty.call(COMMANDS, command)) {
@@ -415,6 +443,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   if (globals['base-url'] !== undefined) merged['base-url'] = globals['base-url'];
   if (globals['allow-custom-origin'] === true) merged['allow-custom-origin'] = true;
   if (globals['root-dir'] !== undefined) merged['root-dir'] = globals['root-dir'];
+  if (globals['connection-cache-dir'] !== undefined) merged['connection-cache-dir'] = globals['connection-cache-dir'];
   if (globals.timeout !== undefined) merged.timeout = globals.timeout;
   if (globals.json === true) merged.json = true;
   if (globals['no-json'] === true && globals.json !== true) merged.json = false;

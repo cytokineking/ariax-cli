@@ -25,7 +25,7 @@ Never add `user_id` to job JSON; keep explicit user epitope constraints exact.
 ```sh
 ariax inputs inspect --input ./target.pdb -f job.json --json   # compact; add --full for per-residue map
 ariax inputs prepare --input ./target.pdb -f job.json --output ./prepared --json
-ariax validate -f ./prepared/job.json --input ./prepared/target.pdb --json
+ariax validate -f ./prepared/job.json --input ./prepared/input.pdb --json
 ```
 
 - `inputs inspect`/`prepare` require no account; `--pdb ID` fetches RCSB directly.
@@ -74,7 +74,7 @@ Turbo allocation rates again). See [campaign forecasting](campaigns.md#forecast-
 ## 4. Submit, monitor, and export
 
 ```sh
-ariax submit -f ./prepared/job.json --input ./prepared/target.pdb --name my-run --wait
+ariax submit -f ./prepared/job.json --input ./prepared/input.pdb --name my-run --wait
 ariax status PROJECT_ID --json
 ariax projects --json                          # summary default; add --details for full rows
 ariax projects export PROJECT_ID -o job.json   # read-only config export (excludes stored inputs/MSAs)

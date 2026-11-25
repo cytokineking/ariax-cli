@@ -681,10 +681,11 @@ export async function exerciseConnectivityCli(script, baseEnv = process.env) {
 
     state.meFault = 'timeout';
     const timedOut = await invoke(['me', '--timeout', '50'], { code: 9 });
-    assert.equal(timedOut.payload.error.code, 'network_error');
+    assert.equal(timedOut.payload.error.code, 'server_timeout');
     assert.equal(timedOut.payload.error.retryable, true);
     assert.match(timedOut.payload.error.message, /timed out after 50ms: GET \/api\/v1\/me/);
-    assert.match(timedOut.payload.error.action, /retry the same read after connectivity returns/);
+    assert.match(timedOut.payload.error.message, /upstream server\/database delay/);
+    assert.match(timedOut.payload.error.action, /Retry shortly or check status/);
     state.meFault = null;
     assert.equal((await invoke(['forge', 'operations'])).payload.data.operations.length, 0);
 

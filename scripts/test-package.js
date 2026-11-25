@@ -116,11 +116,35 @@ globalThis.fetch = async (url) => {
       assert.ok((await fs.readFile(forge.references['freebindcraft-preflight'])).length > 0);
       assert.ok((await fs.readFile(forge.references['boltz2-affinity-check'])).length > 0);
     }
-    // Exercise the managed output reader from the same installed package.
+    // Exercise the managed output reader and Phase 6 skills/schema/help UX from the same installed package.
     const managedOutput = JSON.parse(execute(process.execPath, [script, 'skills', 'boltzgen',
       '--reference', 'outputs', '--read', '--json'])).data;
     assert.equal(managedOutput.scope, 'protocol');
     assert.equal(managedOutput.content, await fs.readFile(managedOutput.path, 'utf8'));
+    const docImplicit = JSON.parse(execute(process.execPath, [script, 'skills', 'boltzgen',
+      '--doc', 'outputs', '--json'])).data;
+    assert.equal(docImplicit.content, managedOutput.content);
+    const refImplicit = JSON.parse(execute(process.execPath, [script, 'skills',
+      '--reference', 'managed-projects', '--json'])).data;
+    assert.match(refImplicit.content, /\.\/prepared\/input\.pdb/);
+    assert.ok(!refImplicit.content.includes('./prepared/target.pdb'));
+    const schemaEx = JSON.parse(execute(process.execPath, [script, 'schema', 'boltzgen',
+      '--example', 'vhh', '--json'])).data;
+    assert.equal(schemaEx.protocol, 'boltzgen');
+    assert.equal(schemaEx.project_type, 'vhh');
+    assert.equal(schemaEx.example?.protocol, 'boltzgen');
+    const installCheckDir = path.join(temporary, `skills-install-${channel}-${index}`);
+    await fs.mkdir(installCheckDir, { recursive: true });
+    execute(process.execPath, [script, 'skills', 'install', '--target', 'codex', '--scope', 'project', '--json'], { cwd: installCheckDir });
+    await fs.access(path.join(installCheckDir, '.codex/skills/ariax/SKILL.md'));
+    await fs.access(path.join(installCheckDir, '.codex/skills/ariax/core/interpretation.md'));
+    let unknownHelpCode = 0;
+    try {
+      execute(process.execPath, [script, 'help', 'nonexistent-subcommand', '--json']);
+    } catch (err) {
+      unknownHelpCode = err.status;
+    }
+    assert.equal(unknownHelpCode, 1, 'ariax help <unknown> must exit 1');
     console.log(`Installed ${channel} Forge reference discovery, reads, and native examples verified.`);
     for (const relative of [
       'agent-skills/skills/ariax-bindcraft2/SKILL.md',

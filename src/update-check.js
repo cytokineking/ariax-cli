@@ -69,26 +69,30 @@ export function isUpdateAvailable(currentVersion, latestVersion) {
 // Agent sandboxes can have a read-only home. Claim the daily check in the user's
 // temp directory so parallel CLI calls produce a single recommendation.
 async function claimAgentCheck(agent, channel, now, intervalMs) {
-  const uid = process.getuid?.();
-  const directory = path.join(os.tmpdir(), `ariax-cli-updates-${uid ?? 'user'}`);
-  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  const stat = await fs.lstat(directory);
-  if (!stat.isDirectory() || (uid !== undefined && (stat.uid !== uid || (stat.mode & 0o077) !== 0))) return false;
-
-  const period = Math.floor(now / intervalMs);
-  const prefix = `${agent}-${channel}-`;
   try {
-    await fs.writeFile(path.join(directory, prefix + period), '', { flag: 'wx', mode: 0o600 });
-  } catch (error) {
-    if (error.code === 'EEXIST') return false;
-    throw error;
-  }
-  for (const name of await fs.readdir(directory)) {
-    if (name.startsWith(prefix) && Number(name.slice(prefix.length)) < period) {
-      await fs.unlink(path.join(directory, name)).catch(() => {});
+    const uid = process.getuid?.();
+    const directory = path.join(os.tmpdir(), `ariax-cli-updates-${uid ?? 'user'}`);
+    await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+    const stat = await fs.lstat(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || (uid !== undefined && (stat.uid !== uid || (stat.mode & 0o077) !== 0))) return false;
+
+    const period = Math.floor(now / intervalMs);
+    const prefix = `${agent}-${channel}-`;
+    try {
+      await fs.writeFile(path.join(directory, prefix + period), '', { flag: 'wx', mode: 0o600 });
+    } catch (error) {
+      if (error.code === 'EEXIST') return false;
+      throw error;
     }
+    for (const name of await fs.readdir(directory)) {
+      if (name.startsWith(prefix) && Number(name.slice(prefix.length)) < period) {
+        await fs.unlink(path.join(directory, name)).catch(() => {});
+      }
+    }
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 }
 
 /** Use the operating system's normal per-user cache location. */

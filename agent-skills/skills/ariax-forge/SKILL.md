@@ -56,6 +56,7 @@ ariax forge command SESSION COMMAND_ID --json
 ```
 
 - Put the native executable and arguments after `--`; `--cwd` defaults to `/workspace` and must stay under it.
+- Resumed Forge projects retain prior `/inputs` remotely (inspect with `ariax forge files PROJECT --path /inputs`); `/inputs` paths are immutable, so upload updated scripts/files under a new `--path` (e.g. `v2/script.py`).
 - Multi-GPU sessions require explicit `--gpus 0` / `--gpus 1,0` for GPU tools (CPU tools omit `--gpus`). Overlapping GPU reservations return `gpu_busy`; use distinct output directories for concurrent commands.
 - `--wait` returns `exit_code` and a bounded `output_tail` (configure with `--tail N`, default 80 lines / 4 KiB). Remote command failures exit with distinct exit code **`11`** (with `exit_code` and `output_tail` in `error.details`), separate from server errors (`10`). Exit `0` does not verify scientific validity — always inspect native outputs and files.
 - Use `--retained` with `commands`, `command`, `logs`, or `inputs list/status` after session closure. `ariax forge list`, `project`, `activity`, `commands`, and `command` return lean summary payloads by default (add `--details` for full metadata).

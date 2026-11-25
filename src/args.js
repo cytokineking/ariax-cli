@@ -19,6 +19,7 @@ export const GLOBAL_FLAG_NAMES = new Set([
   'base-url',
   'allow-custom-origin',
   'root-dir',
+  'connection-cache-dir',
   'timeout',
   'fields',
   'help',
@@ -67,6 +68,8 @@ const BOOLEAN_FLAGS = new Set([
   'preview',
   'attach-last-error',
   'include-sequences',
+  'active',
+  'suggested',
 ]);
 
 /**
@@ -118,6 +121,20 @@ export function parseArgv(argv) {
         && (inlineValue !== undefined || (argv[i + 1] !== undefined && !argv[i + 1].startsWith('-')));
       if (fileVersion) fileVersionOption = true;
       const target = !fileVersion && GLOBAL_FLAG_NAMES.has(name) ? globals : flags;
+      const optionalExample = name === 'example' && command === 'schema';
+      if (optionalExample) {
+        if (inlineValue !== undefined) {
+          target[name] = inlineValue || true;
+          i += 1;
+        } else if (positionals.length >= 1 && argv[i + 1] !== undefined && !argv[i + 1].startsWith('-')) {
+          target[name] = argv[i + 1];
+          i += 2;
+        } else {
+          target[name] = true;
+          i += 1;
+        }
+        continue;
+      }
       if (!fileVersion && BOOLEAN_FLAGS.has(name)) {
         if (inlineValue !== undefined) {
           throw usageError(`Flag --${name} takes no value (got "${tok}").`);
@@ -127,6 +144,12 @@ export function parseArgv(argv) {
       } else if (name === 'hydrate' && command === 'forge') {
         const value = inlineValue === undefined ? takeValue(i, name, tok) : inlineValue;
         target[name] = [...(target[name] || []), value];
+        i += inlineValue === undefined ? 2 : 1;
+      } else if (name === 'path' && command === 'storage' && positionals[0] === 'delete') {
+        const value = inlineValue === undefined ? takeValue(i, name, tok) : inlineValue;
+        target[name] = target[name] === undefined
+          ? value
+          : (Array.isArray(target[name]) ? [...target[name], value] : [target[name], value]);
         i += inlineValue === undefined ? 2 : 1;
       } else if (inlineValue !== undefined) {
         target[name] = inlineValue;

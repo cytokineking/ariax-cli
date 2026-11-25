@@ -14,7 +14,7 @@ const OPTIONS = {
   project: [['refresh'], 2],
   entries: [['path', 'limit', 'cursor'], 2],
   suggest: [[], 2],
-  delete: [['path', 'recursive', 'preview', 'expected-control-revision', 'operation-id'], 2],
+  delete: [['path', 'recursive', 'preview', 'suggested', 'expected-control-revision', 'operation-id'], 2],
   deletion: [[], 3],
 };
 
@@ -23,10 +23,11 @@ export const help = `ariax storage usage [--refresh] [--after UUID]
   ariax storage project PROJECT [--refresh]
   ariax storage entries PROJECT [--path P] [--limit N] [--cursor C]
   ariax storage suggest PROJECT
-  ariax storage delete PROJECT --path P [--recursive] [--preview] [--expected-control-revision N] [--operation-id UUID]
+  ariax storage delete PROJECT (--path P [--path P2 ...] | --suggested) [--recursive] --preview
+  ariax storage delete PROJECT --path P [--recursive] [--expected-control-revision N] [--operation-id UUID]
   ariax storage deletion PROJECT DELETION_ID
   PROJECT accepts a project UUID or an exact unique project name.
-  Use \`storage delete --preview\` to inspect impact before submitting a deletion.
+  Use \`storage delete --preview\` (with one or more \`--path\` flags or \`--suggested\`) to inspect impact before submitting an explicit \`--path\` deletion.
   For Forge projects, \`storage suggest\` highlights large or high-file-count directories for \`ariax forge pack\` or \`ariax forge files delete\`.`;
 
 export function validateArguments({ positionals, flags, globals }) {
@@ -274,28 +275,63 @@ export async function run(ctx) {
 
   if (action === 'suggest') {
     const res = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/storage/cleanup-suggestions`);
-    if (ctx.json) { emitEnvelope(res); return; }
-    const d = res.data || {};
-    printKv({
-      project_id: d.project_id ?? projectId,
-      state: d.state ?? '-',
-      ...(d.final_result ? { final_result: d.final_result } : {}),
+    const rawData = res.data && typeof res.data === 'object' ? res.data : {};
+    const rawItems = Array.isArray(rawData.items) ? rawData.items : [];
+    let sumBytes = 0;
+    let hasAnyBytes = rawItems.length === 0;
+    const normalizedItems = rawItems.map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      const bytes = typeof item.bytes === 'number' && Number.isFinite(item.bytes) && item.bytes >= 0 ? item.bytes : null;
+      if (bytes !== null) {
+        sumBytes += bytes;
+        hasAnyBytes = true;
+      }
+      const objectCount = typeof item.object_count === 'number' && Number.isSafeInteger(item.object_count) && item.object_count >= 0
+        ? item.object_count
+        : (typeof item.file_count === 'number' && Number.isSafeInteger(item.file_count) && item.file_count >= 0
+          ? item.file_count
+          : null);
+      const recursive = typeof item.recursive === 'boolean'
+        ? item.recursive
+        : (item.kind === 'directory' ? true : (item.kind === 'file' ? false : null));
+      return {
+        ...item,
+        bytes,
+        object_count: objectCount,
+        recursive,
+      };
     });
-    const items = Array.isArray(d.items) ? d.items : [];
-    if (!items.length) {
+    const totalReclaimableBytes = typeof rawData.total_reclaimable_bytes === 'number'
+      && Number.isFinite(rawData.total_reclaimable_bytes) && rawData.total_reclaimable_bytes >= 0
+      ? rawData.total_reclaimable_bytes
+      : (hasAnyBytes ? sumBytes : null);
+    const enrichedData = {
+      ...rawData,
+      items: normalizedItems,
+      total_reclaimable_bytes: totalReclaimableBytes,
+    };
+    if (ctx.json) { emitEnvelope({ ...res, data: enrichedData }); return; }
+    printKv({
+      project_id: enrichedData.project_id ?? projectId,
+      state: enrichedData.state ?? '-',
+      total_reclaimable_bytes: totalReclaimableBytes === null ? '-' : `${formatBytes(totalReclaimableBytes)} (${totalReclaimableBytes} bytes)`,
+      ...(enrichedData.final_result ? { final_result: enrichedData.final_result } : {}),
+    });
+    if (!normalizedItems.length) {
       printData('No cleanup suggestions.');
       return;
     }
-    const hasForgeFields = items.some((item) =>
-      item && (item.suggestion !== undefined || item.file_count !== undefined || item.bytes !== undefined || item.reason !== undefined),
+    const hasDetails = normalizedItems.some((item) =>
+      item && (item.suggestion !== undefined || item.object_count !== null || item.bytes !== null || item.reason !== undefined),
     );
-    if (hasForgeFields) {
+    if (hasDetails) {
       printTable(
-        ['path', 'kind', 'file_count', 'bytes', 'suggestion', 'reason'],
-        items.map((item) => [
+        ['path', 'kind', 'recursive', 'objects', 'bytes', 'suggestion', 'reason'],
+        normalizedItems.map((item) => [
           item.path ?? '-',
           item.kind ?? '-',
-          item.file_count ?? '-',
+          item.recursive === null ? '-' : String(item.recursive),
+          item.object_count ?? '-',
           formatBytes(item.bytes),
           item.suggestion ?? '-',
           item.reason ?? '-',
@@ -303,16 +339,32 @@ export async function run(ctx) {
       );
     } else {
       printTable(
-        ['path', 'kind'],
-        items.map((item) => [item.path ?? '-', item.kind ?? '-']),
+        ['path', 'kind', 'recursive'],
+        normalizedItems.map((item) => [item.path ?? '-', item.kind ?? '-', item.recursive === null ? '-' : String(item.recursive)]),
       );
     }
     return;
   }
 
   if (action === 'delete') {
-    const targetPath = requiredString(flags.path, 'path', 'delete');
+    const useSuggested = flags.suggested === true;
+    const rawPaths = flags.path === undefined ? [] : (Array.isArray(flags.path) ? flags.path : [flags.path]);
+    const targetPaths = rawPaths.map((p) => requiredString(p, 'path', 'delete'));
     const recursive = flags.recursive === true;
+
+    if (useSuggested && flags.preview !== true) {
+      throw usageError('storage delete: --suggested requires --preview. Review previewed targets and submit explicit --path deletions individually.');
+    }
+    if (useSuggested && targetPaths.length > 0) {
+      throw usageError('storage delete: pass either --path or --suggested, not both.');
+    }
+    if (!useSuggested && targetPaths.length === 0) {
+      throw usageError('storage delete: --path is required (or pass --suggested with --preview).');
+    }
+    if (targetPaths.length > 1 && flags.preview !== true) {
+      throw usageError('storage delete: multiple --path flags require --preview. Submit actual deletions one --path at a time.');
+    }
+
     if (flags.preview === true) {
       if (flags['operation-id'] !== undefined) {
         throw usageError('storage delete: --operation-id cannot be combined with --preview.');
@@ -320,6 +372,88 @@ export async function run(ctx) {
       if (flags['expected-control-revision'] !== undefined) {
         throw usageError('storage delete: --expected-control-revision cannot be combined with --preview.');
       }
+      if (useSuggested || targetPaths.length > 1) {
+        let targets;
+        if (useSuggested) {
+          const suggestRes = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/storage/cleanup-suggestions`);
+          const items = Array.isArray(suggestRes.data?.items) ? suggestRes.data.items : [];
+          const seen = new Set();
+          targets = [];
+          for (const item of items) {
+            if (!item || typeof item.path !== 'string' || !item.path.trim()) continue;
+            const p = item.path.trim();
+            const rec = typeof item.recursive === 'boolean' ? item.recursive : (item.kind === 'directory' || recursive);
+            const key = `${p}:${rec}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            targets.push({ path: p, recursive: rec });
+          }
+        } else {
+          targets = [...new Set(targetPaths)].map((p) => ({ path: p, recursive }));
+        }
+        const previews = [];
+        let totalBytes = 0;
+        let hasBytes = targets.length === 0;
+        let totalObjects = 0;
+        let hasObjects = targets.length === 0;
+        let lastRequestId;
+        for (const t of targets) {
+          const previewRes = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/storage/deletions/preview`, {
+            query: { path: t.path, recursive: String(t.recursive) },
+          });
+          lastRequestId = previewRes.requestId ?? lastRequestId;
+          const d = previewRes.data || {};
+          const b = d.observation?.bytes;
+          const o = d.observation?.object_count;
+          if (typeof b === 'number' && Number.isFinite(b) && b >= 0) { totalBytes += b; hasBytes = true; }
+          if (typeof o === 'number' && Number.isSafeInteger(o) && o >= 0) { totalObjects += o; hasObjects = true; }
+          previews.push({
+            path: d.path ?? t.path,
+            recursive: d.recursive ?? t.recursive,
+            capability: d.capability ?? null,
+            observation: d.observation ?? null,
+            control: d.control ?? null,
+          });
+        }
+        const aggregate = {
+          project_id: projectId,
+          preview: true,
+          ...(useSuggested ? { suggested: true } : {}),
+          previews,
+          total_bytes: hasBytes ? totalBytes : null,
+          total_object_count: hasObjects ? totalObjects : null,
+          action: previews.length
+            ? 'Review each previewed path and run explicit `ariax storage delete PROJECT --path <PATH> [--recursive]` to delete.'
+            : null,
+        };
+        if (ctx.json) {
+          emitEnvelope({ data: aggregate, requestId: lastRequestId });
+          return;
+        }
+        printKv({
+          project_id: projectId,
+          targets: previews.length,
+          total_bytes: formatBytes(aggregate.total_bytes),
+          total_object_count: aggregate.total_object_count ?? '-',
+        });
+        if (!previews.length) {
+          printData('No suggested cleanup targets to preview.');
+          return;
+        }
+        printTable(
+          ['path', 'recursive', 'allowed', 'bytes', 'objects', 'reason'],
+          previews.map((item) => [
+            item.path ?? '-',
+            String(item.recursive),
+            item.capability?.allowed ?? '-',
+            formatBytes(item.observation?.bytes),
+            item.observation?.object_count ?? '-',
+            item.capability?.reason ?? '-',
+          ]),
+        );
+        return;
+      }
+      const targetPath = targetPaths[0];
       const res = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/storage/deletions/preview`, {
         query: { path: targetPath, recursive: String(recursive) },
       });
@@ -338,6 +472,7 @@ export async function run(ctx) {
       });
       return;
     }
+    const targetPath = targetPaths[0];
     let expectedControlRevision;
     if (flags['expected-control-revision'] !== undefined) {
       expectedControlRevision = validateInteger(

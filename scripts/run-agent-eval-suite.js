@@ -43,11 +43,15 @@ const IDS = Object.freeze({
   actor: '11111111-1111-4111-8111-111111111111',
   billing: '22222222-2222-4222-8222-222222222222',
   managedProject: '33333333-3333-4333-8333-333333333333',
+  boltzgenProject: '33333333-3333-4333-8333-333333333334',
   forgeProject: '44444444-4444-4444-8444-444444444444',
+  forgeClosedProject: '44444444-4444-4444-8444-444444444445',
   forgeSessionPack: '55555555-5555-4555-8555-555555555555',
+  forgeSessionClosed: '55555555-5555-4555-8555-555555555556',
   forgeSessionClose: '66666666-6666-4666-8666-666666666666',
   forgeSessionFail: '77777777-7777-4777-8777-777777777777',
   serverErrorProject: '88888888-8888-4888-8888-888888888888',
+  timeoutProject: '99999999-9999-4999-8999-999999999999',
   apiKey: 'arx_eval_fixture_token_only',
 });
 
@@ -200,13 +204,272 @@ async function startEvalServer() {
 
       if (req.method === 'GET' && p === '/api/v1/forge/catalog') {
         const includeAll = url.searchParams.get('include_all') === 'true';
-        const visible = includeAll
+        const taskFilter = url.searchParams.get('task');
+        let visible = includeAll
           ? state.catalog
           : state.catalog.filter((t) => !['experimental', 'legacy'].includes(t.tier));
+        if (taskFilter) {
+          visible = visible.filter((t) => Array.isArray(t.capabilities?.tasks) && t.capabilities.tasks.includes(taskFilter));
+        }
         return reply(res, 200, { tools: visible }, {
           view: url.searchParams.get('view') || 'summary',
           hidden_experimental_count: 0,
           hidden_legacy_count: state.catalog.filter((t) => t.tier === 'legacy').length,
+        });
+      }
+
+      if (req.method === 'GET' && p === '/api/v1/pricing') {
+        return reply(res, 200, {
+          source: 'database',
+          billing_unit: 'allocation_hour',
+          preview_channel: 'cli',
+          rates: [
+            { gpu_id: 'L40S', gpu_count: 1, currency: 'USD', hourly_rate: '1.800000' },
+            { gpu_id: 'H100', gpu_count: 1, currency: 'USD', hourly_rate: '3.900000' },
+            { gpu_id: 'H100', gpu_count: 2, currency: 'USD', hourly_rate: '7.800000' },
+          ],
+          promotion: {
+            active: false,
+            label: 'Ended launch promo',
+            rates: [
+              { gpu_id: 'L40S', gpu_count: 1, currency: 'USD', hourly_rate: '0.900000' },
+            ],
+          },
+        });
+      }
+
+      if (req.method === 'POST' && p === '/api/v1/validate') {
+        const body = await readJsonBody(req);
+        return reply(res, 200, {
+          valid: true,
+          protocol: body.protocol || 'boltzgen',
+          normalized_job_spec: body,
+          warnings: [],
+        });
+      }
+
+      if (req.method === 'GET' && p === '/api/v1/projects') {
+        const name = url.searchParams.get('name');
+        const allProjects = [
+          { id: IDS.forgeProject, name: 'eval-forge-project', protocol: 'forge', status: 'running' },
+          { id: IDS.managedProject, name: 'pdl1-miniprotein-pilot', protocol: 'bindcraft2', status: 'completed' },
+        ];
+        const filtered = name ? allProjects.filter((item) => item.name === name) : allProjects;
+        return reply(res, 200, { projects: filtered });
+      }
+
+      if (req.method === 'GET' && p === '/api/v1/jobs') {
+        const pid = url.searchParams.get('project_id');
+        if (pid === IDS.boltzgenProject) {
+          return reply(res, 200, {
+            jobs: [
+              {
+                id: 'aaaaaaaa-1111-4111-8111-111111111111',
+                project_id: IDS.boltzgenProject,
+                status: 'completed',
+                allocations: [
+                  { gpu_type: 'H100', total_runtime: 420, total_cost: 1.35 },
+                ],
+              },
+            ],
+          });
+        }
+        if (pid === IDS.forgeClosedProject) {
+          return reply(res, 200, {
+            jobs: [
+              {
+                id: 'bbbbbbbb-1111-4111-8111-111111111111',
+                project_id: IDS.forgeClosedProject,
+                status: 'completed',
+                allocations: [
+                  { gpu_type: 'L40S', total_runtime: 600, total_cost: 0.75 },
+                ],
+              },
+            ],
+          });
+        }
+        return reply(res, 200, { jobs: [] });
+      }
+
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.timeoutProject}`) {
+        // Hold open until client times out (never reply).
+        res.setTimeout(60_000);
+        return;
+      }
+
+      // BoltzGen project fixture for Phase 6 summary accounting & diagnostics gating
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenProject}`) {
+        return reply(res, 200, {
+          id: IDS.boltzgenProject,
+          name: 'boltzgen-vhh-eval',
+          protocol: 'boltzgen',
+          project_type: 'vhh',
+          status: 'completed',
+          allowed_gpus: ['H100', 'L40S'],
+          tested_designs: 0,
+          accepted_designs: 0,
+          num_designs: 10,
+          total_runtime_seconds: null,
+          total_cost_usd: null,
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenProject}/candidates`) {
+        return reply(res, 200, [
+          {
+            id: 'bg-cand-1',
+            native_id: 'vhh_001',
+            engine: 'boltzgen',
+            rank: 1,
+            selection: { selected: true, stage: 'final' },
+            ranking_eligible: null,
+            filters: [{ name: 'pass_filters', passed: false }],
+            metrics: [{ name: 'i_pTM', value: 0.62, unit: null }],
+            binder_sequences: ['QVQLVESGGGLVQAGGSLRLSCAAS'],
+            structures: [{ path: 'final_designs/rank1_vhh_001.cif', role: 'diversity_selected_complex' }],
+          },
+          {
+            id: 'bg-cand-2',
+            native_id: 'vhh_002',
+            engine: 'boltzgen',
+            rank: 2,
+            selection: { selected: true, stage: 'final' },
+            ranking_eligible: null,
+            filters: [{ name: 'pass_filters', passed: false }],
+            metrics: [{ name: 'i_pTM', value: 0.58, unit: null }],
+            binder_sequences: ['EVQLVESGGGLVQAGGSLRLSCAAS'],
+            structures: [{ path: 'final_designs/rank2_vhh_002.cif', role: 'diversity_selected_complex' }],
+          },
+        ], { engine: 'boltzgen', view: 'final', state: 'available', total: 2, next_cursor: null });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenProject}/storage`) {
+        return reply(res, 200, {
+          project_id: IDS.boltzgenProject,
+          usage: { bytes: 1024, object_count: 1, freshness: 'stale' },
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenProject}/storage/cleanup-suggestions`) {
+        return reply(res, 200, { project_id: IDS.boltzgenProject, state: 'ready', items: [] });
+      }
+
+      // Closed Forge project fixture for Phase 6 forge summary + recursive files
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeClosedProject}`) {
+        return reply(res, 200, {
+          project_id: IDS.forgeClosedProject,
+          name: 'eval-forge-closed',
+          status: 'completed',
+          active_session_id: null,
+          latest_session_id: IDS.forgeSessionClosed,
+          control: { revision: 2, human_resume_required: false },
+          sessions: [
+            {
+              session_id: IDS.forgeSessionClosed,
+              state: 'closed',
+              gpu_type: 'L40S',
+              allocated_at: '2026-11-25T04:00:00Z',
+              stopped_at: '2026-11-25T04:10:00Z',
+              tools: [{ tool: 'base' }, { tool: 'boltz2' }],
+            },
+          ],
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeClosedProject}/files/status`) {
+        return reply(res, 200, {
+          project_id: IDS.forgeClosedProject,
+          session_state: 'closed',
+          sync_state: 'saved',
+          durability_gap: false,
+          last_synced_at: '2026-11-25T04:10:00Z',
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeClosedProject}/files`) {
+        const dir = url.searchParams.get('path') || '/workspace';
+        const baseMeta = { mutation_revision: 4, sync_state: 'saved', last_synced_at: '2026-11-25T04:10:00Z', durability_gap: false, next_cursor: null };
+        if (dir === '/workspace') {
+          return reply(res, 200, {
+            ...baseMeta,
+            entries: [
+              { path: '/workspace/results', kind: 'directory', size_bytes: null, version: 1, mode: null },
+              { path: '/workspace/summary.json', kind: 'file', size_bytes: 100, version: 1, mode: 0o644 },
+            ],
+          });
+        }
+        if (dir === '/workspace/results') {
+          return reply(res, 200, {
+            ...baseMeta,
+            entries: [
+              { path: '/workspace/results/top1.cif', kind: 'file', size_bytes: 250, version: 1, mode: 0o644 },
+            ],
+          });
+        }
+        if (dir === '/inputs') {
+          return reply(res, 200, {
+            ...baseMeta,
+            entries: [
+              { path: '/inputs/scripts', kind: 'directory', size_bytes: null, version: 1, mode: null },
+            ],
+          });
+        }
+        if (dir === '/inputs/scripts') {
+          return reply(res, 200, {
+            ...baseMeta,
+            entries: [
+              { path: '/inputs/scripts/run.py', kind: 'file', size_bytes: 900, version: 1, mode: 0o644 },
+            ],
+          });
+        }
+        return reply(res, 200, { ...baseMeta, entries: [] });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.forgeClosedProject}/storage`) {
+        return reply(res, 200, {
+          project_id: IDS.forgeClosedProject,
+          usage: { bytes: 1250, object_count: 3, freshness: 'fresh' },
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.forgeClosedProject}/storage/cleanup-suggestions`) {
+        return reply(res, 200, { project_id: IDS.forgeClosedProject, state: 'ready', items: [] });
+      }
+
+      // Forge sessions list with verbose tools[].capabilities to test client-side filters & compaction
+      if (req.method === 'GET' && p === '/api/v1/forge/sessions') {
+        return reply(res, 200, {
+          sessions: [
+            {
+              session_id: IDS.forgeSessionPack,
+              project_id: IDS.forgeProject,
+              name: 'eval-forge-project',
+              state: 'available',
+              gpu_type: 'L40S',
+              gpu_count: 1,
+              tools: [
+                { tool: 'base', state: 'ready', capabilities: { huge: 'blob' }, sources: [{ repo: 'x' }] },
+                { tool: 'boltz2', state: 'ready', capabilities: { huge: 'blob' }, models: [{ id: 'm' }] },
+              ],
+            },
+            {
+              session_id: IDS.forgeSessionClosed,
+              project_id: IDS.forgeClosedProject,
+              name: 'other-closed-session',
+              state: 'closed',
+              gpu_type: 'H100',
+              gpu_count: 1,
+              tools: [{ tool: 'base', state: 'ready', capabilities: { huge: 'blob' } }],
+            },
+          ],
+        });
+      }
+
+      // Storage deletions preview endpoint for Phase 6 multi-path & --suggested preview
+      const previewMatch = /^\/api\/v1\/projects\/([0-9a-f-]{36})\/storage\/deletions\/preview$/.exec(p);
+      if (req.method === 'GET' && previewMatch) {
+        const targetPath = url.searchParams.get('path') || '';
+        const rec = url.searchParams.get('recursive') === 'true';
+        return reply(res, 200, {
+          project_id: previewMatch[1],
+          path: targetPath,
+          recursive: rec,
+          capability: { allowed: true, reason: null },
+          observation: { bytes: 1024, object_count: 4, complete: true },
+          control: { revision: 1 },
         });
       }
 
@@ -336,13 +599,30 @@ async function startEvalServer() {
       }
 
       if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeProject}/files`) {
-        return reply(res, 200, {
-          sync_state: 'saved',
-          durability_gap: false,
-          last_synced_at: '2026-11-25T05:00:00Z',
-          entries: [{ path: '/workspace/boltz2-raw', kind: 'directory', size_bytes: null }],
-          next_cursor: null,
-        });
+        const dir = url.searchParams.get('path') || '/workspace';
+        const baseMeta = { mutation_revision: 2, sync_state: 'saved', durability_gap: false, last_synced_at: '2026-11-25T05:00:00Z', next_cursor: null };
+        if (dir === '/inputs') {
+          return reply(res, 200, {
+            ...baseMeta,
+            entries: [
+              { path: '/inputs/existing.py', kind: 'file', size_bytes: 128, version: 1, mode: 0o644 },
+            ],
+          });
+        }
+        if (dir === '/workspace') {
+          return reply(res, 200, {
+            ...baseMeta,
+            entries: [{ path: '/workspace/boltz2-raw', kind: 'directory', size_bytes: null, version: 1, mode: null }],
+          });
+        }
+        return reply(res, 200, { ...baseMeta, entries: [] });
+      }
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeProject}/files/metadata`) {
+        const target = url.searchParams.get('path') || '';
+        if (target === '/inputs/existing.py') {
+          return reply(res, 200, { kind: 'file', version: 1, mutation_revision: 2, size_bytes: 128 });
+        }
+        return reply(res, 200, { kind: 'absent', version: 0, mutation_revision: 2 });
       }
 
       // Forge sessions connect
@@ -374,10 +654,16 @@ async function startEvalServer() {
         });
       }
 
-      // Forge files/status (used by close guard and finish pre-check)
+      // Forge files/status (used by close guard, inputs add, and finish pre-check)
       if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeProject}/files/status`) {
         return reply(res, 200, {
           project_id: IDS.forgeProject,
+          session_id: IDS.forgeSessionPack,
+          writer_session_id: IDS.forgeSessionPack,
+          session_state: 'available',
+          hydration_state: 'ready',
+          control_revision: 1,
+          writer_epoch: 1,
           sync_state: 'pending',
           durability_gap: true,
           last_synced_at: null,
@@ -425,6 +711,12 @@ async function startEvalServer() {
         }
       }
 
+      // Direct session inputs list (empty live list to test remote /inputs merge)
+      const directInputs = /^\/__direct\/([0-9a-f-]{36})\/v1\/inputs$/.exec(p);
+      if (req.method === 'GET' && directInputs) {
+        return reply(res, 200, { inputs: [] });
+      }
+
       // Direct session commands (pack & remote exit 11)
       const directCmds = /^\/__direct\/([0-9a-f-]{36})\/v1\/commands$/.exec(p);
       if (req.method === 'POST' && directCmds) {
@@ -445,7 +737,7 @@ async function startEvalServer() {
             ...echoed,
             state: 'succeeded',
             exit_code: 0,
-            output_tail: '{"status":"ok","archive":"/workspace/archives/boltz2-batch.tar.zst"}\n',
+            output_tail: 'pack notice: zstd not found; falling back to tar.gz\n{"src":"/scratch/boltz2-batch","dest":"/workspace/archives/boltz2-batch.tar.gz","format":"tar.gz","sharded":false,"shards":[],"file_count":42,"uncompressed_bytes":1048576,"compressed_bytes":262144,"manifest_path":"/workspace/archives/boltz2-batch.tar.gz.manifest.json","removed_src":false}\n',
           };
           state.commands.set(body.command_id, cmd);
           return reply(res, 200, cmd);
@@ -606,6 +898,15 @@ async function runV2Case(def, envCtx) {
       ...authBase,
     ], { env: authEnv });
     assert.equal(serverState.capturedPackCommands.length, 1, 'expected one pack command dispatched');
+    const packPayload = JSON.parse(packRes.stdout).data;
+    assert.equal(Object.hasOwn(packPayload, 'argv'), false, 'forge pack default --json should omit verbose inline argv');
+    assert.equal(packPayload.pack?.src, input.src);
+    assert.equal(packPayload.pack?.requested_dest, input.dest);
+    assert.equal(packPayload.pack?.actual_dest, '/workspace/archives/boltz2-batch.tar.gz');
+    assert.equal(packPayload.pack?.format, 'tar.gz');
+    assert.equal(packPayload.pack?.file_count, 42);
+    assert.equal(packPayload.pack?.compressed_bytes, 262144);
+    assert.match(packPayload.pack?.fallback_notice || '', /zstd not found/i);
     const argv = serverState.capturedPackCommands[0].argv;
     assert.equal(argv[0], 'bash');
     const script = argv[argv.length - 1];
@@ -776,6 +1077,225 @@ async function runV2Case(def, envCtx) {
   throw new Error(`Unsupported runner: ${runner}`);
 }
 
+async function runPhase6Checks(envCtx) {
+  const { origin, serverState, tunnelEnv, tempRoot } = envCtx;
+  const authBase = ['--base-url', origin, '--allow-custom-origin', '--root-dir', path.join(tempRoot, 'root-phase6')];
+  const authEnv = { ...tunnelEnv, ARIAX_API_KEY: IDS.apiKey };
+  const checks = [];
+
+  const runCheck = async (name, fn) => {
+    try {
+      const detail = await fn();
+      checks.push({ id: name, category: 'phase6_polish', status: 'PASS', measured: '-', budget: '-', detail: detail || 'ok' });
+    } catch (err) {
+      checks.push({ id: name, category: 'phase6_polish', status: 'FAIL', measured: '-', budget: '-', detail: err.message });
+    }
+  };
+
+  // 1. Sandbox EPERM/EACCES fallback for state dir & Forge connection cache + explicit --connection-cache-dir
+  await runCheck('phase6-sandbox-eperm-fallback', async () => {
+    const roHome = path.join(tempRoot, 'readonly-home');
+    await fs.mkdir(roHome, { recursive: true, mode: 0o700 });
+    if (process.platform === 'darwin') {
+      await fs.mkdir(path.join(roHome, 'Library', 'Application Support'), { recursive: true, mode: 0o700 });
+      await fs.chmod(path.join(roHome, 'Library', 'Application Support'), 0o555);
+    } else {
+      await fs.chmod(roHome, 0o555);
+    }
+    try {
+      const sandboxEnv = {
+        ...authEnv,
+        HOME: roHome,
+        ARIAX_FIXTURE_USER_DIR: roHome,
+        XDG_STATE_HOME: path.join(roHome, 'state'),
+        XDG_CONFIG_HOME: path.join(roHome, 'config'),
+      };
+      // Trigger both default state dir fallback (no --root-dir) AND Forge connection cache fallback!
+      const res = await runCli([
+        'forge', 'inputs', 'list', IDS.forgeSessionPack, '--json',
+        '--base-url', origin, '--allow-custom-origin',
+      ], { env: sandboxEnv });
+      const data = JSON.parse(res.stdout).data;
+      assert.ok(Array.isArray(data.inputs) && data.inputs.some((i) => i.path === 'existing.py'));
+
+      // Explicit --connection-cache-dir works outside rootDir and rejects inside rootDir
+      const explicitRoot = path.join(tempRoot, 'explicit-root');
+      const explicitCache = path.join(tempRoot, 'explicit-conn-cache');
+      await runCli([
+        'forge', 'inputs', 'list', IDS.forgeSessionPack, '--json',
+        '--base-url', origin, '--allow-custom-origin',
+        '--root-dir', explicitRoot,
+        '--connection-cache-dir', explicitCache,
+      ], { env: authEnv });
+      const badCache = await runCli([
+        'forge', 'inputs', 'list', IDS.forgeSessionPack, '--json',
+        '--base-url', origin, '--allow-custom-origin',
+        '--root-dir', explicitRoot,
+        '--connection-cache-dir', path.join(explicitRoot, 'nested-cache'),
+      ], { env: authEnv, allowNonZero: true });
+      assert.equal(badCache.code, EXIT.USAGE, 'connection-cache-dir inside rootDir must be rejected');
+      return 'state+conn fallback ok, explicit cache validated';
+    } finally {
+      if (process.platform === 'darwin') {
+        await fs.chmod(path.join(roHome, 'Library', 'Application Support'), 0o700).catch(() => {});
+      } else {
+        await fs.chmod(roHome, 0o700).catch(() => {});
+      }
+    }
+  });
+
+  // 2. validate --json stdout purity, preparation_notes, resolved_binding_rules, and --details valid boolean
+  await runCheck('phase6-validate-json-purity', async () => {
+    const offsetPdb = path.join(tempRoot, 'offset-target.pdb');
+    const lines = [
+      'ATOM      1  CA  ALA A  17       0.000   0.000   0.000  1.00 20.00           C',
+      'ATOM      2  CA  CYS A  18       3.800   0.000   0.000  1.00 20.00           C',
+      'ATOM      3  CA  ASP A  19       7.600   0.000   0.000  1.00 20.00           C',
+      'END',
+    ].join('\n') + '\n';
+    await fs.writeFile(offsetPdb, lines, 'utf8');
+    const jobFile = path.join(tempRoot, 'boltzgen-offset.json');
+    await fs.writeFile(jobFile, JSON.stringify({
+      protocol: 'boltzgen',
+      project_type: 'vhh',
+      num_designs: 2,
+      budget: 2,
+      chains: 'A',
+      allowed_gpus: ['H100', 'L40S'],
+      binding_rules: [{ id: 'A', binding: '1,3' }],
+    }), 'utf8');
+
+    const compactRes = await runCli(['validate', '-f', jobFile, '--input', offsetPdb, '--json', ...authBase], { env: authEnv });
+    assert.ok(!compactRes.stderr.includes('author residue 17 maps to canonical 1'), `validate --json leaked note to stderr: ${compactRes.stderr}`);
+    const compactData = JSON.parse(compactRes.stdout).data;
+    assert.equal(compactData.valid, true);
+    assert.ok(compactData.preparation_notes.some((m) => m.includes('author residue 17 maps to canonical 1')));
+    assert.deepEqual(compactData.resolved_binding_rules, [
+      { chain: 'A', canonical_position: 1, author_residue: 17, amino_acid: 'A' },
+      { chain: 'A', canonical_position: 3, author_residue: 19, amino_acid: 'D' },
+    ]);
+
+    const detailsRes = await runCli(['validate', '-f', jobFile, '--input', offsetPdb, '--details', '--json', ...authBase], { env: authEnv });
+    const detailsData = JSON.parse(detailsRes.stdout).data;
+    assert.equal(detailsData.valid, true);
+    assert.ok(detailsData.preparation_notes.some((m) => m.includes('author residue 17 maps to canonical 1')));
+    assert.equal(detailsData.resolved_binding_rules?.length, 2);
+    return 'stderr clean, preparation_notes + resolved_binding_rules verified';
+  });
+
+  // 3. Managed BoltzGen summary accounting, funnel fix, storage_stale_hint, and diagnostics gating + Forge summary separation
+  await runCheck('phase6-summary-accounting', async () => {
+    const bgRes = await runCli(['summary', IDS.boltzgenProject, '--json', ...authBase], { env: authEnv });
+    const bg = JSON.parse(bgRes.stdout).data;
+    assert.deepEqual(bg.resources.gpus, ['H100'], 'must report executed GPU from jobs allocations, not allowed_gpus');
+    assert.equal(bg.resources.total_runtime_seconds, 420);
+    assert.equal(bg.resources.total_cost_usd, 1.35);
+    assert.equal(bg.funnel.attempted, 2);
+    assert.equal(bg.funnel.evaluated, 2);
+    assert.equal(bg.funnel.count_source, 'candidate_evidence');
+    assert.ok(bg.warnings.some((w) => w.code === 'storage_stale_hint'), 'must emit storage_stale_hint when completed object_count<=1');
+    assert.ok(!bg.next_actions.some((a) => a.command.includes('--view diagnostics')), 'BoltzGen must never emit --view diagnostics');
+
+    const fgRes = await runCli(['forge', 'summary', IDS.forgeClosedProject, '--json', ...authBase], { env: authEnv });
+    const fg = JSON.parse(fgRes.stdout).data;
+    assert.equal(fg.compute_active, false);
+    assert.equal(fg.sessions.compute_active, false);
+    assert.equal(fg.sessions.total_runtime_seconds, 600);
+    assert.equal(fg.sessions.total_cost_usd, 0.75);
+    assert.equal(fg.workspace.file_count, 2);
+    assert.equal(fg.workspace.total_bytes, 350);
+    assert.equal(fg.workspace.inputs_file_count, 1);
+    assert.equal(fg.workspace.inputs_bytes, 900);
+    assert.equal(fg.workspace.catalog_object_count, 3);
+    assert.equal(fg.workspace.catalog_bytes, 1250);
+    return 'managed BoltzGen + Forge workspace/inputs/accounting verified';
+  });
+
+  // 4. Forge list filters + compact projection, forge project by name, recursive files, inputs list remote merge, input_exists guidance, catalog unknown task hint
+  await runCheck('phase6-forge-ergonomics', async () => {
+    const listRes = await runCli([
+      'forge', 'list', '--active', '--state', 'available', '--name', 'eval',
+      '--project', IDS.forgeProject, '--limit', '1', '--json', ...authBase,
+    ], { env: authEnv });
+    const sessions = JSON.parse(listRes.stdout).data.sessions;
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].session_id, IDS.forgeSessionPack);
+    assert.equal(Object.hasOwn(sessions[0].tools[0], 'capabilities'), false, 'default forge list must compact tools[]');
+
+    const projByName = await runCli(['forge', 'project', 'eval-forge-project', '--json', ...authBase], { env: authEnv });
+    assert.equal(JSON.parse(projByName.stdout).data.project_id, IDS.forgeProject);
+
+    const recFiles = await runCli(['forge', 'files', IDS.forgeClosedProject, '--path', '/workspace', '--recursive', '--json', ...authBase], { env: authEnv });
+    const rfData = JSON.parse(recFiles.stdout).data;
+    assert.equal(rfData.recursive, true);
+    assert.equal(rfData.file_count, 2);
+    assert.equal(rfData.total_bytes, 350);
+    assert.equal(rfData.truncated, false);
+
+    // input_exists conflict guidance on forge inputs add
+    const tmpScript = path.join(tempRoot, 'existing.py');
+    await fs.writeFile(tmpScript, 'print(1)\n', 'utf8');
+    const conflictRes = await runCli([
+      'forge', 'inputs', 'add', IDS.forgeSessionPack,
+      '--file', tmpScript, '--path', 'existing.py', '--json', ...authBase,
+    ], { env: authEnv, allowNonZero: true });
+    assert.equal(conflictRes.code, EXIT.CONFLICT);
+    const conflictErr = JSON.parse(conflictRes.stdout).error;
+    assert.equal(conflictErr.code, 'input_exists');
+    assert.match(conflictErr.action, /immutable.*new --path/i);
+
+    const badTask = await runCli(['forge', 'catalog', '--task', 'nonexistent-task', '--json', '--base-url', origin, '--allow-custom-origin']);
+    const badTaskBody = JSON.parse(badTask.stdout);
+    assert.equal(badTaskBody.data.tools.length, 0);
+    assert.ok(Array.isArray(badTaskBody.meta?.available_tasks) && badTaskBody.meta.available_tasks.includes('molecular-prediction'));
+    return 'list/project/recursive/input_exists/catalog-task verified';
+  });
+
+  // 5. Pricing inactive promo omission + filters; Storage suggest & multi-path/--suggested preview
+  await runCheck('phase6-pricing-storage-timeout', async () => {
+    const prDef = JSON.parse((await runCli(['pricing', '--json', '--base-url', origin, '--allow-custom-origin'])).stdout).data;
+    assert.equal(Object.hasOwn(prDef.promotion, 'rates'), false, 'inactive promotion.rates must be omitted by default');
+    const prDet = JSON.parse((await runCli(['pricing', '--details', '--json', '--base-url', origin, '--allow-custom-origin'])).stdout).data;
+    assert.ok(Array.isArray(prDet.promotion.rates) && prDet.promotion.rates.length === 1);
+    const prFilt = JSON.parse((await runCli(['pricing', '--gpu', 'H100', '--gpu-count', '2', '--json', '--base-url', origin, '--allow-custom-origin'])).stdout).data;
+    assert.equal(prFilt.rates.length, 1);
+    assert.equal(prFilt.rates[0].gpu_id, 'H100');
+    assert.equal(prFilt.rates[0].gpu_count, 2);
+
+    serverState.storageSuggestions = [
+      { path: '/workspace/raw-a', kind: 'directory', file_count: 50, bytes: 2048, suggestion: 'pack_archive', reason: 'high_small_file_count' },
+      { path: '/workspace/raw-b', kind: 'directory', file_count: 10, bytes: 1024, suggestion: 'delete', reason: 'redundant' },
+    ];
+    const sug = JSON.parse((await runCli(['storage', 'suggest', IDS.forgeProject, '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(sug.total_reclaimable_bytes, 3072);
+    assert.equal(sug.items[0].object_count, 50);
+    assert.equal(sug.items[0].recursive, true);
+
+    const prevSug = JSON.parse((await runCli(['storage', 'delete', IDS.forgeProject, '--suggested', '--preview', '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(prevSug.suggested, true);
+    assert.equal(prevSug.previews.length, 2);
+    assert.equal(prevSug.total_bytes, 2048);
+
+    const prevMulti = JSON.parse((await runCli(['storage', 'delete', IDS.forgeProject, '--path', '/workspace/a', '--path', '/workspace/b', '--preview', '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(prevMulti.previews.length, 2);
+
+    const noBypass = await runCli(['storage', 'delete', IDS.forgeProject, '--suggested', '--json', ...authBase], { env: authEnv, allowNonZero: true });
+    assert.equal(noBypass.code, EXIT.USAGE, 'storage delete --suggested without --preview must be rejected');
+
+    // Timeout vs network error differentiation
+    const timeoutRes = await runCli(['status', IDS.timeoutProject, '--timeout', '60', '--json', ...authBase], { env: authEnv, allowNonZero: true });
+    assert.equal(timeoutRes.code, EXIT.NETWORK);
+    assert.equal(JSON.parse(timeoutRes.stdout).error.code, 'server_timeout');
+    const refuseRes = await runCli(['me', '--json', '--base-url', 'http://127.0.0.1:1', '--allow-custom-origin', '--timeout', '1000'], { env: authEnv, allowNonZero: true });
+    assert.equal(refuseRes.code, EXIT.NETWORK);
+    assert.equal(JSON.parse(refuseRes.stdout).error.code, 'network_error');
+
+    return 'pricing, storage suggest/preview, and timeout vs network verified';
+  });
+
+  return checks;
+}
+
 async function main() {
   const files = (await fs.readdir(CASES_DIR)).filter((f) => f.endsWith('.json')).sort();
   const seenIds = new Set();
@@ -801,7 +1321,7 @@ async function main() {
   assert.equal(v1Cases.length, 7, `expected 7 v1 cases, found ${v1Cases.length}`);
   assert.equal(v2Cases.length, 17, `expected 17 v2 cases, found ${v2Cases.length}`);
 
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-eval-suite-'));
+  const tempRoot = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ariax-eval-suite-')));
   const server = await startEvalServer();
   const cleanBaseEnv = { ...process.env, ...CLEARED_AGENT_ENV };
   const tunnel = await tunnelEnvironment(tempRoot, server.origin, cleanBaseEnv);
@@ -840,6 +1360,11 @@ async function main() {
         });
       }
     }
+    const phase6Results = await runPhase6Checks(envCtx);
+    for (const r of phase6Results) {
+      if (r.status !== 'PASS') failures += 1;
+      results.push(r);
+    }
   } finally {
     await server.close();
     await fs.rm(tunnel.directory, { recursive: true, force: true });
@@ -855,11 +1380,12 @@ async function main() {
   console.log(widths.map((w) => '-'.repeat(Math.min(w, 48))).join('  '));
   for (const row of rows) console.log(fmt(row));
 
+  const totalAutomated = results.length;
   if (failures > 0) {
-    console.error(`\nFAILED: ${failures} of ${v2Cases.length} automated evaluation cases failed.`);
+    console.error(`\nFAILED: ${failures} of ${totalAutomated} automated checks failed.`);
     process.exit(1);
   }
-  console.log(`\nPASS: all ${v1Cases.length} v1 schemas validated and all ${v2Cases.length}/${v2Cases.length} v2 benchmark cases passed.`);
+  console.log(`\nPASS: all ${v1Cases.length} v1 schemas validated, all ${v2Cases.length}/${v2Cases.length} v2 benchmark cases passed, and all ${totalAutomated - v2Cases.length}/${totalAutomated - v2Cases.length} Phase 6 checks passed.`);
 }
 
 main().catch((err) => {
