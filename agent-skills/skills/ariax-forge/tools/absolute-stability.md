@@ -45,7 +45,7 @@ matched CIF (`stability_1998469.cif`) have chain A
 and 60 residues. The nanobody CIF (`nanobody_1zvh.cif`)
 has chain A and 125 residues. The TrkA complex (`Trka_binder_AF2_10.pdb`)
 uses binder A and target B. These are retained upstream structures under the
-adjacent MIT license. Their provenance is in
+adjacent MIT license. Their source information is in
 [the fixture notes](examples/absolute-stability/README.md).
 
 ## Prepare an authorized session

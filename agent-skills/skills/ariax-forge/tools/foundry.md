@@ -153,7 +153,7 @@ inspection. The [output notes](foundry/outputs.md) retain the measured example
 findings and their limits.
 
 The complete writer retains the native parsed bond graph for input-defined fixed
-ligands in the final AtomArray and CIF. Provenance names the input source, exact
+ligands in the final AtomArray and CIF. Source information names the input source, exact
 atom correspondence and restored bond count. It adds no predicted bonds and
 changes no coordinates. Check native and exported
 bond order/aromaticity plus coordinate-derived chirality for every sample.

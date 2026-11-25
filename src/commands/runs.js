@@ -5,6 +5,10 @@ import { printData, printJson, printKv, printProgress, printTable } from '../out
 import { resolveProjectId } from '../resolve.js';
 import { isUUID } from '../uuid.js';
 
+function presentRun({ provenance_status, ariax_build, ...run }) {
+  return { ...run, settings_status: provenance_status };
+}
+
 export async function run(ctx) {
   const { flags } = ctx;
   if (ctx.positionals.length !== 1) throw usageError('runs: expected one project UUID or exact unique name.');
@@ -18,9 +22,12 @@ export async function run(ctx) {
   const base = `/api/v1/projects/${encodeURIComponent(projectId)}/runs`;
   if (flags.job) {
     const result = await ctx.client.get(`${base}/${encodeURIComponent(flags.job.trim())}`, { signal: ctx.signal });
-    if (ctx.json) printJson({ data: result.data, request_id: result.requestId });
-    else if (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) printKv(result.data);
-    else printData(typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2));
+    const presented = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+      ? presentRun(result.data)
+      : result.data;
+    if (ctx.json) printJson({ data: presented, request_id: result.requestId });
+    else if (presented && typeof presented === 'object' && !Array.isArray(presented)) printKv(presented);
+    else printData(typeof presented === 'string' ? presented : JSON.stringify(presented, null, 2));
     return;
   }
   const data = [], seen = new Set(flags.cursor ? [flags.cursor] : []);
@@ -35,7 +42,7 @@ export async function run(ctx) {
       error.exitCode = EXIT.SERVER;
       throw error;
     }
-    data.push(...result.data);
+    data.push(...result.data.map(presentRun));
     cursor = next;
     if (cursor) seen.add(cursor);
   } while (flags.all && cursor && pages < maxPages);
@@ -51,7 +58,7 @@ export async function run(ctx) {
       request_id: result.requestId,
     });
   } else {
-    printTable(['job_id', 'status', 'provenance_status'], data.map(row => [row.job_id, row.status, row.provenance_status]));
+    printTable(['job_id', 'status', 'settings_status'], data.map(row => [row.job_id, row.status, row.settings_status]));
     if (capped) printProgress(`Stopped after ${maxPages} pages; pass --cursor ${cursor} to continue.`);
     else if (cursor) printProgress('More runs are available; use --all or --cursor with the JSON next_cursor.');
   }

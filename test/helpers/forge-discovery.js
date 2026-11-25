@@ -1,7 +1,10 @@
 /** Catch an installed guide losing discovery or a linked file during packaging. */
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export async function exerciseAcceptedForgeDiscovery(discovery) {
   const references = [
@@ -75,4 +78,14 @@ export async function exerciseAcceptedForgeDiscovery(discovery) {
   assert.equal(discovery.examples.rfdiffusion4, discovery.examples.rfd4);
   assert.equal(discovery.examples['rfd4-antibody'], discovery.examples.rfd4);
   assert.ok((await readFile(join(discovery.examples.rfd4, 'baseline', 'LICENSE'))).length > 0);
+
+  const packagedCap = discovery.examples.capabilities;
+  const fixtureCap = fileURLToPath(new URL('../fixtures/forge-qa/tools/examples/capabilities', import.meta.url));
+  const capDir = packagedCap && existsSync(join(packagedCap, 'inspect.mjs')) ? packagedCap : fixtureCap;
+  if (existsSync(join(capDir, 'inspect.mjs')) && existsSync(join(capDir, 'catalog.json'))) {
+    const observed = JSON.parse(execFileSync(process.execPath,
+      [join(capDir, 'inspect.mjs'), join(capDir, 'catalog.json'), 'antibodies'], { encoding: 'utf8' }));
+    assert.equal(observed.tools.length, 1);
+    assert.deepEqual(observed.tools[0].models, [{ id: 'example-checkpoint', modes: ['sequence-design'] }]);
+  }
 }

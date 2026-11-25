@@ -55,7 +55,7 @@ The accompanying `esmfold2-pipeline/campaign.yaml` proposes full 1UBQ ubiquitin
 chain A, a 40-residue miniprotein, `num_designs: 2`, `seed_start: 7` (seeds 7/8) and eight optimization steps.
 It reuses the existing 1UBQ source fixture (`1ubq.cif`).
 This is a small execution case, with no binding or hit-rate evidence.
-The normal 150-step design setting remains unqualified.
+The normal 150-step design setting has not been verified.
 Native design folds use one loop and one sampling step, or fifty when design
 confidence is requested. Final critic uses three loops/two hundred steps.
 
@@ -75,14 +75,14 @@ The completed small-case coverage includes these native configurations:
 | `fast` | Two VHH frameworks of 129/122 residues with CDR contact loss, framework penalty and server MSAs; two custom 242-residue scFv frameworks using template or explicit sequence/CDRs |
 
 The supported profile requires one GPU with at least 79 GiB usable VRAM,
-eight CPUs and 80 GiB RAM. Qualification used one A100 80GB with about
+eight CPUs and 80 GiB RAM. The observed run used one A100 80GB with about
 79.25 GiB reported usable VRAM, eight assigned CPUs and a 96-GiB container
 limit. The catalog RAM admission floor is 80 GiB; the recorded
-qualification memory limit remains 96 GiB. The true minimum remains unknown. A package disk minimum has not been established,
+observed memory limit remains 96 GiB. The true minimum remains unknown. A package disk minimum has not been established,
 so the catalog leaves it unknown and storage must still cover preparation,
 outputs and restoration. These cases contain at most 318 polymer residues per complex, eight
 design steps and unchanged final critic and v2 settings. Larger workloads,
-the normal 150-step design setting and multi-GPU throughput remain unqualified.
+the normal 150-step design setting and multi-GPU throughput have not been verified.
 The seven additional v2 samples were correctly rejected. The earlier two-sample
 case had one passing validation, but neither candidate met the pose-agreement
 gate. Custom scFv coverage is design/critic and ESM export, with the native
@@ -262,7 +262,7 @@ does not establish that every intended task produced a prediction.
 | Target residue map, chain summary and normalized CIF | Original target identity and canonical model register |
 | `esmfold2/metrics_all.csv`, `structures/` | Candidate/critic metrics and actual structures |
 | `esmfold2/selected_designs.csv`, `selected_structures/selected_manifest.csv` | Deduplicated ESM selection and exported sequence/structure mapping |
-| `validation/protenix_v2/validation_results.csv`, `structure_samples.csv`, `validation_summary.json` | Actual native model/task/sample, raw metric provenance, passing/rejected structure rows |
+| `validation/protenix_v2/validation_results.csv`, `structure_samples.csv`, `validation_summary.json` | Actual native model/task/sample, metric sources, passing/rejected structure rows |
 | `validation-debug/` | Native input, CIF/full/summary JSON and unrounded confidence sidecars; keep all same-sample files |
 | `ranked_results/combined_ranking.csv`, `ranking_diagnostics.csv`, `ranking_summary.json`, `top_ranked/` | Eligible validated rows, all exclusion reasons and paired final exports |
 | `status-*.json` | Shard/candidate/critic/validation/MSA/attempt counts, missing and untracked artifacts |

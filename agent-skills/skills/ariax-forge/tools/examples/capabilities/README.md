@@ -1,8 +1,6 @@
 # Inspect a synthetic capability record
 
-This fixture demonstrates separate upstream, native, installation and
-restoration statuses. Its values are synthetic and do not describe a usable
-scientific tool. Set `EXAMPLE` to `data.examples.capabilities` from
+This example shows how to find a model and mode by task. It uses fictional tool IDs. Set `EXAMPLE` to `data.examples.capabilities` from
 `ariax skills forge --tool capabilities --json`:
 
 ```sh

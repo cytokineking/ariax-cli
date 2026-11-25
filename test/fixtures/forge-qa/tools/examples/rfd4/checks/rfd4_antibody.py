@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check framework and CDR provenance for the upstream RFd4 VHH fixture.
+"""Check framework and CDR source annotations for the upstream RFd4 VHH fixture.
 
 This checks an actual generated structure and optional native antibody metrics;
 experiments are required for binding or antibody developability claims.
@@ -109,7 +109,7 @@ def check(source: Path, generated: Path, metrics: Path | None, max_motif_rmsd: f
               },
               "cdr_output_ranges": cdr_output_ranges,
               "scope": "framework identity, framework-anchored CDR lengths, retained coordinates and hotspots",
-              "qualification": "not established"}
+              "verified": False}
     if metrics is not None:
         stem = structure_file_stem(generated)
         if not stem.endswith("_generated"):

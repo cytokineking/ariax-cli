@@ -49,6 +49,10 @@ export class ApiError extends Error {
 }
 
 const KNOWN_ERROR_DETAIL_KEYS = new Set([
+  'reason',
+  'wait_outcome',
+  'deletion_request_id',
+  'cleanup',
   'issues',
   'current_balance_usd',
   'required_balance_usd',
@@ -56,6 +60,16 @@ const KNOWN_ERROR_DETAIL_KEYS = new Set([
   'current_status',
   'allowed_statuses',
   'project_id',
+  'batch_id',
+  'session_id',
+  'state',
+  'ready_count',
+  'pending_count',
+  'failed_count',
+  'unknown_count',
+  'total_bytes',
+  'input_ids',
+  'files',
   'control_revision',
   'human_resume_required',
   'approval_path',
@@ -142,9 +156,33 @@ function sanitizePublicDetailValue(value, depth, state) {
 }
 
 /** Keep bounded public validation, payment, project-control and diagnostic details. */
-function sanitizeErrorDetails(details) {
+export function sanitizeErrorDetails(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
   const result = {};
+  if (['abort_required', 'terminal_project_required', 'root_delete_requires_project_action'].includes(details.reason)) result.reason = details.reason;
+  if (['attention', 'timeout', 'interrupted'].includes(details.wait_outcome)) {
+    result.wait_outcome = details.wait_outcome;
+    if (isUUID(details.deletion_request_id)) result.deletion_request_id = details.deletion_request_id;
+    if (details.cleanup && typeof details.cleanup === 'object' && !Array.isArray(details.cleanup)) {
+      const c = details.cleanup;
+      const observation = {};
+      if (['managed', 'forge'].includes(c.kind)) observation.kind = c.kind;
+      if (c.state === null || ['pending', 'verified_empty', 'attention', 'completed'].includes(c.state)) observation.state = c.state;
+      for (const field of ['last_checked_at', 'last_complete_check_at', 'verified_empty_at', 'next_reconcile_at', 'verification_not_before']) {
+        if (c[field] === null) observation[field] = null;
+        else if (typeof c[field] === 'string' && Number.isFinite(Date.parse(c[field]))) observation[field] = new Date(c[field]).toISOString();
+      }
+      for (const field of ['object_count', 'multipart_count']) {
+        if (c[field] === null || Number.isSafeInteger(c[field]) && c[field] >= 0) observation[field] = c[field];
+      }
+      for (const field of ['compute_released', 'artifacts_deleted']) if (typeof c[field] === 'boolean') observation[field] = c[field];
+      if (c.error != null) observation.error = { code: 'storage_cleanup_incomplete', message: 'Project cleanup needs review' };
+      if (['publication_open','write_grants_pending','grant_coverage_unknown','namespace_unverified','storage_list_failed',
+        'storage_delete_failed','multipart_list_failed','multipart_abort_failed','invalid_storage_response','owner_unconfirmed',
+        'staging_pending','staging_attention','cleanup_attention'].includes(c.reason)) observation.reason = c.reason;
+      result.cleanup = observation;
+    }
+  }
   if (Array.isArray(details.issues)) {
     result.issues = details.issues.slice(0, 50).flatMap((issue) => {
       if (!issue || !Array.isArray(issue.field) || typeof issue.rule !== 'string' || typeof issue.message !== 'string') return [];
@@ -181,6 +219,24 @@ function sanitizeErrorDetails(details) {
   }
   if (typeof details.output_tail === 'string' && details.output_tail.length > 0) {
     result.output_tail = sanitizeDetailString(details.output_tail, OUTPUT_TAIL_MAX_STRING, true);
+  }
+  if (isUUID(details.batch_id) && isUUID(details.session_id) && Array.isArray(details.files) && details.files.length <= 100) {
+    result.batch_id = details.batch_id;
+    result.session_id = details.session_id;
+    if (['ready', 'pending', 'partial', 'failed'].includes(details.state)) result.state = details.state;
+    for (const key of ['ready_count', 'pending_count', 'failed_count', 'unknown_count', 'total_bytes']) {
+      if (Number.isSafeInteger(details[key]) && details[key] >= 0) result[key] = details[key];
+    }
+    if (Array.isArray(details.input_ids) && details.input_ids.length <= 100 && details.input_ids.every(isUUID)) result.input_ids = details.input_ids;
+    result.files = details.files.flatMap(file => {
+      if (!file || !isUUID(file.input_id) || !['ready', 'pending', 'failed', 'unknown'].includes(file.state)
+          || !Number.isSafeInteger(file.size_bytes) || file.size_bytes < 0 || typeof file.path !== 'string'
+          || Buffer.byteLength(file.path) > 1024 || /[\\\x00-\x1f\x7f]/.test(file.path)
+          || file.path.split('/').some(part => !part || part === '.' || part === '..')) return [];
+      return [{ input_id: file.input_id, path: file.path, size_bytes: file.size_bytes, state: file.state,
+        ...(file.error ? { error: { code: ['rate_limited', 'input_unconfirmed'].includes(file.error.code) ? file.error.code : 'input_staging_failed',
+          message: 'Inspect this input ID and recover the same batch.' } } : {}) }];
+    });
   }
   if (Number.isSafeInteger(details.control_revision) && details.control_revision >= 0) result.control_revision = details.control_revision;
   if (typeof details.human_resume_required === 'boolean') result.human_resume_required = details.human_resume_required;

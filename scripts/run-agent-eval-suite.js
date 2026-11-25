@@ -2061,8 +2061,7 @@ async function runPhase7P2Checks(envCtx) {
     assert.equal(modeOnly.tools.length, 1);
     assert.equal(modeOnly.tools[0].models.length, 1, '--mode affinity must drop complex-only models');
     assert.deepEqual(modeOnly.tools[0].models[0].modes, ['affinity']);
-    assert.equal(modeOnly.tools[0].capabilities.qualification.length, 1);
-    assert.equal(modeOnly.tools[0].capabilities.qualification[0].mode, 'affinity');
+    assert.equal(Object.hasOwn(modeOnly.tools[0].capabilities, 'qualification'), false, 'public catalog output must omit internal qualification rows');
     assert.ok(typeof modeOnly.guide_content === 'string' && modeOnly.guide_content.length > 200);
     return 'guide-only lean payload + --mode filtering verified';
   });
@@ -2112,10 +2111,10 @@ async function runPhase7P2Checks(envCtx) {
       assert.match(h, /PROJECT accepts a project UUID or an exact unique project name/, `help ${cmd} must document PROJECT UUID/name`);
     }
 
-    // Storage web-only whole_project_delete note + subcommand --help
+    // Storage whole-project delete guidance + subcommand --help
     const storageFullHelp = (await runCli(['help', 'storage', '--no-json'])).stdout;
-    assert.match(storageFullHelp, /whole_project_delete.*web-only/i);
-    for (const sub of ['projects', 'project', 'usage', 'suggest', 'delete', 'deletion']) {
+    assert.match(storageFullHelp, /whole-project deletion uses `ariax delete PROJECT`/i);
+    for (const sub of ['projects', 'project', 'usage', 'ls', 'status', 'suggest', 'delete', 'deletion']) {
       const sh = (await runCli(['storage', sub, '--help', '--no-json'])).stdout;
       assert.match(sh, new RegExp(`ariax storage ${sub}`));
       assert.ok(Buffer.byteLength(sh, 'utf8') < Buffer.byteLength(storageFullHelp, 'utf8'), `storage ${sub} --help should be shorter than full storage help`);

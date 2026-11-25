@@ -43,6 +43,7 @@ import * as logs from './commands/logs.js';
 import * as pause from './commands/pause.js';
 import * as restart from './commands/restart.js';
 import * as abort from './commands/abort.js';
+import * as deleteProject from './commands/delete.js';
 import * as results from './commands/results.js';
 import * as upgrade from './commands/upgrade.js';
 import * as login from './commands/login.js';
@@ -63,7 +64,7 @@ import * as discover from './commands/discover.js';
 const COMMANDS = {
   discover,
   me, protocols, pricing, schema, validate, submit,
-  projects, jobs, status, logs, pause, restart, abort, results, summary, storage, upgrade,
+  projects, jobs, status, logs, pause, restart, abort, delete: deleteProject, results, summary, storage, upgrade,
   login, logout,
   skills, operations, recover, inputs, candidates, runs,
   feedback, forge,
@@ -88,6 +89,7 @@ const COMMAND_OPTIONS = {
   pause: [[], 1],
   restart: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   abort: [[], 1],
+  delete: [['yes', 'request-id', 'wait', 'poll-interval', 'wait-timeout'], 1],
   feedback: [[
     'category', 'type', 'summary', 'message', 'file', 'f',
     'severity', 'project', 'job', 'session', 'command',
@@ -98,8 +100,8 @@ const COMMAND_OPTIONS = {
   recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   'gpu-preferences': [['file', 'example'], 1],
   runs: [['job', 'limit', 'cursor', 'all'], 1],
-  candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
-  results: [['path', 'download', 'overwrite', 'limit', 'cursor', 'details'], 1],
+  candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details', 'structures-only'], 1],
+  results: [['path', 'download', 'overwrite', 'limit', 'cursor', 'details', 'source'], 1],
   summary: [['top', 'include-sequences'], 1],
   upgrade: [['check', 'yes', 'channel'], 0],
   login: [['with-token', 'insecure-storage'], 0],
@@ -320,10 +322,11 @@ const HELP_TOPICS = {
   restart: restart.help,
   'gpu-preferences': gpuPreferences.help,
   abort: abort.help,
+  delete: 'ariax delete PROJECT [--yes] [--request-id UUID] [--wait] [--wait-timeout SECONDS]',
   feedback: 'ariax feedback --type bug|agent-friction|docs-gap|missing-capability|technical-support|feature-request|other --summary TEXT (--message TEXT|- | --file FILE) [--severity blocker|high|medium|low] [--project PROJECT] [--job UUID] [--session UUID] [--command UUID] [--protocol P] [--tool T] [--failed-request-id ID] [--attach-last-error] [--operation-id UUID] [--dry-run]',
   runs: 'ariax runs PROJECT [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
-  candidates: 'ariax candidates PROJECT [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
-  results: 'ariax results PROJECT [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
+  candidates: 'ariax candidates PROJECT [--view final|all|diagnostics] [--structures-only (BindCraft2 diagnostics)] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
+  results: 'ariax results PROJECT [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]\n       ariax results PROJECT --source storage --path FILE --download DIR [--overwrite]',
   summary: summary.help,
   storage: storage.help,
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
@@ -353,7 +356,7 @@ function printHelp(topic, subPositionals = []) {
     const display = topicName === 'forge'
       ? 'ariax forge <action> [options] — Custom GPU sessions (list, create, status, tools, inputs, run, sync, pack, finish, files; run ariax help forge)'
       : topicName === 'storage'
-        ? 'ariax storage <usage|projects|project|entries|suggest|delete|deletion> [options] (run ariax help storage)'
+        ? 'ariax storage <usage|projects|project|entries|ls|suggest|status|delete|deletion> [options] (run ariax help storage)'
         : String(line).split('\n')[0];
     printData(`  ${display}`);
   }

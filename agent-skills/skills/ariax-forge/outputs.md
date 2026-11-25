@@ -50,11 +50,15 @@ ariax forge link PROJECT /workspace/result.txt --json                           
 ```
 
 - **Inputs:** `--path` is relative to `/inputs` (commands read `/inputs/<path>`).
-  Resumed Forge projects retain prior `/inputs` remotely (inspect with
-  `ariax forge files PROJECT --path /inputs`). Completed `/inputs` paths are
-  immutable until deleted — upload updated scripts/files under a new `--path`
-  (e.g. `fixed/script.py`). Local multipart uploads report `ready` only after
-  daemon-backed workspace confirmation (not storage publication alone).
+  For multiple small local files, stage an explicit JSON manifest with
+  `ariax forge inputs add SESSION --manifest inputs.json [--dry-run | --wait]`
+  (1–100 regular files, `--concurrency 1..4`; recover partial batches with
+  `ariax forge recover BATCH_ID --wait`). Resumed Forge projects retain prior
+  `/inputs` remotely (inspect with `ariax forge files PROJECT --path /inputs`).
+  Completed `/inputs` paths are immutable until deleted — upload updated
+  scripts/files under a new `--path` (e.g. `fixed/script.py`). Local multipart
+  uploads report `ready` only after daemon-backed workspace confirmation (not
+  storage publication alone).
 - **Pack & Hygiene notices:** `forge pack` stages under `/scratch/.ariax-pack-<id>/`,
   dereferences valid symlinks while skipping broken symlinks/sockets, verifies
   integrity, shards archives larger than `--max-shard-gib` (1–18, default 10),
@@ -66,10 +70,11 @@ ariax forge link PROJECT /workspace/result.txt --json                           
 - **Sync:** flushes changed files (`saved`, `pending`, or `failed`); it is not
   an atomic multi-file snapshot — stop writers when a coherent set is needed.
 - **Storage audit & cleanup:** Use `ariax storage usage`, `ariax storage projects`,
-  `ariax storage project PROJECT`, `ariax storage entries PROJECT`,
+  `ariax storage project PROJECT`, `ariax storage ls PROJECT`,
   `ariax storage suggest PROJECT` (highlights packed/large Forge directories and
-  managed Smart Cleanup targets), and `ariax storage delete PROJECT --path P --preview`
-  to inspect and manage stored data across projects.
+  managed Smart Cleanup targets), `ariax storage delete PROJECT --path P --dry-run`,
+  `ariax storage status PROJECT`, and `ariax delete PROJECT --yes` (whole-project
+  deletion; excludes separately retained archives — see [storage & deletion](../../core/storage.md)).
 - **Links & previews:** Links point to the current path (not a pinned historical
   version). Only uncompressed `.pdb`/`.cif`/`.mmcif` ≤10 MB preview on the web
   page; create an uncompressed copy on the VM if needed.

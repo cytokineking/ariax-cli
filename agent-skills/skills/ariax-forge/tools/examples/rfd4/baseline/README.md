@@ -1,7 +1,7 @@
 # RFd4 baseline inputs
 
 These are small inputs for bounded native checks. Consult the live catalog for
-current availability and qualification. `monomer.yaml` loads the upstream
+current availability and supported workloads. `monomer.yaml` loads the upstream
 100-residue unconditioned
 annotated monomer without discarding its expandable-segment annotations.
 `binder.yaml` adapts the upstream PD-L1 example and selects the target and

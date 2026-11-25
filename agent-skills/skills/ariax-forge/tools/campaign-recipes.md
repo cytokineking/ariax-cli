@@ -134,7 +134,7 @@ Export through current project Files. Use [saved results](../outputs.md) to
 resume and inspect saved candidates before continuing. Restoration does not
 replay generation, optimization or prediction.
 
-Use the current tool-specific catalog scopes for routes beyond this recipe's
+Use the current tool guides for routes beyond this recipe's
 consumer. AF3 is excluded. Computational consensus does not establish
 experimental function or specificity. Native access and terms follow the
 linked tool guides.

@@ -3,7 +3,7 @@
 `1ubq.pdb` is the deposited 1UBQ ubiquitin structure downloaded from
 https://files.rcsb.org/download/1UBQ.pdb on October 4, 2026. It includes chain A,
 76 standard amino acids and the deposited waters. Preserve its header for source
-and experimental provenance. Cite the deposited structure and its primary paper:
+and experimental source information. Cite the deposited structure and its primary paper:
 Vijay-Kumar et al., J Mol Biol 194, 531-544 (1987), DOI 10.1016/0022-2836(87)90679-6.
 RCSB structure record: https://www.rcsb.org/structure/1UBQ.
 

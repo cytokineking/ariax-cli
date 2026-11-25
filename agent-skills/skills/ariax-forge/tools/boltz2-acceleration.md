@@ -35,6 +35,6 @@ For batch runs, follow **Scratch → Curate → Pack → Finish**: write bulk ou
 
 Resume the same project with its current control revision, as documented in the [outputs guide](../outputs.md). Resume allocates compute under normal billing. The new session prepares the image and named asset; restore recovers inputs/workspace and never replays commands. Run the saved checker explicitly after readiness; a new prediction requires an explicit command.
 
-Unsupported optimization flags and model choices fail visibly. No `fast`, `big` or multi-GPU optimization is shipped. MSA and molecular parsing retain the native limits: MSE has been emitted as MET and remains chemically unqualified; caller-selected MSA services remain unverified and require a usable authorized service. Public MSA use must follow the service policy and authorized sequence disclosure.
+Unsupported optimization flags and model choices fail visibly. No `fast`, `big` or multi-GPU optimization is shipped. MSA and molecular parsing retain the native limits: MSE has been emitted as MET and remains chemically unverified; caller-selected MSA services remain unverified and require a usable authorized service. Public MSA use must follow the service policy and authorized sequence disclosure.
 
 Cite [Boltz-2](https://doi.org/10.1101/2025.06.14.659707) and the [reference optimization source](https://github.com/anthropics/uplifting-biomolecular-modeling). See [sources and license notices](boltz2-acceleration/modes.md#sources-and-license-notices).

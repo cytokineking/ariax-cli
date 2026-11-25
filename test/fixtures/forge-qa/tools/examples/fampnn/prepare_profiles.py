@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare the explicit 1TIM monomer/dimer qualification inputs from a downloaded PDB."""
+"""Prepare the explicit 1TIM monomer/dimer example inputs from a downloaded PDB."""
 
 import argparse
 import csv

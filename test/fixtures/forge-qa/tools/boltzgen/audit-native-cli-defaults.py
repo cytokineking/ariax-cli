@@ -26,7 +26,7 @@ assert c['filtering']['budget'] == 30 and c['filtering']['top_budget'] == 10
 report = dict(state='observed_native_cli_defaults', settings=settings,
               analysis_processes=32, budget=30, native_quality_export_budget=10,
               assignment_four_worker_requirement_met=False,
-              correction='Explicit --num_workers 4 required on subsequent qualification')
+              correction='Explicit --num_workers 4 required on subsequent runs')
 a.report.parent.mkdir(parents=True, exist_ok=True)
 a.report.write_text(json.dumps(report, indent=2) + '\n')
 print(json.dumps(report))

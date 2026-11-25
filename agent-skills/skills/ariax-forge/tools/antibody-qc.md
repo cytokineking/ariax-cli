@@ -49,7 +49,7 @@ VHH percentiles are null with `no_vhh_calibration`. Motifs and CDR-length flags
 suggest follow-up checks. Clinical immunogenicity and experimental developability
 remain unmeasured.
 
-Save registered inputs, provenance and the output directory, then release the VM
+Save registered inputs, source information and the output directory, then release the VM
 with `ariax forge finish "$SESSION" --wait --json` (or flush mid-session with
 `ariax forge sync "$SESSION" --wait --wait-timeout 900 --json`). Follow the
 [Files guide](../outputs.md) for file inspection and resume. The

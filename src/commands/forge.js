@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
 import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
-import { ApiError, NetworkError, backoffDelay, createClient } from '../http.js';
+import { ApiError, NetworkError, backoffDelay, createClient, sanitizeErrorDetails } from '../http.js';
 import { requireTrustedApiOrigin, supportsStoredCredentials } from '../config.js';
 import { EXIT } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
@@ -17,7 +17,7 @@ import { isForgeOperationTerminal, pruneExpiredRecords } from '../state-dir.js';
 import { detectAgentShell } from '../agent-env.js';
 
 import { forgeRequest, forgeAccountIdentity, hasCachedForgeConnection } from '../lib/forge-client.js';
-import { readSync, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
+import { readSync, presentForgeTool, redactForgeOutput, redactForgeText, workspacePath } from '../lib/forge-workspace-client.js';
 
 import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js';
 import { readForgeToolGuide } from './skills.js';
@@ -50,7 +50,7 @@ const OPTIONS = {
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
   finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
   commands: [['retained', 'details'], 2], command: [['retained', 'details'], 3], watch: [['timeout', 'wait-timeout', 'tail'], 3],
-  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id', 'wait-ready', 'wait-timeout'], 3],
+  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id', 'wait-ready', 'manifest', 'batch-id', 'concurrency', 'dry-run', 'wait', 'wait-timeout'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
   files: [['path', 'cursor', 'recursive'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
@@ -71,8 +71,8 @@ const SUBCOMMAND_HELP = Object.freeze({
   limit: `ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID] [--details]`,
   catalog: `ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
   ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide | --guide-only] [--json]
-  --guide-only implies --with-guide and returns only { tool, guide, guide_path, guide_content, references } without the qualification/terms/citations matrix.
-  --mode MODE narrows models[] and capabilities.qualification[] down to matching mode rows.`,
+  --guide-only implies --with-guide and returns only { tool, guide, guide_path, guide_content, references } without terms/citations metadata.
+  --mode MODE narrows models[] and modes[] down to matching mode IDs.`,
   list: `ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
   Returns compact session summaries by default; add --details for full tool metadata.`,
   status: `ariax forge status SESSION [--details]`,
@@ -97,10 +97,12 @@ const SUBCOMMAND_HELP = Object.freeze({
   close: `ariax forge close SESSION [--force] [--wait] [--wait-timeout SECONDS]
   Emergency teardown (75s sync ceiling). Prefer ariax forge finish --wait for normal completion.`,
   inputs: `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
+  ariax forge inputs add SESSION --manifest FILE [--batch-id UUID] [--concurrency 1..4] [--dry-run | --wait [--wait-timeout SECONDS]]
   ariax forge inputs list SESSION [--retained]
   ariax forge inputs status SESSION INPUT_ID [--retained]
   --path is relative to /inputs (immutable once published; use a new --path for updates).`,
   'inputs add': `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
+  ariax forge inputs add SESSION --manifest FILE [--batch-id UUID] [--concurrency 1..4] [--dry-run | --wait [--wait-timeout SECONDS]]
   --path is relative to /inputs (immutable once published; use a new --path for updated files).`,
   'inputs list': `ariax forge inputs list SESSION [--retained]`,
   'inputs status': `ariax forge inputs status SESSION INPUT_ID [--retained]`,
@@ -151,6 +153,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge inputs add SESSION --file FILE --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
   ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
   ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
+  ariax forge inputs add SESSION --manifest FILE [--batch-id UUID] [--concurrency 1..4] [--dry-run | --wait [--wait-timeout SECONDS]]
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
   ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
@@ -172,7 +175,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40S, or RTX6000PRO.
   forge catalog is public and returns compact summaries by default (use --all for experimental/legacy, --full for the complete catalog).
-  Use --tool TOOL --with-guide to inspect one tool's full requirements and bundled guide in a single call, or --tool TOOL --guide-only for only the lean guide + references; --model/--mode narrow models[] and capabilities.qualification[] to exact IDs.`;
+  Use --tool TOOL --with-guide to inspect one tool's full requirements and bundled guide in a single call, or --tool TOOL --guide-only for only the lean guide + references; --model/--mode narrow models[] and modes[] to exact IDs.`;
 
 const FORGE_ACTION_ALIASES = Object.freeze({
   upload: 'Did you mean: ariax forge inputs add SESSION --file FILE --path PATH?',
@@ -478,6 +481,7 @@ export async function controlled(ctx, id, seconds, operation, {resume} = {}) {
       stopped.details = {finish:redactForgeOutput(saved.result)};
       printProgress(`Last observed finish: execution ${saved.result.execution}; drain ${saved.result.drain}; durability ${saved.result.durability}; release ${saved.result.release}.`);
     }
+    if (saved && savedKind(id,saved.request) === 'input-batch' && saved.result) stopped.details = sanitizeErrorDetails(saved.result);
     throw stopped;
   } finally { clearTimeout(timer); process.removeListener('SIGINT', interrupt); }
 }
@@ -503,6 +507,7 @@ function savedKind(id, request) {
   if (request.path === '/v1/files/hydrate' && request.body.operation_id === id) return 'file-hydration';
   if (request.path === '/v1/inputs' && request.body.input_id === id) return 'input';
   if (request.type === 'project-file-input-v2' && request.body.operation_id === id) return 'input';
+  if (request.type === 'project-input-batch-v1' && request.body.batch_id === id) return 'input-batch';
   if (request.type === 'project-file-copy-v1' && request.body.operation_id === id) return 'file-recovery';
   if (['project-file-delete-v1','project-file-delete-tree-v1'].includes(request.type) && request.body.operation_id === id) return 'file-deletion';
   if (new RegExp(`^/v1/commands/[0-9a-f-]{36}/cancel$`).test(request.path) && !Object.keys(request.body).length) return 'cancel';
@@ -956,13 +961,8 @@ function parsePackOutput(outputTail, { src, requestedDest, format, removeSrc, no
   };
 }
 
-// Summary is for routing only. Keep all observed qualification states visible,
-// including unknown/missing values. Inspect the selected model/mode before use.
-function compactCatalogTool(tool) {
-  const qual = tool.capabilities?.qualification;
-  const alreadyCompactQual = qual && !Array.isArray(qual) && typeof qual === 'object' && Object.hasOwn(qual, 'rows');
-  const rows = Array.isArray(qual) ? qual : [];
-  const states = field => [...new Set(rows.length ? rows.map(row => row?.[field] ?? 'unknown') : ['unknown'])];
+function compactCatalogTool(rawTool) {
+  const tool = presentForgeTool(rawTool);
   return {
     tool: tool.tool,
     name: tool.name,
@@ -975,6 +975,7 @@ function compactCatalogTool(tool) {
     ...(tool.superseded_by !== undefined ? { superseded_by: tool.superseded_by } : {}),
     ...(tool.pairs_with !== undefined ? { pairs_with: tool.pairs_with } : {}),
     resources: tool.resources ?? null,
+    ...(Array.isArray(tool.modes) && tool.modes.length ? { modes: tool.modes } : {}),
     models: Array.isArray(tool.models)
       ? tool.models.map(model => ({
         id: model.id,
@@ -985,45 +986,46 @@ function compactCatalogTool(tool) {
     capabilities: {
       tasks: tool.capabilities?.tasks ?? null,
       guide: tool.capabilities?.guide ?? null,
-      qualification: alreadyCompactQual
-        ? qual
-        : { rows: rows.length, native: states('native'), installation: states('installation'), restoration: states('restoration') },
     },
   };
 }
 
-// Keep selected rows intact: scope/workload can carry scientific limits that
-// cannot safely be inferred from a passed state or shortened as generic prose.
-function selectedCatalogTool(tool, model, mode) {
+function selectedCatalogTool(rawTool, model, mode) {
+  const tool = presentForgeTool(rawTool);
   const models = Array.isArray(tool.models) ? tool.models : [];
-  const rows = Array.isArray(tool.capabilities?.qualification) ? tool.capabilities.qualification : [];
-  const modelRows = rows.filter(row => model === undefined || row?.model === model);
   const selectedModels = models.filter(item => model === undefined || item.id === model);
-  if (model !== undefined && !selectedModels.length && !modelRows.length) {
+  if (model !== undefined && !selectedModels.length) {
     throw usageError(`forge catalog: model "${model}" is not in tool "${tool.tool}".`);
   }
-  const qualification = modelRows.filter(row => mode === undefined || row?.mode === mode);
-  if (mode !== undefined && !qualification.length && !selectedModels.some(item => item.modes?.includes(mode))) {
+  const matchingModels = selectedModels.filter(item => mode === undefined || item.modes?.includes(mode));
+  const toolModes = model === undefined ? (tool.modes ?? []) : [];
+  const matchingToolModes = toolModes.filter(id => mode === undefined || id === mode);
+  if (mode !== undefined && !matchingModels.length && !matchingToolModes.length) {
     throw usageError(`forge catalog: mode "${mode}" is not in tool "${tool.tool}"${model === undefined ? '' : ` model "${model}"`}.`);
   }
-  const cap = tool.capabilities && typeof tool.capabilities === 'object' ? tool.capabilities : {};
   return {
-    ...tool,
+    tool: tool.tool,
+    name: tool.name,
+    gpu: tool.gpu,
+    ...(tool.tier !== undefined ? { tier: tool.tier } : {}),
+    ...(tool.summary !== undefined ? { summary: tool.summary } : {}),
+    ...(Array.isArray(tool.modalities) ? { modalities: tool.modalities } : {}),
+    ...(Array.isArray(tool.inputs) ? { inputs: tool.inputs } : {}),
+    ...(Array.isArray(tool.outputs) ? { outputs: tool.outputs } : {}),
+    ...(tool.superseded_by !== undefined ? { superseded_by: tool.superseded_by } : {}),
+    ...(tool.pairs_with !== undefined ? { pairs_with: tool.pairs_with } : {}),
     resources: tool.resources ?? null,
-    models: selectedModels.filter(item => mode === undefined || item.modes?.includes(mode)
-      || qualification.some(row => row?.model === item.id)).map(item => ({
-      ...item,
+    ...(matchingToolModes.length ? { modes: matchingToolModes } : {}),
+    models: matchingModels.map(item => ({
       id: item.id,
       modes: mode === undefined ? item.modes ?? null : [mode],
       resources: item.resources ?? null,
     })),
     capabilities: {
-      ...cap,
-      tasks: cap.tasks ?? null,
-      guide: cap.guide ?? null,
-      terms: cap.terms ?? null,
-      citations: cap.citations ?? null,
-      qualification,
+      tasks: tool.capabilities?.tasks ?? null,
+      guide: tool.capabilities?.guide ?? null,
+      terms: tool.capabilities?.terms ?? null,
+      citations: tool.capabilities?.citations ?? null,
     },
   };
 }
@@ -1863,6 +1865,7 @@ async function runAction(ctx) {
           throw error;
         }
       }
+      tools = tools.map(presentForgeTool);
       if (!tools.length) throw usageError(`forge catalog: tool "${selectedTool}" is not in the current catalog.`);
       if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
       if (selected) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
@@ -1917,7 +1920,7 @@ async function runAction(ctx) {
       ...(includeAll ? { include_all: 'true' } : {}),
     };
     response = await catalogGet(ctx, `${API}/catalog`, { query: catalogQuery });
-    const rawToolsBeforeFilter = Array.isArray(response.data?.tools) ? response.data.tools : [];
+    const rawToolsBeforeFilter = (Array.isArray(response.data?.tools) ? response.data.tools : []).map(presentForgeTool);
     tools = rawToolsBeforeFilter;
     const serverFiltered = response.meta?.view === 'summary' || response.meta?.view === 'full';
     if (!serverFiltered) {
@@ -2075,13 +2078,13 @@ async function runAction(ctx) {
       printProgress(`Recovering saved operation: ${id}`);
       const writeFile = found.legacy ? recordPath(ctx,id,true) : found.file;
       try {
-        let result = ['sync','input','file-recovery','file-deletion'].includes(kind)
+        let result = ['sync','input','input-batch','file-recovery','file-deletion'].includes(kind)
           ? await recoverFile(ctx,id,record,{signal,account,retryFailedSync:kind === 'sync'})
           : await dispatchSaved(ctx,writeFile,record,account,{previous:true,signal});
         if (kind === 'sync' && result.data?.state === 'failed') failedSync(id,record.request.session_id,result.data);
         if (kind === 'file-recovery' && result.data?.state === 'failed') failed('file_recovery_failed',`File recovery ${id} failed`,result.data.error,
           `Inspect the destination and operation ${id} before another action.`);
-        if (flags.wait) result = await waitRecovered(ctx,record,result,kind,account,signal);
+        if (flags.wait && kind !== 'input-batch') result = await waitRecovered(ctx,record,result,kind,account,signal);
         if (kind === 'finish') finishOutcome(result.data);
         return report(ctx,result);
       } catch (error) {

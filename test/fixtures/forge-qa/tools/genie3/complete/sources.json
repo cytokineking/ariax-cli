@@ -7,6 +7,5 @@
     "target/targets/01_bhrf1.a3m": "data/design/binder_design/binderbench/targets/msa/01_bhrf1.a3m"
   },
   "target_msa": "supplied upstream BHRF1 alignment, not a synthetic query-only fixture",
-  "chain_pdb_repair": "upstream per-chain BHRF1 PDB is zero bytes; use the same complete single-chain target PDB without changing its residues",
-  "limits": "matrix.md; pending qualification"
+  "chain_pdb_repair": "upstream per-chain BHRF1 PDB is zero bytes; use the same complete single-chain target PDB without changing its residues"
 }

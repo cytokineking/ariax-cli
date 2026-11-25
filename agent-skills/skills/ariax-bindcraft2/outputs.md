@@ -88,7 +88,7 @@ scores are not averages or evidence of independent experimental replication.
 
 `ariax results PROJECT` lists user-facing paths, roles, and sizes. A download reports its destination and downloaded/resumed/skipped/failed counts. Successful verification and recovery bookkeeping stay quiet; add `--details` only for hashes, verification state, manifests, request IDs, or checkpoint diagnostics.
 
-Repeating the same command resumes completed files. A partial failure lists every affected path with a stable code, reason, retryability, and recovery action. Rerun transient transfers; correct destination or access problems first; never use bytes after an integrity mismatch. For accepted settings and provenance troubleshooting, read the shared [recorded settings reference](../../core/recorded-settings.md). Keep original inputs because accepted-input retrieval is not released.
+Repeating the same command resumes completed files. A partial failure lists every affected path with a stable code, reason, retryability, and recovery action. Rerun transient transfers; correct destination or access problems first; never use bytes after an integrity mismatch. For accepted settings and run troubleshooting, read the shared [recorded settings reference](../../core/recorded-settings.md). Keep original inputs because accepted-input retrieval is not released.
 
 ## Scientific review
 

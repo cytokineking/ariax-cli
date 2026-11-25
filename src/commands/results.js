@@ -47,6 +47,11 @@ export async function run(ctx) {
   if (initialCursor !== undefined && downloadDir !== undefined) {
     throw usageError('results: --cursor cannot be combined with --download (downloads resume automatically via local checkpoint state).');
   }
+  const storageSource = ctx.flags.source === 'storage';
+  if (ctx.flags.source !== undefined && !storageSource) throw usageError('results: --source accepts storage. Omit it for ordinary artifact discovery.');
+  if (storageSource && (!artifactPrefix || downloadDir === undefined || ctx.flags.limit !== undefined || initialCursor !== undefined)) {
+    throw usageError('results --source storage requires an exact --path FILE and --download DIR; it does not discover or recursively download folders.');
+  }
   const controller = new AbortController();
   const interrupt = () => {
     const error = new Error('Results interrupted. Re-run the same command to resume completed downloads.');
@@ -61,7 +66,9 @@ export async function run(ctx) {
     let lastNextCursor = null;
     const detailsMode = ctx.flags.details === true;
     let collectedCount = 0;
-    const pages = artifactPages(ctx.client, projectId, limit, artifactPrefix, {
+    const pages = storageSource
+      ? (async function* () { yield [{ path: artifactPrefix }]; })()
+      : artifactPages(ctx.client, projectId, limit, artifactPrefix, {
       signal,
       initialCursor,
       onMeta: (value, requestId) => {
@@ -261,7 +268,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
         try {
           let filename;
           if (rel === BINDCRAFT2_ARCHIVE_PATH) {
-            const entry = (await presignBatch(ctx.client, projectId, [rel], ctx.signal)).get(rel);
+            const entry = (await presignBatch(ctx.client, projectId, [rel], ctx.signal, ctx.flags.source)).get(rel);
             if (!entry) throw serverError('No download URL was returned.');
             filename = bindcraft2ArchiveDownloadFilename(entry.url);
             namedArchiveUrls.set(rel, entry);
@@ -295,7 +302,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
         try {
           const unsigned = batch.filter((artifact) => !namedArchiveUrls.has(artifact.path));
           signed = unsigned.length
-            ? await presignBatch(ctx.client, projectId, unsigned.map((a) => a.path), ctx.signal)
+            ? await presignBatch(ctx.client, projectId, unsigned.map((a) => a.path), ctx.signal, ctx.flags.source)
             : new Map();
           for (const artifact of batch) {
             if (namedArchiveUrls.has(artifact.path)) signed.set(artifact.path, namedArchiveUrls.get(artifact.path));
@@ -316,7 +323,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
             let entry = signed.get(rel);
             let refreshed = false;
             if (entry?.expiresAt && entry.expiresAt <= Date.now() + 30_000) {
-              entry = (await presignBatch(ctx.client, projectId, [rel], ctx.signal)).get(rel);
+              entry = (await presignBatch(ctx.client, projectId, [rel], ctx.signal, ctx.flags.source)).get(rel);
               refreshed = true;
             }
             if (!entry) throw serverError('No download URL was returned.');
@@ -332,7 +339,7 @@ async function downloadAll(ctx, projectId, pages, downloadDir, meta, responseInf
               // permission/not-found/checksum failures must remain visible.
               if (refreshed || ![401, 403].includes(error.status)) throw error;
               ctx.signal?.throwIfAborted();
-              const fresh = (await presignBatch(ctx.client, projectId, [rel], ctx.signal)).get(rel);
+              const fresh = (await presignBatch(ctx.client, projectId, [rel], ctx.signal, ctx.flags.source)).get(rel);
               if (!fresh) throw serverError('No refreshed download URL was returned.');
               out = await downloadUrl(fetchImpl, fresh.url, artifact.dest, {
                 expectedSha256: declaredSha256(artifact), expectedBytes: artifact.expected_bytes,
@@ -497,10 +504,10 @@ function applyArchiveExpectation(artifact, expectations) {
   };
 }
 
-async function presignBatch(client, projectId, paths, signal) {
+async function presignBatch(client, projectId, paths, signal, source) {
   signal?.throwIfAborted();
   const res = await client.post(`/api/v1/projects/${encodeURIComponent(projectId)}/artifacts/presign`, {
-    body: { paths }, signal,
+    body: { paths, ...(source === 'storage' ? { source } : {}) }, signal,
   });
   signal?.throwIfAborted();
   const map = new Map();

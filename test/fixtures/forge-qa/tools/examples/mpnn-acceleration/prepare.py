@@ -23,4 +23,4 @@ for length in (64,93):
     records.append(protein);fixed[name]={'A':[i for i in range(1,length+1) if i not in range(11,21)]}
 (a.out/'parsed.jsonl').write_text(''.join(json.dumps(x)+'\n' for x in records))
 (a.out/'fixed.jsonl').write_text(json.dumps(fixed)+'\n')
-(a.out/'provenance.json').write_text(json.dumps({'structure':'3HTN','source':'accepted ProteinMPNN 8907e667 fixture','chain':'A','crops':[64,93],'redesign_dense_positions':[11,20],'designed_sequences_per_target':2},indent=2)+'\n')
+(a.out/'input-sources.json').write_text(json.dumps({'structure':'3HTN','source':'accepted ProteinMPNN 8907e667 fixture','chain':'A','crops':[64,93],'redesign_dense_positions':[11,20],'designed_sequences_per_target':2},indent=2)+'\n')

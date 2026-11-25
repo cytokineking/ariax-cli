@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit an explicit URL override against the existing public ColabFold service.
 
-Remote qualification only. Explicit HTTPS port 443 preserves the same service
+Run remotely. Explicit HTTPS port 443 preserves the same service
 while making a silently ignored --host-url observable at Requests' send boundary.
 Query bodies, headers, credentials and ticket identifiers are never recorded.
 """
@@ -28,7 +28,7 @@ def route(path: str) -> str:
         return '/ticket/{id}'
     if path.startswith('/template/'):
         return '/template/{ids}'
-    raise ValueError('Unexpected route in the bounded public override qualification')
+    raise ValueError('Unexpected route in the bounded public override example')
 
 
 @contextmanager

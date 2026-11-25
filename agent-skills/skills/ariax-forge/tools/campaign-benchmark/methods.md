@@ -4,7 +4,7 @@
 database and cutoffs. Its required legacy `accepted_b70_heads` object contains
 the original `runtime`, `backend` and `cli` source revisions as 40-character
 lowercase hexadecimal strings. The supplied values are populated; retain them
-with the saved provenance. `prepare` requires exactly two minibinders and one
+with the saved source information. `prepare` requires exactly two minibinders and one
 antibody with distinct explicit identities. Every referenced file stays under
 the saved benchmark root. Relative paths preserve the original native files;
 use a new preparation or report output directory.
@@ -62,7 +62,7 @@ Canonical sequence and backbone checks describe the declared software/structure
 criteria. Pairwise RMSD is a prediction comparison. The report leaves function,
 binding efficacy, biological novelty and clinical immunogenicity unmeasured.
 Related acceleration variants do not supply an independent prediction family.
-Use each tool's current catalog scope for other workloads. AF3 is outside this
+Use each tool's guide for other workloads. AF3 is outside this
 example.
 
 [MMseqs2 parser](https://github.com/soedinglab/MMseqs2/blob/8cc5ce367b5638c4306c2d7cfc652dd099a4643f/src/commons/Parameters.cpp)

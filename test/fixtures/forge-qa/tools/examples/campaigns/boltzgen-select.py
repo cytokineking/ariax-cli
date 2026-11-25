@@ -63,7 +63,7 @@ def main():
         context += sorted((root / "config").glob("*.yaml"))
         for file in context:
             if not file.resolve(strict=True).is_relative_to(root) or not file.is_file():
-                raise ValueError("Missing native provenance or same-candidate context")
+                raise ValueError("Missing native run record or same-candidate context")
         selected.append((candidate, accepted, sequence, target_chain, target_sequence, files, context))
     out.mkdir(parents=True, exist_ok=False)
     (out / "review.json").write_text(json.dumps({

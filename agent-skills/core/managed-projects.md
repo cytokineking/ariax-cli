@@ -14,7 +14,7 @@ ariax schema PROTOCOL --json            # lean job schema (--details for full, -
 
 All five managed protocols return compact output by default (`status`, `validate`,
 `submit`, `candidates`, `projects`); follow `data.action.command` and add
-`--details` only when full diagnostics/provenance are needed, or `--fields a,b`
+`--details` only when omitted diagnostic fields are needed, or `--fields a,b`
 to project JSON fields.
 
 ## 2. Prepare and validate inputs
@@ -89,6 +89,7 @@ replies, pause/restart/abort, or provisioning/job failures, see [recovery & supp
 ariax candidates PROJECT_ID --view final --json
 ariax results PROJECT_ID --json
 ariax results PROJECT_ID --download ./results          # auto-verifies checksums; rerun to resume
+ariax results PROJECT_ID --source storage --path pdbs/input.cif --download ./inputs --json
 ariax results PROJECT_ID --path output/Trajectory --download ./results
 ariax jobs --project PROJECT_ID --json
 ariax logs JOB_ID --list
@@ -101,6 +102,8 @@ ariax runs PROJECT_ID --json                           # recorded settings per j
 - Use [candidates](candidates.md), [interpretation](interpretation.md), and each
   engine's `outputs.md` before ranking. `--eligible` is unsuitable for
   PXDesign/BoltzGen where eligibility may be `unknown`.
+- For storage usage, selected file/folder deletion (`ariax storage`), or
+  whole-project deletion (`ariax delete PROJECT --yes`), see [storage & deletion](storage.md).
 - `ariax logs` returns retained project compute logs only (never platform/API
   logs). Web project URL: `https://www.ariax.bio/projects/<engine>/<id>`.
 - **Exit codes:** `0` ok, `1` usage, `2` auth, `3` forbidden, `4` not found,

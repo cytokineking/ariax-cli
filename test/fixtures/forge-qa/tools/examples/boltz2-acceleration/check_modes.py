@@ -338,7 +338,7 @@ if __name__ == "__main__":
     parser.add_argument("results", type=Path, help="native boltz_results_<input/directory> directory")
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--samples", type=int, default=1)
-    parser.add_argument("--mols-dir", type=Path, help="trusted prepared /models/boltz2/mols; required for chemical qualification")
+    parser.add_argument("--mols-dir", type=Path, help="trusted prepared /models/boltz2/mols; required to check the chemical inputs")
     parser.add_argument("--require-paired-chains", nargs="+", default=[],
                         help="require shared non-query native pairing keys in these chains")
     args = parser.parse_args()

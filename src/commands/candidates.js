@@ -10,12 +10,17 @@ import { compactCandidateResult, usesCompactCandidatePresentation } from '../cam
 
 function serverError(message) { const error = new Error(message); error.exitCode = EXIT.SERVER; return error; }
 
+function presentCandidateRecord({ provenance_scope, ...record }) {
+  return record;
+}
+
 export async function run(ctx) {
   if (ctx.positionals.length !== 1) throw usageError('candidates: expected one project UUID or exact unique name.');
-  const allowed = new Set(['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details']);
+  const allowed = new Set(['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details', 'structures-only']);
   for (const flag of Object.keys(ctx.flags)) if (!allowed.has(flag)) throw usageError(`candidates: unknown flag --${flag}`);
   const view = ctx.flags.view ?? 'final';
   if (!['final', 'all', 'diagnostics'].includes(view)) throw usageError('candidates: --view must be final, all, or diagnostics.');
+  if (ctx.flags['structures-only'] && view !== 'diagnostics') throw usageError('candidates: --structures-only requires --view diagnostics (BindCraft2 trajectories).');
   const rawLimit = ctx.flags.limit ?? '25';
   const limit = Number(rawLimit);
   if (!/^\d+$/.test(String(rawLimit)) || !Number.isInteger(limit) || limit < 1 || limit > 50) throw usageError('candidates: --limit must be an integer 1..50.');
@@ -36,11 +41,13 @@ export async function run(ctx) {
   try {
     do {
       signal.throwIfAborted();
-      const res = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/candidates`, { query: { view, limit, cursor }, signal });
+      const res = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/candidates`, { query: {
+        view, limit, cursor, ...(ctx.flags['structures-only'] ? { structures_only: true } : {}),
+      }, signal });
       pages += 1;
       signal.throwIfAborted();
       if (!Array.isArray(res.data)) throw serverError('Candidate endpoint returned an invalid page.');
-      meta = res.meta || {};
+      meta = presentCandidateRecord(res.meta || {});
       requestId = res.requestId;
       for (const candidate of res.data) {
         if (!candidate || typeof candidate.id !== 'string' || !candidate.id || seenIds.has(candidate.id)) throw serverError('Candidate page contains missing or repeated IDs; restart retrieval.');
@@ -48,7 +55,7 @@ export async function run(ctx) {
         if (ctx.flags.eligible && candidate.ranking_eligible !== true) {
           if (candidate.ranking_eligible === false) excludedFalse++; else excludedUnknown++;
           for (const reason of candidate.ranking_reasons || []) if (typeof reason === 'string') exclusionReasons.add(reason);
-        } else data.push(candidate);
+        } else data.push(presentCandidateRecord(candidate));
       }
       const next = meta.next_cursor;
       if (next !== undefined && next !== null && (typeof next !== 'string' || !next)) throw serverError('Candidate endpoint returned an invalid cursor.');

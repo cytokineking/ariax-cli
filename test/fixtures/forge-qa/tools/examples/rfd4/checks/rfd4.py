@@ -2,7 +2,7 @@
 """Inspect native RFd4 structures and required per-example metric values.
 
 The public functions are reusable by mode-specific checks. They report the
-observed structure/metrics; they do not declare scientific qualification.
+observed structure/metrics; they do not declare support for other workloads.
 """
 from __future__ import annotations
 

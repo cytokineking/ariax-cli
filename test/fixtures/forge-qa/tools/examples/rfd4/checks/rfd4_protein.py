@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check the PD-L1 input and motif mapping for prepared RFd4 qualification cases.
+"""Check the PD-L1 input and motif mapping for prepared RFd4 examples.
 
-This is a remote scientific check, not a mode qualification. It uses RFd4's
+This is a check of the supplied output. It uses RFd4's
 native condition-spec builder and the shared structure/metric readers.
 """
 from __future__ import annotations
@@ -185,7 +185,7 @@ def main() -> None:
         or args.max_motif_rmsd_angstrom <= 0
     ):
         parser.error("--max-motif-rmsd-angstrom requires metrics and a positive finite value")
-    result = {"qualification": "not established"}
+    result = {"verified": False}
     mapping = None
     if args.input_spec is not None:
         mapping, result["input"] = check_binder_input(args.input_spec)

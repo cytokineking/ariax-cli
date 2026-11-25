@@ -107,7 +107,7 @@ def prepare(root: Path, plan, campaign_name: str, shortlists_name: str, out: Pat
             if observation['task'] != source['task'] or observation['native_rank'] != source.get('native_rank'):
                 raise ValueError('Shortlist changed the native task or rank')
             if read(resolve(campaign, source['run_record'])) != observation['run_record']:
-                raise ValueError('Saved run record differs from native provenance')
+                raise ValueError('Saved run record differs from the native run record')
             resolve(campaign, observation['structure'])
             if observation['structure'] != source['structure'] or set(source['scores']) != set(observation['scores']):
                 raise ValueError('Shortlist changed native structure or score fields')
@@ -301,7 +301,7 @@ def report(root: Path, selection_name: str, results_name: str, out: Path):
     query_index = {q['query']: q for q in selection['queries']}
     if search['outcome'] == 'succeeded':
         if search['settings'] != plan['search'] or search['returncode'] != 0 or not search['command_id']:
-            raise ValueError('Search provenance differs from the frozen native settings')
+            raise ValueError('Search record differs from the frozen native settings')
         resolve(root,search['native_log'])
         resolve(root,search['resources'])
         metadata = read(resolve(root, search['metadata_file']))

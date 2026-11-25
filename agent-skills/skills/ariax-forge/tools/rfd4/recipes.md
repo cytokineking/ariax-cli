@@ -26,7 +26,7 @@ done
 Record each returned input ID and use `ariax forge inputs status "$SESSION"
 INPUT_ID --json` until every selected input and checker is ready. A YAML's
 companions must retain their relative paths. The checkers run inside the RFd4
-image; they are case-specific evidence, not scientific qualification.
+image; they are examples of the listed cases.
 
 ## Generate with inline metrics
 
@@ -210,7 +210,7 @@ selected design; it is not a scientific cutoff. The checker requires the
 nonnegative measured count, `pre_oracle_pass=0`, an ordinary sidecar identical
 to the input and no remaining symlinks. Retain the rejected input, filter outcome,
 IDs and all score rows. Do not interpret an absent score as a pass. For normal
-evaluation, materialize sidecars and capture provenance using the
+evaluation, materialize sidecars and save the run settings using the
 [outputs procedure](outputs.md) before syncing.
 
 This Forge adaptation inherits the attribution in the [entrypoint](../rfd4.md).

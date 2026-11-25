@@ -3,7 +3,7 @@
 Use `ariax skills forge --tool antibody-qc --json` to find this directory in
 `data.examples["antibody-qc"]`. Run `python3 prepare.py --out DIRECTORY`. It
 writes `batch.json`, `vhh.json`, `invalid.json`,
-`mixed.json`, `empty.json` and `provenance.json`. The
+`mixed.json`, `empty.json` and an input-source record. The
 paired seed is a trastuzumab-like variable sequence used as a controlled input.
 Its deliberately introduced CDR3 NGT sequon changes to QGT in the second record.
 Both chains retain their lengths. The VHH input is RCSB 1ZVH, camelid polymer entity 2 (author chain A), with
@@ -17,7 +17,7 @@ original sequences, residue indices, distinct IMGT positions, regions, native
 peptide counts and disappearance of the deliberate NGT alert. The adapter checks
 native TNP and AbNumber CDR sequence agreement during execution.
 
-Save `batch.json`, `provenance.json` and the complete output directory through
+Save `batch.json`, the input-source record and the complete output directory through
 the [Files guide](../../../outputs.md). For a
 numbering-only diagnostic, use `--methods number-liabilities`. OASis requires the
 complete selected reference at `/models/oasis-v1/OASis_9mers_v1.db`.

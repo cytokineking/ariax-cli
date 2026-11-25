@@ -20,9 +20,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-unconditional.json",
-    "output_stem": "rfd3-unconditional_0_model_0",
-    "native_status": "bounded_native_identity",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-unconditional_0_model_0"
   },
   {
     "id": "rfd3-indexed-motif",
@@ -45,9 +43,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-indexed-motif.json",
-    "output_stem": "rfd3-indexed-motif_0_model_0",
-    "native_status": "bounded_native_identity_and_conditioning",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-indexed-motif_0_model_0"
   },
   {
     "id": "rfd3-hotspot",
@@ -70,9 +66,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-hotspot.json",
-    "output_stem": "rfd3-hotspot_0_model_0",
-    "native_status": "bounded_native_identity_and_conditioning",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-hotspot_0_model_0"
   },
   {
     "id": "rfd3-unindexed-motif",
@@ -95,9 +89,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-unindexed-motif.json",
-    "output_stem": "rfd3-unindexed-motif_0_model_0",
-    "native_status": "bounded_native_identity_and_conditioning",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-unindexed-motif_0_model_0"
   },
   {
     "id": "rfd3-partial-diffusion",
@@ -120,9 +112,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-partial-diffusion.json",
-    "output_stem": "rfd3-partial-diffusion_0_model_0",
-    "native_status": "completed_with_fixed_geometry_gate",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-partial-diffusion_0_model_0"
   },
   {
     "id": "rfd3-fixed-backbone",
@@ -145,9 +135,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-fixed-backbone.json",
-    "output_stem": "rfd3-fixed-backbone_0_model_0",
-    "native_status": "bounded_native_identity_and_conditioning",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-fixed-backbone_0_model_0"
   },
   {
     "id": "rfd3-ligand",
@@ -170,9 +158,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-ligand.json",
-    "output_stem": "rfd3-ligand_0_model_0",
-    "native_status": "completed_with_AMP_topology_gate",
-    "qualification_attempt": 3
+    "output_stem": "rfd3-ligand_0_model_0"
   },
   {
     "id": "rfd3-rasa-hbond",
@@ -196,9 +182,7 @@
       "inference_sampler.use_classifier_free_guidance=True"
     ],
     "expected": "expected/rfd3-rasa-hbond.json",
-    "output_stem": "rfd3-rasa-hbond_0_model_0",
-    "native_status": "completed_with_AMP_topology_gate",
-    "qualification_attempt": 2
+    "output_stem": "rfd3-rasa-hbond_0_model_0"
   },
   {
     "id": "rfd3-dna-binder",
@@ -221,9 +205,7 @@
       "read_sequence_from_sequence_head=True"
     ],
     "expected": "expected/rfd3-dna-binder.json",
-    "output_stem": "rfd3-dna-binder_0_model_0",
-    "native_status": "completed_with_fixed_geometry_gate",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-dna-binder_0_model_0"
   },
   {
     "id": "rfd3-symmetry-c2",
@@ -247,9 +229,7 @@
       "inference_sampler.kind=symmetry"
     ],
     "expected": "expected/rfd3-symmetry-c2.json",
-    "output_stem": "rfd3-symmetry-c2_0_model_0",
-    "native_status": "bounded_native_identity_and_conditioning",
-    "qualification_attempt": 1
+    "output_stem": "rfd3-symmetry-c2_0_model_0"
   },
   {
     "id": "rfd3na-multipolymer",
@@ -272,9 +252,7 @@
       "read_sequence_from_sequence_head=False"
     ],
     "expected": "expected/rfd3na-multipolymer.json",
-    "output_stem": "rfd3na-multipolymer_0_model_0",
-    "native_status": "completed_with_AMP_topology_gate",
-    "qualification_attempt": 2
+    "output_stem": "rfd3na-multipolymer_0_model_0"
   },
   {
     "id": "rfd3na-rna-secondary",
@@ -297,9 +275,7 @@
       "read_sequence_from_sequence_head=False"
     ],
     "expected": "expected/rfd3na-rna-secondary.json",
-    "output_stem": "rfd3na-rna-secondary_0_model_0",
-    "native_status": "completed_with_AMP_topology_gate",
-    "qualification_attempt": 2
+    "output_stem": "rfd3na-rna-secondary_0_model_0"
   },
   {
     "id": "rfd3na-dna",
@@ -322,9 +298,7 @@
       "read_sequence_from_sequence_head=False"
     ],
     "expected": "expected/rfd3na-dna.json",
-    "output_stem": "rfd3na-dna_0_model_0",
-    "native_status": "completed_with_AMP_topology_gate",
-    "qualification_attempt": 2
+    "output_stem": "rfd3na-dna_0_model_0"
   },
   {
     "id": "rfd3na-aptamer",
@@ -348,9 +322,7 @@
       "inference_sampler.use_classifier_free_guidance=True"
     ],
     "expected": "expected/rfd3na-aptamer.json",
-    "output_stem": "rfd3na-aptamer_0_model_0",
-    "native_status": "completed_with_AMP_topology_gate",
-    "qualification_attempt": 2
+    "output_stem": "rfd3na-aptamer_0_model_0"
   },
   {
     "id": "rf3-monomer",
@@ -371,9 +343,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3-monomer.json",
-    "output_stem": "rf3-monomer",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3-monomer"
   },
   {
     "id": "rf3_preprint_124-monomer",
@@ -394,9 +364,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_124-monomer.json",
-    "output_stem": "rf3_preprint_124-monomer",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_124-monomer"
   },
   {
     "id": "rf3_preprint_921-monomer",
@@ -417,9 +385,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_921-monomer.json",
-    "output_stem": "rf3_preprint_921-monomer",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_921-monomer"
   },
   {
     "id": "rf3-complex",
@@ -440,9 +406,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3-complex.json",
-    "output_stem": "rf3-complex",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3-complex"
   },
   {
     "id": "rf3-supplied-msa",
@@ -463,9 +427,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3-supplied-msa.json",
-    "output_stem": "rf3-supplied-msa",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3-supplied-msa"
   },
   {
     "id": "rf3-template",
@@ -486,9 +448,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3-template.json",
-    "output_stem": "rf3-template",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3-template"
   },
   {
     "id": "rf3_preprint_124-complex",
@@ -509,9 +469,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_124-complex.json",
-    "output_stem": "rf3_preprint_124-complex",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_124-complex"
   },
   {
     "id": "rf3_preprint_124-supplied-msa",
@@ -532,9 +490,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_124-supplied-msa.json",
-    "output_stem": "rf3_preprint_124-supplied-msa",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_124-supplied-msa"
   },
   {
     "id": "rf3_preprint_124-template",
@@ -555,9 +511,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_124-template.json",
-    "output_stem": "rf3_preprint_124-template",
-    "native_status": "completed_with_AMP_chirality_gate",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_124-template"
   },
   {
     "id": "rf3_preprint_921-complex",
@@ -578,9 +532,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_921-complex.json",
-    "output_stem": "rf3_preprint_921-complex",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_921-complex"
   },
   {
     "id": "rf3_preprint_921-supplied-msa",
@@ -601,9 +553,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_921-supplied-msa.json",
-    "output_stem": "rf3_preprint_921-supplied-msa",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_921-supplied-msa"
   },
   {
     "id": "rf3_preprint_921-template",
@@ -624,9 +574,7 @@
       "compress_outputs=False"
     ],
     "expected": "expected/rf3_preprint_921-template.json",
-    "output_stem": "rf3_preprint_921-template",
-    "native_status": "bounded_native_and_molecular_identity",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "rf3_preprint_921-template"
   },
   {
     "id": "resource-rf3-256-batch5",
@@ -647,9 +595,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3-256-batch5.json",
-    "output_stem": "resource-rf3-256-batch5",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3-256-batch5"
   },
   {
     "id": "resource-rf3-512-batch5",
@@ -670,9 +616,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3-512-batch5.json",
-    "output_stem": "resource-rf3-512-batch5",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3-512-batch5"
   },
   {
     "id": "resource-rf3-1024-batch1",
@@ -693,9 +637,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3-1024-batch1.json",
-    "output_stem": "resource-rf3-1024-batch1",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3-1024-batch1"
   },
   {
     "id": "resource-rf3_preprint_124-256-batch5",
@@ -716,9 +658,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3_preprint_124-256-batch5.json",
-    "output_stem": "resource-rf3_preprint_124-256-batch5",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3_preprint_124-256-batch5"
   },
   {
     "id": "resource-rf3_preprint_124-512-batch5",
@@ -739,9 +679,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3_preprint_124-512-batch5.json",
-    "output_stem": "resource-rf3_preprint_124-512-batch5",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3_preprint_124-512-batch5"
   },
   {
     "id": "resource-rf3_preprint_124-1024-batch1",
@@ -762,9 +700,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3_preprint_124-1024-batch1.json",
-    "output_stem": "resource-rf3_preprint_124-1024-batch1",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3_preprint_124-1024-batch1"
   },
   {
     "id": "resource-rf3_preprint_921-256-batch5",
@@ -785,9 +721,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3_preprint_921-256-batch5.json",
-    "output_stem": "resource-rf3_preprint_921-256-batch5",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3_preprint_921-256-batch5"
   },
   {
     "id": "resource-rf3_preprint_921-512-batch5",
@@ -808,9 +742,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3_preprint_921-512-batch5.json",
-    "output_stem": "resource-rf3_preprint_921-512-batch5",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3_preprint_921-512-batch5"
   },
   {
     "id": "resource-rf3_preprint_921-1024-batch1",
@@ -831,9 +763,7 @@
       "early_stopping_plddt_threshold=null"
     ],
     "expected": "expected/resource-rf3_preprint_921-1024-batch1.json",
-    "output_stem": "resource-rf3_preprint_921-1024-batch1",
-    "native_status": "planned_resource_profile",
-    "native_evidence": "science/evidence/foundry/b28a-qualification.md"
+    "output_stem": "resource-rf3_preprint_921-1024-batch1"
   },
   {
     "id": "resource-rfd3-128-batch16",
@@ -856,8 +786,7 @@
       "inference_sampler.num_timesteps=200"
     ],
     "expected": "expected/resource-rfd3-128-batch16.json",
-    "output_stem": "resource-rfd3-128-batch16_0_model_0",
-    "native_status": "planned_resource_profile"
+    "output_stem": "resource-rfd3-128-batch16_0_model_0"
   },
   {
     "id": "resource-rfd3-256-batch4",
@@ -880,8 +809,7 @@
       "inference_sampler.num_timesteps=200"
     ],
     "expected": "expected/resource-rfd3-256-batch4.json",
-    "output_stem": "resource-rfd3-256-batch4_0_model_0",
-    "native_status": "planned_resource_profile"
+    "output_stem": "resource-rfd3-256-batch4_0_model_0"
   },
   {
     "id": "resource-rfd3-512-batch1",
@@ -904,8 +832,7 @@
       "inference_sampler.num_timesteps=200"
     ],
     "expected": "expected/resource-rfd3-512-batch1.json",
-    "output_stem": "resource-rfd3-512-batch1_0_model_0",
-    "native_status": "planned_resource_profile"
+    "output_stem": "resource-rfd3-512-batch1_0_model_0"
   },
   {
     "id": "resource-rfd3na-64-batch16",
@@ -928,8 +855,7 @@
       "inference_sampler.num_timesteps=200"
     ],
     "expected": "expected/resource-rfd3na-64-batch16.json",
-    "output_stem": "resource-rfd3na-64-batch16_0_model_0",
-    "native_status": "planned_resource_profile"
+    "output_stem": "resource-rfd3na-64-batch16_0_model_0"
   },
   {
     "id": "resource-rfd3na-128-batch4",
@@ -952,8 +878,7 @@
       "inference_sampler.num_timesteps=200"
     ],
     "expected": "expected/resource-rfd3na-128-batch4.json",
-    "output_stem": "resource-rfd3na-128-batch4_0_model_0",
-    "native_status": "planned_resource_profile"
+    "output_stem": "resource-rfd3na-128-batch4_0_model_0"
   },
   {
     "id": "resource-rfd3na-256-batch1",
@@ -976,7 +901,6 @@
       "inference_sampler.num_timesteps=200"
     ],
     "expected": "expected/resource-rfd3na-256-batch1.json",
-    "output_stem": "resource-rfd3na-256-batch1_0_model_0",
-    "native_status": "planned_resource_profile"
+    "output_stem": "resource-rfd3na-256-batch1_0_model_0"
   }
 ]

@@ -34,7 +34,7 @@ from the intended biological comparison.
 
 Use `--reference-kind predicted` for a predicted model. Its interpretation is
 `pose_agreement`, including self comparison. Use `experimental` only with an
-experimental reference whose provenance you retain. Automatic mapping can choose
+experimental reference whose source information you retain. Automatic mapping can choose
 a different homologous-chain assignment; native CLI flags remain available, and
 those choices require their own validation.
 

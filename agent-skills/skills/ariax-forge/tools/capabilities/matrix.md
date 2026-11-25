@@ -4,7 +4,7 @@ Discover tools dynamically with `ariax discover --execution forge --json` or
 `ariax forge catalog --task TASK --json` (compact summary by default; pass
 `--all` for experimental/legacy tools). Fetch one tool's full requirements and
 bundled guide in one call with `ariax forge catalog --tool TOOL --with-guide --json`.
-See [capability discovery](../capabilities.md) for qualification details.
+See [capability discovery](../capabilities.md) for modes, resources, and terms.
 
 ## Recommended defaults
 
@@ -64,7 +64,7 @@ Hidden from default `ariax forge catalog` output; pass `--all` or `--tier experi
 | Status | Tool or family | Notes | Guide |
 | --- | --- | --- | --- |
 | Experimental | `protenix-v2` | Experimental Protenix v2 predictor (experimental scope; use `protenix-models` for stable runs) | [Protenix](../protenix-models.md) |
-| Experimental | `esmfold2-pipeline` | Native ESMFold2 inversion + Protenix v2 (bounded qualification; prefer managed protocol for full runs) | [Pipeline](../esmfold2-pipeline.md) |
+| Experimental | `esmfold2-pipeline` | Native ESMFold2 inversion + Protenix v2 (bounded workload; prefer managed protocol for full runs) | [Pipeline](../esmfold2-pipeline.md) |
 | Experimental | `opendde` | Preview molecular prediction | [OpenDDE](../opendde.md) |
 | Experimental | `mpnn-acceleration`, `boltz2-acceleration` | Explicit optimization-mode benchmarks | [MPNN accel](../mpnn-acceleration.md), [Boltz-2 accel](../boltz2-acceleration.md) |
 | Legacy | `ipsae` | Standalone AF2-focused ipSAE v3 CPU scorer (superseded by `interface-scores`) | [ipSAE](../ipsae.md) |

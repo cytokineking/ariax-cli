@@ -35,6 +35,9 @@ recovery and results; [campaign planning](core/campaigns.md) for sizing and
 scaling; [feedback and triage](core/feedback.md) for reporting bugs or CLI
 friction; and [interpretation](core/interpretation.md) for result metrics.
 [Raw REST examples](core/raw-curl.md) are available when the CLI cannot be used.
+[Storage usage, browsing and deletion](core/storage.md) covers cached measurements,
+bounded safe pages, supported downloads, authorized whole-project deletion,
+exact-request recovery and read-only cleanup waiting.
 Starter files in `examples/` must be validated against the live protocol schema
 before submission.
 

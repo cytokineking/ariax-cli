@@ -1,4 +1,4 @@
-/** `ariax storage` — inspect account/project storage usage, entries, cleanup suggestions, and deletions. */
+/** `ariax storage` — inspect account/project storage usage, entries, cleanup suggestions, status, and deletions. */
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
@@ -7,22 +7,31 @@ import { isUUID } from '../uuid.js';
 import { NetworkError } from '../http.js';
 import { resolveProjectId } from '../resolve.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
+import { storageStatus, reportStorage, waitForStorage, storageWaitOptions } from '../storage.js';
+import { listProjectFiles, workspacePath } from '../lib/forge-workspace-client.js';
+import { run as deleteSelection, status as selectedStatus } from './storage-delete.js';
 
 const MAX_PAGES = 20;
 
 const OPTIONS = {
-  usage: [['refresh', 'after'], 1],
-  projects: [['q', 'protocol', 'status', 'sort', 'limit', 'cursor', 'all'], 1],
-  project: [['refresh', 'wait', 'wait-timeout'], 2],
-  entries: [['path', 'limit', 'cursor'], 2],
-  suggest: [[], 2],
-  delete: [['path', 'recursive', 'preview', 'suggested', 'expected-control-revision', 'operation-id'], 2],
-  deletion: [[], 3],
+  usage: [['refresh', 'after', 'limit', 'cursor', 'q', 'protocol', 'status', 'sort', 'wait', 'wait-timeout'], 2, 1],
+  projects: [['q', 'protocol', 'status', 'sort', 'limit', 'cursor', 'all'], 1, 1],
+  project: [['refresh', 'wait', 'wait-timeout'], 2, 2],
+  entries: [['path', 'limit', 'cursor'], 2, 2],
+  ls: [['path', 'limit', 'cursor'], 2, 2],
+  suggest: [[], 2, 2],
+  status: [['wait', 'poll-interval', 'wait-timeout', 'deletion-id'], 2, 2],
+  delete: [[
+    'path', 'recursive', 'preview', 'suggested', 'expected-control-revision', 'operation-id',
+    'dry-run', 'yes', 'request-id', 'wait', 'poll-interval', 'wait-timeout',
+  ], 2, 2],
+  deletion: [[], 3, 3],
 };
 
 const SUBCOMMAND_HELP = Object.freeze({
   usage: `ariax storage usage [--refresh] [--after UUID]
-  Show account-wide storage usage, retained storage summary, and measurement counts.`,
+  ariax storage usage [PROJECT] [--refresh] [--limit N] [--cursor TOKEN] [--q TEXT] [--protocol ID] [--status STATUS] [--sort updated_at|name|bytes_desc]
+  Show account-wide storage usage, list project storage usage, or inspect one project's storage observation.`,
   projects: `ariax storage projects [--q TEXT] [--protocol P] [--status S] [--sort updated_at|name|bytes_desc] [--limit N] [--cursor C] [--all]
   List projects with storage byte usage and freshness.`,
   project: `ariax storage project PROJECT [--refresh [--wait] [--wait-timeout SECONDS]]
@@ -31,14 +40,20 @@ const SUBCOMMAND_HELP = Object.freeze({
   entries: `ariax storage entries PROJECT [--path P] [--limit N] [--cursor C]
   PROJECT accepts a project UUID or an exact unique project name.
   Browse stored directories and files under a project.`,
+  ls: `ariax storage ls PROJECT [--path PATH] [--limit N] [--cursor TOKEN]
+  PROJECT accepts a project UUID or an exact unique project name.
+  Browse managed storage entries or Forge Files paths under /workspace or /inputs.`,
   suggest: `ariax storage suggest PROJECT
   PROJECT accepts a project UUID or an exact unique project name.
   List reclaimable storage paths (for Forge projects, highlights directories for \`ariax forge pack\` or \`ariax forge files delete\`).`,
-  delete: `ariax storage delete PROJECT (--path P [--path P2 ...] | --suggested) [--recursive] --preview
-  ariax storage delete PROJECT --path P [--recursive] [--expected-control-revision N] [--operation-id UUID]
+  status: `ariax storage status PROJECT [--deletion-id UUID] [--wait] [--poll-interval SECONDS] [--wait-timeout SECONDS]
   PROJECT accepts a project UUID or an exact unique project name.
-  CLI \`ariax storage delete\` performs scoped path deletion only; \`whole_project_delete\` is web-only.
-  Use \`--preview\` first to inspect impact; actual deletions require an explicit \`--path\`.`,
+  Read-only observation of project or selected storage deletion cleanup status.`,
+  delete: `ariax storage delete PROJECT --path PATH [--recursive] [--dry-run | --yes] [--request-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax storage delete PROJECT (--path P [--path P2 ...] | --suggested) [--recursive] --preview
+  PROJECT accepts a project UUID or an exact unique project name.
+  CLI \`ariax storage delete\` performs scoped path deletion only; whole-project deletion uses \`ariax delete PROJECT\`.
+  Use \`--dry-run\` or \`--preview\` first to inspect impact; actual deletions require an explicit \`--path\`.`,
   deletion: `ariax storage deletion PROJECT DELETION_ID
   PROJECT accepts a project UUID or an exact unique project name.
   Inspect the state of a submitted storage deletion operation (may report \`write_grants_pending\` until \`verification_not_before\` passes).`,
@@ -53,16 +68,19 @@ export function helpFor(positionals = []) {
 }
 
 export const help = `ariax storage usage [--refresh] [--after UUID]
+  ariax storage usage [PROJECT] [--refresh] [--limit N] [--cursor TOKEN] [--q TEXT] [--protocol ID] [--status STATUS] [--sort updated_at|name|bytes_desc]
   ariax storage projects [--q TEXT] [--protocol P] [--status S] [--sort updated_at|name|bytes_desc] [--limit N] [--cursor C] [--all]
   ariax storage project PROJECT [--refresh [--wait] [--wait-timeout SECONDS]]
   ariax storage entries PROJECT [--path P] [--limit N] [--cursor C]
+  ariax storage ls PROJECT [--path PATH] [--limit N] [--cursor TOKEN]
   ariax storage suggest PROJECT
+  ariax storage status PROJECT [--deletion-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax storage delete PROJECT --path PATH [--recursive] [--dry-run | --yes] [--request-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax storage delete PROJECT (--path P [--path P2 ...] | --suggested) [--recursive] --preview
-  ariax storage delete PROJECT --path P [--recursive] [--expected-control-revision N] [--operation-id UUID]
   ariax storage deletion PROJECT DELETION_ID
   PROJECT accepts a project UUID or an exact unique project name.
-  CLI \`ariax storage delete\` performs scoped path deletion only; \`whole_project_delete\` is web-only.
-  Use \`storage delete --preview\` (with one or more \`--path\` flags or \`--suggested\`) to inspect impact before submitting an explicit \`--path\` deletion.
+  CLI \`ariax storage delete\` performs scoped path deletion only; whole-project deletion uses \`ariax delete PROJECT\`.
+  Use \`storage delete --dry-run\` or \`--preview\` (with one or more \`--path\` flags or \`--suggested\`) to inspect impact before submitting an explicit \`--path\` deletion.
   For Forge projects, \`storage suggest\` highlights large or high-file-count directories for \`ariax forge pack\` or \`ariax forge files delete\`.
   After a managed deletion, cleanup may report \`write_grants_pending\` until \`verification_not_before\` passes (waiting for active upload grants to expire).
   During that window, \`usage.retained.bytes\` reflects logically retained storage while raw \`usage.bytes\` still includes objects awaiting removal (\`pending_deletion_bytes\`).`;
@@ -71,17 +89,17 @@ export function validateArguments({ positionals, flags, globals }) {
   if (!positionals.length && globals.help && !Object.keys(flags).length) return;
   const action = positionals[0];
   if (!Object.hasOwn(OPTIONS, action)) {
-    throw usageError('storage: unknown subcommand. Use usage, projects, project, entries, suggest, delete, or deletion. Run: ariax help storage');
+    throw usageError('storage: unknown subcommand. Use usage, projects, project, entries, ls, suggest, status, delete, or deletion. Run: ariax help storage');
   }
-  const [allowed, expectedOperands] = OPTIONS[action];
+  const [allowed, maxOperands, minOperands = maxOperands] = OPTIONS[action];
   for (const name of Object.keys(flags)) {
     if (!allowed.includes(name)) throw usageError(`storage ${action}: unsupported flag --${name}.`);
   }
-  if (positionals.length > expectedOperands) {
-    throw usageError(`storage ${action}: unexpected positional arguments; expected at most ${expectedOperands}.`);
+  if (positionals.length > maxOperands) {
+    throw usageError(`storage ${action}: unexpected positional arguments; expected at most ${maxOperands}.`);
   }
   if (globals.help) return;
-  if (positionals.length < expectedOperands) {
+  if (positionals.length < minOperands) {
     throw usageError(`storage ${action}: missing required positional arguments. Run: ariax help storage`);
   }
 }
@@ -128,11 +146,119 @@ function emitEnvelope(res, extraMeta = undefined) {
   });
 }
 
+const nullableNumber = value => value === null || (Number.isSafeInteger(value) && value >= 0);
+
+function validateUsageObservation(data, project) {
+  storageStatus(data, project);
+  const u = data.usage;
+  if (!u || !['managed', 'forge'].includes(u.kind) || u.basis !== (u.kind === 'managed' ? 'object_listing' : 'forge_catalog')
+      || !['unknown', 'fresh', 'stale'].includes(u.freshness) || typeof u.complete !== 'boolean'
+      || !['bytes', 'object_count', 'browsable_bytes', 'hidden_other_bytes', 'pending_deletion_bytes', 'bound_input_bytes', 'retained_archive_bytes'].every(key => nullableNumber(u[key]))) {
+    throw new Error('Storage usage returned an invalid observation.');
+  }
+  return data;
+}
+
+function limitOption(value, maximum, fallback) {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) throw usageError(`storage: --limit must be 1..${maximum}.`);
+  return parsed;
+}
+
+function reportUsageObservation(ctx, response) {
+  if (ctx.json) return printJson({ data: response.data, ...(response.requestId ? { request_id: response.requestId } : {}) });
+  const u = response.data.usage;
+  printKv({
+    project_id: response.data.project_id, status: response.data.status, basis: u.basis, complete: u.complete,
+    freshness: u.freshness, measured_at: u.measured_at ?? 'unknown', bytes: u.bytes ?? 'unknown',
+    object_count: u.object_count ?? 'unknown', browsable_bytes: u.browsable_bytes ?? 'unknown', hidden_other_bytes: u.hidden_other_bytes ?? 'unknown',
+    pending_deletion_bytes: u.pending_deletion_bytes ?? 'unknown', bound_input_bytes: u.bound_input_bytes ?? 'unknown',
+    bound_input_measured_at: u.bound_input_measured_at ?? 'unknown', retained_archive_bytes: u.retained_archive_bytes ?? 'unknown',
+    retained_archive_measured_at: u.retained_archive_measured_at ?? 'unknown', refresh: u.refresh.state,
+    summaries_truncated: u.summaries_truncated,
+  });
+  if (u.largest_files.length) printTable(['largest_file', 'bytes'], u.largest_files.map(item => [item.path, item.bytes]));
+  if (u.directories.length) printTable(['directory', 'bytes', 'object_count'], u.directories.map(item => [item.path, item.bytes, item.object_count ?? 'unknown']));
+}
+
+async function runProjectUsageOverview(ctx) {
+  if (ctx.flags.refresh) throw usageError('storage usage --refresh requires a project when combined with overview filters.');
+  const query = { limit: limitOption(ctx.flags.limit, 50, 25) };
+  for (const key of ['cursor', 'q', 'protocol', 'status', 'sort']) if (ctx.flags[key] !== undefined) {
+    if (typeof ctx.flags[key] !== 'string' || !ctx.flags[key]) throw usageError(`storage usage: --${key} requires a value.`);
+    query[key] = ctx.flags[key];
+  }
+  if (query.sort && !['updated_at', 'name', 'bytes_desc'].includes(query.sort)) throw usageError('storage usage: --sort is updated_at, name or bytes_desc.');
+  const response = await ctx.client.get('/api/v1/storage/projects', { query });
+  if (!Array.isArray(response.data?.projects) || response.data.projects.length > query.limit
+      || !(response.data.next_cursor === null || typeof response.data.next_cursor === 'string')) throw new Error('Storage overview returned an invalid page.');
+  for (const row of response.data.projects) validateUsageObservation(row.storage, row.project_id);
+  if (ctx.json) return printJson({ data: response.data, ...(response.requestId ? { request_id: response.requestId } : {}) });
+  printTable(['project_id', 'name', 'protocol', 'status', 'bytes', 'basis', 'freshness'], response.data.projects.map(row => [
+    row.project_id, row.name, row.protocol, row.status, row.storage.usage.bytes ?? 'unknown', row.storage.usage.basis, row.storage.usage.freshness,
+  ]));
+  if (response.data.next_cursor) printKv({ next_cursor: response.data.next_cursor });
+}
+
+async function runList(ctx) {
+  if (!ctx.positionals[1]) throw usageError('storage ls: provide a project UUID or exact unique name.');
+  const id = (await resolveProjectId(ctx.client, ctx.positionals[1])).toLowerCase();
+  const observation = validateUsageObservation((await ctx.client.get(`/api/v1/projects/${id}/storage`)).data, id);
+  if (observation.usage.kind === 'forge') {
+    if (ctx.flags.limit !== undefined) throw usageError('Forge Files uses its existing bounded page size; omit --limit.');
+    const result = await listProjectFiles(ctx, id, workspacePath(ctx.flags.path ?? '/workspace', true), ctx.flags.cursor);
+    if (ctx.json) printJson({ data: result.data, ...(result.requestId ? { request_id: result.requestId } : {}) });
+    else { printTable(['path', 'kind', 'bytes'], result.data.entries.map(row => [row.path, row.kind, row.size_bytes ?? 'unknown'])); if (result.data.next_cursor) printKv({ next_cursor: result.data.next_cursor }); }
+    return;
+  }
+  const query = { path: ctx.flags.path ?? '', limit: limitOption(ctx.flags.limit, 100, 50), cursor: ctx.flags.cursor };
+  if (typeof query.path !== 'string' || (query.cursor !== undefined && (typeof query.cursor !== 'string' || !query.cursor))) throw usageError('storage ls requires valid --path and --cursor values.');
+  const response = await ctx.client.get(`/api/v1/projects/${id}/storage/entries`, { query });
+  const page = response.data;
+  if (page?.project_id !== id || page.path !== query.path || !Array.isArray(page.entries) || page.entries.length > query.limit
+      || !(page.next_cursor === null || typeof page.next_cursor === 'string')) throw new Error('Storage entries returned an invalid page.');
+  if (ctx.json) printJson({ data: page, ...(response.requestId ? { request_id: response.requestId } : {}) });
+  else { printTable(['path', 'kind', 'bytes', 'downloadable'], page.entries.map(row => [row.path, row.kind, row.bytes ?? 'unknown', row.downloadable])); if (page.next_cursor) printKv({ next_cursor: page.next_cursor }); }
+}
+
 export async function run(ctx) {
   const action = ctx.positionals[0];
   const flags = ctx.flags;
 
+  if (action === 'ls') return runList(ctx);
+
+  if (action === 'status') {
+    if (flags.wait) storageWaitOptions(ctx);
+    if (!ctx.positionals[1]) throw usageError('storage: use ariax storage status <project-id> [--deletion-id UUID] [--wait].');
+    const projectId = (await resolveProjectId(ctx.client, ctx.positionals[1])).toLowerCase();
+    if (flags['deletion-id'] !== undefined) return selectedStatus(ctx, projectId, flags['deletion-id']);
+    const response = await ctx.client.get(`/api/v1/projects/${projectId}/storage`);
+    let data = storageStatus(response.data, projectId);
+    if (flags.wait) data = await waitForStorage(ctx, projectId, { initial: data });
+    reportStorage(ctx, data, { requestId: response.requestId, ...(flags.wait ? { waitOutcome: 'complete' } : {}) });
+    return;
+  }
+
   if (action === 'usage') {
+    const operand = ctx.positionals[1];
+    if (operand) {
+      for (const flag of ['after', 'cursor', 'limit', 'q', 'protocol', 'status', 'sort']) {
+        if (flags[flag] !== undefined) throw usageError(`storage usage PROJECT does not accept --${flag}.`);
+      }
+      const id = (await resolveProjectId(ctx.client, operand)).toLowerCase();
+      const response = flags.refresh
+        ? await ctx.client.post(`/api/v1/projects/${id}/storage/refresh`, { body: {} })
+        : await ctx.client.get(`/api/v1/projects/${id}/storage`);
+      validateUsageObservation(response.data, id);
+      reportUsageObservation(ctx, response);
+      return;
+    }
+    const overviewFlags = ['cursor', 'limit', 'q', 'protocol', 'status', 'sort'];
+    if (overviewFlags.some((key) => flags[key] !== undefined)) {
+      if (flags.after !== undefined) throw usageError('storage usage: --after cannot be combined with project overview filters.');
+      return runProjectUsageOverview(ctx);
+    }
     if (flags.after !== undefined && flags.refresh !== true) {
       throw usageError('storage usage: --after requires --refresh.');
     }
@@ -236,6 +362,14 @@ export async function run(ctx) {
     if (capped) printProgress(`Stopped after ${maxPages} pages; pass --cursor ${cursor} to continue.`);
     else if (cursor) printProgress(`More projects available — re-run with --cursor ${cursor} (or --all).`);
     return;
+  }
+
+  if (action === 'delete') {
+    const usePreviewOrSuggested = flags.preview === true || flags.suggested === true || Array.isArray(flags.path);
+    const useLegacyDirect = flags['expected-control-revision'] !== undefined || flags['operation-id'] !== undefined;
+    if (!usePreviewOrSuggested && !useLegacyDirect) {
+      return deleteSelection(ctx);
+    }
   }
 
   const projectId = await resolveProjectId(ctx.client, ctx.positionals[1]);
@@ -480,11 +614,10 @@ export async function run(ctx) {
     }
 
     if (flags.preview === true) {
-      if (flags['operation-id'] !== undefined) {
-        throw usageError('storage delete: --operation-id cannot be combined with --preview.');
-      }
-      if (flags['expected-control-revision'] !== undefined) {
-        throw usageError('storage delete: --expected-control-revision cannot be combined with --preview.');
+      for (const conflict of ['operation-id', 'expected-control-revision', 'dry-run', 'yes', 'request-id', 'wait', 'poll-interval', 'wait-timeout']) {
+        if (flags[conflict] !== undefined) {
+          throw usageError(`storage delete: --${conflict} cannot be combined with --preview.`);
+        }
       }
       if (useSuggested || targetPaths.length > 1) {
         let targets;
@@ -537,7 +670,7 @@ export async function run(ctx) {
           total_bytes: hasBytes ? totalBytes : null,
           total_object_count: hasObjects ? totalObjects : null,
           action: previews.length
-            ? 'Review each previewed path and run explicit `ariax storage delete PROJECT --path <PATH> [--recursive]` to delete.'
+            ? 'Review each previewed path and run explicit `ariax storage delete PROJECT --path <PATH> [--recursive] --yes` to delete.'
             : null,
         };
         if (ctx.json) {

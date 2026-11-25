@@ -28,7 +28,7 @@ Use one when its live schema supports the experiment. **Forge** provides a
 workspace for explicit native commands and composed workflows. You plan the
 commands, inputs, output checks, saves, and session closure; Ariax enforces
 access, isolation, billing, and the resource lifecycle. Shared engine names do
-not imply interchangeable settings or qualification. See
+not imply interchangeable settings or supported modes. See
 [engine choice](agent-skills/core/engine-choice.md), or run
 `ariax skills --reference engine-choice --read --json`.
 
@@ -201,7 +201,7 @@ ariax inputs inspect --input-dir ./bc2-inputs -f bc2-job.json --details --json
 ariax inputs prepare --input ./target.cif -f job.json --output ./prepared --json
 ```
 
-Inspection reports chain IDs, sequence provenance, author/label residue mappings,
+Inspection reports chain IDs, sequence sources, author/label residue mappings,
 unresolved sequence regions, and warnings. With `-f`, `preparation.ready` reports
 whether the explicit job can be prepared and lists proposed supported repairs.
 Inspection itself does not validate the full server schema. Default console output
@@ -230,7 +230,7 @@ and matching author/label identifiers.
 
 The version-1 `ariax_input` manifest records CLI version/channel/source revision,
 source and prepared byte SHA-256 hashes, exact source/prepared job hashes, selected
-chains, sequence provenance, residue maps, unresolved regions, typed supported
+chains, sequence sources, residue maps, unresolved regions, typed supported
 transformations, and preparation notes. File references are relative to the
 manifest directory. `sequence_position` is 1-based in the recorded sequence;
 author and label numbers remain in their respective coordinate conventions.
@@ -245,6 +245,53 @@ ariax validate -f ./prepared/job.json --input ./prepared/input.cif
 ariax submit -f ./prepared/job.json --input ./prepared/input.cif --name prepared-run
 ```
 
+## Storage and deletion
+
+Inspect cached storage with `ariax storage usage --json`, or one project with
+`ariax storage usage PROJECT_ID --json`. Use `--refresh` on a live managed project
+to request background measurement; ordinary reads never scan. Browse one bounded
+directory page with `ariax storage ls PROJECT_ID --path output --json`; pass the
+returned `--cursor` explicitly for another page, including after an empty visible
+page. Unknown/stale observations and independently measured quantities remain
+explicit. See the [storage guide](agent-skills/core/storage.md) for filters,
+server-wide sorting, native Forge Files and supported input/result downloads
+through `ariax results PROJECT_ID --source storage --path FILE --download DIR`.
+
+Deletion permanently removes current saved project files and prevents managed
+resume. Paused and terminal managed projects can be deleted; abort active
+projects first. Native Forge controls and separately retained archives keep
+their existing semantics.
+
+```sh
+ariax storage status PROJECT_ID
+ariax delete PROJECT_ID --yes --wait --wait-timeout 300
+```
+
+Omit `--yes` for an interactive confirmation. The CLI saves the exact request
+before dispatch and reuses an uncertain receipt on retry. Use `--request-id UUID`
+or `ariax recover UUID` for explicit recovery with the original account/origin.
+`ariax storage status PROJECT_ID --wait` only observes; it does not repeat deletion.
+Pending, attention, unknown counts and timestamped verified-empty observations
+remain distinct. Timeout or interruption leaves backend cleanup running. See
+the [storage guide](agent-skills/core/storage.md) for recovery and native Forge
+differences.
+
+Select a file or folder on a completed, failed or aborted managed project:
+
+```sh
+ariax storage delete PROJECT_ID --path output/models --recursive --dry-run --json
+ariax storage delete PROJECT_ID --path output/models --recursive --yes --json
+ariax storage status PROJECT_ID --deletion-id REQUEST_UUID --wait --json
+```
+
+Dry-run only reads a bounded preview. Recursive scope includes hidden descendants;
+root deletion requires `ariax delete`. Paused projects must keep files for resume.
+Selected deletion hides matching paths immediately while leaving workflow status
+unchanged; physical cleanup can remain pending. Unselected archives and other
+copies remain readable. Keep the saved UUID and exact target on uncertainty;
+`ariax recover UUID` reconciles the existing receipt. Forge absolute Files paths
+reuse the native deletion engine and its original journal/recovery commands.
+
 ## Use Ariax with a coding agent
 
 The CLI package includes portable Markdown skills for agents. No MCP server is
@@ -257,7 +304,7 @@ if the CLI recommends an update. Install it only if I ask.
 Read `ariax skills --reference engine-choice --read --json`
 and choose a managed project or Forge for my goal, preserving my
 chosen engine and existing compute authorization. Read the selected guide and
-the relevant live schema or exact Forge tool and mode qualification. Check
+the relevant live schema or the guide for the exact Forge tool and mode. Check
 current pricing and prepare the inputs and configuration. For managed work,
 validate, submit within my authorized scope, monitor, and retrieve results. For
 Forge, plan the native commands, inspect results, flush changed files, close
@@ -300,14 +347,11 @@ authentication using `ariax discover --query "<goal>"` or
 | Submit feedback for triage | `ariax feedback --type bug\|agent-friction\|docs-gap\|missing-capability\|technical-support\|feature-request\|other --summary "Short summary" --message "Details" [--attach-last-error] [--dry-run]` |
 | Check or install updates | `ariax upgrade --check`, `ariax upgrade` |
 
-Forge catalog `--compact` routes tool selection; combined status values do not
-establish a particular mode. With `--tool`, add `--model MODEL`, `--mode MODE`, or
-both to return exact-ID matches with tool/model resources, matching qualification
-rows, scope and workload limits, guide, license notices and citations. Missing
-rows or status fields and null resources mean unknown. Filters do not establish
-support beyond the returned scope. Omit these filters for the full tool record;
-`--json` and `--compact` keep their existing output formats. Model/mode filters
-cannot be combined with `--compact` or `--details`.
+Use `forge catalog --compact` to find tool and model IDs. Add `--tool TOOL`
+with `--model MODEL` or `--mode MODE` to see model and mode IDs, hardware
+requirements, terms and citations. Consult the tool guide for workload limits.
+A null hardware requirement means the value is unknown.
+Model and mode filters cannot be combined with `--compact` or `--details`.
 
 Forge saves each supported request under `.ariax/forge/` in `--root-dir` and
 prints its ID before sending it. Temporary failures are retried a bounded number
@@ -393,7 +437,7 @@ the saved operation ID. Storage cleanup is reported separately.
 
 The [RFd4 Forge guide](agent-skills/skills/ariax-forge/tools/rfd4.md) documents a
 native joint sequence and structure design workflow. Its checks are bounded;
-consult the live catalog for availability, qualified modes and resources.
+consult the live catalog for availability, supported modes and resources.
 
 The [Mol-1 guide](agent-skills/skills/ariax-forge/tools/mol1.md) describes
 prepared-JSON molecular prediction, recorded scope and limits. Consult it with
@@ -467,7 +511,7 @@ saved policies with `ariax gpu-preferences` before restart.
 Plan campaign scope with a representative pilot or comparable prior campaign
 evidence. Before that evidence exists, report hourly prices and runtime
 uncertainty; afterward, use observed work, runtime, and recorded costs for a
-qualified forecast before scaling. Design counts and trajectory caps bound work,
+cost estimate with its assumptions before scaling. Design counts and trajectory caps bound work,
 not exact dollar spend. Preserve explicit small tests and existing authorization.
 See [campaign planning](agent-skills/core/campaigns.md) for pilot suggestions and
 forecast limits.
@@ -537,7 +581,7 @@ file or directory; globs and partial prefixes are unsupported.
 ariax results PROJECT_ID --path output/Trajectory --download ./results
 ```
 
-Rerun the same download to resume. Add `--details` for diagnostic and provenance
+Rerun the same download to resume. Add `--details` for additional diagnostic
 fields. Download summaries report the local destination; BindCraft2 archives
 use a project-specific filename. See [results and errors](agent-skills/core/managed-projects.md#results-and-errors)
 for recovery and [SECURITY.md](SECURITY.md) for data handling.

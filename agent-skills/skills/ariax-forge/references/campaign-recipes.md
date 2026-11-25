@@ -30,9 +30,8 @@ count, attempt cap, GPU/time allowance and review point before compute.
 | [Native PXDesign](../tools/pxdesign.md) | A joined design/prediction pipeline with preview or extended settings | Inspect the exact preset, checkpoint, MSA/template requirements and native export conditions. |
 | [Native ESMFold2 pipeline](../tools/esmfold2-pipeline.md) | Experimental design/critic with integrated Protenix validation | Experimental scope is currently validated up to 318 polymer residues and eight design steps; custom scFv validation needs a supported structural framework. |
 
-The live selected-tool record supplies actual keys, model choices, mode limits
-and resource floors. A guide or compact entry alone does not establish that a
-mode is available. Unknown floors remain unknown.
+The live tool record lists model and mode IDs and hardware requirements.
+A null minimum means the requirement is unknown.
 AF3 is outside Ariax support. RFantibody requires its specialized RFdiffusion_Ab,
 not standalone original RFdiffusion. Tool/model license and attribution notices
 in the linked native guides apply to every route.

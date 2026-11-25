@@ -1,4 +1,4 @@
-"""Finite native qualification. Diagnostics never promote a rejected campaign."""
+"""Bounded native run. Diagnostics never promote a rejected campaign."""
 from __future__ import annotations
 import argparse
 from dataclasses import fields

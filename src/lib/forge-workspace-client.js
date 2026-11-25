@@ -21,11 +21,56 @@ export function redactForgeText(value) {
   });
 }
 
+// Keep the IDs used by catalog filters. Older responses and saved tool records
+// can carry some IDs only in their per-mode metadata.
+export function presentForgeTool(tool) {
+  const { resource_evidence, patches, ...result } = tool;
+  if (!tool.capabilities) return result;
+  const { qualification, modes: previousRows, ...capabilities } = tool.capabilities;
+  if (qualification === undefined && previousRows === undefined) return result;
+  const rows = Array.isArray(qualification) ? qualification : previousRows;
+  const modelModes = new Map();
+  const toolModes = new Set(tool.modes ?? []);
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (typeof row?.mode !== 'string') continue;
+    if (row.model == null) {
+      toolModes.add(row.mode);
+    } else if (typeof row.model === 'string') {
+      if (!modelModes.has(row.model)) modelModes.set(row.model, new Set());
+      modelModes.get(row.model).add(row.mode);
+    }
+  }
+  if (modelModes.size) {
+    result.models = (tool.models ?? []).map(model => {
+      const extra = modelModes.get(model.id);
+      if (!extra) return model;
+      modelModes.delete(model.id);
+      return { ...model, modes: [...new Set([...(model.modes ?? []), ...extra])] };
+    });
+    for (const [id, modes] of modelModes) result.models.push({ id, modes: [...modes] });
+  }
+  if (toolModes.size) result.modes = [...toolModes];
+  // These catalog labels describe internal test history. Keep the attribution,
+  // license conditions and citation links as provided by the source.
+  if (Array.isArray(capabilities.terms)) {
+    capabilities.terms = capabilities.terms.map(term =>
+      term?.name === 'UniProt-derived qualification fixture sequences'
+        ? { ...term, name: 'UniProt-derived example sequences' } : term);
+  }
+  if (Array.isArray(capabilities.citations)) {
+    capabilities.citations = capabilities.citations.map(citation =>
+      citation?.title === 'Native expected-TM export, exact two-file changes applied by B47 selected source'
+        ? { ...citation, title: 'Native expected-TM export' } : citation);
+  }
+  return { ...result, capabilities };
+}
+
 export function redactForgeOutput(value) {
   if (typeof value === 'string') return redactForgeText(value);
   if (Array.isArray(value)) return value.map(redactForgeOutput);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value)
+  const record = typeof value.tool === 'string' && value.capabilities ? presentForgeTool(value) : value;
+  return Object.fromEntries(Object.entries(record)
     .filter(([key]) => !/^(?:access_token|api_token|bearer_token|token|api_key|authorization|download_url|upload_url|signed_url|credential|credentials|secret|client_secret|private_key|password)$/i.test(key))
     .map(([key, item]) => [key, redactForgeOutput(item)]));
 }
@@ -61,6 +106,7 @@ function cleanError(error, label) {
   if (error.status === 404) result.action = label.startsWith('Project')
     ? 'File commands require an authorized PROJECT ID; the former SESSION form is unsupported. Check access and upgrade the CLI and API together for the current project workspace.'
     : 'Check the active SESSION ID and access. The CLI, API and daemon must all support the current project workspace; upgrade them together.';
+  if (error.status === 422 && label === 'Project file download request') result.action = 'The API rejected the file request format. Check the request path and CLI/API compatibility; this is not an authentication failure.';
   return result;
 }
 
@@ -109,7 +155,7 @@ export async function projectFileGrant(ctx, projectId, target) {
   let result;
   try {
     result = await ctx.client.post(`${API}/projects/${projectId}/files/presign`, {body:{path:target}});
-  } catch (error) { throw cleanError(error, 'Project file authorization'); }
+  } catch (error) { throw cleanError(error, 'Project file download request'); }
   const data = dataEnvelope(result);
   if (data.path !== target || !Number.isSafeInteger(data.size_bytes) || data.size_bytes < 0
       || !Number.isSafeInteger(data.version) || data.version <= 0

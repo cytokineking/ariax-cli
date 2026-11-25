@@ -27,6 +27,6 @@ for name, groups in [('empty', {'model': [['X'], ['Z']], 'reference': [['X'], ['
                      ('relabeled', {'model': [['X'], ['Y', 'Z']], 'reference': [['A'], ['B', 'C']]}),
                      ('pair', {'model': [['X'], ['Z']], 'reference': [['A'], ['C']]})]:
     (a.out / (name + '-partners.json')).write_text(json.dumps(groups, indent=2) + '\n')
-(a.out / 'provenance.json').write_text(json.dumps({'source': url, 'identity': 'creator 1A2K protein complex', 'changed_pose': 'author chain C translated +50 angstrom on X; all other coordinates retained', 'chain_relabel': {'A':'X','B':'Y','C':'Z'}, 'reduction': 'bounded creator fixture; no biological inference'}, indent=2) + '\n')
+(a.out / 'input-sources.json').write_text(json.dumps({'source': url, 'identity': 'creator 1A2K protein complex', 'changed_pose': 'author chain C translated +50 angstrom on X; all other coordinates retained', 'chain_relabel': {'A':'X','B':'Y','C':'Z'}, 'reduction': 'bounded creator fixture; no biological inference'}, indent=2) + '\n')
 
 (a.out / 'table.json').write_text(json.dumps({'candidates': [{'id':'reference','reports':['/workspace/qc-dssp/result.json']},{'id':'relabeled','reports':['/workspace/qc-dockq/result.json']},{'id':'changed','reports':['/workspace/qc-changed/result.json']}]}, indent=2) + '\n')

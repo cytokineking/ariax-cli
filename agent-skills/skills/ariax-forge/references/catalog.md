@@ -20,8 +20,7 @@ for a listed mode. Omit `--model` for tools without model IDs. Use
 `capabilities.guide` with
 `ariax skills forge --tool GUIDE --json` to locate the guide, relevant references
 and examples. [Capability discovery](../tools/capabilities.md) explains the
-fields and limits. Packaged documentation does not establish live availability;
-held, untested and unknown modes are not supported choices.
+fields and limits.
 
 Check `ariax pricing --json` and workload-specific resource requirements before
 allocating compute. Null resource minima remain unknown. A managed protocol's

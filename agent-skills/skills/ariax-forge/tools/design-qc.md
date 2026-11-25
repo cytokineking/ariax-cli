@@ -48,7 +48,7 @@ original residue identities, prediction lineage and native missing reasons.
 The ipSAE text adapter takes the main report, byres report and original structure;
 see the format reference. It performs no new interface calculation.
 
-Keep registered structures, partner maps, prediction/reference provenance,
+Keep registered structures, partner maps, prediction/reference source information,
 input interface reports and output directories, then release the VM with
 `ariax forge finish "$SESSION" --wait --json` (for large multi-candidate QC
 sweeps, write raw per-candidate outputs under `/scratch/design-qc/`, copy

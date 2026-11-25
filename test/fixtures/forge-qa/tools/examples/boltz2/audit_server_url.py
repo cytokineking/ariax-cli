@@ -41,7 +41,7 @@ def main() -> None:
     parser.add_argument("native_argv", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if args.origin != "https://api.colabfold.com:443":
-        raise ValueError("This qualification uses the selected public service and explicit HTTPS port")
+        raise ValueError("This example uses the selected public service and explicit HTTPS port")
     if args.check_only:
         print(json.dumps(check(args.audit_path, args.origin, args.pairing), indent=2))
         return
@@ -52,7 +52,7 @@ def main() -> None:
         raise ValueError("Fresh service audit path required")
     args.audit_path.parent.mkdir(parents=True, exist_ok=True)
     report = {"events": [], "native_exit_code": None, "expected_origin": args.origin,
-              "scope": "Observed native HTTP; no separate service or authentication qualification"}
+              "scope": "Observed native HTTP requests only"}
 
     def save() -> None:
         args.audit_path.write_text(json.dumps(report, indent=2) + "\n")

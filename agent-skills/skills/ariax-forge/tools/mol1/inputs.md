@@ -43,7 +43,7 @@ supported recipe is available, set `--use_msa true` and specify
 `proteinChain`. Use absolute paths such as `/inputs/mol1/msas/A.unpaired.a3m`.
 Upload every referenced file at that exact path and wait for every input to be
 ready. Relative paths resolve against the remote working directory, not the JSON
-file. Preserve the query sequence, database provenance, search parameters,
+file. Preserve the query sequence, database release, search parameters,
 coverage, paired-chain correspondence and any preprocessing decisions. A pairing
 file's presence alone does not prove biologically appropriate chain pairing.
 `--msa_pair_as_unpair` defaults to `true`: paired rows also enter unpaired
@@ -86,7 +86,7 @@ unreliable, apart from its described cyclic-peptide/disulfide cases. None are
 validated in this recipe. An unavailable CCD component is an input/asset
 limitation, not permission to silently change chemistry or fetch a new dictionary.
 
-## Seeds, batches and provenance
+## Seeds, batches and input sources
 
 The direct runner reads one JSON file containing one or more jobs. `--seeds 101`
 selects the default seed; a comma-separated value selects several. With

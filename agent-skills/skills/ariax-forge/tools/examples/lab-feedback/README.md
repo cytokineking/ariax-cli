@@ -9,7 +9,7 @@ synthetic controls. The source CSV must come from the permitted ProteinBase expo
 and be retained with attribution. Stage it into `/inputs/lab-feedback/` for processing in the Forge session.
 
 `check.py --ledger /workspace/lab-feedback/exchange.json` checks saved identity and
-provenance. `--controls` checks the independent artificial
+source information. `--controls` checks the independent artificial
 control ledger: two differing KD values survive and the third has missing units.
 No artificial record represents a ProteinBase or laboratory measurement.
 

@@ -2,7 +2,7 @@
 """Score or Cartesian-minimize an explicitly selected canonical-protein model.
 
 This uploadable adapter uses the public Tmol 0.2.0 Python interface. See the
-accompanying guide for preparation, score interpretation, and qualification.
+accompanying guide for preparation, score interpretation, and supported workloads.
 """
 from __future__ import annotations
 

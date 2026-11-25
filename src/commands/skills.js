@@ -29,7 +29,6 @@ const CANONICAL_PROTOCOLS = Object.freeze([
 ]);
 const PLATFORMS = Object.freeze({ forge: 'ariax-forge', 'ariax-forge': 'ariax-forge' });
 const FORGE_ROOT = join(ROOT, 'skills', 'ariax-forge');
-
 /** Explicit Forge tool & guide aliases pointing to canonical guide relative paths under FORGE_ROOT. */
 const FORGE_ALIASES = Object.freeze({
   proteinmpnn: 'tools/mpnn.md',
@@ -50,6 +49,7 @@ const FORGE_ALIASES = Object.freeze({
   rf3: 'tools/foundry.md',
   rfdiffusion4: 'tools/rfd4.md',
   'rfd4-antibody': 'tools/rfd4-antibody.md',
+  'rfd4-antibody-fixtures': 'tools/examples/rfd4/README.md',
   'mol-1': 'tools/mol1.md',
   'jms-esm2': 'tools/jms-components.md',
   'jms-mpnn': 'tools/jms-components.md',
