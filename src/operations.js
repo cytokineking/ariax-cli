@@ -195,7 +195,7 @@ export function loadOperation(rootDir, id, { legacyRootDir } = {}) {
   return loadOperationFromFile(file, id);
 }
 
-export function listOperations(rootDir, { legacyRootDir } = {}) {
+export function listOperations(rootDir, { legacyRootDir, apiOrigin } = {}) {
   const seen = new Set();
   const operations = [];
   const roots = [rootDir];
@@ -207,7 +207,9 @@ export function listOperations(rootDir, { legacyRootDir } = {}) {
       const id = name.slice(0, -5);
       if (seen.has(id)) continue;
       seen.add(id);
-      operations.push(loadOperationFromFile(path.join(dir, name), id));
+      const record = loadOperationFromFile(path.join(dir, name), id);
+      if (apiOrigin && record.api_origin !== apiOrigin) continue;
+      operations.push(record);
     }
   }
   return operations;

@@ -44,12 +44,17 @@ const IDS = Object.freeze({
   billing: '22222222-2222-4222-8222-222222222222',
   managedProject: '33333333-3333-4333-8333-333333333333',
   boltzgenProject: '33333333-3333-4333-8333-333333333334',
+  boltzgenPassProject: '33333333-3333-4333-8333-333333333335',
+  pausedRestartProject: '33333333-3333-4333-8333-333333333336',
   forgeProject: '44444444-4444-4444-8444-444444444444',
   forgeClosedProject: '44444444-4444-4444-8444-444444444445',
+  forgeSyncPendingProject: '44444444-4444-4444-8444-444444444446',
   forgeSessionPack: '55555555-5555-4555-8555-555555555555',
   forgeSessionClosed: '55555555-5555-4555-8555-555555555556',
   forgeSessionClose: '66666666-6666-4666-8666-666666666666',
   forgeSessionFail: '77777777-7777-4777-8777-777777777777',
+  forgeSessionPhase7: '77777777-7777-4777-8777-777777777778',
+  forgeCancelCmd: 'cccccccc-1111-4111-8111-111111111111',
   serverErrorProject: '88888888-8888-4888-8888-888888888888',
   timeoutProject: '99999999-9999-4999-8999-999999999999',
   apiKey: 'arx_eval_fixture_token_only',
@@ -172,6 +177,14 @@ async function startEvalServer() {
     remoteLog: 'Traceback (most recent call last):\nValueError: invalid ligand atom index\n',
     finishOps: new Map(),
     commands: new Map(),
+    phase7Queries: [],
+    phase7ScratchBytes: 0,
+    phase7SyncPolls: 0,
+    phase7CancelPolls: 0,
+    phase7RefreshPolls: 0,
+    phase7InputReadyPolls: 0,
+    phase7InputUnreadyOnce: true,
+    phase7InputSeenIds: [],
   };
 
   const reply = (res, status, data, meta = undefined, extraHeaders = {}) => {
@@ -288,7 +301,188 @@ async function startEvalServer() {
             ],
           });
         }
+        if (pid === IDS.pausedRestartProject) {
+          return reply(res, 200, {
+            jobs: [
+              {
+                id: 'dddddddd-1111-4111-8111-111111111111',
+                project_id: IDS.pausedRestartProject,
+                status: 'paused',
+                failure: { code: 'gpu_provisioning_delayed', message: 'GPU provisioning delayed on selected GPUs' },
+                allocations: [],
+              },
+            ],
+          });
+        }
         return reply(res, 200, { jobs: [] });
+      }
+
+      // Phase 7: BoltzGen project with passing candidates, null eligibility, control metadata, and retained storage
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenPassProject}`) {
+        return reply(res, 200, {
+          id: IDS.boltzgenPassProject,
+          name: 'boltzgen-pass-eval',
+          protocol: 'boltzgen',
+          project_type: 'vhh',
+          status: 'completed',
+          design_count_source: 'candidate_evidence',
+          allowed_gpus: ['H100', 'L40S'],
+          tested_designs: 0,
+          accepted_designs: 0,
+          num_designs: 10,
+          total_runtime_seconds: 300,
+          total_cost_usd: 0.95,
+          control: {
+            revision: 3,
+            human_resume_required: false,
+            stop_origin: 'system',
+            stop_reason: 'target_reached',
+            stopped_by: null,
+            stopped_at: '2026-11-25T05:00:00Z',
+          },
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenPassProject}/candidates`) {
+        return reply(res, 200, [
+          {
+            id: 'bg-pass-1',
+            native_id: 'vhh_pass_001',
+            engine: 'boltzgen',
+            rank: 1,
+            selection: { selected: true, stage: 'final' },
+            ranking_eligible: null,
+            filters: [{ name: 'pass_filters', passed: true }],
+            metrics: [
+              { name: 'design_to_target_iptm', value: 0.78, unit: null },
+              { name: 'design_plddt', value: 0.91, unit: null },
+              { name: 'plddt', value: 89.5, unit: null },
+              { name: 'filter_rmsd', value: 1.4, unit: null },
+              { name: 'i_pae', value: 4.2, unit: null },
+              { name: 'complex_ipde', value: 1.8, unit: null },
+              { name: 'affinity_probability_binary', value: 0.64, unit: null },
+            ],
+            binder_sequences: ['QVQLVESGGGLVQAGGSLRLSCAAS'],
+            structures: [{ path: 'final_designs/rank1_vhh_pass_001.cif', role: 'diversity_selected_complex' }],
+          },
+          {
+            id: 'bg-pass-2',
+            native_id: 'vhh_pass_002',
+            engine: 'boltzgen',
+            rank: 2,
+            selection: { selected: true, stage: 'final' },
+            ranking_eligible: null,
+            filters: [{ name: 'pass_filters', passed: true }],
+            metrics: [{ name: 'design_iptm', value: 0.72, unit: null }],
+            binder_sequences: ['EVQLVESGGGLVQAGGSLRLSCAAS'],
+            structures: [{ path: 'final_designs/rank2_vhh_pass_002.cif', role: 'diversity_selected_complex' }],
+          },
+        ], { engine: 'boltzgen', view: 'final', state: 'available', total: 2, next_cursor: null });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenPassProject}/storage`) {
+        const isIdle = state.phase7RefreshPolls === 0 || state.phase7RefreshPolls >= 2;
+        if (state.phase7RefreshPolls > 0 && state.phase7RefreshPolls < 2) state.phase7RefreshPolls += 1;
+        return reply(res, 200, {
+          project_id: IDS.boltzgenPassProject,
+          name: 'boltzgen-pass-eval',
+          status: 'completed',
+          control: { revision: 3, human_resume_required: false },
+          cleanup: { state: 'write_grants_pending', kind: 'managed', verification_not_before: '2026-11-25T06:00:00Z' },
+          usage: {
+            kind: 'managed',
+            bytes: isIdle ? 512000 : 716800,
+            object_count: 14,
+            freshness: isIdle ? 'fresh' : 'stale',
+            measured_at: '2026-11-25T05:10:00Z',
+            pending_deletion_bytes: 204800,
+            retained: { bytes: '512000', as_of: '2026-11-25T05:10:00Z', quality: 'measured' },
+            refresh: { state: isIdle ? 'idle' : 'running', requested_at: '2026-11-25T05:09:58Z', reason: null },
+          },
+        });
+      }
+      if (req.method === 'POST' && p === `/api/v1/projects/${IDS.boltzgenPassProject}/storage/refresh`) {
+        state.phase7RefreshPolls = 1;
+        return reply(res, 202, {
+          project_id: IDS.boltzgenPassProject,
+          usage: {
+            kind: 'managed',
+            bytes: 716800,
+            object_count: 14,
+            freshness: 'stale',
+            refresh: { state: 'pending', requested_at: '2026-11-25T05:09:58Z', reason: null },
+          },
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.boltzgenPassProject}/storage/cleanup-suggestions`) {
+        return reply(res, 200, { project_id: IDS.boltzgenPassProject, state: 'ready', items: [] });
+      }
+
+      // Phase 7: Restart --wait falling back to paused
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.pausedRestartProject}`) {
+        return reply(res, 200, {
+          id: IDS.pausedRestartProject,
+          name: 'paused-restart-eval',
+          protocol: 'boltzgen',
+          project_type: 'vhh',
+          status: 'paused',
+          allowed_gpus: ['H100', 'L40S'],
+          tested_designs: 0,
+          accepted_designs: 0,
+        });
+      }
+      if (req.method === 'POST' && p === `/api/v1/projects/${IDS.pausedRestartProject}/restart`) {
+        return reply(res, 200, {
+          project_id: IDS.pausedRestartProject,
+          status: 'queued',
+          job_id: 'dddddddd-1111-4111-8111-111111111111',
+        });
+      }
+
+      // Phase 7: Forge project with sync_state=pending, durability_gap=false
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeSyncPendingProject}`) {
+        return reply(res, 200, {
+          project_id: IDS.forgeSyncPendingProject,
+          name: 'eval-forge-sync-pending',
+          status: 'running',
+          active_session_id: IDS.forgeSessionPhase7,
+          latest_session_id: IDS.forgeSessionPhase7,
+          control: { revision: 1, human_resume_required: false },
+          sessions: [{ session_id: IDS.forgeSessionPhase7, state: 'available', gpu_type: 'L40S', tools: [{ tool: 'base' }] }],
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeSyncPendingProject}/files/status`) {
+        return reply(res, 200, {
+          project_id: IDS.forgeSyncPendingProject,
+          session_id: IDS.forgeSessionPhase7,
+          writer_session_id: IDS.forgeSessionPhase7,
+          session_state: 'available',
+          hydration_state: 'ready',
+          control_revision: 1,
+          writer_epoch: 1,
+          sync_state: 'pending',
+          durability_gap: false,
+          last_synced_at: '2026-11-25T05:00:00Z',
+          runtime_observation: {
+            synchronization: {
+              pending_files: 3,
+              pending_bytes: 1024,
+              scratch_bytes: state.phase7ScratchBytes,
+              warnings: state.phase7ScratchBytes === 0
+                ? [{ code: 'scratch_data_not_saved', message: 'Stale scratch warning with zero bytes' }]
+                : [],
+            },
+          },
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/forge/projects/${IDS.forgeSyncPendingProject}/files`) {
+        return reply(res, 200, {
+          mutation_revision: 1, sync_state: 'pending', durability_gap: false, last_synced_at: null, next_cursor: null, entries: [],
+        });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.forgeSyncPendingProject}/storage`) {
+        return reply(res, 200, { project_id: IDS.forgeSyncPendingProject, usage: { bytes: 0, object_count: 0, freshness: 'fresh' } });
+      }
+      if (req.method === 'GET' && p === `/api/v1/projects/${IDS.forgeSyncPendingProject}/storage/cleanup-suggestions`) {
+        return reply(res, 200, { project_id: IDS.forgeSyncPendingProject, state: 'ready', items: [] });
       }
 
       if (req.method === 'GET' && p === `/api/v1/projects/${IDS.timeoutProject}`) {
@@ -643,6 +837,25 @@ async function startEvalServer() {
       const sessMatch = /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})$/.exec(p);
       if (req.method === 'GET' && sessMatch) {
         const sid = sessMatch[1];
+        if (sid === IDS.forgeSessionPhase7) {
+          state.phase7Queries.push(`GET ${p}${url.search}`);
+          const ready = state.phase7InputReadyPolls === 0 || state.phase7InputReadyPolls >= 2;
+          if (state.phase7InputReadyPolls > 0 && state.phase7InputReadyPolls < 2) state.phase7InputReadyPolls += 1;
+          return reply(res, 200, {
+            session_id: sid,
+            project_id: IDS.forgeSyncPendingProject,
+            name: 'eval-forge-phase7',
+            state: ready ? 'available' : 'starting',
+            gpu_type: 'L40S',
+            gpu_count: 1,
+            limit_revision: 1,
+            applied_limit_revision: 1,
+            tools: [
+              { tool: 'base', state: ready ? 'ready' : 'installing', error: null, capabilities: { huge: 'strip-me' }, terms: ['x'], citations: ['y'], models: [{ id: 'm' }] },
+              { tool: 'boltz2', state: 'ready', error: null, capabilities: { huge: 'strip-me' }, resources: { min_ram_gib: 32 } },
+            ],
+          });
+        }
         return reply(res, 200, {
           session_id: sid,
           project_id: IDS.forgeProject,
@@ -651,6 +864,134 @@ async function startEvalServer() {
           gpu_type: 'L40S',
           gpu_count: 1,
           tools: [{ tool: 'base', state: 'ready' }, { tool: 'boltz2', state: 'ready' }],
+        });
+      }
+
+      // Phase 7: Forge session limit
+      const limitMatch = /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})\/limit$/.exec(p);
+      if (req.method === 'POST' && limitMatch) {
+        const sid = limitMatch[1];
+        const body = await readJsonBody(req);
+        state.phase7Queries.push(`POST ${p}${url.search}`);
+        return reply(res, 200, {
+          session_id: sid,
+          project_id: IDS.forgeSyncPendingProject,
+          state: 'available',
+          max_gpu_hours: body.max_gpu_hours,
+          limit_revision: (body.expected_limit_revision ?? 0) + 1,
+          applied_limit_revision: (body.expected_limit_revision ?? 0) + 1,
+          tools: [
+            { tool: 'base', state: 'ready', error: null, capabilities: { huge: 'strip-me' }, terms: ['t'], citations: ['c'], models: [] },
+          ],
+        });
+      }
+
+      // Phase 7: Direct tools, commands, cancel, sync, inputs for forgeSessionPhase7
+      const directTools = /^\/__direct\/([0-9a-f-]{36})\/v1\/tools$/.exec(p);
+      if (directTools) {
+        state.phase7Queries.push(`${req.method} /v1/tools${url.search}`);
+        const verboseTools = [
+          { tool: 'base', state: 'ready', error: null, capabilities: { huge: 'strip-me' }, terms: ['t'], citations: ['c'], sources: [], resources: {}, models: [] },
+          { tool: 'boltz2', state: 'queued', error: null, capabilities: { huge: 'strip-me' }, qualification: [{ note: 'big' }] },
+        ];
+        if (req.method === 'GET') return reply(res, 200, { tools: verboseTools });
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req);
+          return reply(res, 202, { selection_id: body.selection_id, tools: verboseTools });
+        }
+      }
+
+      const directCmdList = /^\/__direct\/([0-9a-f-]{36})\/v1\/commands$/.exec(p);
+      if (req.method === 'GET' && directCmdList) {
+        state.phase7Queries.push(`GET /v1/commands${url.search}`);
+        const longScript = `set -euo pipefail\n${'# padding '.repeat(700)}`;
+        return reply(res, 200, {
+          commands: [
+            { command_id: IDS.forgeCancelCmd, tool: 'base', argv: ['bash', '-c', longScript], state: 'succeeded', exit_code: 0 },
+          ],
+        });
+      }
+
+      const directCmdCancel = /^\/__direct\/([0-9a-f-]{36})\/v1\/commands\/([0-9a-f-]{36})\/cancel$/.exec(p);
+      if (req.method === 'POST' && directCmdCancel) {
+        state.phase7CancelPolls = 1;
+        return reply(res, 202, { command_id: directCmdCancel[2], tool: 'base', state: 'running', cancel_requested: true });
+      }
+
+      const directCmdGet = /^\/__direct\/([0-9a-f-]{36})\/v1\/commands\/([0-9a-f-]{36})$/.exec(p);
+      if (req.method === 'GET' && directCmdGet) {
+        const cid = directCmdGet[2];
+        if (cid === IDS.forgeCancelCmd) {
+          state.phase7CancelPolls += 1;
+          const done = state.phase7CancelPolls >= 3;
+          return reply(res, 200, { command_id: cid, tool: 'base', state: done ? 'cancelled' : 'running', cancel_requested: true });
+        }
+        const cmd = state.commands.get(cid);
+        if (!cmd) return replyError(res, 404, 'not_found', 'Command not found');
+        return reply(res, 200, cmd);
+      }
+
+      const directSyncPost = /^\/__direct\/([0-9a-f-]{36})\/v1\/sync$/.exec(p);
+      if (req.method === 'POST' && directSyncPost) {
+        const body = await readJsonBody(req);
+        state.phase7SyncPolls = 1;
+        return reply(res, 202, {
+          sync_id: body.sync_id,
+          state: 'pending',
+          mutation_revision: 5,
+          pending_files: 120,
+          workspace_file_count: 250,
+        });
+      }
+
+      const directSyncGet = /^\/__direct\/([0-9a-f-]{36})\/v1\/sync\/([0-9a-f-]{36})$/.exec(p);
+      if (req.method === 'GET' && directSyncGet) {
+        if (state.phase7SyncPolls === 0) {
+          return replyError(res, 404, 'sync_not_found', 'Sync not yet created');
+        }
+        state.phase7SyncPolls += 1;
+        if (state.phase7SyncPolls === 2) {
+          return reply(res, 200, {
+            sync_id: directSyncGet[2],
+            state: 'pending',
+            mutation_revision: 6,
+            pending_files: 40,
+            workspace_file_count: 250,
+          });
+        }
+        return reply(res, 200, {
+          sync_id: directSyncGet[2],
+          state: 'saved',
+          mutation_revision: 7,
+          pending_files: 0,
+          workspace_file_count: 250,
+        });
+      }
+
+      const directInputsPost = /^\/__direct\/([0-9a-f-]{36})\/v1\/inputs$/.exec(p);
+      if (req.method === 'POST' && directInputsPost) {
+        const body = await readJsonBody(req);
+        state.phase7InputSeenIds.push(body.input_id);
+        if (state.phase7InputUnreadyOnce) {
+          state.phase7InputUnreadyOnce = false;
+          return replyError(res, 409, 'session_unready', 'Session base tool is still preparing');
+        }
+        return reply(res, 202, { input_id: body.input_id, path: body.path, state: 'ready', size_bytes: 12 });
+      }
+
+      const directInputsGetOne = /^\/__direct\/([0-9a-f-]{36})\/v1\/inputs\/([0-9a-f-]{36})$/.exec(p);
+      if (req.method === 'GET' && directInputsGetOne) {
+        return replyError(res, 404, 'not_found', 'Not yet created');
+      }
+
+      const directSessionGet = /^\/__direct\/([0-9a-f-]{36})\/v1\/session$/.exec(p);
+      if (req.method === 'GET' && directSessionGet) {
+        return reply(res, 200, {
+          session_id: directSessionGet[1],
+          project_id: IDS.forgeSyncPendingProject,
+          state: 'available',
+          tools: [{ tool: 'base', state: 'ready' }],
+          synchronization: { mutation_revision: 5, pending_files: 120, workspace_file_count: 250, scratch_bytes: state.phase7ScratchBytes, warnings: [] },
         });
       }
 
@@ -900,6 +1241,7 @@ async function runV2Case(def, envCtx) {
     assert.equal(serverState.capturedPackCommands.length, 1, 'expected one pack command dispatched');
     const packPayload = JSON.parse(packRes.stdout).data;
     assert.equal(Object.hasOwn(packPayload, 'argv'), false, 'forge pack default --json should omit verbose inline argv');
+    assert.equal(Object.hasOwn(packPayload, 'output_tail'), false, 'forge pack default --json should omit duplicate output_tail when pack parsed');
     assert.equal(packPayload.pack?.src, input.src);
     assert.equal(packPayload.pack?.requested_dest, input.dest);
     assert.equal(packPayload.pack?.actual_dest, '/workspace/archives/boltz2-batch.tar.gz');
@@ -1296,6 +1638,261 @@ async function runPhase6Checks(envCtx) {
   return checks;
 }
 
+async function runPhase7Checks(envCtx) {
+  const { origin, serverState, tunnelEnv, tempRoot } = envCtx;
+  const authBase = ['--base-url', origin, '--allow-custom-origin', '--root-dir', path.join(tempRoot, 'root-phase7')];
+  const authEnv = { ...tunnelEnv, ARIAX_API_KEY: IDS.apiKey };
+  const checks = [];
+
+  const runCheck = async (name, fn) => {
+    try {
+      const detail = await fn();
+      checks.push({ id: name, category: 'phase7_p0_p1', status: 'PASS', measured: '-', budget: '-', detail: detail || 'ok' });
+    } catch (err) {
+      checks.push({ id: name, category: 'phase7_p0_p1', status: 'FAIL', measured: '-', budget: '-', detail: err.message });
+    }
+  };
+
+  // 1. P0 #1 + P1 #9 + P1 #10: BoltzGen funnel, zero_accepted_pilot gating, key_metrics[].scale, retained_bytes, status control
+  await runCheck('phase7-boltzgen-funnel-scales-control', async () => {
+    const sumRes = await runCli(['summary', IDS.boltzgenPassProject, '--json', ...authBase], { env: authEnv });
+    const sum = JSON.parse(sumRes.stdout).data;
+    assert.equal(sum.funnel.passed_filters, 2, 'passed_filters must count native_filter_pass===true candidates');
+    assert.equal(sum.funnel.accepted, null, 'accepted must remain null when ranking.eligible is null across candidates');
+    assert.ok(!sum.warnings.some((w) => w.code === 'zero_accepted_pilot'), 'zero_accepted_pilot must be suppressed when passed_filters>0 and accepted===null');
+    assert.equal(sum.resources.retained_bytes, 512000, 'retained_bytes must coerce decimal string');
+    assert.equal(sum.resources.pending_deletion_bytes, 204800, 'pending_deletion_bytes must be exposed when > 0');
+    const scales = Object.fromEntries(sum.top_candidates[0].key_metrics.map((m) => [m.name, m.scale]));
+    assert.equal(scales.design_to_target_iptm, '0..1');
+    assert.equal(scales.design_plddt, '0..1');
+    assert.equal(scales.plddt, '0..100');
+    assert.equal(scales.filter_rmsd, 'Å');
+    assert.equal(scales.i_pae, 'Å');
+
+    const failSum = JSON.parse((await runCli(['summary', IDS.boltzgenProject, '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(failSum.funnel.passed_filters, 0);
+    assert.ok(failSum.warnings.some((w) => w.code === 'zero_accepted_pilot'), 'zero_accepted_pilot must still fire when all evaluated candidates failed filters');
+
+    const stCompact = JSON.parse((await runCli(['status', IDS.boltzgenPassProject, '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.notEqual(stCompact.scientific_outcome?.code, 'completed_no_accepted_designs');
+    assert.equal(stCompact.designs?.accepted, null);
+    assert.deepEqual(stCompact.control, { revision: 3, human_resume_required: false, stop_reason: 'target_reached' });
+
+    const stDetails = JSON.parse((await runCli(['status', IDS.boltzgenPassProject, '--details', '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(stDetails.control?.stop_origin, 'system');
+
+    const cand = JSON.parse((await runCli(['candidates', IDS.boltzgenPassProject, '--json', ...authBase], { env: authEnv })).stdout).data;
+    const candScales = Object.fromEntries(cand[0].metrics.map((m) => [m.name, m.scale]));
+    assert.equal(candScales.complex_ipde, 'Å');
+    assert.equal(candScales.affinity_probability_binary, '0..1');
+    return 'funnel/scales/retained_bytes/control verified';
+  });
+
+  // 2. P0 #2 + P0 #3: restart --wait non-zero on paused fallback + inline job reason; --fields data. prefix
+  await runCheck('phase7-restart-wait-and-fields-prefix', async () => {
+    const res = await runCli([
+      'restart', IDS.pausedRestartProject, '--wait', '--poll-interval', '1', '--json', ...authBase,
+    ], { env: authEnv, allowNonZero: true });
+    assert.notEqual(res.code, 0, 'restart --wait falling back to paused must exit non-zero');
+    const parsed = JSON.parse(res.stdout);
+    assert.equal(parsed.error?.code, 'gpu_provisioning_delayed');
+    assert.equal(parsed.error?.details?.failure_reason, 'gpu_provisioning_delayed');
+    assert.equal(parsed.error?.details?.latest_job?.error_code, 'gpu_provisioning_delayed');
+    assert.equal(parsed.error?.details?.lifecycle?.terminal, false);
+
+    const fWithData = JSON.parse((await runCli([
+      'status', IDS.boltzgenPassProject, '--json', '--fields', 'data.project_id,data.control.revision', ...authBase,
+    ], { env: authEnv })).stdout);
+    const fBare = JSON.parse((await runCli([
+      'status', IDS.boltzgenPassProject, '--json', '--fields', 'project_id,control.revision', ...authBase,
+    ], { env: authEnv })).stdout);
+    assert.deepEqual(fWithData, fBare, '--fields with leading data. must match bare --fields');
+    assert.equal(fWithData.data?.project_id, IDS.boltzgenPassProject);
+    assert.equal(fWithData.data?.control?.revision, 3);
+    return `restart exit=${res.code} (${parsed.error.code}), --fields data. normalized`;
+  });
+
+  // 3. P0 #4 + P1 #7 + P1 #8 + P1 #14: lean payloads, scratch hygiene, cancel --wait, pack output_tail, sync_pending
+  await runCheck('phase7-forge-lean-cancel-hygiene', async () => {
+    serverState.phase7Queries.length = 0;
+
+    const limRes = JSON.parse((await runCli(['forge', 'limit', IDS.forgeSessionPhase7, '--gpu-hours', '2', '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(Object.hasOwn(limRes.tools[0], 'capabilities'), false, 'forge limit default must compact tools');
+
+    const toolsAdd = JSON.parse((await runCli(['forge', 'tools', 'add', IDS.forgeSessionPhase7, '--tools', 'boltz2', '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(Object.hasOwn(toolsAdd.tools[0], 'capabilities'), false, 'forge tools add default must compact tools');
+
+    const toolsList = JSON.parse((await runCli(['forge', 'tools', IDS.forgeSessionPhase7, '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.equal(Object.hasOwn(toolsList.tools[0], 'capabilities'), false, 'forge tools default must compact tools');
+
+    const cmdsSummary = JSON.parse((await runCli(['forge', 'commands', IDS.forgeSessionPhase7, '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.match(cmdsSummary.commands[0].argv[2], /<truncated \d+ chars; pass --details for full argv>/);
+
+    const cmdsFull = JSON.parse((await runCli(['forge', 'commands', IDS.forgeSessionPhase7, '--details', '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.ok(cmdsFull.commands[0].argv[2].length > 5000, 'forge commands --details must retain full argv');
+
+    assert.ok(serverState.phase7Queries.some((q) => q.includes('/limit?view=summary')), 'forge limit must send ?view=summary');
+    assert.ok(serverState.phase7Queries.some((q) => q === 'POST /v1/tools?view=summary'), 'forge tools add must send ?view=summary');
+    assert.ok(serverState.phase7Queries.some((q) => q === 'GET /v1/tools?view=summary'), 'forge tools must send ?view=summary');
+    assert.ok(serverState.phase7Queries.some((q) => q === 'GET /v1/commands?view=summary'), 'forge commands must send ?view=summary');
+    assert.ok(serverState.phase7Queries.some((q) => q === 'GET /v1/commands?view=full'), 'forge commands --details must send ?view=full');
+
+    // forge cancel --wait
+    const cancelRes = JSON.parse((await runCli([
+      'forge', 'cancel', IDS.forgeSessionPhase7, IDS.forgeCancelCmd, '--wait', '--wait-timeout', '15', '--json', ...authBase,
+    ], { env: authEnv })).stdout).data;
+    assert.equal(cancelRes.state, 'cancelled');
+
+    // forge summary: sync_state=pending + durability_gap=false -> sync_pending (never durability_gap)
+    serverState.phase7ScratchBytes = 0;
+    const fgSum = JSON.parse((await runCli(['forge', 'summary', IDS.forgeSyncPendingProject, '--json', ...authBase], { env: authEnv })).stdout).data;
+    assert.ok(fgSum.warnings.some((w) => w.code === 'sync_pending'), 'must emit sync_pending when durability_gap=false');
+    assert.ok(!fgSum.warnings.some((w) => w.code === 'durability_gap'), 'must NOT emit durability_gap when durability_gap=false');
+    assert.ok(!fgSum.warnings.some((w) => w.code === 'scratch_data_not_saved'), 'must NOT emit scratch_data_not_saved when scratch_bytes=0');
+
+    // forge finish scratch notice suppression when scratch_bytes=0 vs emission when >0
+    const finZero = await runCli(['forge', 'finish', IDS.forgeSessionPhase7, '--wait', '--json', ...authBase], { env: authEnv });
+    assert.ok(!finZero.stderr.includes('scratch_data_not_saved'), 'finish must suppress scratch_data_not_saved when scratch_bytes=0');
+    serverState.phase7ScratchBytes = 8192;
+    serverState.finishOps.delete(IDS.forgeSessionPhase7);
+    const finNonZero = await runCli(['forge', 'finish', IDS.forgeSessionPhase7, '--wait', '--json', ...authBase], { env: authEnv });
+    assert.ok(finNonZero.stderr.includes('scratch_data_not_saved'), 'finish must emit scratch_data_not_saved when scratch_bytes>0');
+    assert.ok(finNonZero.stderr.includes('/workspace/archives/'), 'scratch notice must mention /workspace/archives/');
+
+    // forge pack --details retains output_tail
+    const packDet = JSON.parse((await runCli([
+      'forge', 'pack', IDS.forgeSessionPack, '--src', '/scratch/boltz2-batch', '--dest', '/workspace/archives/boltz2-batch.tar.zst',
+      '--wait', '--details', '--json', ...authBase,
+    ], { env: authEnv })).stdout).data;
+    assert.ok(typeof packDet.output_tail === 'string' && packDet.output_tail.length > 0, 'forge pack --details must keep output_tail');
+    return 'lean views, cancel --wait, scratch hygiene, sync_pending verified';
+  });
+
+  // 4. P1 #6 + P1 #13: forge sync --wait live stderr progress + forge inputs add --wait-ready idempotent retry
+  await runCheck('phase7-forge-sync-progress-and-inputs-wait-ready', async () => {
+    const syncRes = await runCli([
+      'forge', 'sync', IDS.forgeSessionPhase7, '--wait', '--wait-timeout', '20', '--json', ...authBase,
+    ], { env: authEnv });
+    const syncData = JSON.parse(syncRes.stdout).data;
+    assert.equal(syncData.state, 'saved');
+    assert.match(syncRes.stderr, /mutation_revision=6/, 'sync --wait stderr must report mutation_revision');
+    assert.match(syncRes.stderr, /pending_files=40/, 'sync --wait stderr must report pending_files');
+    assert.match(syncRes.stderr, /workspace_file_count=250/, 'sync --wait stderr must report workspace_file_count');
+
+    serverState.phase7InputReadyPolls = 1;
+    serverState.phase7InputUnreadyOnce = true;
+    serverState.phase7InputSeenIds.length = 0;
+    const fixedInputId = 'eeeeeeee-1111-4111-8111-111111111111';
+    const inputRes = await runCli([
+      'forge', 'inputs', 'add', IDS.forgeSessionPhase7,
+      '--url', 'https://example.org/target.cif',
+      '--path', 'targets/wait-ready.cif',
+      '--input-id', fixedInputId,
+      '--wait-ready', '--wait-timeout', '20', '--json', ...authBase,
+    ], { env: authEnv });
+    const inputData = JSON.parse(inputRes.stdout).data;
+    assert.equal(inputData.input_id, fixedInputId);
+    assert.equal(inputData.state, 'ready');
+    assert.deepEqual(serverState.phase7InputSeenIds, [fixedInputId, fixedInputId], 'inputs add --wait-ready must retry with identical input_id');
+    return 'sync progress + inputs --wait-ready idempotent retry verified';
+  });
+
+  // 5. P1 #9 + P1 #11 + P1 #12: storage --refresh --wait, origin-scoped operations, skills UX
+  await runCheck('phase7-storage-wait-operations-skills-ux', async () => {
+    const stRefresh = await runCli([
+      'storage', 'project', IDS.boltzgenPassProject, '--refresh', '--wait', '--wait-timeout', '15', '--json', ...authBase,
+    ], { env: authEnv });
+    const stData = JSON.parse(stRefresh.stdout).data;
+    assert.equal(stData.usage?.refresh?.state, 'idle');
+    assert.equal(stData.usage?.bytes, 512000);
+    assert.match(stRefresh.stderr, /Storage refresh/, 'storage --refresh --wait should emit progress to stderr');
+
+    const storageHelp = await runCli(['help', 'storage', '--no-json']);
+    assert.match(storageHelp.stdout, /write_grants_pending/);
+    assert.match(storageHelp.stdout, /verification_not_before/);
+    assert.match(storageHelp.stdout, /retained\.bytes/);
+
+    // Origin-scoped operations journal
+    const opsRoot = path.join(tempRoot, 'root-ops-origin');
+    const opsDir = path.join(opsRoot, '.ariax', 'operations');
+    await fs.mkdir(opsDir, { recursive: true, mode: 0o700 });
+    const { createHash } = await import('node:crypto');
+    const makeOp = (id, apiOrigin) => {
+      const request = { method: 'POST', path: '/api/v1/projects', body: { name: 'demo' } };
+      return {
+        version: 1,
+        id,
+        idempotency_key: id,
+        action: 'project:create',
+        actor_user_id: IDS.actor,
+        billing_account_type: 'user',
+        billing_account_id: IDS.billing,
+        api_origin: apiOrigin,
+        created_at: '2026-11-25T05:00:00Z',
+        updated_at: '2026-11-25T05:00:00Z',
+        replay_not_after: '2026-12-02T05:00:00Z',
+        request,
+        request_sha256: createHash('sha256').update(JSON.stringify(request)).digest('hex'),
+        sources: [],
+        prepared_input: null,
+        upload_intent_id: null,
+        state: 'completed',
+        operation_id: null,
+        project_id: IDS.boltzgenPassProject,
+        job_id: null,
+      };
+    };
+    const opA = '11111111-2222-4333-8444-555555555551';
+    const opB = '11111111-2222-4333-8444-555555555552';
+    await fs.writeFile(path.join(opsDir, `${opA}.json`), JSON.stringify(makeOp(opA, origin)) + '\n', { mode: 0o600 });
+    await fs.writeFile(path.join(opsDir, `${opB}.json`), JSON.stringify(makeOp(opB, 'https://other.ariax.bio')) + '\n', { mode: 0o600 });
+
+    const opsScoped = JSON.parse((await runCli(['operations', '--json', '--base-url', origin, '--allow-custom-origin', '--root-dir', opsRoot], { env: authEnv })).stdout);
+    assert.equal(opsScoped.data.length, 1);
+    assert.equal(opsScoped.data[0].id, opA);
+    assert.equal(opsScoped.meta?.filtered_by_origin, true);
+    assert.equal(opsScoped.meta?.hidden_other_origins, 1);
+
+    const opsAll = JSON.parse((await runCli(['operations', '--all-origins', '--json', '--base-url', origin, '--allow-custom-origin', '--root-dir', opsRoot], { env: authEnv })).stdout);
+    assert.equal(opsAll.data.length, 2);
+    assert.equal(opsAll.meta?.filtered_by_origin, false);
+
+    // Skills P1 #12: piped raw markdown (no --json), relative path aliases, fuzzy error, valid examples
+    const rawRead = await runCli(['skills', 'forge', '--reference', 'mpnn', '--read']);
+    assert.ok(rawRead.stdout.trimStart().startsWith('#'), `piped skills --read without --json must print raw markdown, got: ${rawRead.stdout.slice(0, 80)}`);
+    const rawToolRead = await runCli(['skills', 'forge', '--tool', 'boltz2', '--read']);
+    assert.ok(rawToolRead.stdout.trimStart().startsWith('#'));
+    const rawDocRead = await runCli(['skills', 'boltzgen', '--doc', 'outputs']);
+    assert.ok(rawDocRead.stdout.trimStart().startsWith('#'));
+
+    for (const [args, expectedPathPart] of [
+      [['skills', 'forge', '--reference', 'boltz2/modes.md', '--json'], 'tools/boltz2/modes.md'],
+      [['skills', 'forge', '--reference', 'tools/boltz2/modes', '--json'], 'tools/boltz2/modes.md'],
+      [['skills', 'forge', '--reference', 'references/custom-code', '--json'], 'references/custom-code.md'],
+      [['skills', 'forge', '--reference', 'references/custom-code.md', '--json'], 'references/custom-code.md'],
+      [['skills', 'forge', '--reference', 'core/interpretation.md', '--json'], 'core/interpretation.md'],
+    ]) {
+      const r = JSON.parse((await runCli(args)).stdout).data;
+      assert.ok(r.path.endsWith(expectedPathPart), `${args.join(' ')} resolved to ${r.path}, expected ${expectedPathPart}`);
+    }
+
+    const fuzzyErr = await runCli(['skills', 'forge', '--reference', 'boltz2-modess', '--json'], { allowNonZero: true });
+    assert.equal(fuzzyErr.code, EXIT.USAGE);
+    const fuzzyMsg = JSON.parse(fuzzyErr.stdout).error?.message || '';
+    assert.match(fuzzyMsg, /Closest matches:.*boltz2-modes/);
+    assert.match(fuzzyMsg, /ariax skills --list/);
+    assert.ok(fuzzyMsg.length < 400, `fuzzy unknown-reference error should stay concise, got ${fuzzyMsg.length} chars`);
+
+    const toolInfo = JSON.parse((await runCli(['skills', 'forge', '--tool', 'boltz2', '--json'])).stdout).data;
+    assert.deepEqual(toolInfo.examples, {}, 'boltz2 doc-only examples dir without runnable fixtures should be omitted from examples');
+    assert.ok(typeof toolInfo.references['boltz2-fixtures'] === 'string');
+    await fs.access(toolInfo.references['boltz2-fixtures']);
+    return 'storage --refresh --wait, origin-scoped ops, and skills UX verified';
+  });
+
+  return checks;
+}
+
 async function main() {
   const files = (await fs.readdir(CASES_DIR)).filter((f) => f.endsWith('.json')).sort();
   const seenIds = new Set();
@@ -1365,6 +1962,11 @@ async function main() {
       if (r.status !== 'PASS') failures += 1;
       results.push(r);
     }
+    const phase7Results = await runPhase7Checks(envCtx);
+    for (const r of phase7Results) {
+      if (r.status !== 'PASS') failures += 1;
+      results.push(r);
+    }
   } finally {
     await server.close();
     await fs.rm(tunnel.directory, { recursive: true, force: true });
@@ -1385,7 +1987,7 @@ async function main() {
     console.error(`\nFAILED: ${failures} of ${totalAutomated} automated checks failed.`);
     process.exit(1);
   }
-  console.log(`\nPASS: all ${v1Cases.length} v1 schemas validated, all ${v2Cases.length}/${v2Cases.length} v2 benchmark cases passed, and all ${totalAutomated - v2Cases.length}/${totalAutomated - v2Cases.length} Phase 6 checks passed.`);
+  console.log(`\nPASS: all ${v1Cases.length} v1 schemas validated, all ${v2Cases.length}/${v2Cases.length} v2 benchmark cases passed, and all ${totalAutomated - v2Cases.length}/${totalAutomated - v2Cases.length} Phase 6 + Phase 7 checks passed.`);
 }
 
 main().catch((err) => {

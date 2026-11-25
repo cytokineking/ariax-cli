@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { printData, printJson, printProgress } from '../output.js';
 import { usageError } from '../args.js';
-import { EXIT } from '../exit-codes.js';
+import { EXIT, errorCodeToExit } from '../exit-codes.js';
 import { loadResume, clearResume, resumeHint } from '../resume.js';
 import { waitForProject } from '../poll.js';
 import { readAndValidateInput } from '../input.js';
@@ -355,7 +355,69 @@ async function putInput(fetchImpl, url, headers, body, timeoutMs) {
   }
 }
 
-export async function waitAndReport(ctx, projectId, operation) {
+function extractFailureFromJob(job) {
+  if (!job || typeof job !== 'object') return { code: null, message: null };
+  const nested = job.failure && typeof job.failure === 'object' ? job.failure : null;
+  const code = [
+    nested?.code,
+    job.error_code,
+    job.failure_code,
+    job.failure_reason,
+    job.stop_reason,
+  ].find((v) => typeof v === 'string' && v.trim())?.trim() ?? null;
+  const message = [
+    nested?.message,
+    job.error_message,
+    job.failure_message,
+    job.stop_message,
+  ].find((v) => typeof v === 'string' && v.trim())?.trim() ?? null;
+  return { code, message };
+}
+
+async function fetchLatestJobDetail(client, projectId, projectPayload) {
+  const source = projectPayload?.project ?? projectPayload ?? {};
+  const inlineJobs = Array.isArray(source.jobs) ? source.jobs : [];
+  let job = inlineJobs[0] ?? null;
+  let { code, message } = extractFailureFromJob(job);
+  if (!job || !code) {
+    try {
+      const res = await client.get('/api/v1/jobs', {
+        query: { project_id: projectId, limit: 1 },
+        attempts: 1,
+      });
+      const list = Array.isArray(res.data)
+        ? res.data
+        : (Array.isArray(res.data?.jobs) ? res.data.jobs : (Array.isArray(res.data?.items) ? res.data.items : []));
+      if (list[0]) {
+        const fetchedFailure = extractFailureFromJob(list[0]);
+        if (!job || fetchedFailure.code || fetchedFailure.message) {
+          job = list[0];
+          code = fetchedFailure.code ?? code;
+          message = fetchedFailure.message ?? message;
+        }
+      }
+    } catch {
+      // Best-effort job lookup must not mask the observed project outcome.
+    }
+  }
+  const projectCode = [
+    source.control?.stop_reason,
+    source.stop_reason,
+    source.bindcraft2_progress?.stop_reason,
+    source.bindcraft2_progress?.scheduling_reason,
+  ].find((v) => typeof v === 'string' && v.trim())?.trim() ?? null;
+  const failureReason = code ?? projectCode ?? null;
+  const latestJob = job ? {
+    id: job.id ?? null,
+    status: job.status ?? job.state ?? null,
+    ...(code ? { error_code: code } : {}),
+    ...(message ? { message } : {}),
+    ...(job.failure && typeof job.failure === 'object' ? { failure: job.failure } : {}),
+  } : null;
+  return { latestJob, failureReason, failureMessage: message };
+}
+
+export async function waitAndReport(ctx, projectId, operation, waitOpts = {}) {
   const pollMs = ctx.flags['poll-interval'] !== undefined
     ? Math.max(1, Number(ctx.flags['poll-interval'])) * 1000
     : 3000;
@@ -369,7 +431,7 @@ export async function waitAndReport(ctx, projectId, operation) {
   const onSigint = () => { stopped = true; };
   process.once('SIGINT', onSigint);
   try {
-    printProgress('Waiting for a terminal state (completed/failed/paused/aborted)…');
+    printProgress('Waiting for project execution to settle (completed/failed/paused/aborted)…');
     let lastProgress = null;
     const out = await waitForProject(ctx.client, projectId, {
       pollIntervalMs: pollMs,
@@ -399,22 +461,63 @@ export async function waitAndReport(ctx, projectId, operation) {
     }
     // Each new mutation has its own permanent journal. Only legacy waits use resume.json.
     if (!operation) await clearResume(ctx.config.rootDir, projectId);
-    if (String(out.status).toLowerCase() === 'failed') {
-      const err = new Error(`Project ${projectId} ended in state "failed".`);
-      err.exitCode = EXIT.SERVER;
-      throw err;
-    }
+    const normalizedStatus = String(out.status ?? '').toLowerCase();
     const compactDefault = usesCompactCampaignPresentation(out.project) && ctx.flags.details !== true;
     const compact = compactDefault ? compactCampaign(out.project, projectId) : null;
+    const shouldInspectLatestJob = normalizedStatus === 'failed'
+      || normalizedStatus === 'paused'
+      || normalizedStatus === 'aborted'
+      || normalizedStatus === 'cancelled';
+    const jobInfo = shouldInspectLatestJob
+      ? await fetchLatestJobDetail(ctx.client, projectId, out.project)
+      : { latestJob: null, failureReason: null, failureMessage: null };
+
+    const shouldFail = normalizedStatus === 'failed'
+      || (waitOpts.failOnPaused === true && normalizedStatus === 'paused')
+      || (waitOpts.failOnAborted === true && (normalizedStatus === 'aborted' || normalizedStatus === 'cancelled'));
+
+    if (shouldFail) {
+      const reasonSuffix = jobInfo.failureReason ? ` (${jobInfo.failureReason})` : '';
+      const msgSuffix = jobInfo.failureMessage ? `: ${jobInfo.failureMessage}` : '.';
+      const verb = normalizedStatus === 'paused' ? 'fell back to' : 'ended in';
+      const err = new Error(`Project ${projectId} ${verb} state "${normalizedStatus}"${reasonSuffix}${msgSuffix}`);
+      err.code = jobInfo.failureReason || `project_${normalizedStatus}`;
+      err.exitCode = errorCodeToExit(jobInfo.failureReason) ?? EXIT.SERVER;
+      err.retryable = ['gpu_provisioning_delayed', 'gpu_capacity_unavailable', 'msa_service_unavailable'].includes(jobInfo.failureReason);
+      const jobLogHint = jobInfo.latestJob?.id ? ` or inspect logs with ariax logs ${jobInfo.latestJob.id}` : '';
+      err.action = normalizedStatus === 'paused'
+        ? `Inspect ariax status ${projectId}${jobLogHint}. Adjust GPU preferences or retry ariax restart ${projectId} --wait once capacity is available.`
+        : `Inspect ariax status ${projectId}, ariax results ${projectId}${jobLogHint}.`;
+      err.details = {
+        project_id: projectId,
+        status: normalizedStatus,
+        lifecycle: compact?.lifecycle ?? { state: normalizedStatus, terminal: normalizedStatus !== 'paused' },
+        failure_reason: jobInfo.failureReason,
+        ...(jobInfo.failureMessage ? { failure_message: jobInfo.failureMessage } : {}),
+        ...(jobInfo.latestJob ? { latest_job: jobInfo.latestJob } : {}),
+        ...(compact ? { project: compact } : {}),
+      };
+      throw err;
+    }
+
+    const extraPauseFields = normalizedStatus === 'paused' && (jobInfo.failureReason || jobInfo.latestJob)
+      ? {
+        ...(jobInfo.failureReason ? { failure_reason: jobInfo.failureReason } : {}),
+        ...(jobInfo.latestJob ? { latest_job: jobInfo.latestJob } : {}),
+      }
+      : {};
+
     if (ctx.json) {
-      if (compactDefault) printJson({ data: compact, meta: { waited: true } });
-      else printJson({ data: out.project, meta: { waited: true, status: out.status } });
+      if (compactDefault) printJson({ data: { ...compact, ...extraPauseFields }, meta: { waited: true } });
+      else printJson({ data: { ...(out.project && typeof out.project === 'object' ? out.project : {}), ...extraPauseFields }, meta: { waited: true, status: out.status } });
     } else {
       if (!compactDefault) {
         printData(`status: ${out.status}`);
         printData(`project_id: ${out.project?.id ?? projectId}`);
+        if (jobInfo.failureReason) printData(`failure_reason: ${jobInfo.failureReason}`);
       } else {
         for (const line of campaignStatusLines(compact)) printData(line);
+        if (jobInfo.failureReason) printProgress(`Pause/failure reason: ${jobInfo.failureReason}${jobInfo.failureMessage ? ` — ${jobInfo.failureMessage}` : ''}`);
       }
     }
     return { projectId, status: out.status };

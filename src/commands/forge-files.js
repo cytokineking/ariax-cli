@@ -935,6 +935,75 @@ async function runCopy(ctx, projectId) {
   });
 }
 
+async function waitForInputsReady(ctx, sessionId, sessionPath, signal, { requireWorkspaceReady = false } = {}) {
+  let lastState;
+  for (;;) {
+    const lifecycle = (await ctx.client.get(sessionPath, { query: { view: 'summary' }, signal })).data;
+    const state = lifecycle?.state;
+    if (['closing', 'closed', 'failed'].includes(state)) {
+      failed('session_unavailable', `Session ${sessionId} is ${state}`, lifecycle?.error);
+    }
+    let statusText = `session ${state ?? 'unknown'}`;
+    if (state === 'available') {
+      const baseTool = Array.isArray(lifecycle.tools)
+        ? lifecycle.tools.find((t) => t?.tool === 'base')
+        : null;
+      if (baseTool?.state === 'failed') {
+        failed('tool_failed', 'Tool base failed', baseTool.error);
+      }
+      let baseReady = !baseTool || baseTool.state === 'ready';
+      if (baseReady && !baseTool) {
+        try {
+          const direct = (await forgeRequest(ctx, sessionId, 'GET', '/v1/session', {
+            query: { view: 'summary' },
+            signal,
+          })).data;
+          if (['closing', 'closed', 'failed'].includes(direct?.state)) {
+            failed('session_unavailable', `Session ${sessionId} is ${direct.state}`, direct.error);
+          }
+          const directBase = Array.isArray(direct?.tools)
+            ? direct.tools.find((t) => t?.tool === 'base')
+            : null;
+          if (directBase?.state === 'failed') {
+            failed('tool_failed', 'Tool base failed', directBase.error);
+          }
+          baseReady = direct?.state === 'available' && (!directBase || directBase.state === 'ready');
+          if (!baseReady) {
+            statusText = directBase ? `tool base: ${directBase.state}` : `session ${direct?.state ?? 'starting'}`;
+          }
+        } catch (err) {
+          if (signal?.aborted) throw err;
+          if (err?.code === 'session_unready' || transient(err)) {
+            baseReady = false;
+            statusText = `session ${err.code || 'starting'}`;
+          } else {
+            throw err;
+          }
+        }
+      } else if (!baseReady) {
+        statusText = `tool base: ${baseTool.state}`;
+      }
+      if (baseReady) {
+        if (!requireWorkspaceReady || !isUUID(lifecycle.project_id)) return;
+        const fsStatus = (await ctx.client.get(`${API}/projects/${lifecycle.project_id}/files/status`, { signal })).data;
+        const wsReady = fsStatus.session_id === sessionId
+          && fsStatus.writer_session_id === sessionId
+          && fsStatus.session_state === 'available'
+          && fsStatus.hydration_state === 'ready'
+          && Number.isSafeInteger(fsStatus.control_revision) && fsStatus.control_revision >= 0
+          && Number.isSafeInteger(fsStatus.writer_epoch) && fsStatus.writer_epoch >= 0;
+        if (wsReady) return;
+        statusText = `workspace hydration: ${fsStatus.hydration_state ?? fsStatus.session_state ?? 'pending'}`;
+      }
+    }
+    if (statusText !== lastState) {
+      printProgress(`Waiting for input readiness (${sessionId}): ${statusText}`);
+      lastState = statusText;
+    }
+    await delay(1000, undefined, { signal });
+  }
+}
+
 export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   const flags = ctx.flags;
   if (action === 'files recover') return runCopy(ctx,projectId);
@@ -944,28 +1013,57 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     ? ctx.client.get(`${sessionPath}${resource.slice(3)}`)
     : forgeRequest(ctx, sessionId, 'GET', resource);
   if (action === 'inputs add') {
+    if (flags['wait-timeout'] !== undefined && flags['wait-ready'] !== true) {
+      throw usageError('forge inputs add: --wait-timeout requires --wait-ready.');
+    }
+    const waitReady = flags['wait-ready'] === true;
+    const waitSeconds = waitReady ? localWaitSeconds(flags['wait-timeout'], 180) : 0;
     const id = flags['input-id'] === undefined ? randomUUID() : uuid(flags['input-id'],'input ID');
     const target = safePath(required(flags.path,'path'));
     if (['file','artifact','url'].filter(key => flags[key] !== undefined).length !== 1) {
       throw usageError('forge inputs add: supply exactly one of --file, --artifact, or --url.');
     }
-    let source;
+    const isReadinessRetryable = (error) => (
+      ['session_unready', 'hydration_pending', 'tool_unready'].includes(error?.code)
+    );
     if (flags.file !== undefined) {
       const localFile = path.resolve(required(flags.file,'file'));
       const info = fs.lstatSync(localFile);
       if (!info.isFile() || info.isSymbolicLink() || info.size > 20*1024**3) throw usageError('Forge upload requires a regular file up to 20 GiB.');
-      try { return report(ctx,await addProjectInput(ctx,sessionId,sessionPath,id,target,localFile)); }
-      catch (error) {
-        const record = readRecord(recordPath(ctx,id));
-        if (!record || !transient(error)) throw error;
-        printProgress(`Temporary error; reconciling saved operation ${id}.`);
-        try { return report(ctx,await recoverFile(ctx,id,record,{account:await accountIdentity(ctx)})); }
-        catch (recoveryError) {
-          recoveryError.action ||= `Recover input ${id} with ariax forge recover ${id} using the original root, account and API origin.`;
-          throw recoveryError;
+      const runFileUpload = async (signal) => {
+        for (;;) {
+          if (waitReady) {
+            await waitForInputsReady(ctx, sessionId, sessionPath, signal, { requireWorkspaceReady: true });
+          }
+          try {
+            return report(ctx, await addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal));
+          } catch (error) {
+            if (signal?.aborted) throw error;
+            if (waitReady && isReadinessRetryable(error)) {
+              printProgress(`Session ${sessionId} not yet ready (${error.code}); waiting to retry with input_id ${id}…`);
+              await delay(1000, undefined, { signal });
+              continue;
+            }
+            const record = readRecord(recordPath(ctx,id));
+            if (!record || !transient(error)) throw error;
+            printProgress(`Temporary error; reconciling saved operation ${id}.`);
+            try { return report(ctx,await recoverFile(ctx,id,record,{signal, account:await accountIdentity(ctx, {signal})})); }
+            catch (recoveryError) {
+              recoveryError.action ||= `Recover input ${id} with ariax forge recover ${id} using the original root, account and API origin.`;
+              throw recoveryError;
+            }
+          }
         }
+      };
+      if (waitReady) {
+        return controlled(ctx, id, waitSeconds, runFileUpload, {
+          resume: `ariax forge inputs add ${sessionId} --file ${localFile} --path ${target} --input-id ${id} --wait-ready`,
+        });
       }
-    } else if (flags.artifact !== undefined) {
+      return runFileUpload(undefined);
+    }
+    let source;
+    if (flags.artifact !== undefined) {
       const value = required(flags.artifact,'artifact');
       const colon = value.indexOf(':');
       if (colon < 0) throw usageError('forge: --artifact requires PROJECT_ID:PATH.');
@@ -982,19 +1080,38 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     const body = {input_id:id,path:target,source};
     const safe = {...body,source:source.kind === 'url' ? {kind:'url'} : source};
     const request = {method:'POST',session_id:sessionId,path:`${direct}/inputs`,body:safe};
-    const {record} = await fileRecord(ctx,id,request,'input_id');
-    try {
-      return report(ctx,await recoverFile(ctx,id,record,{body}));
-    } catch (error) {
-      if (error?.code === 'input_exists' || error?.code === 'input_path_exists') {
-        let resolvedPid = null;
-        try { resolvedPid = (await ctx.client.get(sessionPath, { attempts: 1 })).data?.project_id ?? null; } catch { /* ignore */ }
-        error.action = inputExistsAction(target, resolvedPid);
-      } else {
-        error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id} and the original source if no accepted operation exists.`;
+    const runDirectInput = async (signal) => {
+      for (;;) {
+        if (waitReady) {
+          await waitForInputsReady(ctx, sessionId, sessionPath, signal, { requireWorkspaceReady: false });
+        }
+        try {
+          const {record} = await fileRecord(ctx,id,request,'input_id',signal);
+          return report(ctx,await recoverFile(ctx,id,record,{body,signal}));
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          if (waitReady && isReadinessRetryable(error)) {
+            printProgress(`Session ${sessionId} not yet ready (${error.code}); waiting to retry with input_id ${id}…`);
+            await delay(1000, undefined, { signal });
+            continue;
+          }
+          if (error?.code === 'input_exists' || error?.code === 'input_path_exists') {
+            let resolvedPid = null;
+            try { resolvedPid = (await ctx.client.get(sessionPath, { attempts: 1 })).data?.project_id ?? null; } catch { /* ignore */ }
+            error.action = inputExistsAction(target, resolvedPid);
+          } else {
+            error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id} and the original source if no accepted operation exists.`;
+          }
+          throw error;
+        }
       }
-      throw error;
+    };
+    if (waitReady) {
+      return controlled(ctx, id, waitSeconds, runDirectInput, {
+        resume: `ariax forge inputs status ${sessionId} ${id}`,
+      });
     }
+    return runDirectInput(undefined);
   }
   if (action === 'inputs list') {
     const result = await read(`${direct}/inputs`);
@@ -1084,14 +1201,69 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
       error.action = `Inspect or retry the same flush with ${resume}, using the original account, API origin and root directory. The server and session must support the current project workspace.`;
       throw error;
     }
+    const syncStartedAt = Date.now();
+    let lastTelemetryAt = 0;
+    let cachedTelemetry = null;
     const inspect = sync => {
       if (sync.state === 'failed') failedSync(id,sessionId,sync);
-      return { state:sync.state, done:sync.state === 'saved' };
+      const state = sync.state ?? 'unknown';
+      if (state === 'saved') {
+        return { state, done: true, progress: 'sync: saved', progressKey: 'saved' };
+      }
+      const mutRev = sync.mutation_revision ?? cachedTelemetry?.mutation_revision;
+      const pending = sync.pending_files ?? sync.pending_count ?? cachedTelemetry?.pending_files;
+      const savedCount = sync.saved_count;
+      const wsFiles = sync.workspace_file_count ?? cachedTelemetry?.workspace_file_count;
+      const parts = [];
+      if (Number.isSafeInteger(mutRev)) parts.push(`mutation_revision=${mutRev}`);
+      if (Number.isSafeInteger(pending)) parts.push(`pending_files=${pending}`);
+      if (Number.isSafeInteger(savedCount)) parts.push(`saved_count=${savedCount}`);
+      if (Number.isSafeInteger(wsFiles)) parts.push(`workspace_file_count=${wsFiles}`);
+      const elapsedSec = Math.max(0, Math.round((Date.now() - syncStartedAt) / 1000));
+      const detail = parts.length ? ` (${parts.join(', ')}, elapsed=${elapsedSec}s)` : ` (elapsed=${elapsedSec}s)`;
+      return {
+        state,
+        done: false,
+        progress: `sync: ${state}${detail}`,
+        progressKey: `${state}|${mutRev ?? ''}|${pending ?? ''}|${savedCount ?? ''}|${wsFiles ?? ''}`,
+      };
     };
     const current = inspect(result.data);
     if (flags.wait && !current.done) {
-      result = await poll(ctx,resource,id,inspect,resume,sessionId,
-        options => readSync(ctx,sessionId,id,options));
+      const readSyncWithTelemetry = async (options) => {
+        const res = await readSync(ctx, sessionId, id, options);
+        const s = res.data;
+        if ((s.state === 'queued' || s.state === 'pending') && !options?.signal?.aborted) {
+          const hasInline = Number.isSafeInteger(s.mutation_revision)
+            || Number.isSafeInteger(s.pending_files)
+            || Number.isSafeInteger(s.pending_count)
+            || Number.isSafeInteger(s.workspace_file_count);
+          const now = Date.now();
+          if (!hasInline && (lastTelemetryAt === 0 || (now - lastTelemetryAt) >= 15_000)) {
+            lastTelemetryAt = now;
+            try {
+              const hostRes = await forgeRequest(ctx, sessionId, 'GET', '/v1/session', {
+                query: { view: 'summary' },
+                signal: options?.signal,
+              });
+              const hostSync = hostRes.data?.synchronization;
+              if (hostSync && typeof hostSync === 'object') {
+                cachedTelemetry = {
+                  ...(Number.isSafeInteger(hostSync.mutation_revision) ? { mutation_revision: hostSync.mutation_revision } : {}),
+                  ...(Number.isSafeInteger(hostSync.pending_files) ? { pending_files: hostSync.pending_files } : {}),
+                  ...(Number.isSafeInteger(hostSync.workspace_file_count) ? { workspace_file_count: hostSync.workspace_file_count } : {}),
+                };
+              }
+            } catch (err) {
+              if (options?.signal?.aborted) throw err;
+            }
+          }
+        }
+        return res;
+      };
+      result = await poll(ctx, resource, id, inspect, resume, sessionId, readSyncWithTelemetry, {
+        heartbeatMs: 15_000,
+      });
     }
     const syncInfo = await observeSessionSync(ctx, sessionId, sessionPath, result.data, { tryDirect: true });
     if (syncInfo) emitHygieneNotices(ctx, syncInfo, { sessionId, includeScratch: false });

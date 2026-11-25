@@ -6,7 +6,7 @@
  * compact scientific handoff payload without fabricating missing values.
  */
 import { usageError } from '../args.js';
-import { compactCampaign, compactCandidate } from '../campaign-presentation.js';
+import { compactCampaign, compactCandidate, inferMetricScale } from '../campaign-presentation.js';
 import { printData, printJson, printTable } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
 import { isUUID } from '../uuid.js';
@@ -34,30 +34,36 @@ const PROTOCOL_URL_SEGMENT = Object.freeze({
 const METRIC_PRIORITY = new Map([
   ['i_pTM', 0],
   ['ipTM', 1],
-  ['iptm', 2],
-  ['pLDDT', 3],
-  ['plddt', 4],
-  ['i_pDAE', 5],
-  ['i_pAE', 6],
-  ['ipSAE', 7],
-  ['ipsae', 8],
-  ['pTM', 9],
-  ['ptm', 10],
-  ['Binder_RMSD', 11],
-  ['Target_RMSD', 12],
-  ['Hotspot_Contact_Fraction', 13],
-  ['Off_Epitope_Contact_Fraction', 14],
-  ['Interface_Residues', 15],
-]);
-
-const ZERO_TO_ONE_METRICS = new Set([
-  'i_ptm',
-  'iptm',
-  'ptm',
-  'i_pdae',
-  'ipsae',
-  'hotspot_contact_fraction',
-  'off_epitope_contact_fraction',
+  ['design_to_target_iptm', 2],
+  ['design_iptm', 3],
+  ['iptm', 4],
+  ['ligand_iptm', 5],
+  ['quality_score', 6],
+  ['pLDDT', 7],
+  ['plddt', 8],
+  ['design_plddt', 9],
+  ['complex_plddt', 10],
+  ['i_pDAE', 11],
+  ['i_pAE', 12],
+  ['i_pae', 13],
+  ['pae', 14],
+  ['ipSAE', 15],
+  ['ipsae', 16],
+  ['pTM', 17],
+  ['ptm', 18],
+  ['design_ptm', 19],
+  ['binder_ptm', 20],
+  ['affinity_probability_binary', 21],
+  ['filter_rmsd', 22],
+  ['backbone_rmsd', 23],
+  ['rmsd', 24],
+  ['Binder_RMSD', 25],
+  ['Target_RMSD', 26],
+  ['complex_ipde', 27],
+  ['complex_pde', 28],
+  ['Hotspot_Contact_Fraction', 29],
+  ['Off_Epitope_Contact_Fraction', 30],
+  ['Interface_Residues', 31],
 ]);
 
 function parseTop(raw, label) {
@@ -73,6 +79,17 @@ function parseTop(raw, label) {
 function nonNegInt(...values) {
   for (const v of values) {
     if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return v;
+  }
+  return null;
+}
+
+function parseNonNegInt(...values) {
+  for (const v of values) {
+    if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return v;
+    if (typeof v === 'string' && /^\d+$/.test(v.trim())) {
+      const n = Number(v.trim());
+      if (Number.isSafeInteger(n) && n >= 0) return n;
+    }
   }
   return null;
 }
@@ -150,26 +167,6 @@ function forgeProjectUrl(ctx, projectId) {
   }
 }
 
-function inferMetricScale(name, value, unit, explicitScale) {
-  if (typeof explicitScale === 'string' && explicitScale.trim()) return explicitScale.trim();
-  const lower = String(name ?? '').trim().toLowerCase();
-  const normUnit = typeof unit === 'string' ? unit.trim().toLowerCase() : '';
-  if (ZERO_TO_ONE_METRICS.has(lower)) return '0..1';
-  if (lower === 'i_pae' || lower === 'ipae') {
-    if (normUnit === 'å' || normUnit === 'a' || normUnit === 'angstrom') return null;
-    if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) return '0..1';
-    return null;
-  }
-  if (lower === 'plddt' || lower.endsWith('_plddt')) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      if (value > 1 && value <= 100) return '0..100';
-      if (value >= 0 && value <= 1) return '0..1';
-    }
-    return null;
-  }
-  return null;
-}
-
 function extractKeyMetrics(rawCandidate, compact) {
   const rawMetricsByName = new Map();
   if (Array.isArray(rawCandidate?.metrics)) {
@@ -194,7 +191,7 @@ function extractKeyMetrics(rawCandidate, compact) {
       return {
         name: metric.name,
         value: metric.value,
-        scale: inferMetricScale(metric.name, metric.value, unit, rawMetric?.scale),
+        scale: inferMetricScale(metric.name, metric.value, unit, metric.scale ?? rawMetric?.scale),
         unit,
       };
     });
@@ -370,13 +367,18 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
       : Promise.resolve({ ok: false, skipped: true }),
   ]);
 
+  const rawCandidates = candidatesRes.ok && Array.isArray(candidatesRes.data) ? candidatesRes.data : [];
+  const compactCandidates = rawCandidates.map(compactCandidate);
+  const explicitPassedFilters = nonNegInt(project.passed_filters, project.passed_designs);
+  const explicitProjectAccepted = nonNegInt(project.accepted_designs, project.accepted);
+
   const isBc2 = Boolean(compact.records && compact.budget);
   const funnel = isBc2
     ? {
       planned: nonNegInt(compact.designs?.requested),
       attempted: nonNegInt(compact.budget?.attempts_used),
       evaluated: nonNegInt(compact.records?.refolded, compact.rejections?.candidates_scored),
-      passed_filters: nonNegInt(project.passed_filters, project.passed_designs, compact.designs?.accepted),
+      passed_filters: nonNegInt(explicitPassedFilters, compact.designs?.accepted),
       accepted: nonNegInt(compact.designs?.accepted),
       count_source: firstString(project.design_count_source) ?? (project.bindcraft2_progress ? 'bindcraft2_progress' : 'project_record'),
       stop_reason: firstString(compact.stop?.code, project.stop_reason),
@@ -385,19 +387,45 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
       planned: nonNegInt(compact.designs?.requested),
       attempted: nonNegInt(project.attempted_designs, project.total_designs, compact.designs?.tested),
       evaluated: nonNegInt(project.evaluated_designs, compact.designs?.tested),
-      passed_filters: nonNegInt(project.passed_filters, project.passed_designs, compact.designs?.accepted),
+      passed_filters: nonNegInt(explicitPassedFilters, compact.designs?.accepted),
       accepted: nonNegInt(compact.designs?.accepted),
       count_source: firstString(compact.designs?.source, project.design_count_source) ?? 'project_record',
       stop_reason: firstString(project.stop_reason),
     };
 
   if (status === 'completed' && candidatesRes.ok && !isBc2) {
-    const candidatesCount = nonNegInt(candidatesRes.meta?.total)
-      ?? (Array.isArray(candidatesRes.data) ? candidatesRes.data.length : 0);
+    const candidatesCount = nonNegInt(candidatesRes.meta?.total) ?? rawCandidates.length;
     if (candidatesCount > 0 && ((funnel.attempted ?? 0) === 0 || (funnel.evaluated ?? 0) === 0)) {
       funnel.evaluated = Math.max(funnel.evaluated ?? 0, candidatesCount);
       funnel.attempted = Math.max(funnel.attempted ?? 0, funnel.evaluated);
       funnel.count_source = 'candidate_evidence';
+    }
+  }
+
+  if (!isBc2 && compactCandidates.length > 0) {
+    const anyFilterReported = compactCandidates.some((c) => typeof c.native_filter_pass === 'boolean');
+    const passedFromCandidates = compactCandidates.filter((c) => c.native_filter_pass === true).length;
+    if (explicitPassedFilters === null && (funnel.count_source === 'candidate_evidence' || anyFilterReported)) {
+      if (anyFilterReported) {
+        funnel.passed_filters = Math.max(
+          nonNegInt(candidatesRes.meta?.passed_filters) ?? 0,
+          passedFromCandidates,
+        );
+      } else if (funnel.count_source === 'candidate_evidence') {
+        funnel.passed_filters = null;
+      }
+    }
+    const allEligibilityUnknown = compactCandidates.every((c) => c.ranking?.eligible === null);
+    if (allEligibilityUnknown) {
+      if (explicitProjectAccepted === null) {
+        funnel.accepted = null;
+      } else if (
+        funnel.count_source === 'candidate_evidence'
+        && explicitProjectAccepted === 0
+        && ((funnel.passed_filters !== null && funnel.passed_filters > 0) || (project.tested_designs ?? 0) === 0)
+      ) {
+        funnel.accepted = null;
+      }
     }
   }
 
@@ -416,14 +444,18 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
       : (Array.isArray(compact.compute?.allowed_gpus) ? [...new Set(compact.compute.allowed_gpus.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim()))] : []));
 
   const storageUsage = storageRes.ok ? (storageRes.data?.usage ?? null) : null;
+  const retainedBytes = parseNonNegInt(storageUsage?.retained?.bytes, storageUsage?.retained_bytes);
+  const pendingDeletionBytes = parseNonNegInt(storageUsage?.pending_deletion_bytes);
   const jobsList = Array.isArray(project.jobs) ? project.jobs : [];
   const resources = {
     gpus: resolvedGpus,
     job_count: nonNegInt(project.job_count, compact.jobs?.count, jobsList.length > 0 ? jobsList.length : null, jobsAccounting?.jobCount > 0 ? jobsAccounting.jobCount : null),
     total_runtime_seconds: totalRuntimeSeconds,
     total_cost_usd: totalCostUsd,
-    storage_bytes: nonNegInt(storageUsage?.bytes),
-    storage_files: nonNegInt(storageUsage?.object_count, storageUsage?.file_count),
+    storage_bytes: parseNonNegInt(storageUsage?.bytes),
+    storage_files: parseNonNegInt(storageUsage?.object_count, storageUsage?.file_count),
+    ...(retainedBytes !== null ? { retained_bytes: retainedBytes } : {}),
+    ...(pendingDeletionBytes !== null && pendingDeletionBytes > 0 ? { pending_deletion_bytes: pendingDeletionBytes } : {}),
   };
 
   let topCandidates = [];
@@ -431,7 +463,7 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
   let candidatesFailed = false;
   if (candidatesRes.ok && Array.isArray(candidatesRes.data)) {
     candidateMetaState = typeof candidatesRes.meta?.state === 'string' ? candidatesRes.meta.state : null;
-    topCandidates = candidatesRes.data.slice(0, top).map((row) => summarizeCandidate(row, includeSequences));
+    topCandidates = rawCandidates.slice(0, top).map((row) => summarizeCandidate(row, includeSequences));
   } else if (!candidatesRes.ok) {
     candidatesFailed = true;
   }
@@ -441,7 +473,9 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
   const nextActions = [];
   const seenActions = new Set();
 
-  if (status === 'completed' && funnel.accepted === 0) {
+  const evaluatedAllFailedFilters = funnel.passed_filters === 0 && (funnel.evaluated ?? 0) > 0;
+  const zeroAcceptedNoPasses = funnel.accepted === 0 && (funnel.passed_filters === null || funnel.passed_filters === 0);
+  if (status === 'completed' && (zeroAcceptedNoPasses || (funnel.accepted === null && evaluatedAllFailedFilters))) {
     addUniqueWarning(
       warnings,
       seenWarnings,
@@ -513,10 +547,10 @@ export async function buildManagedSummary(ctx, projectId, project, { top = DEFAU
     addUniqueAction(nextActions, seenActions, `ariax status ${projectId} --wait`, 'Wait for the project to reach a terminal state.');
   } else if (status === 'paused') {
     addUniqueAction(nextActions, seenActions, `ariax status ${projectId} --json`, 'Inspect paused project status before deciding whether to resume.');
-  } else if (funnel.accepted !== null && funnel.accepted > 0) {
-    addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view final --json`, 'Inspect full accepted candidate metrics and rankings.');
+  } else if ((funnel.accepted !== null && funnel.accepted > 0) || (status === 'completed' && funnel.accepted === null && funnel.passed_filters !== null && funnel.passed_filters > 0)) {
+    addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view final --json`, 'Inspect full accepted or filter-passing candidate metrics and rankings.');
     addUniqueAction(nextActions, seenActions, `ariax results ${projectId} --download ./results`, 'Download selected structures and output tables.');
-  } else if (status === 'completed' && funnel.accepted === 0) {
+  } else if (status === 'completed' && (funnel.accepted === 0 || funnel.passed_filters === 0)) {
     addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view all --json`, 'Review rejected/refolded candidates and native filter failure reasons.');
     if (supportsDiagnostics) {
       addUniqueAction(nextActions, seenActions, `ariax candidates ${projectId} --view diagnostics --json`, 'Inspect trajectory diagnostics if no refolded candidates exist.');
@@ -553,9 +587,16 @@ function extractForgeSyncWarnings(filesStatus) {
   const out = [];
   for (const w of sync.warnings) {
     if (!w || typeof w !== 'object' || typeof w.code !== 'string' || !w.code.trim()) continue;
+    const code = w.code.trim();
+    if (code === 'scratch_data_not_saved') {
+      const scratchBytes = typeof sync.scratch_bytes === 'number' && Number.isFinite(sync.scratch_bytes)
+        ? sync.scratch_bytes
+        : 0;
+      if (scratchBytes <= 0) continue;
+    }
     out.push(redactForgeOutput({
-      code: w.code.trim(),
-      message: typeof w.message === 'string' && w.message.trim() ? w.message.trim() : w.code.trim(),
+      code,
+      message: typeof w.message === 'string' && w.message.trim() ? w.message.trim() : code,
       ...(typeof w.action === 'string' && w.action.trim() ? { action: w.action.trim() } : {}),
     }));
   }
@@ -809,25 +850,40 @@ export async function buildForgeSummary(ctx, projectId, { top = DEFAULT_TOP, fal
     );
   }
 
-  if (durabilityGap || syncState === 'failed' || syncState === 'pending') {
+  if (durabilityGap === true) {
     addUniqueWarning(
       warnings,
       seenWarnings,
       'durability_gap',
-      `Workspace sync state is ${syncState ?? 'unknown'} (durability_gap=${durabilityGap}); saved files may lag the active host.`,
+      `Workspace sync state is ${syncState ?? 'unknown'} with a durability gap; saved files may lag the active host.`,
     );
-    if (activeSessionId) {
-      addUniqueAction(
-        nextActions,
-        seenActions,
-        `ariax forge sync ${activeSessionId} --wait --wait-timeout 1800 --json`,
-        'Flush pending workspace files to durable project storage.',
-      );
-    }
+  } else if (syncState === 'pending') {
+    addUniqueWarning(
+      warnings,
+      seenWarnings,
+      'sync_pending',
+      'Workspace sync state is pending; saved files may lag the active host.',
+    );
+  } else if (syncState === 'failed') {
+    addUniqueWarning(
+      warnings,
+      seenWarnings,
+      'sync_failed',
+      'Workspace sync state is failed; saved files may lag the active host.',
+    );
+  }
+  if ((durabilityGap === true || syncState === 'failed' || syncState === 'pending') && activeSessionId) {
+    addUniqueAction(
+      nextActions,
+      seenActions,
+      `ariax forge sync ${activeSessionId} --wait --wait-timeout 1800 --json`,
+      'Flush pending workspace files to durable project storage.',
+    );
   }
 
   const packHygieneCodes = new Set([
     'high_file_count',
+    'high_small_file_count',
     'high_pending_files',
     'low_disk_space',
     'file_near_20gib_limit',
@@ -991,6 +1047,8 @@ function renderManagedHuman(summary) {
     `runtime=${formatDuration(r.total_runtime_seconds)}`,
     `cost=${r.total_cost_usd === null ? 'unknown' : `$${r.total_cost_usd}`}`,
     `storage=${formatBytes(r.storage_bytes)}${r.storage_files === null ? '' : ` (${r.storage_files} files)`}`,
+    ...(r.retained_bytes !== undefined ? [`retained=${formatBytes(r.retained_bytes)}`] : []),
+    ...(r.pending_deletion_bytes !== undefined ? [`pending_deletion=${formatBytes(r.pending_deletion_bytes)}`] : []),
   ];
   printData(resParts.join(' · '));
 

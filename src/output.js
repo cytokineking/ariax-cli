@@ -34,8 +34,15 @@ export function installStdoutEpipeHandler() {
 
 installStdoutEpipeHandler();
 
+function stripLeadingDataPrefix(selector) {
+  return typeof selector === 'string' && selector.startsWith('data.')
+    ? selector.slice('data.'.length)
+    : selector;
+}
+
 /**
  * Parse and validate a comma-separated list of dot-path field selectors.
+ * Accepts an optional leading `data.` envelope prefix (e.g. `data.project_id` == `project_id`).
  * @param {unknown} raw
  * @returns {string[]}
  */
@@ -50,15 +57,19 @@ export function parseFieldsOption(raw) {
     if (!trimmed) {
       throw usageError(`--fields contains an empty field selector (got "${raw}").`);
     }
-    const segments = trimmed.split('.');
+    const normalized = stripLeadingDataPrefix(trimmed);
+    if (!normalized) {
+      throw usageError(`--fields contains an invalid field path "${trimmed}".`);
+    }
+    const segments = normalized.split('.');
     for (const seg of segments) {
       if (!seg || !/^[A-Za-z0-9_-]+$/.test(seg) || FORBIDDEN_FIELD_SEGMENTS.has(seg)) {
         throw usageError(`--fields contains an invalid field path "${trimmed}".`);
       }
     }
-    if (!seen.has(trimmed)) {
-      seen.add(trimmed);
-      fields.push(trimmed);
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      fields.push(normalized);
     }
   }
   if (!fields.length) {
@@ -122,7 +133,9 @@ function pickObjectFields(item, parsedPaths) {
  */
 export function projectFields(obj, fields) {
   if (!fields || (Array.isArray(fields) && fields.length === 0)) return obj;
-  const list = Array.isArray(fields) ? fields : parseFieldsOption(fields);
+  const rawList = Array.isArray(fields) ? fields : parseFieldsOption(fields);
+  const list = rawList.map((f) => stripLeadingDataPrefix(f)).filter(Boolean);
+  if (!list.length) return obj;
   const parsedPaths = list.map((f) => f.split('.'));
   const topLevelRequested = new Set(parsedPaths.map((segs) => segs[0]));
 

@@ -1,6 +1,8 @@
 /** `ariax storage` — inspect account/project storage usage, entries, cleanup suggestions, and deletions. */
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { usageError } from '../args.js';
+import { EXIT } from '../exit-codes.js';
 import { isUUID } from '../uuid.js';
 import { NetworkError } from '../http.js';
 import { resolveProjectId } from '../resolve.js';
@@ -11,7 +13,7 @@ const MAX_PAGES = 20;
 const OPTIONS = {
   usage: [['refresh', 'after'], 1],
   projects: [['q', 'protocol', 'status', 'sort', 'limit', 'cursor', 'all'], 1],
-  project: [['refresh'], 2],
+  project: [['refresh', 'wait', 'wait-timeout'], 2],
   entries: [['path', 'limit', 'cursor'], 2],
   suggest: [[], 2],
   delete: [['path', 'recursive', 'preview', 'suggested', 'expected-control-revision', 'operation-id'], 2],
@@ -20,7 +22,7 @@ const OPTIONS = {
 
 export const help = `ariax storage usage [--refresh] [--after UUID]
   ariax storage projects [--q TEXT] [--protocol P] [--status S] [--sort updated_at|name|bytes_desc] [--limit N] [--cursor C] [--all]
-  ariax storage project PROJECT [--refresh]
+  ariax storage project PROJECT [--refresh [--wait] [--wait-timeout SECONDS]]
   ariax storage entries PROJECT [--path P] [--limit N] [--cursor C]
   ariax storage suggest PROJECT
   ariax storage delete PROJECT (--path P [--path P2 ...] | --suggested) [--recursive] --preview
@@ -28,7 +30,9 @@ export const help = `ariax storage usage [--refresh] [--after UUID]
   ariax storage deletion PROJECT DELETION_ID
   PROJECT accepts a project UUID or an exact unique project name.
   Use \`storage delete --preview\` (with one or more \`--path\` flags or \`--suggested\`) to inspect impact before submitting an explicit \`--path\` deletion.
-  For Forge projects, \`storage suggest\` highlights large or high-file-count directories for \`ariax forge pack\` or \`ariax forge files delete\`.`;
+  For Forge projects, \`storage suggest\` highlights large or high-file-count directories for \`ariax forge pack\` or \`ariax forge files delete\`.
+  After a managed deletion, cleanup may report \`write_grants_pending\` until \`verification_not_before\` passes (waiting for active upload grants to expire).
+  During that window, \`usage.retained.bytes\` reflects logically retained storage while raw \`usage.bytes\` still includes objects awaiting removal (\`pending_deletion_bytes\`).`;
 
 export function validateArguments({ positionals, flags, globals }) {
   if (!positionals.length && globals.help && !Object.keys(flags).length) return;
@@ -204,28 +208,105 @@ export async function run(ctx) {
   const projectId = await resolveProjectId(ctx.client, ctx.positionals[1]);
 
   if (action === 'project') {
-    const res = flags.refresh === true
+    if (flags.wait === true && flags.refresh !== true) {
+      throw usageError('storage project: --wait requires --refresh.');
+    }
+    if (flags['wait-timeout'] !== undefined && flags.wait !== true) {
+      throw usageError('storage project: --wait-timeout requires --wait.');
+    }
+    let waitTimeoutMs = 300_000;
+    if (flags['wait-timeout'] !== undefined) {
+      const secs = Number(flags['wait-timeout']);
+      if (!['string', 'number'].includes(typeof flags['wait-timeout']) || String(flags['wait-timeout']).trim() === ''
+          || !Number.isFinite(secs) || secs <= 0 || secs > 3600) {
+        throw usageError('storage project: --wait-timeout must be a positive number of seconds (<= 3600).');
+      }
+      waitTimeoutMs = Math.round(secs * 1000);
+    }
+    let res = flags.refresh === true
       ? await ctx.client.post(`/api/v1/projects/${encodeURIComponent(projectId)}/storage/refresh`, { body: {} })
       : await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/storage`);
+    let waited = false;
+    const refreshStateOf = (payload) => payload?.usage?.refresh?.state ?? null;
+    if (flags.refresh === true && flags.wait === true) {
+      const initialState = refreshStateOf(res.data);
+      const needsPoll = res.status === 202 || (initialState !== null && initialState !== 'idle' && initialState !== 'failed');
+      if (needsPoll) {
+        waited = true;
+        const controller = new AbortController();
+        let timedOut = false;
+        const interrupt = () => controller.abort();
+        const timer = setTimeout(() => { timedOut = true; controller.abort(); }, waitTimeoutMs);
+        process.once('SIGINT', interrupt);
+        let lastProgress = null;
+        let attempt = 0;
+        const startedAt = Date.now();
+        try {
+          for (;;) {
+            const state = refreshStateOf(res.data) ?? (res.status === 202 ? 'pending' : 'unknown');
+            const elapsedSec = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+            const line = `Storage refresh (${projectId}): state=${state} elapsed=${elapsedSec}s`;
+            if (state !== lastProgress) {
+              printProgress(line);
+              lastProgress = state;
+            }
+            if (state === 'idle' || state === 'failed') break;
+            const pollMs = Math.min(3000, Math.round(500 * Math.pow(1.5, attempt)));
+            attempt += 1;
+            await delay(pollMs, undefined, { signal: controller.signal });
+            res = await ctx.client.get(`/api/v1/projects/${encodeURIComponent(projectId)}/storage`, {
+              signal: controller.signal,
+            });
+          }
+          const finalState = refreshStateOf(res.data);
+          if (finalState === 'idle') {
+            printProgress(`Storage refresh complete (${formatBytes(res.data?.usage?.bytes)}, freshness=${res.data?.usage?.freshness ?? 'unknown'}).`);
+          } else if (finalState === 'failed') {
+            printProgress(`Storage refresh failed (reason=${res.data?.usage?.refresh?.reason ?? 'unknown'}).`);
+          }
+        } catch (err) {
+          if (controller.signal.aborted) {
+            const stopErr = new Error(
+              `${timedOut ? 'Storage refresh wait timed out' : 'Interrupted'}; remote measurement continues. Check with: ariax storage project ${projectId} --json`,
+            );
+            stopErr.exitCode = timedOut ? EXIT.NETWORK : EXIT.INTERRUPTED;
+            throw stopErr;
+          }
+          throw err;
+        } finally {
+          clearTimeout(timer);
+          process.removeListener('SIGINT', interrupt);
+        }
+      }
+    }
     if (ctx.json) {
-      emitEnvelope(res, res.status === 202 ? { accepted: true, status: 202 } : undefined);
+      const extraMeta = waited
+        ? { waited: true }
+        : (res.status === 202 ? { accepted: true, status: 202 } : undefined);
+      emitEnvelope(res, extraMeta);
       return;
     }
     const d = res.data || {};
     const usage = d.usage || {};
+    const retainedBytes = usage.retained?.bytes;
     printKv({
       project_id: d.project_id ?? projectId,
       name: d.name ?? '-',
       status: d.status ?? '-',
       kind: usage.kind ?? d.cleanup?.kind ?? '-',
       bytes: formatBytes(usage.bytes),
+      ...(retainedBytes !== undefined && retainedBytes !== null ? { retained_bytes: formatBytes(retainedBytes) } : {}),
+      ...(typeof usage.pending_deletion_bytes === 'number' && usage.pending_deletion_bytes > 0
+        ? { pending_deletion_bytes: formatBytes(usage.pending_deletion_bytes) }
+        : {}),
       object_count: usage.object_count ?? '-',
       freshness: usage.freshness ?? '-',
       measured_at: usage.measured_at ?? '-',
       refresh_state: usage.refresh?.state ?? '-',
       control_revision: d.control?.revision ?? '-',
       cleanup_state: d.cleanup?.state ?? '-',
-      ...(res.status === 202 ? { accepted: true } : {}),
+      ...(d.cleanup?.verification_not_before ? { verification_not_before: d.cleanup.verification_not_before } : {}),
+      ...(!waited && res.status === 202 ? { accepted: true } : {}),
     });
     if (Array.isArray(usage.directories) && usage.directories.length) {
       printData('');

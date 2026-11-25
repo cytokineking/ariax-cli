@@ -127,8 +127,11 @@ function syncResult(result, syncId) {
   const data = dataEnvelope(result);
   if (data.sync_id !== syncId || !SYNC_STATES.has(data.state)) throw invalidResponse();
   const value = {sync_id:syncId,state:data.state};
-  for (const field of ['saved_count','pending_count','failed_count']) {
-    if (data[field] !== undefined) {
+  for (const field of [
+    'saved_count', 'pending_count', 'failed_count',
+    'mutation_revision', 'pending_files', 'pending_bytes', 'workspace_file_count',
+  ]) {
+    if (data[field] !== undefined && data[field] !== null) {
       if (!Number.isSafeInteger(data[field]) || data[field] < 0) throw invalidResponse();
       value[field] = data[field];
     }

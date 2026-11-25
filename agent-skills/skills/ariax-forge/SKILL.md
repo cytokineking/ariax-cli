@@ -48,7 +48,7 @@ means `base` accepts commands; each scientific tool reports `queued`,
 ## 3. Stage inputs & run native commands
 
 ```sh
-ariax forge inputs add SESSION --file ./target.yaml --path targets/target.yaml --json   # mounted at /inputs/targets/target.yaml
+ariax forge inputs add SESSION --file ./target.yaml --path targets/target.yaml --wait-ready --json   # waits for base; mounts at /inputs/...
 ariax forge inputs status SESSION INPUT_ID --json                                       # wait for state=ready
 ariax forge run SESSION --tool boltz2 --gpus 0 --wait-ready --input-ids INPUT_ID --wait --wait-timeout 1800 --json -- boltz predict /inputs/targets/target.yaml --out_dir /scratch/run1
 ariax forge logs SESSION COMMAND_ID --tail 1000 --no-json
@@ -86,15 +86,17 @@ ariax storage suggest PROJECT --json          # inspect large/high-file-count di
 - `forge status`, `forge sync`, `forge finish`, and `forge close` emit
   structured stderr hygiene notices when workspace telemetry flags high file
   counts, pending sync volume, low disk space, symlinks, large files, or unsaved
-  `/scratch` data.
+  `/scratch` data. In `forge summary`, `workspace.hygiene_warnings` reflects
+  live daemon telemetry on active sessions while `cleanup_suggestions` reflects
+  saved-storage catalog rules from `ariax storage suggest`.
 - `ariax forge close SESSION [--wait]` is for emergency/immediate teardown (75s
   sync ceiling) and refuses by default when >100 files or >500 MiB remain
   unsynced (pass `--force` only when intentionally discarding unsaved files).
-- Use `ariax forge cancel SESSION COMMAND_ID` to cancel one command,
-  `ariax forge limit SESSION --gpu-hours H` to edit a session cap,
-  `ariax forge resume PROJECT --gpu GPU --wait` to reopen saved files
-  (`--hydrate PATH` selects a subset), and `ariax storage` (`usage`, `projects`,
-  `project`, `entries`, `suggest`, `delete`, `deletion`) to audit and clean up
-  account/project storage.
+- Use `ariax forge cancel SESSION COMMAND_ID [--wait]` to cancel one command
+  (waiting for terminal state with `--wait`), `ariax forge limit SESSION --gpu-hours H`
+  to edit a session cap, `ariax forge resume PROJECT --gpu GPU --wait` to reopen
+  saved files (`--hydrate PATH` selects a subset), and `ariax storage` (`usage`,
+  `projects`, `project [--refresh --wait]`, `entries`, `suggest`, `delete`,
+  `deletion`) to audit and clean up account/project storage.
 
 **Deep references:** [outputs & file ops](outputs.md) · [recovery, holds & deletions](references/recovery.md) · [campaign recipes](references/campaign-recipes.md) · [custom code](references/custom-code.md) · [Adaptyv ordering](references/adaptyv-ordering.md)

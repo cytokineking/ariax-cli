@@ -158,17 +158,102 @@ export function usesCompactCandidatePresentation(data, meta = {}) {
     && data.every((candidate) => isManagedProtocol(candidate?.engine ?? candidate?.protocol));
 }
 
-function scientificOutcome(lifecycle, accepted, requested) {
+const ZERO_TO_ONE_METRICS = new Set([
+  'design_to_target_iptm',
+  'design_iptm',
+  'design_ptm',
+  'quality_score',
+  'iptm',
+  'i_ptm',
+  'ptm',
+  'binder_ptm',
+  'ligand_iptm',
+  'affinity_probability_binary',
+  'i_pdae',
+  'ipsae',
+  'hotspot_contact_fraction',
+  'off_epitope_contact_fraction',
+  'average_i_ptm',
+  'average_ptm',
+]);
+
+const ANGSTROM_METRICS = new Set([
+  'filter_rmsd',
+  'rmsd',
+  'backbone_rmsd',
+  'binder_rmsd',
+  'target_rmsd',
+  'pae',
+  'complex_pde',
+  'complex_ipde',
+  'pde',
+  'ipde',
+  'unscaled_i_pae',
+  'af2_ipae',
+]);
+
+export function inferMetricScale(name, value, unit, explicitScale) {
+  if (typeof explicitScale === 'string' && explicitScale.trim()) return explicitScale.trim();
+  const rawName = String(name ?? '').trim();
+  const lower = rawName.toLowerCase();
+  const normUnit = typeof unit === 'string' ? unit.trim().toLowerCase() : '';
+  const isAngstromUnit = normUnit === 'å' || normUnit === 'a' || normUnit === 'angstrom' || normUnit === 'angstroms';
+  if (ZERO_TO_ONE_METRICS.has(lower)) return '0..1';
+  if (lower === 'plddt' || lower === 'design_plddt' || lower === 'complex_plddt' || lower.endsWith('_plddt')) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      if (value > 1 && value <= 100) return '0..100';
+      if (value >= 0 && value <= 1) return '0..1';
+    }
+    return null;
+  }
+  if (ANGSTROM_METRICS.has(lower) || lower.endsWith('_rmsd')) return 'Å';
+  if (lower === 'i_pae' || lower === 'ipae') {
+    if (isAngstromUnit) return 'Å';
+    if (rawName === 'i_pAE' && typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) {
+      return '0..1';
+    }
+    return 'Å';
+  }
+  if (isAngstromUnit) return 'Å';
+  return null;
+}
+
+function compactControl(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const revision = count(raw.revision);
+  const humanResumeRequired = typeof raw.human_resume_required === 'boolean' ? raw.human_resume_required : null;
+  const stopReason = typeof raw.stop_reason === 'string' && raw.stop_reason.trim() ? raw.stop_reason.trim() : null;
+  if (revision === null && humanResumeRequired === null && stopReason === null) return null;
+  return {
+    revision,
+    human_resume_required: humanResumeRequired,
+    stop_reason: stopReason,
+  };
+}
+
+function scientificOutcome(lifecycle, accepted, requested, passedFilters = null) {
   if (accepted !== null && accepted > 0) {
     return {
       code: 'accepted_designs_available',
       summary: `${accepted}${requested === null ? '' : ` of ${requested} requested`} accepted design${accepted === 1 ? '' : 's'} available.`,
     };
   }
-  if (lifecycle === 'completed' && accepted === 0) {
+  if (passedFilters !== null && passedFilters > 0) {
+    return {
+      code: 'filter_passing_designs_available',
+      summary: `${passedFilters} filter-passing design${passedFilters === 1 ? '' : 's'} available; accepted-design eligibility is not reported on the project record.`,
+    };
+  }
+  if (lifecycle === 'completed' && accepted === 0 && (passedFilters === null || passedFilters === 0)) {
     return {
       code: 'completed_no_accepted_designs',
       summary: 'Execution completed with no accepted designs. This does not establish that the target is undesignable or that more compute will help.',
+    };
+  }
+  if (lifecycle === 'completed' && accepted === null) {
+    return {
+      code: 'completed_eligibility_unreported',
+      summary: 'Execution completed; accepted-design eligibility is not reported on the project record. Inspect candidate records for native filter outcomes.',
     };
   }
   if (lifecycle === 'failed') {
@@ -243,10 +328,18 @@ export function compactCampaign(project, fallbackId = null) {
   const settings = compactScientificSettings(source);
   const lifecycle = String(firstKnown(source.status, source.state, 'unknown')).toLowerCase();
   const projectId = String(firstKnown(source.id, source.project_id, fallbackId, 'unknown'));
+  const control = compactControl(source.control);
 
   if (!isBindcraft2Protocol(settings.protocol)) {
+    const designCountSource = typeof source.design_count_source === 'string' ? source.design_count_source : null;
     const tested = count(firstKnown(source.tested_designs, source.total_designs));
-    const accepted = count(source.accepted_designs);
+    const rawAccepted = count(firstKnown(source.accepted_designs, source.accepted));
+    const passedFilters = count(firstKnown(source.passed_filters, source.passed_designs));
+    const accepted = designCountSource === 'candidate_evidence'
+      && rawAccepted === 0
+      && (tested === null || tested === 0 || (passedFilters !== null && passedFilters > 0))
+      ? null
+      : rawAccepted;
     const requested = settings.requested_designs;
     const jobsList = Array.isArray(source.jobs) ? source.jobs : [];
     const latestJobId = firstKnown(source.latest_job_id, jobsList[0]?.id);
@@ -256,8 +349,8 @@ export function compactCampaign(project, fallbackId = null) {
       ? { code: 'wait', command: `ariax status ${projectId} --wait`, reason: 'Wait for a terminal lifecycle state.' }
       : (lifecycle === 'failed' || lifecycle === 'aborted' || lifecycle === 'cancelled')
         ? { code: 'inspect_results_and_logs', command: `ariax results ${projectId}`, reason: 'Inspect saved results and logs from the stopped execution.' }
-        : (accepted !== null && accepted > 0)
-          ? { code: 'review_final_candidates', command: `ariax candidates ${projectId} --view final`, reason: 'Review the accepted ranked designs.' }
+        : ((accepted !== null && accepted > 0) || (passedFilters !== null && passedFilters > 0))
+          ? { code: 'review_final_candidates', command: `ariax candidates ${projectId} --view final`, reason: 'Review the accepted or filter-passing ranked designs.' }
           : { code: 'review_candidates', command: `ariax candidates ${projectId} --view all`, reason: 'Inspect candidate records or saved results.' };
     return {
       schema_version: 1,
@@ -274,18 +367,20 @@ export function compactCampaign(project, fallbackId = null) {
         ...(typeof source.updated_at === 'string' ? { updated_at: source.updated_at } : {}),
         ...(typeof source.completed_at === 'string' ? { completed_at: source.completed_at } : {}),
       },
+      ...(control ? { control } : {}),
       designs: {
         tested,
+        ...(passedFilters !== null ? { passed_filters: passedFilters } : {}),
         accepted,
         requested,
-        ...(typeof source.design_count_source === 'string' ? { source: source.design_count_source } : {}),
+        ...(designCountSource ? { source: designCountSource } : {}),
       },
       ...(latestJobId !== null || jobCount !== null ? {
         jobs: { latest_job_id: latestJobId, count: jobCount },
       } : {}),
-      scientific_outcome: scientificOutcome(lifecycle, accepted, requested),
+      scientific_outcome: scientificOutcome(lifecycle, accepted, requested, passedFilters),
       results: {
-        final_candidates: recordState(accepted),
+        final_candidates: recordState(accepted !== null ? accepted : passedFilters),
         command: `ariax results ${projectId}`,
         candidates_command: `ariax candidates ${projectId} --view final`,
       },
@@ -312,6 +407,7 @@ export function compactCampaign(project, fallbackId = null) {
     ranked: count(rawCounts.ranked),
   };
   const accepted = count(firstKnown(rawCounts.accepted, source.accepted_designs));
+  const passedFilters = count(firstKnown(source.passed_filters, source.passed_designs));
   const requested = count(firstKnown(progress.requested, settings.requested_designs));
   const attemptLimit = count(settings.attempt_limit);
   const warnings = [];
@@ -340,8 +436,13 @@ export function compactCampaign(project, fallbackId = null) {
       phase: typeof progress.stage === 'string' ? progress.stage : null,
       phase_label: PHASE_LABELS[progress.stage] ?? (progress.stage ?? null),
     },
+    ...(control ? { control } : {}),
     budget: { attempts_used: counts.attempted, attempt_limit: attemptLimit },
-    designs: { accepted, requested },
+    designs: {
+      ...(passedFilters !== null ? { passed_filters: passedFilters } : {}),
+      accepted,
+      requested,
+    },
     records: {
       trajectories: counts.trajectories,
       refolded: counts.refolded,
@@ -358,7 +459,7 @@ export function compactCampaign(project, fallbackId = null) {
     publication: {
       error: syncError,
     },
-    scientific_outcome: scientificOutcome(lifecycle, accepted, requested),
+    scientific_outcome: scientificOutcome(lifecycle, accepted, requested, passedFilters),
     rejections,
     results: {
       final_candidates: recordState(accepted),
@@ -445,6 +546,13 @@ export function campaignStatusLines(campaign) {
   if (campaign.cost.recorded_spend_usd !== null) cost.push(`recorded=$${campaign.cost.recorded_spend_usd}`);
   if (campaign.cost.spend_limit_usd !== null) cost.push(`limit=$${campaign.cost.spend_limit_usd}`);
   if (compute.length || cost.length) lines.push(`Compute/cost: ${[...compute, ...cost].join(' · ')}`);
+  if (campaign.control) {
+    const ctrl = [];
+    if (campaign.control.revision !== null) ctrl.push(`revision=${campaign.control.revision}`);
+    if (campaign.control.human_resume_required === true) ctrl.push('human_resume_required=true');
+    if (campaign.control.stop_reason) ctrl.push(`stop_reason=${campaign.control.stop_reason}`);
+    if (ctrl.length) lines.push(`Control: ${ctrl.join(' · ')}`);
+  }
   lines.push(`Next: ${campaign.action.command}`);
   return lines;
 }
@@ -460,7 +568,13 @@ export function compactCandidate(candidate) {
   const isBc2 = isBindcraft2Protocol(source.engine ?? source.protocol) || Boolean(source.bindcraft2);
   const metrics = Array.isArray(source.metrics)
     ? source.metrics.filter((metric) => typeof metric?.name === 'string' && metric.value !== undefined)
-      .map((metric) => ({ name: metric.name, value: metric.value ?? null, unit: metric.unit ?? null, direction: metric.direction ?? null }))
+      .map((metric) => ({
+        name: metric.name,
+        value: metric.value ?? null,
+        scale: inferMetricScale(metric.name, metric.value, metric.unit, metric.scale),
+        unit: metric.unit ?? null,
+        direction: metric.direction ?? null,
+      }))
     : [];
   const explicitFailedFilters = Array.isArray(source.filters)
     ? source.filters.filter((filter) => filter?.passed === false && typeof filter?.name === 'string' && filter.name !== 'pass_filters')

@@ -70,6 +70,7 @@ const BOOLEAN_FLAGS = new Set([
   'include-sequences',
   'active',
   'suggested',
+  'all-origins',
 ]);
 
 /**

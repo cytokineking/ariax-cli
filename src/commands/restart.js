@@ -34,7 +34,7 @@ export async function run(ctx) {
   if (flags.wait === true) {
     if (operation.state === 'in_progress') await waitForOperation(ctx, operation);
     printProgress(`Restart accepted for ${projectId}; waiting…`);
-    return waitAndReport(ctx, projectId, operation);
+    return waitAndReport(ctx, projectId, operation, { failOnPaused: true, failOnAborted: true });
   }
   return { projectId, operationId: operation.id };
 }

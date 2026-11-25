@@ -38,24 +38,24 @@ const OPTIONS = {
   project: [['limit', 'cursor', 'details'], 2],
   summary: [['top'], 2],
   activity: [['limit', 'cursor', 'details'], 2],
-  limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
+  limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id', 'details'], 2],
   catalog: [['details', 'full', 'all', 'task', 'tool', 'compact', 'model', 'mode', 'query', 'search', 'modality', 'tier', 'with-guide'], 1],
   list: [['details', 'active', 'state', 'name', 'project', 'limit'], 1],
   status: [['details'], 2],
   tools: [['details'], 2],
-  'tools add': [['tools', 'priority', 'selection-id'], 3],
+  'tools add': [['tools', 'priority', 'selection-id', 'details'], 3],
   'tools wait': [['timeout', 'wait-timeout', 'details'], 4],
   run: [['tool', 'gpus', 'cwd', 'timeout-seconds', 'command-id', 'wait-ready', 'input-ids', 'wait', 'wait-timeout', 'tail'], 2],
   pack: [['src', 'dest', 'format', 'max-shard-gib', 'remove-src', 'no-manifest', 'wait', 'wait-timeout', 'wait-ready', 'tail', 'operation-id', 'details'], 2],
   operations: [[], 1], recover: [['wait', 'wait-timeout'], 2],
   finish: [['timeout-seconds', 'operation-id', 'wait', 'wait-timeout'], 2],
   commands: [['retained', 'details'], 2], command: [['retained', 'details'], 3], watch: [['timeout', 'wait-timeout', 'tail'], 3],
-  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id'], 3],
+  'inputs add': [['file', 'artifact', 'url', 'path', 'input-id', 'wait-ready', 'wait-timeout'], 3],
   'inputs list': [['retained'], 3], 'inputs status': [['retained'], 4],
   sync: [['wait', 'sync-id', 'timeout', 'wait-timeout'], 2],
   files: [['path', 'cursor', 'recursive'], 2], 'files delete': [['path', 'operation-id', 'recursive', 'wait', 'wait-timeout'], 3], 'files hydrate': [['path', 'operation-id', 'wait', 'wait-timeout'], 3], 'files recover': [['path', 'catalog', 'archive', 'artifact', 'version', 'operation-id', 'overwrite', 'wait', 'wait-timeout'], 3],
   download: [['dest'], 3], link: [[], 3],
-  logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [[], 3], close: [['force', 'wait', 'wait-timeout'], 2],
+  logs: [['tail', 'cursor', 'wait-seconds', 'retained'], 3], cancel: [['wait', 'wait-timeout'], 3], close: [['force', 'wait', 'wait-timeout'], 2],
 };
 
 const SUBCOMMAND_HELP = Object.freeze({
@@ -68,16 +68,16 @@ const SUBCOMMAND_HELP = Object.freeze({
   summary: `ariax forge summary PROJECT [--top 5]
   Compact Forge workspace, session accounting, hygiene warnings, and handoff summary.`,
   activity: `ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]`,
-  limit: `ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]`,
+  limit: `ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID] [--details]`,
   catalog: `ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
   ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]`,
   list: `ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
   Returns compact session summaries by default; add --details for full tool metadata.`,
   status: `ariax forge status SESSION [--details]`,
   tools: `ariax forge tools SESSION [--details]
-  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
+  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID] [--details]
   ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS] [--details]`,
-  'tools add': `ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]`,
+  'tools add': `ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID] [--details]`,
   'tools wait': `ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS] [--details]`,
   run: `ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] [--tail N] -- COMMAND ARG...
   Put the native command and arguments after --. Remote script failures exit with code 11 and include output_tail.`,
@@ -91,14 +91,14 @@ const SUBCOMMAND_HELP = Object.freeze({
   command: `ariax forge command SESSION COMMAND_ID [--retained] [--details]`,
   watch: `ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS] [--tail N]`,
   logs: `ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]`,
-  cancel: `ariax forge cancel SESSION COMMAND_ID`,
+  cancel: `ariax forge cancel SESSION COMMAND_ID [--wait] [--wait-timeout SECONDS]`,
   close: `ariax forge close SESSION [--force] [--wait] [--wait-timeout SECONDS]
   Emergency teardown (75s sync ceiling). Prefer ariax forge finish --wait for normal completion.`,
-  inputs: `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID]
+  inputs: `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
   ariax forge inputs list SESSION [--retained]
   ariax forge inputs status SESSION INPUT_ID [--retained]
   --path is relative to /inputs (immutable once published; use a new --path for updates).`,
-  'inputs add': `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID]
+  'inputs add': `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
   --path is relative to /inputs (immutable once published; use a new --path for updated files).`,
   'inputs list': `ariax forge inputs list SESSION [--retained]`,
   'inputs status': `ariax forge inputs status SESSION INPUT_ID [--retained]`,
@@ -127,13 +127,13 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge summary PROJECT [--top 5]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]
-  ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
+  ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID] [--details]
   ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
   ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]
   ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
   ariax forge status SESSION [--details]
   ariax forge tools SESSION [--details]
-  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID]
+  ariax forge tools add SESSION --tools TOOL,... [--priority TOOL,...] [--selection-id UUID] [--details]
   ariax forge tools wait SESSION TOOL [--wait-timeout SECONDS]
   ariax forge run SESSION --tool TOOL [--gpus 0,1] [--cwd /workspace] [--timeout-seconds SECONDS] [--command-id UUID] [--wait-ready [--input-ids ID,...]] [--wait] [--wait-timeout SECONDS] [--tail N] -- COMMAND ARG...
   ariax forge pack SESSION --src PATH --dest /workspace/archives/NAME.tar.zst [--format tar.zst|tar.gz] [--max-shard-gib 10] [--remove-src] [--no-manifest] [--wait] [--wait-timeout SECONDS] [--wait-ready] [--tail N] [--operation-id UUID]
@@ -144,11 +144,11 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge command SESSION COMMAND_ID [--retained] [--details]
   ariax forge watch SESSION COMMAND_ID [--wait-timeout SECONDS] [--tail N]
   ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]
-  ariax forge cancel SESSION COMMAND_ID
+  ariax forge cancel SESSION COMMAND_ID [--wait] [--wait-timeout SECONDS]
   ariax forge close SESSION [--force] [--wait] [--wait-timeout SECONDS]
-  ariax forge inputs add SESSION --file FILE --path PATH [--input-id UUID]
-  ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path PATH [--input-id UUID]
-  ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID]
+  ariax forge inputs add SESSION --file FILE --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
+  ariax forge inputs add SESSION --artifact PROJECT_ID:PATH --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
+  ariax forge inputs add SESSION --url URL --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
   ariax forge inputs list SESSION
   ariax forge inputs status SESSION INPUT_ID
   ariax forge sync SESSION [--wait] [--sync-id UUID] [--wait-timeout SECONDS]
@@ -549,11 +549,16 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
         const directAccount = await forgeAccountIdentity(ctx, request.session_id, { signal });
         checkIdentity(record, directAccount, id);
       }
+      const viewQuery = { view: ctx.flags?.details === true ? 'full' : 'summary' };
       const res = request.session_id
-        ? await forgeRequest(ctx, request.session_id, 'POST', request.path, { body: request.body, signal })
+        ? await forgeRequest(ctx, request.session_id, 'POST', request.path, {
+          body: request.body,
+          ...(kind === 'selection' ? { query: viewQuery } : {}),
+          signal,
+        })
         : await ctx.client.post(request.path, {
           body: request.body,
-          ...(kind === 'session' && ctx.flags?.details !== true ? { query: { view: 'summary' } } : {}),
+          ...(kind === 'session' || kind === 'limit' ? { query: viewQuery } : {}),
           signal,
         });
       const label = { session: 'session_id', command: 'command_id', selection: 'selection_id' }[kind];
@@ -754,6 +759,8 @@ const KNOWN_CATALOG_TASKS = Object.freeze([
   'validation-search',
 ]);
 
+const MAX_SUMMARY_ARGV_CHARS = 512;
+
 function compactSessionTool(tool) {
   if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return tool;
   const out = {};
@@ -769,6 +776,29 @@ function compactSessionPayload(data, details = false) {
   if (details || !data || typeof data !== 'object' || Array.isArray(data)) return data;
   if (!Array.isArray(data.tools)) return data;
   return { ...data, tools: data.tools.map(compactSessionTool) };
+}
+
+function compactCommandEntry(command, details = false) {
+  if (details || !command || typeof command !== 'object' || Array.isArray(command)) return command;
+  if (!Array.isArray(command.argv)) return command;
+  let changed = false;
+  const argv = command.argv.map((arg) => {
+    if (typeof arg === 'string' && arg.length > MAX_SUMMARY_ARGV_CHARS) {
+      changed = true;
+      const preview = arg.slice(0, 80).replace(/\s+/g, ' ').trim();
+      return preview
+        ? `${preview} … <truncated ${arg.length} chars; pass --details for full argv>`
+        : `<truncated ${arg.length} chars; pass --details for full argv>`;
+    }
+    return arg;
+  });
+  return changed ? { ...command, argv } : command;
+}
+
+function compactCommandsPayload(data, details = false) {
+  if (details || !data || typeof data !== 'object' || Array.isArray(data)) return data;
+  if (!Array.isArray(data.commands)) return data;
+  return { ...data, commands: data.commands.map((cmd) => compactCommandEntry(cmd, false)) };
 }
 
 function parsePackOutput(outputTail, { src, requestedDest, format, removeSrc, noManifest }) {
@@ -807,18 +837,21 @@ function parsePackOutput(outputTail, { src, requestedDest, format, removeSrc, no
     ? parsed.manifest_path
     : (noManifest ? null : `${actualDest}.manifest.json`);
   return {
-    src: typeof parsed?.src === 'string' && parsed.src ? parsed.src : src,
-    requested_dest: requestedDest,
-    actual_dest: actualDest,
-    manifest_path: manifestPath,
-    format: actualFormat,
-    ...(typeof parsed?.sharded === 'boolean' ? { sharded: parsed.sharded } : {}),
-    ...(Array.isArray(parsed?.shards) && parsed.shards.length ? { shards: parsed.shards } : {}),
-    file_count: typeof parsed?.file_count === 'number' && Number.isFinite(parsed.file_count) ? parsed.file_count : null,
-    uncompressed_bytes: typeof parsed?.uncompressed_bytes === 'number' && Number.isFinite(parsed.uncompressed_bytes) ? parsed.uncompressed_bytes : null,
-    compressed_bytes: typeof parsed?.compressed_bytes === 'number' && Number.isFinite(parsed.compressed_bytes) ? parsed.compressed_bytes : null,
-    removed_src: typeof parsed?.removed_src === 'boolean' ? parsed.removed_src : Boolean(removeSrc),
-    fallback_notice: fallbackNotice,
+    parsed: parsed !== null,
+    summary: {
+      src: typeof parsed?.src === 'string' && parsed.src ? parsed.src : src,
+      requested_dest: requestedDest,
+      actual_dest: actualDest,
+      manifest_path: manifestPath,
+      format: actualFormat,
+      ...(typeof parsed?.sharded === 'boolean' ? { sharded: parsed.sharded } : {}),
+      ...(Array.isArray(parsed?.shards) && parsed.shards.length ? { shards: parsed.shards } : {}),
+      file_count: typeof parsed?.file_count === 'number' && Number.isFinite(parsed.file_count) ? parsed.file_count : null,
+      uncompressed_bytes: typeof parsed?.uncompressed_bytes === 'number' && Number.isFinite(parsed.uncompressed_bytes) ? parsed.uncompressed_bytes : null,
+      compressed_bytes: typeof parsed?.compressed_bytes === 'number' && Number.isFinite(parsed.compressed_bytes) ? parsed.compressed_bytes : null,
+      removed_src: typeof parsed?.removed_src === 'boolean' ? parsed.removed_src : Boolean(removeSrc),
+      fallback_notice: fallbackNotice,
+    },
   };
 }
 
@@ -915,12 +948,15 @@ async function catalogGet(ctx, routePath, options = {}) {
   }
 }
 
-export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, readResult) {
+export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, readResult, pollOpts = {}) {
   const waitTimeout = ctx.flags['wait-timeout'] ?? ctx.flags.timeout;
   const timeoutMs = waitTimeout === undefined ? 0 : localWaitSeconds(waitTimeout, 0, { allowZero: true }) * 1000;
+  const intervalMs = typeof pollOpts.intervalMs === 'number' && pollOpts.intervalMs > 0 ? pollOpts.intervalMs : 3000;
+  const heartbeatMs = typeof pollOpts.heartbeatMs === 'number' && pollOpts.heartbeatMs > 0 ? pollOpts.heartbeatMs : 0;
   const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   const controller = new AbortController();
-  let timedOut = false, timer, lastState;
+  let timedOut = false, timer, lastState, lastProgressKey;
+  let lastEmitAt = 0;
   const interrupt = () => controller.abort();
   const expire = () => {
     const remaining = deadline - Date.now();
@@ -948,7 +984,7 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, re
           printProgress(`state: ${redactForgeText(String(lifecycle.data.state))}`);
           lastState = lifecycle.data.state;
         }
-        await delay(3000, undefined, { signal: controller.signal });
+        await delay(intervalMs, undefined, { signal: controller.signal });
       }
     }
     for (;;) {
@@ -959,14 +995,21 @@ export async function poll(ctx, resourcePath, id, inspect, resume, sessionId, re
         })
         : await ctx.client.get(resourcePath, { signal: controller.signal });
       remember(ctx, id, resourcePath, res.data);
-      const { state, done } = inspect(res.data);
-      if (state !== lastState) {
-        printProgress(`state: ${redactForgeText(String(state))}`);
-        if (state === 'unknown') printProgress('Keep the same command ID while its outcome is uncertain; a fresh command could duplicate execution.');
+      const { state, done, progress, progressKey } = inspect(res.data);
+      const now = Date.now();
+      const effectiveKey = progressKey ?? progress ?? String(state);
+      const heartbeatDue = heartbeatMs > 0 && lastEmitAt > 0 && (now - lastEmitAt) >= heartbeatMs;
+      if (effectiveKey !== lastProgressKey || state !== lastState || heartbeatDue) {
+        printProgress(progress ? redactForgeText(String(progress)) : `state: ${redactForgeText(String(state))}`);
+        if (state === 'unknown' && state !== lastState) {
+          printProgress('Keep the same command ID while its outcome is uncertain; a fresh command could duplicate execution.');
+        }
         lastState = state;
+        lastProgressKey = effectiveKey;
+        lastEmitAt = now;
       }
       if (done) return res;
-      await delay(3000, undefined, { signal: controller.signal });
+      await delay(intervalMs, undefined, { signal: controller.signal });
     }
   } catch (error) {
     if (controller.signal.aborted) {
@@ -999,6 +1042,12 @@ export function extractSynchronization(data) {
 const HYGIENE_ACTIONS = Object.freeze({
   high_file_count: (sessionId) =>
     `Pack bulk directories into a compressed archive before finishing: ariax forge pack ${sessionId || 'SESSION'} --src /scratch/<run> --dest /workspace/archives/<name>.tar.zst --wait --json`,
+  high_small_file_count: (sessionId, details) => {
+    const rawPath = typeof details?.path === 'string' && details.path.trim() ? details.path.trim() : null;
+    const src = rawPath ? (rawPath.startsWith('/') ? rawPath : `/${rawPath}`) : '/workspace/<dir>';
+    const slug = rawPath ? rawPath.replace(/^\/+|\/+$/g, '').split('/').pop() || 'archive' : 'archive';
+    return `Pack high-file-count directory into a compressed archive before finishing: ariax forge pack ${sessionId || 'SESSION'} --src ${src} --dest /workspace/archives/${slug}.tar.zst --remove-src --wait --json`;
+  },
   high_pending_files: (sessionId) =>
     `Use ariax forge finish ${sessionId || 'SESSION'} --wait --json to allow full drain, or pack bulk directories with ariax forge pack.`,
   low_disk_space: (sessionId) =>
@@ -1008,13 +1057,16 @@ const HYGIENE_ACTIONS = Object.freeze({
   file_near_20gib_limit: (sessionId) =>
     `Pack large outputs into sharded archives below the 20 GiB file limit using ariax forge pack ${sessionId || 'SESSION'} --max-shard-gib 10.`,
   scratch_data_not_saved: (sessionId) =>
-    `Files in /scratch are ephemeral and are not saved after session release. Pack outputs you want to keep first: ariax forge pack ${sessionId || 'SESSION'} --src /scratch/<run> --dest /workspace/archives/<name>.tar.zst --wait --json`,
+    `Pack outputs you want to keep with \`ariax forge pack ${sessionId || 'SESSION'} --src /scratch/<run> --dest /workspace/archives/<name>.tar.zst --wait --json\`. If outputs were already packed into /workspace/archives/, no further action is needed.`,
 });
 
 export function emitHygieneNotices(ctx, sync, { sessionId, includeScratch = false } = {}) {
   if (!sync || typeof sync !== 'object') return;
   const structured = ctx.json === true || (!ctx.config?.jsonDisabled && Boolean(detectAgentShell(ctx.env)));
   const seenCodes = new Set();
+  const scratchBytes = typeof sync.scratch_bytes === 'number' && Number.isFinite(sync.scratch_bytes)
+    ? sync.scratch_bytes
+    : 0;
   const emit = (code, message, action, details) => {
     const cleanCode = String(code);
     const cleanMessage = redactForgeText(String(message));
@@ -1037,22 +1089,22 @@ export function emitHygieneNotices(ctx, sync, { sessionId, includeScratch = fals
     for (const warning of sync.warnings) {
       if (!warning || typeof warning !== 'object' || typeof warning.code !== 'string' || !warning.code.trim()) continue;
       const code = warning.code.trim();
+      if (code === 'scratch_data_not_saved' && scratchBytes <= 0) continue;
       seenCodes.add(code);
       const message = typeof warning.message === 'string' && warning.message.trim() ? warning.message.trim() : code;
+      const details = warning.details && typeof warning.details === 'object' ? warning.details : undefined;
       const action = typeof warning.action === 'string' && warning.action.trim()
         ? warning.action.trim()
-        : HYGIENE_ACTIONS[code]?.(sessionId);
-      const details = warning.details && typeof warning.details === 'object' ? warning.details : undefined;
+        : HYGIENE_ACTIONS[code]?.(sessionId, details);
       emit(code, message, action, details);
     }
   }
-  if (includeScratch && !seenCodes.has('scratch_data_not_saved')
-      && typeof sync.scratch_bytes === 'number' && Number.isFinite(sync.scratch_bytes) && sync.scratch_bytes > 0) {
+  if (includeScratch && !seenCodes.has('scratch_data_not_saved') && scratchBytes > 0) {
     emit(
       'scratch_data_not_saved',
-      `/scratch contains ${formatBytes(sync.scratch_bytes)} of ephemeral data that will not be saved after session release.`,
+      `/scratch contains ${formatBytes(scratchBytes)} of ephemeral data that will not be saved after session release.`,
       HYGIENE_ACTIONS.scratch_data_not_saved(sessionId),
-      { scratch_bytes: sync.scratch_bytes },
+      { scratch_bytes: scratchBytes },
     );
   }
 }
@@ -1957,7 +2009,7 @@ async function runAction(ctx) {
     const res = await submit(ctx, id, { method: 'POST', path: `${sessionPath}/limit`, body }, 'request_id',
       `Inspect ariax forge status ${sessionId} for max_gpu_hours, limit_revision, applied_limit_revision, and expires_at before another edit. An accepted edit replaces the total allowance from allocation; the host retains its previous deadline until applied_limit_revision matches limit_revision.`);
     remember(ctx, sessionId, sessionPath, res.data);
-    return report(ctx, res);
+    return report(ctx, { ...res, data: compactSessionPayload(res.data, flags.details) });
   }
   if (action === 'finish') {
     if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge finish: --wait-timeout requires --wait.');
@@ -1993,12 +2045,18 @@ async function runAction(ctx) {
   }
   if (action === 'tools add') {
     const id = flags['selection-id'] === undefined ? randomUUID() : uuid(flags['selection-id'], 'selection ID');
-    return report(ctx, await submit(ctx, id, { method: 'POST', session_id: sessionId, path: '/v1/tools', body: { selection_id: id, ...selection(flags, true) } }, 'selection_id',
-      `Inspect ariax forge tools ${sessionId}; retry with --selection-id ${id}, identical fields, and the same --root-dir, account, and API origin.`));
+    const res = await submit(ctx, id, { method: 'POST', session_id: sessionId, path: '/v1/tools', body: { selection_id: id, ...selection(flags, true) } }, 'selection_id',
+      `Inspect ariax forge tools ${sessionId}; retry with --selection-id ${id}, identical fields, and the same --root-dir, account, and API origin.`);
+    return report(ctx, { ...res, data: compactSessionPayload(res.data, flags.details) });
   }
-  if (action === 'tools') return report(ctx, await forgeRequest(ctx, sessionId, 'GET', '/v1/tools'), 'tools');
+  if (action === 'tools') {
+    const res = await forgeRequest(ctx, sessionId, 'GET', '/v1/tools', {
+      query: { view: flags.details === true ? 'full' : 'summary' },
+    });
+    return report(ctx, { ...res, data: compactSessionPayload(res.data, flags.details) }, 'tools');
+  }
   if (action === 'status') {
-    const res = await ctx.client.get(sessionPath, { query: flags.details ? undefined : { view: 'summary' } });
+    const res = await ctx.client.get(sessionPath, { query: { view: flags.details === true ? 'full' : 'summary' } });
     remember(ctx, sessionId, sessionPath, res.data);
     const project = await ctx.client.get(`${API}/projects/${uuid(res.data.project_id, 'project ID')}`, { query: { view: 'summary' } });
     const syncInfo = await observeSessionSync(ctx, sessionId, sessionPath, res.data, { tryDirect: false });
@@ -2095,13 +2153,18 @@ async function runAction(ctx) {
       const baseData = result?.data && typeof result.data === 'object' ? { ...result.data } : {};
       if (!flags.details) delete baseData.argv;
       if (waited) {
-        baseData.pack = parsePackOutput(baseData.output_tail, {
+        const { summary, parsed } = parsePackOutput(baseData.output_tail, {
           src,
           requestedDest: dest,
           format,
           removeSrc: flags['remove-src'] === true,
           noManifest: flags['no-manifest'] === true,
         });
+        baseData.pack = summary;
+        const succeeded = baseData.state === 'succeeded' && (baseData.exit_code === 0 || baseData.exit_code === undefined);
+        if (!flags.details && succeeded && parsed) {
+          delete baseData.output_tail;
+        }
       }
       return report(ctx, { ...result, data: baseData });
     };
@@ -2158,10 +2221,11 @@ async function runAction(ctx) {
     }, { resume: `ariax forge status ${sessionId}` });
   }
   if (action === 'commands') {
+    const viewQuery = { view: flags.details === true ? 'full' : 'summary' };
     const res = flags.retained
-      ? await ctx.client.get(`${sessionPath}/commands`, { query: flags.details ? undefined : { view: 'summary' } })
-      : await forgeRequest(ctx, sessionId, 'GET', '/v1/commands');
-    return report(ctx, res, 'commands');
+      ? await ctx.client.get(`${sessionPath}/commands`, { query: viewQuery })
+      : await forgeRequest(ctx, sessionId, 'GET', '/v1/commands', { query: viewQuery });
+    return report(ctx, { ...res, data: compactCommandsPayload(res.data, flags.details) }, 'commands');
   }
   const commandId = uuid(ctx.positionals[2], 'command ID');
   const commandPath = `/v1/commands/${commandId}`;
@@ -2169,10 +2233,34 @@ async function runAction(ctx) {
     return report(ctx, await watchCommand(ctx, sessionId, commandId));
   }
   if (action === 'cancel') {
-    const res = await submit(ctx, randomUUID(), { method: 'POST', session_id: sessionId, path: `${commandPath}/cancel`, body: {} }, 'request_id',
-      `Inspect ariax forge command ${sessionId} ${commandId}; repeat cancellation if needed.`);
+    if (flags['wait-timeout'] !== undefined && !flags.wait) {
+      throw usageError('forge cancel: --wait-timeout requires --wait.');
+    }
+    if (flags.wait && flags['wait-timeout'] !== undefined) {
+      localWaitSeconds(flags['wait-timeout'], 1800);
+    }
+    const cancelId = randomUUID();
+    const request = { method: 'POST', session_id: sessionId, path: `${commandPath}/cancel`, body: {} };
+    const recovery = `Inspect ariax forge command ${sessionId} ${commandId}; repeat cancellation if needed.`;
+    const res = await submit(ctx, cancelId, request, 'request_id', recovery);
     remember(ctx, commandId, commandPath, res.data);
-    return report(ctx, res);
+    if (!flags.wait || TERMINAL_COMMANDS.has(res.data?.state)) {
+      return report(ctx, res);
+    }
+    const waitCtx = flags['wait-timeout'] === undefined
+      ? { ...ctx, flags: { ...flags, 'wait-timeout': 1800 } }
+      : ctx;
+    const terminal = await poll(
+      waitCtx,
+      commandPath,
+      commandId,
+      (cmd) => ({ state: cmd?.state ?? 'unknown', done: TERMINAL_COMMANDS.has(cmd?.state) }),
+      `ariax forge command ${sessionId} ${commandId}`,
+      sessionId,
+      undefined,
+      { intervalMs: 1000 },
+    );
+    return report(ctx, terminal);
   }
   if (action === 'logs') {
     const tail = flags.tail === undefined ? 1000 : number(flags.tail, 'tail', { integer: true });

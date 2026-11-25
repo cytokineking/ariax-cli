@@ -345,25 +345,103 @@ function paths() {
   };
 }
 
+function dirHasBundledFixtures(dirPath) {
+  try {
+    const stack = [dirPath];
+    while (stack.length) {
+      const current = stack.pop();
+      for (const entry of listDirSafe(current)) {
+        const full = join(current, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(full);
+        } else if (entry.isFile()) {
+          const lower = entry.name.toLowerCase();
+          if (!lower.endsWith('.md') && !lower.startsWith('license') && !lower.startsWith('notice')) {
+            return true;
+          }
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const curr = new Array(b.length + 1);
+  for (let i = 1; i <= a.length; i += 1) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    for (let j = 0; j <= b.length; j += 1) prev[j] = curr[j];
+  }
+  return prev[b.length];
+}
+
+function closestMatches(query, candidates, limit = 5) {
+  const normQuery = String(query ?? '')
+    .trim()
+    .toLowerCase()
+    .split('#')[0]
+    .replace(/\\/g, '/')
+    .replace(/^(?:\.\.?\/)+/, '')
+    .replace(/^(?:references|tools\/examples|tools|core|scripts|examples)\//, '')
+    .replace(/\.(?:md|py)$/, '')
+    .replace(/\//g, '-');
+  if (!normQuery) return candidates.slice(0, limit);
+  const queryTokens = new Set(normQuery.split(/[-_./]+/).filter(Boolean));
+  const scored = [];
+  const seen = new Set();
+  for (const name of candidates) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const lower = name.toLowerCase();
+    const candTokens = lower.split(/[-_./]+/).filter(Boolean);
+    let overlap = 0;
+    for (const tok of candTokens) {
+      if (queryTokens.has(tok)) overlap += 1;
+    }
+    const dist = levenshtein(normQuery, lower);
+    const maxLen = Math.max(normQuery.length, lower.length, 1);
+    const sim = 1 - (dist / maxLen);
+    const substringBonus = (lower.includes(normQuery) || normQuery.includes(lower)) ? 0.35 : 0;
+    const suffixBonus = lower.endsWith(`-${normQuery}`) || lower.startsWith(`${normQuery}-`) ? 0.25 : 0;
+    const tokenBonus = queryTokens.size > 0 ? (overlap / Math.max(queryTokens.size, candTokens.length)) * 0.4 : 0;
+    const score = sim + substringBonus + suffixBonus + tokenBonus;
+    scored.push({ name, score, dist });
+  }
+  scored.sort((a, b) => b.score - a.score || a.dist - b.dist || a.name.localeCompare(b.name));
+  return scored.slice(0, limit).map((item) => item.name);
+}
+
 function forgeToolPaths(requestedTool, forgeRefs, forgeExamples) {
   if (typeof requestedTool !== 'string' || !requestedTool.trim()) {
     throw usageError('skills forge: --tool requires a guide ID.');
   }
   const tool = requestedTool.trim();
   const guides = Object.entries(forgeRefs).filter(([id, filePath]) => (
-    dirname(filePath) === join(FORGE_ROOT, 'tools') || Object.hasOwn(forgeExamples, id)
+    fs.existsSync(filePath) && (dirname(filePath) === join(FORGE_ROOT, 'tools') || Object.hasOwn(forgeExamples, id))
   ));
-  const guide = guides.find(([id]) => id === tool)?.[1] ?? forgeRefs[tool];
+  const guide = guides.find(([id]) => id === tool)?.[1] ?? (fs.existsSync(forgeRefs[tool]) ? forgeRefs[tool] : null);
   if (!guide) {
-    throw usageError(`skills forge: unknown tool guide "${tool}". Use the catalog guide ID or run: ariax skills forge --json`);
+    const suggestions = closestMatches(tool, Object.keys(forgeRefs), 5);
+    const hint = suggestions.length ? ` Closest matches: ${suggestions.join(', ')}.` : '';
+    throw usageError(`skills forge: unknown tool guide "${tool}".${hint} Run ariax skills --list (or ariax skills forge --json) to browse all references.`);
   }
   const matchingGuide = (id) => guides
     .filter(([alias]) => id === alias || id.startsWith(`${alias}-`))
     .sort(([a], [b]) => b.length - a.length)[0]?.[1];
   const references = Object.fromEntries(Object.entries(forgeRefs)
-    .filter(([id, filePath]) => filePath === guide || matchingGuide(id) === guide));
+    .filter(([id, filePath]) => fs.existsSync(filePath) && (filePath === guide || matchingGuide(id) === guide)));
   const examples = Object.fromEntries(Object.entries(forgeExamples)
-    .filter(([id]) => matchingGuide(id) === guide));
+    .filter(([id, dirPath]) => matchingGuide(id) === guide && fs.existsSync(dirPath) && dirHasBundledFixtures(dirPath)));
   return { platform: 'forge', tool, guide, skill: join(FORGE_ROOT, 'SKILL.md'), references, examples };
 }
 
@@ -395,6 +473,60 @@ function protocolSkill(requested) {
   return join(ROOT, 'skills', skillName, 'SKILL.md');
 }
 
+function buildReferenceCandidates(reference) {
+  const raw = String(reference).trim();
+  const withoutAnchor = raw.split('#')[0].trim().replace(/\\/g, '/');
+  const strippedRelative = withoutAnchor.replace(/^(?:\.\.?\/)+/, '').replace(/^\/+/, '');
+  const prefersCore = /^core\//i.test(strippedRelative);
+  const stripExt = (value) => value.replace(/\.(?:md|py)$/i, '');
+  const list = [];
+  const push = (value) => {
+    if (value && !list.includes(value)) list.push(value);
+  };
+  const addForms = (value) => {
+    const clean = stripExt(value).replace(/\/+$/, '');
+    if (!clean) return;
+    push(clean);
+    const lower = clean.toLowerCase();
+    push(lower);
+    if (clean.includes('/')) {
+      const dashed = clean.replace(/\//g, '-');
+      push(dashed);
+      push(dashed.toLowerCase());
+      if (/\/readme$/i.test(clean)) {
+        const prefix = clean.slice(0, -'/readme'.length).replace(/\//g, '-');
+        push(`${prefix}-fixtures`);
+        push(`${prefix.toLowerCase()}-fixtures`);
+      }
+    }
+  };
+  push(raw);
+  addForms(withoutAnchor);
+  addForms(strippedRelative);
+  for (const prefix of ['references/', 'tools/examples/', 'tools/', 'core/', 'scripts/', 'examples/']) {
+    if (strippedRelative.toLowerCase().startsWith(prefix)) {
+      addForms(strippedRelative.slice(prefix.length));
+    }
+  }
+  return { raw, strippedRelative, prefersCore, candidates: list };
+}
+
+function resolveBundledRelativeFile(strippedRelative, searchBases) {
+  if (!strippedRelative || !strippedRelative.includes('/')) return null;
+  const rel = strippedRelative.replace(/^\/+/, '');
+  for (const base of searchBases) {
+    const resolvedBase = resolve(base);
+    const candidate = resolve(resolvedBase, rel);
+    if (!candidate.startsWith(`${resolvedBase}/`) && !candidate.startsWith(`${resolvedBase}\\`)) continue;
+    for (const full of [candidate, `${candidate}.md`, `${candidate}.py`]) {
+      try {
+        if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
+      } catch { /* ignore */ }
+    }
+  }
+  return null;
+}
+
 function readTarget(requested, reference, all) {
   const coreRefs = discoverCoreReferences();
   const forgeRefs = all.platform_references.forge;
@@ -408,15 +540,26 @@ function readTarget(requested, reference, all) {
       }
       : { id: 'shared', scope: 'shared', path: all.shared };
   }
-  const raw = String(reference).trim();
-  const normalized = raw.endsWith('.md') ? raw.slice(0, -3) : raw;
-  const candidates = raw === normalized ? [raw] : [raw, normalized];
+  const { strippedRelative, prefersCore, candidates } = buildReferenceCandidates(reference);
   if (candidates.includes('shared')) return { id: 'shared', scope: 'shared', path: all.shared };
+  if (prefersCore) {
+    for (const key of candidates) {
+      if (Object.hasOwn(coreRefs, key)) {
+        return { id: key, scope: 'core', path: coreRefs[key] };
+      }
+    }
+  }
   if (Object.hasOwn(PLATFORMS, requested)) {
     for (const key of candidates) {
       if (Object.hasOwn(forgeRefs, key)) {
         return { id: key, scope: 'platform', platform: 'forge', path: forgeRefs[key] };
       }
+    }
+    const directForgeFile = resolveBundledRelativeFile(strippedRelative, [FORGE_ROOT, join(FORGE_ROOT, 'tools')]);
+    if (directForgeFile) {
+      const matchedId = Object.entries(forgeRefs).find(([, p]) => p === directForgeFile)?.[0]
+        ?? basename(directForgeFile).replace(/\.(?:md|py)$/i, '');
+      return { id: matchedId, scope: 'platform', platform: 'forge', path: directForgeFile };
     }
   }
   if (requested && Object.hasOwn(PROTOCOLS, requested)) {
@@ -450,11 +593,30 @@ function readTarget(requested, reference, all) {
       return { id: key, scope: 'core', path: coreRefs[key] };
     }
   }
-  const names = Object.keys({
+  // If a bare relative filename like ./esmc-capacity.md uniquely matches a single Forge reference file, resolve it.
+  if (Object.hasOwn(PLATFORMS, requested) && !strippedRelative.includes('/')) {
+    const stem = strippedRelative.replace(/\.(?:md|py)$/i, '').toLowerCase();
+    const byBasename = new Map();
+    for (const [id, filePath] of Object.entries(forgeRefs)) {
+      const fileStem = basename(filePath).replace(/\.(?:md|py)$/i, '').toLowerCase();
+      if (fileStem === stem && !byBasename.has(filePath)) {
+        byBasename.set(filePath, id);
+      }
+    }
+    if (byBasename.size === 1) {
+      const [[filePath, id]] = [...byBasename.entries()];
+      return { id, scope: 'platform', platform: 'forge', path: filePath };
+    }
+  }
+  const availableNames = Object.keys({
     ...all.references,
     ...(Object.hasOwn(PLATFORMS, requested) ? forgeRefs : { outputs: null }),
-  }).join(', ');
-  throw usageError(`Unknown skills reference "${reference}". Available references: ${names}.`);
+  });
+  const suggestions = closestMatches(reference, availableNames, 5);
+  const suggestionText = suggestions.length ? ` Closest matches: ${suggestions.join(', ')}.` : '';
+  throw usageError(
+    `Unknown skills reference "${reference}".${suggestionText} Run ariax skills --list (or ariax skills forge --json) to browse all references.`,
+  );
 }
 
 function readGuide(target) {
@@ -854,6 +1016,7 @@ export async function run(ctx) {
   }
   const docOrRef = ctx.flags.doc !== undefined ? ctx.flags.doc : ctx.flags.reference;
   const shouldRead = ctx.flags.read === true || docOrRef !== undefined;
+  const explicitJson = ctx.config ? ctx.config.jsonForced === true : ctx.json === true;
   if (ctx.flags.list === true && (shouldRead || ctx.flags.tool !== undefined)) {
     throw usageError('skills: --list cannot be combined with --read, --reference, --doc, or --tool.');
   }
@@ -864,7 +1027,7 @@ export async function run(ctx) {
     }
     if (ctx.flags.read) {
       const data = readForgeToolGuide(ctx.flags.tool);
-      if (ctx.json) printJson({ data });
+      if (explicitJson) printJson({ data });
       else printData(data.content);
       return data;
     }
@@ -879,7 +1042,7 @@ export async function run(ctx) {
   }
   if (shouldRead) {
     const data = readGuide(readTarget(requested, docOrRef, all));
-    if (ctx.json) printJson({ data });
+    if (explicitJson) printJson({ data });
     else printData(data.content);
     return data;
   }

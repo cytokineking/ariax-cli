@@ -38,11 +38,20 @@ export async function run(ctx) {
     else for (const line of campaignStatusLines(compact)) printData(line);
     return compact;
   }
+  const control = project.control && typeof project.control === 'object' && !Array.isArray(project.control)
+    ? project.control
+    : null;
   printKv({
     id: project.id ?? projectId,
     name: project.name ?? '-',
     protocol: project.protocol ?? project.protocol_id ?? '-',
     status: project.status ?? project.state ?? '-',
+    ...(control ? {
+      control_revision: control.revision ?? '-',
+      human_resume_required: control.human_resume_required ?? '-',
+      ...(control.stop_reason ? { control_stop_reason: control.stop_reason } : {}),
+      ...(ctx.flags.details === true ? { control } : {}),
+    } : {}),
     ...bindCraft2ProgressFields(project),
   });
 }
