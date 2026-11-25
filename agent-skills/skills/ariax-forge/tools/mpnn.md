@@ -63,12 +63,23 @@ command UUID and inspect logs before using the prepared files. The helper
 rejects missing backbone atoms, unknown protein residues, unresolved alternate
 locations, zero occupancy, ambiguous atoms and multiple PDB models. Convert
 or repair these explicitly while retaining the raw input and preparation
-record. No coordinates are synthesized by this helper.
+record. No coordinates are synthesized by this helper. Preflight note:
+`mpnn-prepare` checks occupancy on all atoms including hydrogens—strip
+zero-occupancy H atoms first if a crystal PDB fails occupancy validation.
 
 Plans contain `source.structure_id`, `source.description` and a nonempty
 `design_positions` list such as `["A:10", "A:10A"]`. Identifiers refer to
-the supplied PDB's original residue number plus insertion code. Unselected
-protein residues and chains are fixed. `mpnn-prepare` writes a fresh
+the supplied PDB's original residue number plus insertion code. Minimal
+`protein.plan.json` example:
+
+```json
+{
+  "source": { "structure_id": "3HTN", "description": "Chains A/B; chain B fixed" },
+  "design_positions": ["A:54", "A:55", "A:56"]
+}
+```
+
+Unselected protein residues and chains are fixed. `mpnn-prepare` writes a fresh
 `backbone.pdb`, `fixed_positions.jsonl`, `plan.json` and `residue-map.json`.
 It maps observed residues to dense one-based native positions while retaining
 original chain, residue number, insertion code and amino acid. It preserves

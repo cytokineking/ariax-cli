@@ -16,6 +16,10 @@ const FORGE_API = '/api/v1/forge';
 const DEFAULT_TOP = 5;
 const MAX_TOP = 25;
 
+export const help = `ariax summary PROJECT [--top N] [--include-sequences]
+  PROJECT accepts a project UUID or an exact unique project name.
+  Auto-routes Managed and Forge projects into one compact scientific handoff summary.`;
+
 export const MANAGED_CAVEAT =
   'Computational acceptance supports experimental prioritization only; it does not establish binding, affinity, stability, or activity.';
 export const FORGE_CAVEAT =

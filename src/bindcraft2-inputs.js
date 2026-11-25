@@ -39,12 +39,19 @@ export function isBindcraft2(spec) {
   return String(spec?.protocol || '').trim().toLowerCase() === 'bindcraft2';
 }
 
-export function normalizeBindcraft2Spec(spec) {
+export function normalizeBindcraft2Spec(spec, notes = null) {
   if (!isBindcraft2(spec)) throw invalid('Job JSON protocol must be bindcraft2.');
   const prepared = structuredClone(spec);
   const config = prepared.protocol_config;
   if (!isObject(config)) throw invalid('BindCraft2 protocol_config is required.');
-  if (config.schema_version !== 1) throw invalid('BindCraft2 protocol_config.schema_version must be integer 1.');
+  if (config.schema_version === undefined) {
+    config.schema_version = 1;
+    if (Array.isArray(notes)) {
+      notes.push('Defaulted omitted BindCraft2 protocol_config.schema_version to 1.');
+    }
+  } else if (config.schema_version !== 1) {
+    throw invalid('BindCraft2 protocol_config.schema_version must be integer 1.');
+  }
   if (!Array.isArray(config.modality) || !config.modality.length) {
     throw invalid('BindCraft2 protocol_config.modality must identify a binder format.');
   }
@@ -274,7 +281,29 @@ export function prepareBindcraft2Bundle({ spec, inputDir, inputFile }) {
   if ((inputDir !== undefined) === (inputFile !== undefined)) {
     throw usageError('Choose exactly one BindCraft2 input source: --input-dir DIR or --input FILE.');
   }
-  const preparedSpec = normalizeBindcraft2Spec(spec);
+  const preparationNotes = [];
+  const preparedSpec = normalizeBindcraft2Spec(spec, preparationNotes);
+  if (inputFile !== undefined) {
+    const inputBasename = path.basename(String(inputFile));
+    const ext = path.extname(inputBasename).toLowerCase();
+    const normalizedInputName = ext === '.pdb'
+      ? 'input.pdb'
+      : ((ext === '.cif' || ext === '.mmcif') ? 'input.cif' : null);
+    if (normalizedInputName && inputBasename !== normalizedInputName) {
+      let normalizedCount = 0;
+      for (const target of preparedSpec.protocol_config.targets) {
+        if (isObject(target) && typeof target.input_file === 'string' && target.input_file === inputBasename) {
+          target.input_file = normalizedInputName;
+          normalizedCount += 1;
+        }
+      }
+      if (normalizedCount > 0) {
+        preparationNotes.push(
+          `Normalized BindCraft2 target input_file "${inputBasename}" to "${normalizedInputName}" to match --input.`,
+        );
+      }
+    }
+  }
   const required = requiredBindcraft2Inputs(preparedSpec);
   const primaryFilename = preparedSpec.protocol_config.targets[0].input_file;
   const sources = [];
@@ -310,6 +339,7 @@ export function prepareBindcraft2Bundle({ spec, inputDir, inputFile }) {
     required,
     sources,
     files,
+    preparationNotes,
     manifest: {
       schema_version: 1,
       kind: 'ariax_bindcraft2_input_bundle',
@@ -317,6 +347,7 @@ export function prepareBindcraft2Bundle({ spec, inputDir, inputFile }) {
       primary_file: primaryFilename,
       project_type: bindcraft2ProjectType(preparedSpec),
       files: Object.fromEntries(files.map(({ filename, bytes }) => [filename, { bytes: bytes.length, sha256: digest(bytes) }])),
+      ...(preparationNotes.length ? { preparation_notes: preparationNotes } : {}),
     },
   };
 }
@@ -374,11 +405,21 @@ function compactTargetInspection(target) {
   };
 }
 
+const MAX_COMPACT_CHAIN_SEQUENCE = 1000;
+
+function compactChainSequence(sequence) {
+  if (typeof sequence !== 'string' || !sequence) return null;
+  return sequence.length > MAX_COMPACT_CHAIN_SEQUENCE
+    ? `${sequence.slice(0, MAX_COMPACT_CHAIN_SEQUENCE)}...`
+    : sequence;
+}
+
 function compactChainInspection(chain, full) {
   const compact = {
     chain: chain.prepared_chain ?? chain.source_chain ?? null,
     source_chain: chain.source_chain ?? null,
     selected: chain.selected === true,
+    sequence: full ? (chain.sequence ?? null) : compactChainSequence(chain.sequence),
     sequence_length: chain.sequence_length ?? null,
     sequence_source: chain.sequence_source ?? null,
     mapping_status: chain.mapping_status ?? null,
@@ -387,7 +428,6 @@ function compactChainInspection(chain, full) {
   };
   if (chain.mapping_note) compact.mapping_note = chain.mapping_note;
   if (full) {
-    compact.sequence = chain.sequence ?? null;
     compact.residues = Array.isArray(chain.residues) ? chain.residues : [];
     compact.unresolved_regions = chain.unresolved_regions ?? null;
   }

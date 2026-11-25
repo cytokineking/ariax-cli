@@ -1,16 +1,37 @@
 /** Replace a project's saved GPU policy for its next provisioning attempt. */
 import { usageError } from '../args.js';
-import { printJson, printKv, printProgress } from '../output.js';
+import { printData, printJson, printKv, printProgress } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
 import { readJsonFile } from './validate.js';
 import { checkGpuPolicy, projectGpuPolicy } from '../gpu-policy.js';
 
+export const GPU_PREFERENCES_EXAMPLE = Object.freeze({
+  allowed_gpus: ['L40S', 'A100_80GB'],
+  priority_mode: 'cost',
+});
+
+export const help = `ariax gpu-preferences PROJECT -f preferences.json | ariax gpu-preferences --example
+  PROJECT accepts a project UUID or an exact unique project name.
+  Fields:
+    allowed_gpus   Nonempty array of GPU IDs containing at least one compatible core GPU.
+    priority_mode  "speed" | "cost" | "balanced"
+  Example JSON (also printable via \`ariax gpu-preferences --example\`):
+    {"allowed_gpus":["L40S","A100_80GB"],"priority_mode":"cost"}`;
+
 export async function run(ctx) {
-  if (ctx.positionals.length !== 1) throw usageError('gpu-preferences: expected one project UUID or exact unique name.');
-  const unknown = Object.keys(ctx.flags).find((flag) => flag !== 'file');
+  const unknown = Object.keys(ctx.flags).find((flag) => !['file', 'example'].includes(flag));
   if (unknown) throw usageError(`gpu-preferences: unknown flag --${unknown}`);
+  if (ctx.flags.example === true) {
+    if (ctx.positionals.length > 0 || ctx.flags.file !== undefined) {
+      throw usageError('gpu-preferences: --example cannot be combined with PROJECT or -f.');
+    }
+    if (ctx.json) printJson({ data: GPU_PREFERENCES_EXAMPLE });
+    else printData(JSON.stringify(GPU_PREFERENCES_EXAMPLE, null, 2));
+    return;
+  }
+  if (ctx.positionals.length !== 1) throw usageError('gpu-preferences: expected one PROJECT (UUID or exact unique project name).');
   const file = ctx.flags.file;
-  if (typeof file !== 'string' || !file) throw usageError('gpu-preferences: provide -f preferences.json.');
+  if (typeof file !== 'string' || !file) throw usageError('gpu-preferences: provide -f preferences.json (or pass --example for sample JSON).');
   const body = readJsonFile(file);
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw usageError('gpu-preferences: preferences file must contain a JSON object.');

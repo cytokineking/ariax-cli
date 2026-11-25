@@ -1,5 +1,5 @@
 /**
- * `ariax restart <project-id> [--wait]`
+ * `ariax restart PROJECT [--wait]`
  * Restart with an internally generated request identifier.
  */
 import { printData, printJson, printProgress } from '../output.js';
@@ -9,11 +9,14 @@ import { waitAndReport } from './submit.js';
 import { accountIdentity, createOperation, sendOperation, waitForOperation } from '../operations.js';
 import { checkGpuPolicy, projectGpuPolicy } from '../gpu-policy.js';
 
+export const help = `ariax restart PROJECT [--wait] [--poll-interval SECONDS] [--wait-timeout SECONDS] [--details]
+  PROJECT accepts a project UUID or an exact unique project name.`;
+
 /** @param {{ client: any, flags: Record<string, any>, positionals: string[], json: boolean, config: { rootDir: string } }} ctx */
 export async function run(ctx) {
   const { flags } = ctx;
   const operand = ctx.positionals[0];
-  if (!operand) throw usageError('restart: missing <project-id> (UUID or exact unique project name).');
+  if (!operand) throw usageError('restart: missing PROJECT (UUID or exact unique project name).');
   const projectId = await resolveProjectId(ctx.client, String(operand));
   const project = await projectGpuPolicy(ctx, projectId);
   await checkGpuPolicy(ctx, project, { source: 'saved policy', saved: true });

@@ -13,10 +13,31 @@ import {
   inputManifest,
   inspectChains,
   inspectResidues,
+  resolveBindcraft2BundleResidueMappings,
   resolveSpecResidueMappings,
   stableJson,
 } from '../input-manifest.js';
 import { inspectBindcraft2Bundle, isBindcraft2, prepareBindcraft2Bundle, writeBindcraft2Bundle } from '../bindcraft2-inputs.js';
+
+const SUBCOMMAND_HELP = Object.freeze({
+  inspect: `ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--residues SPEC] [--full] [--details]
+  Inspects chains, compact 1-letter sequences (up to 1,000 aa per chain), register mapping, and residue lookups without mutating files.
+  --residues SPEC examples: --residues A:56,115,121-123  or  --residues A56,A121-123`,
+  prepare: `ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR
+  Deterministically normalizes structure inputs and job.json into DIR (writes prepared structure, job.json, and input-manifest.json).`,
+});
+
+export const help = `ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--residues SPEC] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR
+  --residues SPEC examples: --residues A:56,115,121-123  or  --residues A56,A121-123
+  Compact inspect includes 1-letter chain sequences (truncated with "..." only above 1,000 aa); pass --full for full per-residue arrays.`;
+
+export function helpFor(positionals = []) {
+  const action = positionals[0];
+  if (action && Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, action)) {
+    return SUBCOMMAND_HELP[action];
+  }
+  return help;
+}
 
 function invalid(message) {
   return Object.assign(new Error(message), {exitCode:EXIT.VALIDATION, code:'validation_failed'});
@@ -151,13 +172,12 @@ export async function run(ctx) {
           { spec: bundle.spec },
         )
         : undefined;
-      const resolvedMappings = primaryEntry
-        ? resolveSpecResidueMappings(bundle.spec, primaryEntry.text, primaryEntry.filename)
-        : {};
+      const resolvedMappings = resolveBindcraft2BundleResidueMappings(bundle);
       const prepareRequired = stableJson(bundle.spec) !== stableJson(job.spec);
       outputBindcraft2Inspection(ctx, {
         ...inspection,
         prepare_required: prepareRequired,
+        ...(bundle.preparationNotes?.length ? { preparation_notes: bundle.preparationNotes } : {}),
         ...(matchedResidues ? { matched_residues: matchedResidues } : {}),
         ...resolvedMappings,
       });
@@ -171,6 +191,7 @@ export async function run(ctx) {
       primary_input: path.join(directory, bundle.primaryFilename),
       input_files: bundle.required.map((filename) => path.join(directory, filename)),
       project_type: bundle.projectType,
+      preparation_notes: bundle.preparationNotes ?? [],
     });
     return;
   }

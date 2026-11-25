@@ -48,6 +48,7 @@ const BUNDLED_EXAMPLES = Object.freeze({
       multidomain: 'bindcraft2-formats/multidomain.json',
       'multistate-secondary-fasta': 'bindcraft2-formats/multistate-secondary-fasta.json',
       multistate: 'bindcraft2-formats/multistate-secondary-fasta.json',
+      detarget: 'bindcraft2-formats/detarget.json',
     },
   },
   boltzgen: {

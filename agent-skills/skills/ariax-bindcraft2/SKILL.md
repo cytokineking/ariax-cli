@@ -33,7 +33,7 @@ Use exact case-sensitive tokens in `protocol_config.modality` (`induced_fit` and
 
 - First target must be `input.pdb` or `input.cif` (primary FASTA is deferred). Up to 8 targets and 9 unique files (including optional custom scaffold); secondary targets may be PDB, mmCIF, or FASTA. Config filenames are local bundle basenames.
 - Uses **author residue numbering**; whole-chain hotspot/coldspot shorthands (`A`, `A,B12-16`) are supported on structured targets (not FASTA or scaffold edits). Do not translate BoltzGen canonical numbers.
-- Secondary FASTA targets select the named record and cannot carry hotspots/coldspots. Detargeting requires `objective: "detarget"` and a final ceiling.
+- Secondary FASTA targets select the named record and cannot carry hotspots/coldspots. For folded homolog FASTA sequences (multistate or detargeting), set `advanced.crop_fasta_sequence: false` to fold the full sequence rather than the default 10–40 aa IDR crop. Detargeting requires `objective: "detarget"` and `advanced.max_detarget_iptm_final` (see `ariax schema bindcraft2 --example detarget`).
 - **Custom scaffolds:** supply `scaffold_file` + `mutate_positions` (e.g., `A50-55(5-8)` for variable length; omit de novo `lengths`). `!` or `-DESIGN` holds a span fixed (cannot resize: `A50-55(6)!` valid, `A50-55(5-8)!` invalid); `+DESIGN` re-enables editing.
 - **Bundled VHH scaffold:** omit `binder` to inherit the qualified mutation selection. Supplying `mutate_positions` replaces it; plain spans mark editable paratope and `*` marks editable framework (`DESIGN` without `CONTACT`). Editing only paratope requires `advanced.weights_binder_intra_coldspot: 0` if accepted by the live schema.
 

@@ -59,6 +59,8 @@ const BOOLEAN_FLAGS = new Set([
   'details',
   'compact',
   'with-guide',
+  'guide-only',
+  'all-counts',
   'paths',
   'dry-run',
   'force',
@@ -134,6 +136,14 @@ export function parseArgv(argv) {
           target[name] = true;
           i += 1;
         }
+        continue;
+      }
+      if (name === 'example' && command === 'gpu-preferences') {
+        if (inlineValue !== undefined) {
+          throw usageError(`Flag --${name} takes no value (got "${tok}").`);
+        }
+        target[name] = true;
+        i += 1;
         continue;
       }
       if (!fileVersion && BOOLEAN_FLAGS.has(name)) {

@@ -138,6 +138,15 @@ export function inputManifest(input, prepared, sourceSpec, sourceJobBytes, build
   };
 }
 
+const MAX_COMPACT_SEQUENCE_CHARS = 1000;
+
+function compactSequenceValue(sequence) {
+  if (typeof sequence !== 'string' || !sequence) return null;
+  return sequence.length > MAX_COMPACT_SEQUENCE_CHARS
+    ? `${sequence.slice(0, MAX_COMPACT_SEQUENCE_CHARS)}...`
+    : sequence;
+}
+
 /** Bound default console output; full per-residue mappings require --full or the written manifest. */
 export function compactInspection(value, full = false) {
   if (full) return value;
@@ -151,8 +160,11 @@ export function compactInspection(value, full = false) {
     chains: value.chains.slice(0, 50).map((chain) => {
       const { residues, sequence, ...rest } = chain;
       const list = Array.isArray(residues) ? residues : [];
+      const truncatedSeq = typeof sequence === 'string' && sequence.length > MAX_COMPACT_SEQUENCE_CHARS;
       return {
         ...rest,
+        sequence: compactSequenceValue(sequence),
+        ...(truncatedSeq ? { sequence_truncated: true } : {}),
         sequence_sha256: sequence ? sha256(sequence) : null,
         unresolved_region_count: chain.unresolved_regions?.length ?? null,
         unresolved_regions: chain.unresolved_regions?.slice(0, 100) ?? null,
@@ -388,8 +400,35 @@ export function resolveSpecResidueMappings(spec, text, targetFilename) {
   }
 
   const hotspots = [];
-  const pushHotspot = (entry) => {
-    if (hotspots.length < MAX_RESOLVED_POSITIONS) hotspots.push(entry);
+  const coldspots = [];
+  const pushTo = (list, entry) => {
+    if (list.length < MAX_RESOLVED_POSITIONS) list.push(entry);
+  };
+  const pushHotspot = (entry) => pushTo(hotspots, entry);
+
+  const resolveBindcraft2Selection = (rawSelection, target, dest) => {
+    if (typeof rawSelection !== 'string' || !rawSelection.trim()) return;
+    const defaultChain = Array.isArray(target.chains) && target.chains.length ? String(target.chains[0]) : null;
+    for (const rawTok of rawSelection.split(',').map((t) => t.trim()).filter(Boolean)) {
+      if (dest.length >= MAX_RESOLVED_POSITIONS) break;
+      if (/^[A-Za-z]+$/.test(rawTok)) {
+        const residues = parsed.author?.[rawTok]?.authorResidues || [];
+        for (const pos of residues) {
+          if (dest.length >= MAX_RESOLVED_POSITIONS) break;
+          pushTo(dest, lookupAuthor(rawTok, pos));
+        }
+        continue;
+      }
+      const tok = /^[A-Za-z]/.test(rawTok) ? rawTok : (defaultChain ? `${defaultChain}${rawTok}` : rawTok);
+      const m = /^([A-Za-z]+)(\d+)(?:-(\d+))?$/.exec(tok);
+      if (!m) continue;
+      const chain = m[1];
+      const start = Math.min(Number(m[2]), Number(m[3] || m[2]));
+      const end = Math.max(Number(m[2]), Number(m[3] || m[2]));
+      for (let pos = start; pos <= end && dest.length < MAX_RESOLVED_POSITIONS; pos += 1) {
+        pushTo(dest, lookupAuthor(chain, pos));
+      }
+    }
   };
 
   if (protocol === 'bindcraft') {
@@ -407,20 +446,10 @@ export function resolveSpecResidueMappings(spec, text, targetFilename) {
   } else if (protocol === 'bindcraft2') {
     const targets = Array.isArray(spec.protocol_config?.targets) ? spec.protocol_config.targets : [];
     for (const target of targets) {
-      if (!target || typeof target.hotspots !== 'string' || !target.hotspots.trim()) continue;
+      if (!target || typeof target !== 'object') continue;
       if (target.input_file && targetFilename && target.input_file !== targetFilename) continue;
-      const defaultChain = Array.isArray(target.chains) && target.chains.length ? String(target.chains[0]) : null;
-      for (const rawTok of target.hotspots.split(',').map((t) => t.trim()).filter(Boolean)) {
-        const tok = /^[A-Za-z]/.test(rawTok) ? rawTok : (defaultChain ? `${defaultChain}${rawTok}` : rawTok);
-        const m = /^([A-Za-z]+)(\d+)(?:-(\d+))?$/.exec(tok);
-        if (!m) continue;
-        const chain = m[1];
-        const start = Math.min(Number(m[2]), Number(m[3] || m[2]));
-        const end = Math.max(Number(m[2]), Number(m[3] || m[2]));
-        for (let pos = start; pos <= end && hotspots.length < MAX_RESOLVED_POSITIONS; pos += 1) {
-          pushHotspot(lookupAuthor(chain, pos));
-        }
-      }
+      resolveBindcraft2Selection(target.hotspots, target, hotspots);
+      resolveBindcraft2Selection(target.coldspots, target, coldspots);
     }
   } else if (protocol === 'pxdesign') {
     for (const [chain, raw] of Object.entries(spec.hotspots_by_chain || {})) {
@@ -444,5 +473,37 @@ export function resolveSpecResidueMappings(spec, text, targetFilename) {
     }
   }
 
-  return hotspots.length ? { resolved_hotspots: hotspots } : {};
+  return {
+    ...(hotspots.length ? { resolved_hotspots: hotspots } : {}),
+    ...(coldspots.length ? { resolved_coldspots: coldspots } : {}),
+  };
+}
+
+/** Merge resolved hotspot and coldspot mappings across all structured files in a BindCraft2 bundle. */
+export function resolveBindcraft2BundleResidueMappings(bundle) {
+  if (!bundle || !Array.isArray(bundle.files)) return {};
+  const hotspots = [];
+  const coldspots = [];
+  const orderedFiles = [
+    ...bundle.files.filter((entry) => entry.filename === bundle.primaryFilename),
+    ...bundle.files.filter((entry) => entry.filename !== bundle.primaryFilename),
+  ];
+  for (const entry of orderedFiles) {
+    if (!entry || entry.format === 'fasta' || typeof entry.text !== 'string') continue;
+    const mapped = resolveSpecResidueMappings(bundle.spec, entry.text, entry.filename);
+    if (Array.isArray(mapped.resolved_hotspots)) {
+      for (const item of mapped.resolved_hotspots) {
+        if (hotspots.length < MAX_RESOLVED_POSITIONS) hotspots.push(item);
+      }
+    }
+    if (Array.isArray(mapped.resolved_coldspots)) {
+      for (const item of mapped.resolved_coldspots) {
+        if (coldspots.length < MAX_RESOLVED_POSITIONS) coldspots.push(item);
+      }
+    }
+  }
+  return {
+    ...(hotspots.length ? { resolved_hotspots: hotspots } : {}),
+    ...(coldspots.length ? { resolved_coldspots: coldspots } : {}),
+  };
 }

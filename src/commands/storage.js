@@ -20,6 +20,38 @@ const OPTIONS = {
   deletion: [[], 3],
 };
 
+const SUBCOMMAND_HELP = Object.freeze({
+  usage: `ariax storage usage [--refresh] [--after UUID]
+  Show account-wide storage usage, retained storage summary, and measurement counts.`,
+  projects: `ariax storage projects [--q TEXT] [--protocol P] [--status S] [--sort updated_at|name|bytes_desc] [--limit N] [--cursor C] [--all]
+  List projects with storage byte usage and freshness.`,
+  project: `ariax storage project PROJECT [--refresh [--wait] [--wait-timeout SECONDS]]
+  PROJECT accepts a project UUID or an exact unique project name.
+  Inspect project storage usage, directories, largest files, retained bytes, and cleanup status.`,
+  entries: `ariax storage entries PROJECT [--path P] [--limit N] [--cursor C]
+  PROJECT accepts a project UUID or an exact unique project name.
+  Browse stored directories and files under a project.`,
+  suggest: `ariax storage suggest PROJECT
+  PROJECT accepts a project UUID or an exact unique project name.
+  List reclaimable storage paths (for Forge projects, highlights directories for \`ariax forge pack\` or \`ariax forge files delete\`).`,
+  delete: `ariax storage delete PROJECT (--path P [--path P2 ...] | --suggested) [--recursive] --preview
+  ariax storage delete PROJECT --path P [--recursive] [--expected-control-revision N] [--operation-id UUID]
+  PROJECT accepts a project UUID or an exact unique project name.
+  CLI \`ariax storage delete\` performs scoped path deletion only; \`whole_project_delete\` is web-only.
+  Use \`--preview\` first to inspect impact; actual deletions require an explicit \`--path\`.`,
+  deletion: `ariax storage deletion PROJECT DELETION_ID
+  PROJECT accepts a project UUID or an exact unique project name.
+  Inspect the state of a submitted storage deletion operation (may report \`write_grants_pending\` until \`verification_not_before\` passes).`,
+});
+
+export function helpFor(positionals = []) {
+  const action = positionals[0];
+  if (action && Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, action)) {
+    return SUBCOMMAND_HELP[action];
+  }
+  return help;
+}
+
 export const help = `ariax storage usage [--refresh] [--after UUID]
   ariax storage projects [--q TEXT] [--protocol P] [--status S] [--sort updated_at|name|bytes_desc] [--limit N] [--cursor C] [--all]
   ariax storage project PROJECT [--refresh [--wait] [--wait-timeout SECONDS]]
@@ -29,6 +61,7 @@ export const help = `ariax storage usage [--refresh] [--after UUID]
   ariax storage delete PROJECT --path P [--recursive] [--expected-control-revision N] [--operation-id UUID]
   ariax storage deletion PROJECT DELETION_ID
   PROJECT accepts a project UUID or an exact unique project name.
+  CLI \`ariax storage delete\` performs scoped path deletion only; \`whole_project_delete\` is web-only.
   Use \`storage delete --preview\` (with one or more \`--path\` flags or \`--suggested\`) to inspect impact before submitting an explicit \`--path\` deletion.
   For Forge projects, \`storage suggest\` highlights large or high-file-count directories for \`ariax forge pack\` or \`ariax forge files delete\`.
   After a managed deletion, cleanup may report \`write_grants_pending\` until \`verification_not_before\` passes (waiting for active upload grants to expire).

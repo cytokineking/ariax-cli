@@ -1,4 +1,4 @@
-/** `ariax status <project-id> [--wait] [--resume]` — project detail + optional wait. */
+/** `ariax status PROJECT [--wait] [--resume]` — Managed campaign detail + optional wait. */
 import { printData, printJson, printKv, printProgress } from '../output.js';
 import { usageError } from '../args.js';
 import { resolveProjectId } from '../resolve.js';
@@ -6,6 +6,10 @@ import { loadResume, saveResume } from '../resume.js';
 import { waitAndReport } from './submit.js';
 import { bindCraft2ProgressFields } from '../bindcraft2-progress.js';
 import { campaignStatusLines, compactCampaign, usesCompactCampaignPresentation } from '../campaign-presentation.js';
+
+export const help = `ariax status PROJECT [--wait] [--resume] [--poll-interval SECONDS] [--wait-timeout SECONDS] [--details]
+  PROJECT accepts a project UUID or an exact unique project name.
+  Returns Managed campaign status (kind: ariax_campaign_status). For Forge sessions or projects, use \`ariax forge status SESSION\` or \`ariax forge project PROJECT\`.`;
 
 /** @param {{ client: any, flags: Record<string, any>, positionals: string[], json: boolean, config: { rootDir: string } }} ctx */
 export async function run(ctx) {
@@ -19,7 +23,7 @@ export async function run(ctx) {
     operand = saved.projectId;
     printProgress(`Resuming wait for project ${operand} (polling only)…`);
   }
-  if (!operand) throw usageError('status: missing <project-id> (UUID or exact unique project name).');
+  if (!operand) throw usageError('status: missing PROJECT (UUID or exact unique project name).');
   const projectId = await resolveProjectId(ctx.client, String(operand));
   if (flags.wait === true || flags.resume === true) {
     await saveResume(ctx.config.rootDir, { projectId }, { separate: true });

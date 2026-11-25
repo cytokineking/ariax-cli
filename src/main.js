@@ -76,7 +76,7 @@ const COMMAND_OPTIONS = {
   discover: [['query', 'task', 'modality', 'execution', 'all'], 0],
   me: [[], 0],
   protocols: [[], 0],
-  pricing: [['details', 'gpu', 'gpu-count'], 0],
+  pricing: [['details', 'gpu', 'gpu-count', 'all-counts'], 0],
   schema: [['raw', 'kind', 'output', 'o', 'details', 'example'], 1],
   skills: [['read', 'reference', 'doc', 'tool', 'paths', 'details', 'list'], 1],
   validate: [['file', 'f', 'input', 'input-dir', 'details'], 0],
@@ -96,7 +96,7 @@ const COMMAND_OPTIONS = {
   ], 1],
   operations: [['all-origins'], 1],
   recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
-  'gpu-preferences': [['file'], 1],
+  'gpu-preferences': [['file', 'example'], 1],
   runs: [['job', 'limit', 'cursor', 'all'], 1],
   candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
   results: [['path', 'download', 'overwrite', 'limit', 'cursor', 'details'], 1],
@@ -104,7 +104,7 @@ const COMMAND_OPTIONS = {
   upgrade: [['check', 'yes', 'channel'], 0],
   login: [['with-token', 'insecure-storage'], 0],
   logout: [[], 0],
-  help: [[], 1],
+  help: [[], 3],
 };
 
 function validateCommandArguments({ command, positionals, flags }) {
@@ -149,6 +149,7 @@ export function isPublicInvocation(command, positionals = [], flags = {}) {
   if (PUBLIC_COMMANDS.has(command)) return true;
   if (command === 'forge' && positionals[0] === 'catalog') return true;
   if (command === 'feedback' && flags?.['dry-run'] === true) return true;
+  if (command === 'gpu-preferences' && flags?.example === true) return true;
   return false;
 }
 
@@ -281,7 +282,11 @@ function reportError(err, jsonMode, authContext) {
       };
       const buffer = recordCliError(errorRoot, entry, { now: nowMs });
       const recorded = buffer?.entries?.[buffer.entries.length - 1] ?? entry;
-      const notice = evaluateFeedbackOpportunity(buffer, recorded, { env, now: nowMs });
+      const notice = evaluateFeedbackOpportunity(buffer, recorded, {
+        env,
+        now: nowMs,
+        attemptedCommand: authContext?.command,
+      });
       if (notice) {
         recordFeedbackAdvisory(errorRoot, recorded, { now: nowMs });
         printProgress(JSON.stringify({ notice }));
@@ -298,27 +303,28 @@ const HELP_TOPICS = {
   forge: forge.help,
   me: 'ariax me',
   protocols: 'ariax protocols',
-  pricing: 'ariax pricing [--gpu GPU_ID] [--gpu-count 1|2|4|8] [--details]',
-  schema: 'ariax schema <protocol> [--raw] [--details] [--example [TYPE]] [--kind job|submission] [-o, --output FILE]',
+  pricing: pricing.help,
+  schema: `ariax schema <protocol> [--raw] [--details] [--example [TYPE]] [--kind job|submission] [-o, --output FILE]
+  Bundled examples include: bindcraft2 (--example pilot|miniprotein|peptide|cyclic-peptide|vhh|scfv|fab|arp|detarget|multistate), boltzgen (--example vhh|peptide|cyclic-peptide|small-molecule|smiles), pxdesign, esmfold2-pipeline, bindcraft-v1.5.`,
   skills: 'ariax skills [protocol|forge] [--list] [--read] [--reference NAME] [--doc NAME] [--tool GUIDE_ID] [--paths] | ariax skills install [--target claude|codex|cursor|antigravity|all] [--scope user|project] [--dry-run] [--yes] | ariax skills status',
-  inputs: 'ariax inputs inspect (--input FILE | --input-dir DIR | --pdb ID) [-f job.json] [--residues SPEC] [--full] [--details] | ariax inputs prepare (--input FILE | --input-dir DIR | --pdb ID) -f job.json --output DIR',
+  inputs: inputs.help,
   validate: 'ariax validate -f job.json [--input FILE | --input-dir DIR] [--details]',
   submit: 'ariax submit -f job.json --name <name> [--input FILE | --input-dir DIR] [--wait] [--details]',
   operations: 'ariax operations [operation-id] [--all-origins]  (lists current API origin by default; pass --all-origins for all)',
   recover: 'ariax recover <operation-id> [--wait]',
-  projects: 'ariax projects [--status s] [--protocol p] [--name n] [--limit N] [--cursor C] [--all] [--details] | ariax projects export <project-id> [-o, --output job.json]',
+  projects: 'ariax projects [--status s] [--protocol p] [--name n] [--limit N] [--cursor C] [--all] [--details] | ariax projects export PROJECT [-o, --output job.json]',
   jobs: 'ariax jobs [--project <id>] [--status s] [--limit N] [--cursor C] [--all]',
-  status: 'ariax status <project-id> [--wait] [--resume] [--details]',
+  status: status.help,
   logs: 'ariax logs <job-id> [--list | [--tail N] [--log-ref PATH]]',
-  pause: 'ariax pause <project-id>',
-  restart: 'ariax restart <project-id> [--wait]',
-  'gpu-preferences': 'ariax gpu-preferences <project-id> -f preferences.json',
-  abort: 'ariax abort <project-id>',
+  pause: pause.help,
+  restart: restart.help,
+  'gpu-preferences': gpuPreferences.help,
+  abort: abort.help,
   feedback: 'ariax feedback --type bug|agent-friction|docs-gap|missing-capability|technical-support|feature-request|other --summary TEXT (--message TEXT|- | --file FILE) [--severity blocker|high|medium|low] [--project PROJECT] [--job UUID] [--session UUID] [--command UUID] [--protocol P] [--tool T] [--failed-request-id ID] [--attach-last-error] [--operation-id UUID] [--dry-run]',
-  runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
-  candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
-  results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
-  summary: 'ariax summary <project-id> [--top N] [--include-sequences]',
+  runs: 'ariax runs PROJECT [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
+  candidates: 'ariax candidates PROJECT [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
+  results: 'ariax results PROJECT [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
+  summary: summary.help,
   storage: storage.help,
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',
@@ -326,8 +332,9 @@ const HELP_TOPICS = {
 };
 
 function printHelp(topic, subPositionals = []) {
-  if (topic === 'forge' && Array.isArray(subPositionals) && subPositionals.length > 0 && typeof forge.helpFor === 'function') {
-    printData(`usage: ${forge.helpFor(subPositionals)}`);
+  const commandModule = topic && Object.prototype.hasOwnProperty.call(COMMANDS, topic) ? COMMANDS[topic] : null;
+  if (commandModule && Array.isArray(subPositionals) && subPositionals.length > 0 && typeof commandModule.helpFor === 'function') {
+    printData(`usage: ${commandModule.helpFor(subPositionals)}`);
     printData('');
     printData('Global flags: --json, --fields <paths>, --base-url <url>, --allow-custom-origin, --root-dir <dir>, --connection-cache-dir <dir>, --timeout <ms>');
     return;
@@ -342,14 +349,15 @@ function printHelp(topic, subPositionals = []) {
   printData('usage: ariax <command> [options]');
   printData('');
   printData('Commands:');
-  for (const [topic, line] of Object.entries(HELP_TOPICS)) {
-    const display = topic === 'forge'
-      ? 'ariax forge <action> [options] (run ariax help forge for commands)'
-      : topic === 'storage'
+  for (const [topicName, line] of Object.entries(HELP_TOPICS)) {
+    const display = topicName === 'forge'
+      ? 'ariax forge <action> [options] — Custom GPU sessions (list, create, status, tools, inputs, run, sync, pack, finish, files; run ariax help forge)'
+      : topicName === 'storage'
         ? 'ariax storage <usage|projects|project|entries|suggest|delete|deletion> [options] (run ariax help storage)'
-        : line;
+        : String(line).split('\n')[0];
     printData(`  ${display}`);
   }
+  printData('  (PROJECT accepts a project UUID or an exact unique project name.)');
   printData('');
   printData('Global flags:');
   printData('  --json / --no-json      Force JSON or human output (default: JSON when piped)');

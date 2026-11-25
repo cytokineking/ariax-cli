@@ -412,10 +412,27 @@ function hasRepeatedValidationFailures(entries, current, nowMs) {
   return false;
 }
 
-function buildSuggestedCommand(reason, current, consentMode) {
+/**
+ * Sanitize an attempted unknown top-level command token for feedback summaries.
+ * Returns at most 32 safe [A-Za-z0-9_-] chars, or null if empty, secret-like, or path-like.
+ */
+export function sanitizeCommandToken(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.startsWith('-') || /^arx_/i.test(trimmed)) return null;
+  if (/[\/\\@:]/.test(trimmed)) return null;
+  const cleaned = trimmed.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+  if (!cleaned || /^arx_/i.test(cleaned)) return null;
+  return cleaned;
+}
+
+function buildSuggestedCommand(reason, current, consentMode, attemptedToken = null) {
   const dryRunFlag = consentMode === 'friction' ? '' : ' --dry-run';
   if (reason === 'repeated_validation_failures') {
-    return `ariax feedback --type agent-friction --attach-last-error --summary "Repeated validation failures on ${current.command_template}" --message "Describe expected vs observed behavior"${dryRunFlag}`;
+    const summary = current.command_template === 'unknown' && attemptedToken
+      ? `Repeated unknown-command errors (ariax ${attemptedToken})`
+      : `Repeated validation failures on ${current.command_template}`;
+    return `ariax feedback --type agent-friction --attach-last-error --summary "${summary}" --message "Describe expected vs observed behavior"${dryRunFlag}`;
   }
   if (reason === 'anomaly_error') {
     return `ariax feedback --type bug --attach-last-error --summary "${current.command_template} encountered ${current.error_code}" --message "Describe expected vs observed behavior"${dryRunFlag}`;
@@ -427,7 +444,11 @@ function buildSuggestedCommand(reason, current, consentMode) {
  * Evaluate whether the current CLI failure qualifies for a stderr `feedback_opportunity` notice.
  * Returns a notice object or null.
  */
-export function evaluateFeedbackOpportunity(buffer, currentEntry, { env = process.env, now = Date.now() } = {}) {
+export function evaluateFeedbackOpportunity(
+  buffer,
+  currentEntry,
+  { env = process.env, now = Date.now(), attemptedCommand = undefined } = {},
+) {
   const agent = detectAgentShell(env);
   if (!agent) return null;
   const consentMode = feedbackConsentMode(env);
@@ -436,6 +457,9 @@ export function evaluateFeedbackOpportunity(buffer, currentEntry, { env = proces
   const nowMs = typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
   const current = sanitizeErrorEntry(currentEntry, nowMs);
   if (current.command_template === 'feedback') return null;
+  const attemptedToken = current.command_template === 'unknown'
+    ? sanitizeCommandToken(attemptedCommand ?? currentEntry?.attempted_command)
+    : null;
 
   const storedEntries = Array.isArray(buffer?.entries)
     ? buffer.entries.filter(isValidStoredEntry)
@@ -466,7 +490,7 @@ export function evaluateFeedbackOpportunity(buffer, currentEntry, { env = proces
   return {
     code: 'feedback_opportunity',
     reason,
-    suggested_command: buildSuggestedCommand(reason, current, consentMode),
+    suggested_command: buildSuggestedCommand(reason, current, consentMode, attemptedToken),
     consent_mode: consentMode,
     policy: FEEDBACK_POLICY,
   };

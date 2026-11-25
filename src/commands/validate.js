@@ -5,7 +5,7 @@ import { EXIT } from '../exit-codes.js';
 import { readAndValidateInput } from '../input.js';
 import { createSequencePrompt } from '../sequence-prompt.js';
 import { prepareStructureInput, protocolId } from '../structure-input.js';
-import { resolveSpecResidueMappings } from '../input-manifest.js';
+import { resolveBindcraft2BundleResidueMappings, resolveSpecResidueMappings } from '../input-manifest.js';
 import { isBindcraft2, prepareBindcraft2Bundle } from '../bindcraft2-inputs.js';
 import { compactScientificSettings, usesCompactCampaignPresentation } from '../campaign-presentation.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
@@ -45,9 +45,10 @@ export async function run(ctx) {
       inputDir: ctx.flags['input-dir'],
     });
     body = bundle.spec;
-    const primaryEntry = bundle.files.find((entry) => entry.filename === bundle.primaryFilename);
-    if (primaryEntry) {
-      resolvedMappings = resolveSpecResidueMappings(bundle.spec, primaryEntry.text, primaryEntry.filename);
+    preparationNotes = Array.isArray(bundle.preparationNotes) ? bundle.preparationNotes : [];
+    resolvedMappings = resolveBindcraft2BundleResidueMappings(bundle);
+    if (!ctx.json) {
+      for (const message of preparationNotes) printProgress(message);
     }
   } else if (ctx.flags['input-dir'] !== undefined) {
     const err = new Error('--input-dir is supported only for BindCraft2 jobs.');

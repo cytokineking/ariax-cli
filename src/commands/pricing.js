@@ -3,6 +3,46 @@ import { usageError } from '../args.js';
 import { printData, printJson, printTable } from '../output.js';
 import { EXIT } from '../exit-codes.js';
 
+const KNOWN_GPU_VRAM_GB = Object.freeze({
+  T4: 16,
+  L4: 24,
+  A10G: 24,
+  RTX_4090: 24,
+  RTX4090: 24,
+  RTX5090: 32,
+  RTX_5090: 32,
+  A100_40GB: 40,
+  L40: 48,
+  L40S: 48,
+  A6000: 48,
+  RTX_A6000: 48,
+  RTX6000ADA: 48,
+  RTX_6000_ADA: 48,
+  RTX5000PRO: 48,
+  A100: 80,
+  A100_80GB: 80,
+  H100: 80,
+  H100_SXM: 80,
+  H100_PCIE: 80,
+  RTX6000PRO: 96,
+  RTX_6000_PRO: 96,
+  RTXPRO6000: 96,
+  H200: 141,
+  B200: 180,
+  B300: 288,
+});
+
+function resolveVramGb(rate) {
+  if (typeof rate?.vram_gb === 'number' && Number.isFinite(rate.vram_gb) && rate.vram_gb > 0) {
+    return rate.vram_gb;
+  }
+  const key = String(rate?.gpu_id || '').trim().toUpperCase().replaceAll('-', '_');
+  return KNOWN_GPU_VRAM_GB[key] ?? null;
+}
+
+export const help = `ariax pricing [--gpu GPU_ID] [--gpu-count 1|2|4|8 | --all-counts] [--details]
+  Defaults to 1-GPU rates (gpu_count=1) with vram_gb per GPU. Pass --all-counts for all 1/2/4/8x rows or --gpu-count N for a specific count.`;
+
 export async function run(ctx) {
   const flags = ctx.flags || {};
   let gpuFilter = null;
@@ -11,7 +51,12 @@ export async function run(ctx) {
     if (!rawGpu) throw usageError('pricing: --gpu must be a nonempty GPU identifier.');
     gpuFilter = /^L40$/i.test(rawGpu) ? 'L40S' : rawGpu.toUpperCase();
   }
-  let gpuCountFilter = null;
+  const allCounts = flags['all-counts'] === true;
+  if (allCounts && flags['gpu-count'] !== undefined) {
+    throw usageError('pricing: --gpu-count and --all-counts cannot be combined.');
+  }
+  let gpuCountFilter = allCounts ? null : 1;
+  const usingDefaultGpuCount = !allCounts && flags['gpu-count'] === undefined;
   if (flags['gpu-count'] !== undefined) {
     const rawCount = String(flags['gpu-count']).trim();
     const num = Number(rawCount);
@@ -44,10 +89,14 @@ export async function run(ctx) {
       return [{ ...row, gpu_id: 'L40S' }];
     });
   };
-  const filterRows = rows => rows.filter(row => (
+  const enrich = rows => rows.map(row => ({
+    ...row,
+    vram_gb: resolveVramGb(row),
+  }));
+  const filterRows = rows => enrich(rows.filter(row => (
     (gpuFilter === null || String(row.gpu_id).toUpperCase() === gpuFilter)
     && (gpuCountFilter === null || row.gpu_count === gpuCountFilter)
-  ));
+  )));
 
   let promotion;
   if (raw.promotion && typeof raw.promotion === 'object') {
@@ -63,6 +112,7 @@ export async function run(ctx) {
 
   const data = {
     ...raw,
+    ...(usingDefaultGpuCount ? { default_gpu_count: 1 } : {}),
     rates: filterRows(collapse(raw.rates)),
     ...(promotion !== undefined ? { promotion } : {}),
   };
@@ -73,10 +123,15 @@ export async function run(ctx) {
   if (!data.rates.length) {
     printData('No matching GPU rates found.');
   } else {
-    printTable(['GPU', 'GPUs', 'USD/allocation-hour'], data.rates.map(rate => [
-      rate.gpu_id, rate.gpu_count,
+    printTable(['GPU', 'vram_gb', 'GPUs', 'USD/allocation-hour'], data.rates.map(rate => [
+      rate.gpu_id,
+      rate.vram_gb ?? '-',
+      rate.gpu_count,
       Number(rate.hourly_rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }),
     ]));
+  }
+  if (usingDefaultGpuCount) {
+    printData('Showing 1-GPU rates by default (pass --all-counts for 1/2/4/8x or --gpu-count N).');
   }
   printData(`Source: ${data.source}`);
   printData('Turbo standard total: single-GPU hourly price × GPU count.');

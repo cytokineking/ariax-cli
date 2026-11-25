@@ -125,8 +125,22 @@ function buildCatalogFixture() {
       gpu: true,
       modalities: ['protein', 'ligand', 'small-molecule', 'affinity'],
       resources: { min_gpu_count: 1, min_vram_gib_per_gpu: 24, min_ram_gib: 32, min_cpu_count: 4, min_disk_gib: 80 },
-      models: [{ id: 'boltz2-default', assets: ['boltz2'], modes: ['complex', 'affinity'], resources: { min_gpu_count: 1, min_vram_gib_per_gpu: 24 } }],
-      capabilities: { tasks: ['molecular-prediction', 'validation-search'], guide: 'boltz2', tier: 'recommended', qualification: [] },
+      models: [
+        { id: 'boltz2-default', assets: ['boltz2'], modes: ['complex', 'affinity'], resources: { min_gpu_count: 1, min_vram_gib_per_gpu: 24 } },
+        { id: 'boltz2-complex-only', assets: ['boltz2'], modes: ['complex'], resources: { min_gpu_count: 1, min_vram_gib_per_gpu: 24 } },
+      ],
+      capabilities: {
+        tasks: ['molecular-prediction', 'validation-search'],
+        guide: 'boltz2',
+        tier: 'recommended',
+        terms: [{ component: 'boltz2', name: 'MIT', status: 'permissive' }],
+        citations: [{ title: 'Boltz-2', url: 'https://example.org/boltz2' }],
+        qualification: [
+          { model: 'boltz2-default', mode: 'complex', native: 'passed', installation: 'passed', restoration: 'passed', scope: 'complex', workload: 'complex' },
+          { model: 'boltz2-default', mode: 'affinity', native: 'passed', installation: 'passed', restoration: 'passed', scope: 'affinity', workload: 'affinity' },
+          { model: 'boltz2-complex-only', mode: 'complex', native: 'passed', installation: 'passed', restoration: 'passed', scope: 'complex', workload: 'complex' },
+        ],
+      },
     },
     {
       tool: 'protenix-models',
@@ -1893,6 +1907,318 @@ async function runPhase7Checks(envCtx) {
   return checks;
 }
 
+async function runPhase7P2Checks(envCtx) {
+  const { origin, tunnelEnv, tempRoot } = envCtx;
+  const authBase = ['--base-url', origin, '--allow-custom-origin', '--root-dir', path.join(tempRoot, 'root-phase7-p2')];
+  const authEnv = { ...tunnelEnv, ARIAX_API_KEY: IDS.apiKey };
+  const checks = [];
+
+  const runCheck = async (name, fn) => {
+    try {
+      const detail = await fn();
+      checks.push({ id: name, category: 'phase7_p2', status: 'PASS', measured: '-', budget: '-', detail: detail || 'ok' });
+    } catch (err) {
+      checks.push({ id: name, category: 'phase7_p2', status: 'FAIL', measured: '-', budget: '-', detail: err.message });
+    }
+  };
+
+  // 1. P2 #15: BindCraft2 schema_version default, --input basename normalization, resolved_coldspots, detarget example, SKILL note
+  await runCheck('phase7-p2-bindcraft2-inputs-validate-schema', async () => {
+    const cifFixture = path.join(REPO_ROOT, 'agent-skills', 'examples', 'fixtures', 'synthetic-target.cif');
+    const namedCif = path.join(tempRoot, '4ZQK.cif');
+    await fs.copyFile(cifFixture, namedCif);
+    const jobFile = path.join(tempRoot, 'bc2-omitted-sv.json');
+    await fs.writeFile(jobFile, JSON.stringify({
+      protocol: 'bindcraft2',
+      protocol_config: {
+        modality: ['binder'],
+        properties: [],
+        targets: [
+          {
+            name: 'target',
+            input_file: '4ZQK.cif',
+            chains: ['A'],
+            hotspots: 'A10',
+            coldspots: 'A12-13',
+            objective: 'target',
+            weight: 1,
+          },
+        ],
+        binder: { lengths: [60, 80] },
+        campaign: { num_designs: 2, max_trajectories: 10 },
+      },
+      allowed_gpus: ['H100', 'L40S'],
+    }), 'utf8');
+
+    const prepOut = path.join(tempRoot, 'bc2-prepared');
+    const prepRes = JSON.parse((await runCli([
+      'inputs', 'prepare', '--input', namedCif, '-f', jobFile, '--output', prepOut, '--json',
+    ])).stdout).data;
+    assert.ok(prepRes.preparation_notes.some((n) => n.includes('schema_version') && n.includes('1')), 'must note defaulted schema_version');
+    assert.ok(prepRes.preparation_notes.some((n) => n.includes('4ZQK.cif') && n.includes('input.cif')), 'must note normalized input_file');
+    const writtenJob = JSON.parse(await fs.readFile(path.join(prepOut, 'job.json'), 'utf8'));
+    assert.equal(writtenJob.protocol_config.schema_version, 1);
+    assert.equal(writtenJob.protocol_config.targets[0].input_file, 'input.cif');
+
+    // Invalid explicit schema_version values must still be rejected
+    for (const badVersion of [2, '1']) {
+      const badFile = path.join(tempRoot, `bc2-bad-sv-${String(badVersion)}.json`);
+      await fs.writeFile(badFile, JSON.stringify({
+        protocol: 'bindcraft2',
+        protocol_config: {
+          schema_version: badVersion,
+          modality: ['binder'],
+          targets: [{ name: 'target', input_file: 'input.cif', chains: ['A'], objective: 'target', weight: 1 }],
+          binder: { lengths: [60, 80] },
+        },
+      }), 'utf8');
+      const badRes = await runCli(
+        ['inputs', 'prepare', '--input', namedCif, '-f', badFile, '--output', path.join(tempRoot, `bad-out-${String(badVersion)}`), '--json'],
+        { allowNonZero: true },
+      );
+      assert.equal(badRes.code, EXIT.VALIDATION, `schema_version=${JSON.stringify(badVersion)} must fail validation`);
+    }
+
+    // BindCraft2 validate (--details and compact) echoes resolved_coldspots alongside resolved_hotspots
+    for (const extraFlags of [['--details'], []]) {
+      const valRes = JSON.parse((await runCli([
+        'validate', '-f', jobFile, '--input', namedCif, ...extraFlags, '--json', ...authBase,
+      ], { env: authEnv })).stdout).data;
+      assert.equal(valRes.valid, true);
+      assert.equal(valRes.resolved_hotspots?.length, 1);
+      assert.equal(valRes.resolved_hotspots[0].author_residue, 10);
+      assert.equal(valRes.resolved_coldspots?.length, 2);
+      assert.deepEqual(valRes.resolved_coldspots.map((r) => r.author_residue), [12, 13]);
+      assert.ok(valRes.resolved_coldspots.every((r) => Number.isInteger(r.canonical_position) && typeof r.amino_acid === 'string'));
+    }
+
+    // schema bindcraft2 --example detarget + help schema + skills bindcraft2
+    const detargetEx = JSON.parse((await runCli(['schema', 'bindcraft2', '--example', 'detarget', '--json'])).stdout).data;
+    const targets = detargetEx.example?.protocol_config?.targets || [];
+    assert.equal(targets.length, 2);
+    assert.equal(targets[0].objective, 'target');
+    assert.equal(targets[0].weight, 1);
+    assert.equal(targets[1].objective, 'detarget');
+    assert.equal(targets[1].weight, -1);
+    assert.equal(typeof detargetEx.example?.protocol_config?.advanced?.max_detarget_iptm, 'number');
+    assert.equal(typeof detargetEx.example?.protocol_config?.advanced?.max_detarget_iptm_final, 'number');
+    assert.ok(detargetEx.available_examples.includes('detarget'));
+
+    const schemaHelp = (await runCli(['help', 'schema', '--no-json'])).stdout;
+    assert.match(schemaHelp, /detarget/);
+
+    const bc2Skill = JSON.parse((await runCli(['skills', 'bindcraft2', '--read', '--json'])).stdout).data.content;
+    assert.match(bc2Skill, /crop_fasta_sequence:\s*false/);
+    assert.match(bc2Skill, /ariax schema bindcraft2 --example detarget/);
+    return 'schema_version default, input_file norm, coldspots, detarget verified';
+  });
+
+  // 2. P2 #16: pricing default gpu_count=1, --all-counts, and vram_gb
+  await runCheck('phase7-p2-pricing-vram-and-default-count', async () => {
+    const defPricing = JSON.parse((await runCli(['pricing', '--json', '--base-url', origin, '--allow-custom-origin'])).stdout).data;
+    assert.equal(defPricing.default_gpu_count, 1);
+    assert.equal(defPricing.rates.length, 2, 'default pricing should filter to gpu_count=1 rows only');
+    assert.ok(defPricing.rates.every((r) => r.gpu_count === 1));
+    const byGpu = Object.fromEntries(defPricing.rates.map((r) => [r.gpu_id, r]));
+    assert.equal(byGpu.L40S.vram_gb, 48);
+    assert.equal(byGpu.H100.vram_gb, 80);
+
+    const allPricing = JSON.parse((await runCli(['pricing', '--all-counts', '--json', '--base-url', origin, '--allow-custom-origin'])).stdout).data;
+    assert.equal(allPricing.rates.length, 3, '--all-counts must return 1/2/4/8x rows');
+    assert.equal(Object.hasOwn(allPricing, 'default_gpu_count'), false);
+    assert.ok(allPricing.rates.every((r) => typeof r.vram_gb === 'number' && r.vram_gb > 0));
+
+    const humanPricing = (await runCli(['pricing', '--no-json', '--base-url', origin, '--allow-custom-origin'])).stdout;
+    assert.match(humanPricing, /\bvram_gb\b/);
+    assert.match(humanPricing, /1-GPU/);
+
+    const badCombo = await runCli(
+      ['pricing', '--gpu-count', '2', '--all-counts', '--json', '--base-url', origin, '--allow-custom-origin'],
+      { allowNonZero: true },
+    );
+    assert.equal(badCombo.code, EXIT.USAGE);
+    return 'default gpu_count=1, --all-counts, and vram_gb verified';
+  });
+
+  // 3. P2 #17: forge catalog --guide-only and cleaner --mode filtering
+  await runCheck('phase7-p2-forge-catalog-guide-only-and-mode', async () => {
+    const guideOnly = JSON.parse((await runCli([
+      'forge', 'catalog', '--tool', 'boltz2', '--guide-only', '--json',
+      '--base-url', origin, '--allow-custom-origin',
+    ])).stdout).data;
+    assert.equal(guideOnly.tool, 'boltz2');
+    assert.equal(guideOnly.guide, 'boltz2');
+    assert.ok(typeof guideOnly.guide_path === 'string' && guideOnly.guide_path.endsWith('boltz2.md'));
+    assert.ok(typeof guideOnly.guide_content === 'string' && guideOnly.guide_content.length > 200);
+    assert.ok(guideOnly.references && typeof guideOnly.references === 'object');
+    assert.equal(Object.hasOwn(guideOnly, 'tools'), false, '--guide-only must omit tools qualification matrix');
+    assert.equal(Object.hasOwn(guideOnly, 'capabilities'), false);
+
+    const modeOnly = JSON.parse((await runCli([
+      'forge', 'catalog', '--tool', 'boltz2', '--mode', 'affinity', '--with-guide', '--json',
+      '--base-url', origin, '--allow-custom-origin',
+    ])).stdout).data;
+    assert.equal(modeOnly.tools.length, 1);
+    assert.equal(modeOnly.tools[0].models.length, 1, '--mode affinity must drop complex-only models');
+    assert.deepEqual(modeOnly.tools[0].models[0].modes, ['affinity']);
+    assert.equal(modeOnly.tools[0].capabilities.qualification.length, 1);
+    assert.equal(modeOnly.tools[0].capabilities.qualification[0].mode, 'affinity');
+    assert.ok(typeof modeOnly.guide_content === 'string' && modeOnly.guide_content.length > 200);
+    return 'guide-only lean payload + --mode filtering verified';
+  });
+
+  // 4. P2 #18, #19, #22: Help polish, compact inputs sequence, storage subcommand help, forge aliases/fuzzy, guides, top-level help
+  await runCheck('phase7-p2-help-inputs-seq-storage-forge-fuzzy', async () => {
+    // gpu-preferences --example & help
+    const gpuEx = JSON.parse((await runCli(['gpu-preferences', '--example', '--json'])).stdout).data;
+    assert.deepEqual(gpuEx, { allowed_gpus: ['L40S', 'A100_80GB'], priority_mode: 'cost' });
+    const gpuHelp = (await runCli(['help', 'gpu-preferences', '--no-json'])).stdout;
+    assert.match(gpuHelp, /"allowed_gpus"/);
+    assert.match(gpuHelp, /"priority_mode"/);
+    assert.match(gpuHelp, /speed.*cost.*balanced/);
+
+    // inputs help + compact sequence (normal and >1000 aa truncation)
+    const inputsHelp = (await runCli(['help', 'inputs', '--no-json'])).stdout;
+    assert.match(inputsHelp, /A:56,115,121-123/);
+    assert.match(inputsHelp, /A56,A121-123/);
+    const inspectHelp = (await runCli(['inputs', 'inspect', '--help', '--no-json'])).stdout;
+    assert.match(inspectHelp, /A:56,115,121-123/);
+    assert.ok(Buffer.byteLength(inspectHelp, 'utf8') < 800, 'inputs inspect --help must stay concise');
+
+    const pdbFixture = path.join(REPO_ROOT, 'agent-skills', 'examples', 'fixtures', 'synthetic-target.pdb');
+    const compactInsp = JSON.parse((await runCli(['inputs', 'inspect', '--input', pdbFixture, '--json'])).stdout).data;
+    assert.equal(typeof compactInsp.chains[0].sequence, 'string');
+    assert.equal(compactInsp.chains[0].sequence.length, compactInsp.chains[0].sequence_length);
+    assert.equal(compactInsp.chains[0].residues_omitted, true);
+
+    const longPdb = path.join(tempRoot, 'long-chain.pdb');
+    const longLines = [];
+    for (let i = 1; i <= 1050; i += 1) {
+      const serial = String(i).padStart(5, ' ');
+      const resSeq = String(i).padStart(4, ' ');
+      longLines.push(`ATOM  ${serial}  CA  ALA A${resSeq}       0.000   0.000   0.000  1.00 20.00           C`);
+    }
+    longLines.push('END');
+    await fs.writeFile(longPdb, longLines.join('\n') + '\n', 'utf8');
+    const longCompact = JSON.parse((await runCli(['inputs', 'inspect', '--input', longPdb, '--json'])).stdout).data;
+    assert.equal(longCompact.chains[0].sequence_length, 1050);
+    assert.equal(longCompact.chains[0].sequence.length, 1003);
+    assert.ok(longCompact.chains[0].sequence.endsWith('...'));
+    assert.equal(longCompact.chains[0].sequence_truncated, true);
+
+    // Project-name consistency across lifecycle help
+    for (const cmd of ['pause', 'restart', 'status', 'abort', 'gpu-preferences', 'summary']) {
+      const h = (await runCli(['help', cmd, '--no-json'])).stdout;
+      assert.match(h, /PROJECT accepts a project UUID or an exact unique project name/, `help ${cmd} must document PROJECT UUID/name`);
+    }
+
+    // Storage web-only whole_project_delete note + subcommand --help
+    const storageFullHelp = (await runCli(['help', 'storage', '--no-json'])).stdout;
+    assert.match(storageFullHelp, /whole_project_delete.*web-only/i);
+    for (const sub of ['projects', 'project', 'usage', 'suggest', 'delete', 'deletion']) {
+      const sh = (await runCli(['storage', sub, '--help', '--no-json'])).stdout;
+      assert.match(sh, new RegExp(`ariax storage ${sub}`));
+      assert.ok(Buffer.byteLength(sh, 'utf8') < Buffer.byteLength(storageFullHelp, 'utf8'), `storage ${sub} --help should be shorter than full storage help`);
+    }
+
+    // Forge unknown-action aliases and fuzzy suggestions
+    for (const [bad, expectedRe] of [
+      ['upload', /ariax forge inputs add/],
+      ['ls', /ariax forge list.*ariax forge files/],
+      ['rm', /ariax forge files delete/],
+      ['stop', /ariax forge finish.*ariax forge close/],
+      ['exec', /ariax forge run/],
+      ['statuz', /Closest matches:.*status/],
+    ]) {
+      const r = await runCli(['forge', bad, '--json'], { allowNonZero: true });
+      assert.equal(r.code, EXIT.USAGE);
+      assert.match(JSON.parse(r.stdout).error.message, expectedRe, `forge ${bad} hint mismatch`);
+    }
+
+    // Forge guides (P2 #19)
+    const mpnnGuide = JSON.parse((await runCli(['skills', 'forge', '--tool', 'mpnn', '--read', '--json'])).stdout).data.content;
+    assert.match(mpnnGuide, /"design_positions":/);
+    assert.match(mpnnGuide, /zero-occupancy H atoms/i);
+    const stGuide = JSON.parse((await runCli(['skills', 'forge', '--tool', 'structure-tools', '--read', '--json'])).stdout).data.content;
+    assert.match(stGuide, /--chains A --reference-chains A/);
+    assert.match(stGuide, /FreeSASA: warning: guessing that atom/i);
+
+    // Top-level help primary Forge subcommands (P2 #22)
+    const topHelp = (await runCli(['--help', '--no-json'])).stdout;
+    assert.match(topHelp, /forge .*list, create, status, tools, inputs, run, sync, pack, finish, files/);
+    return 'help, compact seq, storage sub-help, forge fuzzy, guides verified';
+  });
+
+  // 5. P2 #20 + #21: feedback_opportunity unknown-command summary + help status + discover routing
+  await runCheck('phase7-p2-feedback-unknown-and-discover-status', async () => {
+    const parseNotices = (stderr) => stderr
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('{'))
+      .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+      .filter((obj) => obj?.notice?.code === 'feedback_opportunity');
+
+    const unkRoot = path.join(tempRoot, 'root-p2-unknown-cmd');
+    const agentEnv = { ...authEnv, ARIAX_AUTO_FEEDBACK: '', CODEX_THREAD_ID: 'eval-p2-unknown' };
+    let notice = null;
+    for (let i = 0; i < 3; i += 1) {
+      const r = await runCli(['foo-bar', '--json', '--root-dir', unkRoot], { env: agentEnv, allowNonZero: true });
+      assert.equal(r.code, EXIT.USAGE);
+      const found = parseNotices(r.stderr);
+      if (found.length) notice = found[0].notice;
+    }
+    assert.ok(notice, '3 repeated unknown-command errors must emit feedback_opportunity');
+    assert.equal(notice.reason, 'repeated_validation_failures');
+    assert.ok(
+      notice.suggested_command.includes('Repeated unknown-command errors (ariax foo-bar)'),
+      `expected unknown-command summary with token, got: ${notice.suggested_command}`,
+    );
+
+    // Secret-like unknown command must never leak into summary
+    const secRoot = path.join(tempRoot, 'root-p2-secret-cmd');
+    let secNotice = null;
+    for (let i = 0; i < 3; i += 1) {
+      const r = await runCli(['arx_secret_token_value', '--json', '--root-dir', secRoot], { env: agentEnv, allowNonZero: true });
+      const found = parseNotices(r.stderr);
+      if (found.length) secNotice = found[0].notice;
+    }
+    assert.ok(secNotice && !secNotice.suggested_command.includes('arx_secret'), 'secret-like token must be redacted');
+
+    // Known command repeated validation still uses "Repeated validation failures on <cmd>"
+    const knownRoot = path.join(tempRoot, 'root-p2-known-cmd');
+    let knownNotice = null;
+    for (let i = 0; i < 3; i += 1) {
+      const r = await runCli(['schema', '--json', '--root-dir', knownRoot], { env: agentEnv, allowNonZero: true });
+      const found = parseNotices(r.stderr);
+      if (found.length) knownNotice = found[0].notice;
+    }
+    assert.ok(knownNotice && knownNotice.suggested_command.includes('Repeated validation failures on schema'));
+
+    // Unified status help (P2 #21)
+    const statusHelp = (await runCli(['help', 'status', '--no-json'])).stdout;
+    assert.match(statusHelp, /ariax_campaign_status/);
+    assert.match(statusHelp, /ariax forge status SESSION/);
+    assert.match(statusHelp, /ariax forge project PROJECT/);
+
+    // Discover routing tuning (P2 #21)
+    const forgeCtrl = JSON.parse((await runCli([
+      'discover', '--query', 'forge limit cancel pack hygiene sync finish', '--json',
+      '--base-url', 'http://127.0.0.1:1', '--allow-custom-origin', '--timeout', '1000',
+    ])).stdout).data;
+    assert.equal(forgeCtrl.recommended_execution, 'forge');
+
+    const esmVal = JSON.parse((await runCli([
+      'discover', '--query', 'esmfold2-pipeline sequence validation triage', '--json',
+      '--base-url', 'http://127.0.0.1:1', '--allow-custom-origin', '--timeout', '1000',
+    ])).stdout).data;
+    assert.equal(esmVal.recommended_execution, 'managed');
+    assert.equal(esmVal.managed_protocols?.[0]?.id, 'esmfold2-pipeline');
+    return 'feedback unknown token, help status, and discover routing verified';
+  });
+
+  return checks;
+}
+
 async function main() {
   const files = (await fs.readdir(CASES_DIR)).filter((f) => f.endsWith('.json')).sort();
   const seenIds = new Set();
@@ -1964,6 +2290,11 @@ async function main() {
     }
     const phase7Results = await runPhase7Checks(envCtx);
     for (const r of phase7Results) {
+      if (r.status !== 'PASS') failures += 1;
+      results.push(r);
+    }
+    const phase7P2Results = await runPhase7P2Checks(envCtx);
+    for (const r of phase7P2Results) {
       if (r.status !== 'PASS') failures += 1;
       results.push(r);
     }

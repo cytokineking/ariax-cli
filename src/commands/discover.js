@@ -55,7 +55,7 @@ const MANAGED_CATALOG = Object.freeze([
     constraints: 'Protein targets (mmCIF/PDB + sequences); miniprotein binders.',
     modalities: ['miniprotein', 'protein-binder'],
     tasks: ['binder-design'],
-    keywords: ['esmfold', 'esmfold2', 'pipeline', 'high-throughput', 'fast', 'folding', 'triage', 'screen', 'miniprotein', 'binder'],
+    keywords: ['esmfold', 'esmfold2', 'esmfold2-pipeline', 'pipeline', 'high-throughput', 'fast', 'folding', 'triage', 'screen', 'validation', 'validate', 'sequence', 'miniprotein', 'binder'],
   },
 ]);
 
@@ -90,6 +90,8 @@ const OFFLINE_FORGE_TOOLS = Object.freeze([
 ]);
 
 const FORGE_ONLY_TASKS = new Set(['molecular-prediction', 'sequence-optimization', 'validation-search']);
+const FORGE_CONTROL_RE = /\bforge\b/i;
+const FORGE_LIFECYCLE_RE = /\b(session|sessions|workspace|scratch|limit|cancel|pack|archive|hygiene|sync|finish|close|hydrate|resume|files|inputs|commands|watch|logs|catalog|tools)\b/i;
 const FORGE_ONLY_RE = /\b(fold|refold|predict|prediction|structure prediction|dock|docking|affinity|ic50|pic50|mpnn|abmpnn|inverse fold|sequence design|sequence optimization|stability|ddg|thermostability|ipsae|scoring|score|qc|humanness|humanize|humanization|numbering|imgt|kabat|chothia|developability|foldseek|msa|mmseqs|search|cluster|custom|pipeline|multi-stage|rfd3|rfd4|rfdiffusion|rfantibody|boltz2|boltz-2|protenix|chai|af2|alphafold|esmfold|esm-c|mol1|mol-1|immunebuilder|fampnn|caliby|spurs|motif|enzyme|dna|rna|nucleic)\b/i;
 const MANAGED_FRIENDLY_RE = /\b(binder|miniprotein|peptide|cyclic|nanobody|nanobodies|vhh|antibody|de novo|design|campaign|bindcraft|boltzgen|pxdesign)\b/i;
 const VHH_NANOBODY_RE = /\b(nanobody|nanobodies|vhh|single[- ]domain antibody)\b/i;
@@ -216,12 +218,25 @@ function recommendExecution({ execution, query, task, modality, managedCount, fo
     };
   }
   const combined = `${query || ''} ${modality || ''}`.trim();
+  if (FORGE_CONTROL_RE.test(combined) && FORGE_LIFECYCLE_RE.test(combined)) {
+    return {
+      recommended_execution: 'forge',
+      rationale: 'Forge session lifecycle, workspace sync/pack/hygiene, and command control run through `ariax forge` subcommands.',
+    };
+  }
   if (
     managedCount > 0
     && /\besmfold(?:2)?(?:-pipeline)?\b/i.test(combined)
     && !/\bbiohub\b/i.test(combined)
-    && /\b(triage|screen|pipeline|binder|design)\b/i.test(combined)
+    && !FORGE_CONTROL_RE.test(combined)
+    && (/\besmfold2-pipeline\b/i.test(combined) || /\b(triage|screen|pipeline|binder|design|validat\w*)\b/i.test(combined))
   ) {
+    if (/\besmfold2-pipeline\b/i.test(combined) || /\bmanaged\b/i.test(combined)) {
+      return {
+        recommended_execution: 'managed',
+        rationale: 'Use managed esmfold2-pipeline for turnkey high-throughput folding screen/triage and sequence validation.',
+      };
+    }
     return {
       recommended_execution: 'either',
       rationale: 'Use managed esmfold2-pipeline for turnkey high-throughput folding triage/binder design, or Forge biohub-esmfold2 for standalone structure prediction.',

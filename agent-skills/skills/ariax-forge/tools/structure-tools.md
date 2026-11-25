@@ -55,6 +55,7 @@ cannot represent a chain ID or residue number.
 ```sh
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools convert /inputs/structure-tools/1ubq-protein.pdb --format cif --out-dir /workspace/structures/convert1
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools align /inputs/structure-tools/1ubq-transformed.pdb --reference /inputs/structure-tools/1ubq-protein.pdb --engine kabsch --out-dir /workspace/structures/rmsd1
+ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools align /inputs/complex-with-ligand.cif --reference /inputs/reference-protein.pdb --chains A --reference-chains A --engine kabsch --out-dir /workspace/structures/rmsd-complex
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools align /inputs/structure-tools/1ubq-transformed.pdb --reference /inputs/structure-tools/1ubq-protein.pdb --engine usalign --out-dir /workspace/structures/usalign1
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools align /inputs/structure-tools/1ubq-transformed.pdb --reference /inputs/structure-tools/1ubq-protein.pdb --engine tmalign --out-dir /workspace/structures/tmalign1
 ariax forge run "$SESSION" --tool structure-tools --timeout-seconds 120 --json -- structure-tools contacts /inputs/structure-tools/identity.pdb --altloc occupancy --partner-a A --partner-b B --cutoff 4 --out-dir /workspace/structures/contacts1
@@ -94,7 +95,7 @@ before interpreting them. [Pinned US-align help](https://github.com/pylelab/USal
 Contacts include selected cross-partner non-H/D atoms at or below the stated
 Angstrom cutoff; empty contacts are a valid outcome. SASA is exposed area in
 Angstrom squared using FreeSASA Lee-Richards/ProtOr. The adapter accepts standard
-proteins, so explicitly remove ligands/waters first if present. Geometry reports
+proteins, so explicitly remove ligands/waters first if present; `FreeSASA: warning: guessing that atom ...` stderr chatter during `sasa` is benign. Geometry reports
 backbone distances and heavy-atom radius overlaps with its exclusions and
 unscored elements. It is not a validated clashscore or physical energy.
 

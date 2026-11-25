@@ -27,6 +27,7 @@
   "agent-skills/examples/bindcraft2-formats/arp.json",
   "agent-skills/examples/bindcraft2-formats/custom-scaffold.json",
   "agent-skills/examples/bindcraft2-formats/cyclic-peptide.json",
+  "agent-skills/examples/bindcraft2-formats/detarget.json",
   "agent-skills/examples/bindcraft2-formats/fab.json",
   "agent-skills/examples/bindcraft2-formats/homo-oligomer.json",
   "agent-skills/examples/bindcraft2-formats/large-binder.json",

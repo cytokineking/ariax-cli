@@ -39,7 +39,7 @@ const OPTIONS = {
   summary: [['top'], 2],
   activity: [['limit', 'cursor', 'details'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id', 'details'], 2],
-  catalog: [['details', 'full', 'all', 'task', 'tool', 'compact', 'model', 'mode', 'query', 'search', 'modality', 'tier', 'with-guide'], 1],
+  catalog: [['details', 'full', 'all', 'task', 'tool', 'compact', 'model', 'mode', 'query', 'search', 'modality', 'tier', 'with-guide', 'guide-only'], 1],
   list: [['details', 'active', 'state', 'name', 'project', 'limit'], 1],
   status: [['details'], 2],
   tools: [['details'], 2],
@@ -70,7 +70,9 @@ const SUBCOMMAND_HELP = Object.freeze({
   activity: `ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]`,
   limit: `ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID] [--details]`,
   catalog: `ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
-  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]`,
+  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide | --guide-only] [--json]
+  --guide-only implies --with-guide and returns only { tool, guide, guide_path, guide_content, references } without the qualification/terms/citations matrix.
+  --mode MODE narrows models[] and capabilities.qualification[] down to matching mode rows.`,
   list: `ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
   Returns compact session summaries by default; add --details for full tool metadata.`,
   status: `ariax forge status SESSION [--details]`,
@@ -129,7 +131,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID] [--details]
   ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
-  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide] [--json]
+  ariax forge catalog --tool TOOL [--model MODEL] [--mode MODE] [--with-guide | --guide-only] [--json]
   ariax forge list [--active] [--state STATE] [--name SUBSTR] [--project UUID] [--limit N] [--details]
   ariax forge status SESSION [--details]
   ariax forge tools SESSION [--details]
@@ -170,7 +172,92 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   Elsewhere the global --timeout is a per-request limit in milliseconds (default 30000).
   --gpu is preferred; --allowed-gpus lists it plus permitted fallbacks. Include a core GPU: H100, A100_80GB, L40S, or RTX6000PRO.
   forge catalog is public and returns compact summaries by default (use --all for experimental/legacy, --full for the complete catalog).
-  Use --tool TOOL --with-guide to inspect one tool's full requirements and bundled guide in a single call; --model/--mode narrow to exact IDs.`;
+  Use --tool TOOL --with-guide to inspect one tool's full requirements and bundled guide in a single call, or --tool TOOL --guide-only for only the lean guide + references; --model/--mode narrow models[] and capabilities.qualification[] to exact IDs.`;
+
+const FORGE_ACTION_ALIASES = Object.freeze({
+  upload: 'Did you mean: ariax forge inputs add SESSION --file FILE --path PATH?',
+  put: 'Did you mean: ariax forge inputs add SESSION --file FILE --path PATH?',
+  push: 'Did you mean: ariax forge inputs add SESSION --file FILE --path PATH?',
+  ls: 'Did you mean: ariax forge list (for sessions) or ariax forge files PROJECT (for workspace files)?',
+  dir: 'Did you mean: ariax forge list (for sessions) or ariax forge files PROJECT (for workspace files)?',
+  rm: 'Did you mean: ariax forge files delete PROJECT --path PATH?',
+  del: 'Did you mean: ariax forge files delete PROJECT --path PATH?',
+  delete: 'Did you mean: ariax forge files delete PROJECT --path PATH?',
+  remove: 'Did you mean: ariax forge files delete PROJECT --path PATH?',
+  stop: 'Did you mean: ariax forge finish SESSION --wait (clean save + release) or ariax forge close SESSION (emergency)?',
+  end: 'Did you mean: ariax forge finish SESSION --wait (clean save + release) or ariax forge close SESSION (emergency)?',
+  shutdown: 'Did you mean: ariax forge finish SESSION --wait (clean save + release) or ariax forge close SESSION (emergency)?',
+  terminate: 'Did you mean: ariax forge finish SESSION --wait (clean save + release) or ariax forge close SESSION (emergency)?',
+  kill: 'Did you mean: ariax forge cancel SESSION COMMAND_ID or ariax forge finish SESSION --wait?',
+  exec: 'Did you mean: ariax forge run SESSION --tool TOOL -- COMMAND ARG...?',
+  shell: 'Did you mean: ariax forge run SESSION --tool TOOL -- COMMAND ARG...?',
+  sh: 'Did you mean: ariax forge run SESSION --tool TOOL -- COMMAND ARG...?',
+  cmd: 'Did you mean: ariax forge run SESSION --tool TOOL -- COMMAND ARG...?',
+  get: 'Did you mean: ariax forge download PROJECT PATH --dest LOCAL?',
+  pull: 'Did you mean: ariax forge download PROJECT PATH --dest LOCAL?',
+  fetch: 'Did you mean: ariax forge download PROJECT PATH --dest LOCAL?',
+  info: 'Did you mean: ariax forge status SESSION or ariax forge project PROJECT?',
+  inspect: 'Did you mean: ariax forge status SESSION or ariax forge project PROJECT?',
+  show: 'Did you mean: ariax forge status SESSION or ariax forge project PROJECT?',
+  start: 'Did you mean: ariax forge create --name NAME --gpu GPU?',
+  new: 'Did you mean: ariax forge create --name NAME --gpu GPU?',
+  launch: 'Did you mean: ariax forge create --name NAME --gpu GPU?',
+  archive: 'Did you mean: ariax forge pack SESSION --src PATH --dest /workspace/archives/NAME.tar.zst --wait?',
+  tar: 'Did you mean: ariax forge pack SESSION --src PATH --dest /workspace/archives/NAME.tar.zst --wait?',
+  zip: 'Did you mean: ariax forge pack SESSION --src PATH --dest /workspace/archives/NAME.tar.zst --wait?',
+  flush: 'Did you mean: ariax forge sync SESSION --wait?',
+  tail: 'Did you mean: ariax forge logs SESSION COMMAND_ID or ariax forge watch SESSION COMMAND_ID?',
+  log: 'Did you mean: ariax forge logs SESSION COMMAND_ID?',
+  ps: 'Did you mean: ariax forge commands SESSION?',
+  jobs: 'Did you mean: ariax forge commands SESSION?',
+});
+
+const KNOWN_FORGE_ACTIONS = Object.freeze(
+  Object.keys(OPTIONS).filter(key => !key.includes(' ')).concat(['inputs', 'tools']),
+);
+
+function editDistance(a, b) {
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let j = 1; j <= n; j += 1) {
+    let prev = dp[0];
+    dp[0] = j;
+    for (let i = 1; i <= m; i += 1) {
+      const tmp = dp[i];
+      dp[i] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[i], dp[i - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[m];
+}
+
+function closestForgeActions(raw, limit = 3) {
+  const needle = String(raw || '').trim().toLowerCase();
+  if (!needle) return [];
+  const scored = KNOWN_FORGE_ACTIONS.map((candidate) => {
+    const dist = editDistance(needle, candidate);
+    const prefixBonus = candidate.startsWith(needle) || needle.startsWith(candidate) ? -1.5 : 0;
+    const subBonus = candidate.includes(needle) || needle.includes(candidate) ? -0.75 : 0;
+    return { candidate, score: dist + prefixBonus + subBonus, dist };
+  });
+  scored.sort((a, b) => a.score - b.score || a.dist - b.dist || a.candidate.localeCompare(b.candidate));
+  return scored.slice(0, limit).map(entry => entry.candidate);
+}
+
+function unknownForgeActionError(positionals) {
+  const raw = String(positionals?.[0] || '').trim();
+  if (!raw) return usageError('forge: missing action. Run: ariax forge --help');
+  const lower = raw.toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(FORGE_ACTION_ALIASES, lower)) {
+    return usageError(`forge: unknown action "${raw}". ${FORGE_ACTION_ALIASES[lower]} Run: ariax forge --help`);
+  }
+  const suggestions = closestForgeActions(lower, 3);
+  const hint = suggestions.length ? ` Closest matches: ${suggestions.join(', ')}.` : '';
+  return usageError(`forge: unknown action "${raw}".${hint} Run: ariax forge --help`);
+}
 
 function actionOf(positionals) {
   if (positionals[0] === 'inputs' && ['add', 'list', 'status'].includes(positionals[1])) return `inputs ${positionals[1]}`;
@@ -189,7 +276,7 @@ export function validateArguments({ positionals, flags, passthrough, globals }) 
   if (globals.help && Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, action) && !Object.keys(flags).length) {
     return;
   }
-  if (!Object.hasOwn(OPTIONS, action)) throw usageError('forge: unknown action. Run: ariax forge --help');
+  if (!Object.hasOwn(OPTIONS, action)) throw unknownForgeActionError(positionals);
   const [allowed, operands] = OPTIONS[action];
   for (const name of Object.keys(flags)) {
     if (!allowed.includes(name)) throw usageError(`forge ${action}: unsupported flag --${name}.`);
@@ -697,8 +784,22 @@ export function report(ctx, res, kind) {
   }
   else if (kind === 'commands') printTable(['command_id', 'tool', 'gpu_ids', 'state', 'exit_code'], data.commands.map(c => [c.command_id, c.tool, c.gpu_ids?.join(','), c.state, c.exit_code]));
   else if (kind === 'tools' || kind === 'catalog') {
-    if (ctx.flags.details || (kind === 'catalog' && (ctx.flags.compact || ctx.flags.tool !== undefined))) {
-      for (const tool of data.tools) printKv(tool);
+    if (kind === 'catalog' && ctx.flags['guide-only']) {
+      printKv({
+        tool: data.tool,
+        guide: data.guide,
+        guide_path: data.guide_path,
+        ...(data.references && Object.keys(data.references).length ? { references: Object.keys(data.references) } : {}),
+        ...(data.guide_error ? { guide_error: data.guide_error } : {}),
+      });
+      if (typeof data.guide_content === 'string') {
+        printData('');
+        printData(`--- Guide (${data.guide ?? ctx.flags.tool}) ---`);
+        printData(data.guide_content);
+      }
+    }
+    else if (ctx.flags.details || (kind === 'catalog' && (ctx.flags.compact || ctx.flags.tool !== undefined))) {
+      for (const tool of data.tools || []) printKv(tool);
       if (kind === 'catalog' && typeof data.guide_content === 'string') {
         printData('');
         printData(`--- Guide (${data.guide_id ?? ctx.flags.tool}) ---`);
@@ -905,22 +1006,23 @@ function selectedCatalogTool(tool, model, mode) {
   if (mode !== undefined && !qualification.length && !selectedModels.some(item => item.modes?.includes(mode))) {
     throw usageError(`forge catalog: mode "${mode}" is not in tool "${tool.tool}"${model === undefined ? '' : ` model "${model}"`}.`);
   }
+  const cap = tool.capabilities && typeof tool.capabilities === 'object' ? tool.capabilities : {};
   return {
-    tool: tool.tool,
-    name: tool.name,
-    gpu: tool.gpu,
+    ...tool,
     resources: tool.resources ?? null,
     models: selectedModels.filter(item => mode === undefined || item.modes?.includes(mode)
       || qualification.some(row => row?.model === item.id)).map(item => ({
+      ...item,
       id: item.id,
       modes: mode === undefined ? item.modes ?? null : [mode],
       resources: item.resources ?? null,
     })),
     capabilities: {
-      tasks: tool.capabilities?.tasks ?? null,
-      guide: tool.capabilities?.guide ?? null,
-      terms: tool.capabilities?.terms ?? null,
-      citations: tool.capabilities?.citations ?? null,
+      ...cap,
+      tasks: cap.tasks ?? null,
+      guide: cap.guide ?? null,
+      terms: cap.terms ?? null,
+      citations: cap.citations ?? null,
       qualification,
     },
   };
@@ -1716,6 +1818,12 @@ async function runAction(ctx) {
     if (selected && (flags.compact || flags.details || flags.full)) {
       throw usageError('forge catalog: --model/--mode cannot be combined with --compact, --full, or --details.');
     }
+    if (flags['guide-only'] && selectedTool === undefined) {
+      throw usageError('forge catalog: --guide-only requires --tool.');
+    }
+    if (flags['guide-only'] && (flags.compact || flags.details || flags.full)) {
+      throw usageError('forge catalog: --guide-only cannot be combined with --compact, --full, or --details.');
+    }
     if (flags['with-guide'] && selectedTool === undefined) {
       throw usageError('forge catalog: --with-guide requires --tool.');
     }
@@ -1732,7 +1840,6 @@ async function runAction(ctx) {
     let response;
     let tools;
     if (selectedTool !== undefined) {
-      let usedFallback = false;
       try {
         response = await catalogGet(ctx, `${API}/catalog/${encodeURIComponent(selectedTool)}`, {
           query: {
@@ -1749,7 +1856,6 @@ async function runAction(ctx) {
       } catch (error) {
         if (error instanceof ApiError && error.status === 404
             && !['unknown_tool', 'unknown_model', 'unknown_mode'].includes(error.code)) {
-          usedFallback = true;
           response = await catalogGet(ctx, `${API}/catalog`);
           tools = (Array.isArray(response.data?.tools) ? response.data.tools : [])
             .filter(tool => tool.tool === selectedTool);
@@ -1759,10 +1865,35 @@ async function runAction(ctx) {
       }
       if (!tools.length) throw usageError(`forge catalog: tool "${selectedTool}" is not in the current catalog.`);
       if (task !== undefined) tools = tools.filter(tool => tool.capabilities?.tasks?.includes(task));
-      if (selected && usedFallback) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
+      if (selected) tools = tools.map(tool => selectedCatalogTool(tool, model, mode));
+      if (flags['guide-only'] && tools.length === 1) {
+        const toolRecord = tools[0];
+        const guideId = toolRecord.capabilities?.guide || toolRecord.tool;
+        try {
+          const guide = readForgeToolGuide(guideId);
+          response.data = {
+            tool: toolRecord.tool,
+            guide: guide.id,
+            guide_path: guide.path,
+            guide_size_bytes: guide.size_bytes,
+            guide_content: guide.content,
+            references: guide.references || {},
+          };
+        } catch (err) {
+          response.data = {
+            tool: toolRecord.tool,
+            guide: guideId,
+            guide_path: null,
+            guide_content: null,
+            references: {},
+            guide_error: err?.message || `No bundled guide found for "${guideId}".`,
+          };
+        }
+        return report(ctx, response, 'catalog');
+      }
       if (flags.compact) tools = tools.map(compactCatalogTool);
       response.data = { tools };
-      if (flags['with-guide'] && tools.length === 1) {
+      if ((flags['with-guide'] || flags['guide-only']) && tools.length === 1) {
         const guideId = tools[0].capabilities?.guide || tools[0].tool;
         try {
           const guide = readForgeToolGuide(guideId);
