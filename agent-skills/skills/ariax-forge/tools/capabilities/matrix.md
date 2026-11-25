@@ -63,7 +63,7 @@ Hidden from default `ariax forge catalog` output; pass `--all` or `--tier experi
 
 | Status | Tool or family | Notes | Guide |
 | --- | --- | --- | --- |
-| Experimental | `protenix-v2` | Experimental Protenix v2 predictor (internal-development scope; use `protenix-models` for stable runs) | [Protenix](../protenix-models.md) |
+| Experimental | `protenix-v2` | Experimental Protenix v2 predictor (experimental scope; use `protenix-models` for stable runs) | [Protenix](../protenix-models.md) |
 | Experimental | `esmfold2-pipeline` | Native ESMFold2 inversion + Protenix v2 (bounded qualification; prefer managed protocol for full runs) | [Pipeline](../esmfold2-pipeline.md) |
 | Experimental | `opendde` | Preview molecular prediction | [OpenDDE](../opendde.md) |
 | Experimental | `mpnn-acceleration`, `boltz2-acceleration` | Explicit optimization-mode benchmarks | [MPNN accel](../mpnn-acceleration.md), [Boltz-2 accel](../boltz2-acceleration.md) |

@@ -92,7 +92,7 @@ ariax forge run "$SESSION" --tool base --json -- python3 /inputs/custom-code/che
 ```
 
 After **each** `run`, set `COMMAND_ID` to its returned ID, run
-`ariax forge watch "$SESSION" "$COMMAND_ID" --timeout 180 --json`, and require
+`ariax forge watch "$SESSION" "$COMMAND_ID" --wait-timeout 180 --json`, and require
 `succeeded` before the next step. These commands depend on each other.
 Inspect `source.source.json`: the Git commit is present, local changes are
 true, and the changed `run.py` plus untracked note are recorded. The tar
@@ -107,13 +107,14 @@ Stop writers and flush the changed files:
 Set `PROJECT` to the session's returned `project_id`.
 
 ```sh
-ariax forge sync "$SESSION" --wait --timeout 900 --json
+ariax forge sync "$SESSION" --wait --wait-timeout 900 --json
 ariax forge files "$PROJECT" --path /workspace/custom --json
-ariax forge close "$SESSION" --json
+ariax forge finish "$SESSION" --wait --json
 ariax forge status "$SESSION" --json
 ```
 
-Require a `saved` flush and source state `closed`, which confirms resource
+Require a `saved` flush and `finish` with `release: "released"` and
+`durability: "saved"`, which confirms resource
 release. The saved source, bootstrap and outputs remain available through the
 [project file commands](../outputs.md).
 

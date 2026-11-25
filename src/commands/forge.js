@@ -20,6 +20,7 @@ import { readSync, redactForgeOutput, redactForgeText, workspacePath } from '../
 
 import { runFiles, inputStatus, recoverFile, failedSync } from './forge-files.js';
 import { readForgeToolGuide } from './skills.js';
+import { runForgeSummary } from './summary.js';
 
 const API = '/api/v1/forge';
 const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrupted', 'timed_out']);
@@ -34,6 +35,7 @@ const OPTIONS = {
   create: [['name', ...SESSION_OPTIONS, 'wait', 'wait-timeout'], 1],
   resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS, 'wait', 'wait-timeout'], 2],
   project: [['limit', 'cursor', 'details'], 2],
+  summary: [['top'], 2],
   activity: [['limit', 'cursor', 'details'], 2],
   limit: [['gpu-hours', 'clear', 'limit-revision', 'operation-id'], 2],
   catalog: [['details', 'full', 'all', 'task', 'tool', 'compact', 'model', 'mode', 'query', 'search', 'modality', 'tier', 'with-guide'], 1],
@@ -56,6 +58,7 @@ const OPTIONS = {
 export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR] [--details]
+  ariax forge summary PROJECT [--top 5]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge limit SESSION (--gpu-hours H | --clear) [--limit-revision N] [--operation-id UUID]
   ariax forge catalog [--task TASK] [--query TEXT] [--modality MOD] [--tier TIER] [--all] [--full | --details]
@@ -1577,6 +1580,10 @@ async function runAction(ctx) {
     response.data = { ...response.data, tools };
     return report(ctx, response, 'catalog');
   }
+  if (action === 'summary') {
+    const id = uuid(ctx.positionals[1], 'project ID');
+    return runForgeSummary(ctx, id);
+  }
   if (action === 'project' || action === 'activity') {
     const id = uuid(ctx.positionals[1], 'project ID');
     const limit = flags.limit === undefined ? undefined : number(flags.limit, 'limit', { integer: true });
@@ -1929,7 +1936,7 @@ export async function run(ctx) {
     if (error.code === 'human_resume_required' || error.code === 'control_revision_conflict') {
       let projectId = isUUID(error.details?.project_id) ? uuid(error.details.project_id, 'project ID') : undefined;
       try {
-        if (!projectId && ['resume', 'project'].includes(action)) projectId = uuid(ctx.positionals[1], 'project ID');
+        if (!projectId && ['resume', 'project', 'summary'].includes(action)) projectId = uuid(ctx.positionals[1], 'project ID');
         else if (!projectId && action === 'files recover') projectId = uuid(ctx.positionals[2], 'project ID');
         else if (!projectId && action === 'recover' && isUUID(recovered?.request?.project_id)) projectId = recovered.request.project_id;
         else if (!projectId && action === 'inputs add' && ctx.flags.artifact !== undefined) projectId = uuid(ctx.flags.artifact.split(':')[0], 'project ID');

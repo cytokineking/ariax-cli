@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-forge-rfantibody-cdr-graft",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Antibody CDR design query naming rfantibody routes to Forge rfantibody or rfd4-antibody.",
+  "input": {
+    "query": "antibody CDR design rfantibody"
+  },
+  "assertions": {
+    "recommended_execution_in": ["forge"],
+    "top_forge_tool_in": ["rfantibody", "rfd4-antibody"],
+    "max_stdout_bytes": 6000
+  }
+}

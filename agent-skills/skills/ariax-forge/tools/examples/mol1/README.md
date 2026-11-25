@@ -48,6 +48,6 @@ command and [input guidance](../../mol1/inputs.md), preserving every companion.
 Every run needs a fresh output directory. Follow
 [output inspection](../../mol1/outputs.md) for required identities, confidence
 scales, mappings, error handling and retention. See the central guide's
-[native checks](../../mol1.md#recorded-native-checks) and
-[installation/recovery scope](../../mol1.md#installation-and-recovery-scope)
+[native checks](../../mol1.md#scope-and-limits) and
+[installation/recovery scope](../../mol1.md#restore-saved-work)
 for the finite observed results and their limits.

@@ -68,9 +68,9 @@ Monitor the returned command ID using the tool guide. After successful
 completion, check the example's saved settings and outputs:
 
 ```sh
-ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds 240 --json -- python /inputs/boltzgen/audit-defaults-v2.py /workspace/b43/W25B --devices 1 --design-samples 5 --report /scratch/W25B-settings.json
-ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds 240 --json -- python /inputs/boltzgen/check-complete-v6.py /workspace/b43/W25B --case /inputs/boltzgen/testing-25-batch5-cases.json --id W25B --report /scratch/W25B-science.json
-ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds 240 --json -- python /inputs/boltzgen/check-semantics-v2.py /workspace/b43/W25B --id W25B
+ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds 240 --json -- python /inputs/boltzgen/audit-defaults-v2.py /workspace/boltzgen/W25B --devices 1 --design-samples 5 --report /scratch/W25B-settings.json
+ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds 240 --json -- python /inputs/boltzgen/check-complete-v6.py /workspace/boltzgen/W25B --case /inputs/boltzgen/testing-25-batch5-cases.json --id W25B --report /scratch/W25B-science.json
+ariax forge run "$SESSION" --tool boltzgen --gpus 0 --timeout-seconds 240 --json -- python /inputs/boltzgen/check-semantics-v2.py /workspace/boltzgen/W25B --id W25B
 ```
 
 These checkers use the pinned BoltzGen environment. Their assertions cover the

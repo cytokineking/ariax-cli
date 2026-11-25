@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "id": "recovery-remote-command-exit-11",
+  "category": "recovery_feedback",
+  "runner": "recovery_remote_exit_11",
+  "description": "ariax forge run --wait exits with code 11 and returns exit_code + output_tail in error.details, distinct from exit 10 server errors.",
+  "input": {
+    "remote_exit_code": 2,
+    "remote_log": "Traceback (most recent call last):\nValueError: invalid ligand atom index\n"
+  },
+  "assertions": {
+    "expected_cli_exit_code": 11,
+    "expected_error_code": "command_failed",
+    "expected_remote_exit_code": 2,
+    "output_tail_must_contain": "invalid ligand atom index",
+    "distinct_from_server_exit_code": 10
+  }
+}

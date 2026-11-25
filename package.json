@@ -250,6 +250,7 @@
     "src/commands/status.js",
     "src/commands/storage.js",
     "src/commands/submit.js",
+    "src/commands/summary.js",
     "src/commands/upgrade.js",
     "src/commands/validate.js",
     "src/config.js",
@@ -281,6 +282,8 @@
     "src/uuid.js"
   ],
   "scripts": {
+    "test:agent-surface": "node scripts/check-agent-surface.js",
+    "test:evals": "node scripts/run-agent-eval-suite.js",
     "test:package": "node scripts/test-package.js",
     "pack:github": "node scripts/pack-release.js github",
     "pack:npm": "node scripts/pack-release.js npm"

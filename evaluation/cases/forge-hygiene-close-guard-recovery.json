@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "id": "forge-hygiene-close-guard-recovery",
+  "category": "forge_hygiene",
+  "runner": "forge_hygiene_close_guard",
+  "description": "ariax forge close fails fast with exit 7 pending_files_use_finish when pending_files > 100 and directs the caller to ariax forge finish --wait.",
+  "input": {
+    "pending_files": 240,
+    "pending_bytes": 12582912
+  },
+  "assertions": {
+    "expected_exit_code": 7,
+    "expected_error_code": "pending_files_use_finish",
+    "action_must_mention": "ariax forge finish"
+  }
+}

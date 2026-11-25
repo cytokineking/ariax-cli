@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "id": "budget-discover-and-skill-read",
+  "category": "context_budget",
+  "runner": "budget_discover_skill",
+  "description": "Combined discover query plus single managed skill read stays under a tight byte budget.",
+  "input": {
+    "query": "nanobody binder",
+    "skill_protocol": "boltzgen"
+  },
+  "assertions": {
+    "max_discover_bytes": 4500,
+    "max_skill_bytes": 6000,
+    "max_total_bytes": 10000
+  }
+}

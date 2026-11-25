@@ -34,3 +34,15 @@ explicit constraints, and separately reports validation and completion. It
 returns nonzero for a fidelity mismatch. Freeform missing-information,
 unsupported-mode, and recovery answers also require reviewing the retained
 transcript; outcome labels alone do not establish correct reasoning.
+
+## Automated CLI & agent-surface benchmark suite (`schema_version: 2`)
+
+Deterministic `schema_version: 2` cases under `cases/` cover routing accuracy,
+context/token budgets, Forge storage hygiene, remote exit-code recovery, and
+redacted feedback behavior against the real CLI and an isolated loopback HTTP
+fixture (no network or external LLM calls):
+
+```sh
+npm run test:evals           # validates all v1 + v2 schemas and runs all v2 cases
+npm run test:agent-surface   # checks manifests, size/context budgets, leaks, links/anchors, and syntax
+```

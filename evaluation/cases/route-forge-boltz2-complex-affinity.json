@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-forge-boltz2-complex-affinity",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Small-molecule affinity prediction query routes to Forge boltz2.",
+  "input": {
+    "query": "small molecule affinity prediction"
+  },
+  "assertions": {
+    "recommended_execution_in": ["forge"],
+    "top_forge_tool_in": ["boltz2"],
+    "max_stdout_bytes": 6000
+  }
+}

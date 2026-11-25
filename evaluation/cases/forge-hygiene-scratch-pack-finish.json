@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "id": "forge-hygiene-scratch-pack-finish",
+  "category": "forge_hygiene",
+  "runner": "forge_hygiene_pack_finish",
+  "description": "ariax forge pack stages in /scratch, writes to /workspace/archives/*.tar.zst, passes bash -n, and pairs cleanly with ariax forge finish --wait.",
+  "input": {
+    "src": "/scratch/boltz2-batch",
+    "dest": "/workspace/archives/boltz2-batch.tar.zst"
+  },
+  "assertions": {
+    "require_scratch_staging": true,
+    "require_bash_syntax_ok": true,
+    "require_finish_released_and_saved": true
+  }
+}

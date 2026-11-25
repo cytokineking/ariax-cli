@@ -15,11 +15,11 @@ const MANAGED_CATALOG = Object.freeze([
   {
     id: 'bindcraft2',
     display_name: 'BindCraft2',
-    recommended_for: 'Default for miniproteins, linear/cyclic peptides, multi-target selectivity, and scaffold redesign.',
+    recommended_for: 'Default for de novo miniproteins, linear/cyclic peptides, multi-target selectivity, and scaffold redesign.',
     constraints: 'Protein/peptide targets (PDB/mmCIF/FASTA); hotspots, coldspots, multi-target.',
     modalities: ['miniprotein', 'peptide', 'cyclic-peptide', 'protein-binder', 'scaffold', 'multi-target', 'nanobody', 'antibody'],
     tasks: ['binder-design', 'antibodies'],
-    keywords: ['bindcraft', 'bindcraft2', 'binder', 'miniprotein', 'peptide', 'cyclic', 'hotspot', 'coldspot', 'multi-target', 'selectivity', 'scaffold', 'protein'],
+    keywords: ['bindcraft', 'bindcraft2', 'de novo', 'binder', 'miniprotein', 'peptide', 'cyclic', 'hotspot', 'coldspot', 'multi-target', 'selectivity', 'scaffold', 'protein'],
   },
   {
     id: 'boltzgen',
@@ -37,7 +37,7 @@ const MANAGED_CATALOG = Object.freeze([
     constraints: 'Protein targets (mmCIF/PDB + sequence); miniprotein binders only.',
     modalities: ['miniprotein', 'protein-binder'],
     tasks: ['binder-design'],
-    keywords: ['pxdesign', 'miniprotein', 'binder', 'diffusion', 'fast', 'preview'],
+    keywords: ['pxdesign', 'de novo', 'miniprotein', 'binder', 'diffusion', 'fast', 'preview'],
   },
   {
     id: 'bindcraft-v1.5',
@@ -51,11 +51,11 @@ const MANAGED_CATALOG = Object.freeze([
   {
     id: 'esmfold2-pipeline',
     display_name: 'ESMFold2 Pipeline',
-    recommended_for: 'High-throughput ESMFold2-guided miniprotein binder design and fast folding screen.',
+    recommended_for: 'High-throughput ESMFold2-guided miniprotein binder design and fast folding screen/triage.',
     constraints: 'Protein targets (mmCIF/PDB + sequences); miniprotein binders.',
     modalities: ['miniprotein', 'protein-binder'],
     tasks: ['binder-design'],
-    keywords: ['esmfold', 'esmfold2', 'pipeline', 'high-throughput', 'miniprotein', 'binder'],
+    keywords: ['esmfold', 'esmfold2', 'pipeline', 'high-throughput', 'fast', 'folding', 'triage', 'screen', 'miniprotein', 'binder'],
   },
 ]);
 
@@ -83,7 +83,7 @@ const OFFLINE_FORGE_TOOLS = Object.freeze([
   { tool: 'esmc-600m', tier: 'recommended', summary: 'Balanced ESM-C 600M protein language model for embeddings and masked log-likelihood scoring.', gpu: true, min_vram_gib: 16, modalities: ['protein', 'antibody', 'vhh', 'peptide'], tasks: ['sequence-optimization', 'validation-search'] },
   { tool: 'rfantibody', tier: 'specialized', summary: 'Integrated RFdiffusion antibody/nanobody backbone generation, ProteinMPNN CDR sequencing, and RF2 prediction.', gpu: true, min_vram_gib: 44, modalities: ['antibody', 'nanobody', 'vhh', 'cdr'], tasks: ['antibodies', 'binder-design'] },
   { tool: 'absolute-stability-esm3', tier: 'specialized', summary: 'ESM3-based learned folding stability (dG) predictor for monomers, complexes, and mutation scans.', gpu: true, min_vram_gib: 24, modalities: ['protein', 'peptide', 'stability'], tasks: ['sequence-optimization', 'validation-search'] },
-  { tool: 'chai1', tier: 'specialized', summary: 'Chai-1 v2 multi-modal structure predictor with local MSAs, templates, and contact/pocket restraints.', gpu: true, min_vram_gib: 24, modalities: ['protein', 'antibody', 'vhh', 'ligand', 'small-molecule', 'nucleic-acid'], tasks: ['molecular-prediction', 'validation-search'] },
+  { tool: 'chai1', tier: 'specialized', summary: 'Chai-1 v2 multi-modal multimer complex structure predictor with local MSAs, templates, and contact/pocket restraints.', gpu: true, min_vram_gib: 24, modalities: ['protein', 'antibody', 'vhh', 'ligand', 'small-molecule', 'nucleic-acid'], tasks: ['molecular-prediction', 'validation-search'] },
   { tool: 'fampnn', tier: 'specialized', summary: 'Full-atom sequence design, sidechain packing, and single/multi-mutation scoring.', gpu: true, min_vram_gib: 16, modalities: ['protein'], tasks: ['sequence-optimization'] },
   { tool: 'mol1', tier: 'specialized', summary: 'Prepared-JSON all-atom biomolecular structure prediction (Mol-1).', gpu: true, min_vram_gib: 24, modalities: ['protein', 'ligand', 'small-molecule', 'nucleic-acid'], tasks: ['molecular-prediction'] },
   { tool: 'ipsae', tier: 'legacy', superseded_by: 'interface-scores', summary: 'Legacy standalone AF2-focused ipSAE v3 CPU interface scorer; superseded by interface-scores.', gpu: false, min_vram_gib: 0, modalities: ['protein', 'antibody', 'vhh', 'peptide'], tasks: ['validation-search'] },
@@ -104,24 +104,37 @@ function tokenize(text) {
 
 const GENERIC_TOKENS = new Set(['binder', 'binders', 'design', 'protein', 'proteins', 'tool', 'tools', 'model', 'models', 'for', 'with', 'and', 'the']);
 
-function scoreTextMatch(tokens, haystackParts) {
-  if (!tokens.length) return { score: 1, specificHits: 0, specificTotal: 0 };
+function scoreTextMatch(tokens, haystackParts, { id = '', primary = '' } = {}) {
+  if (!tokens.length) return { score: 1, specificHits: 0, specificTotal: 0, exactId: 0 };
   const hay = haystackParts.filter(Boolean).join(' ').toLowerCase();
+  const normId = String(id || '').toLowerCase();
+  const normPrimary = String(primary || '').toLowerCase();
   const specificTokens = tokens.filter((t) => !GENERIC_TOKENS.has(t));
   let score = 0;
   let specificHits = 0;
+  let exactId = 0;
   for (const tok of tokens) {
     const isSpecific = !GENERIC_TOKENS.has(tok);
     const weight = isSpecific ? 3 : 1;
+    if (normId && (tok === normId || (tok.length >= 4 && normId.startsWith(tok)))) {
+      exactId += 1;
+      score += 10;
+    }
     if (hay.includes(tok)) {
       score += weight;
-      if (isSpecific) specificHits += 1;
+      if (isSpecific) {
+        specificHits += 1;
+        if (normPrimary && normPrimary.includes(tok)) score += 2;
+      }
     } else if (tok.endsWith('s') && tok.length > 3 && hay.includes(tok.slice(0, -1))) {
       score += weight * 0.8;
-      if (isSpecific) specificHits += 1;
+      if (isSpecific) {
+        specificHits += 1;
+        if (normPrimary && normPrimary.includes(tok.slice(0, -1))) score += 1.5;
+      }
     }
   }
-  return { score, specificHits, specificTotal: specificTokens.length };
+  return { score, specificHits, specificTotal: specificTokens.length, exactId };
 }
 
 function minVramOf(tool) {
@@ -190,6 +203,17 @@ function recommendExecution({ execution, query, task, modality, managedCount, fo
     };
   }
   const combined = `${query || ''} ${modality || ''}`.trim();
+  if (
+    managedCount > 0
+    && /\besmfold(?:2)?(?:-pipeline)?\b/i.test(combined)
+    && !/\bbiohub\b/i.test(combined)
+    && /\b(triage|screen|pipeline|binder|design)\b/i.test(combined)
+  ) {
+    return {
+      recommended_execution: 'either',
+      rationale: 'Use managed esmfold2-pipeline for turnkey high-throughput folding triage/binder design, or Forge biohub-esmfold2 for standalone structure prediction.',
+    };
+  }
   if ((task && FORGE_ONLY_TASKS.has(task)) || (FORGE_ONLY_RE.test(combined) && !MANAGED_FRIENDLY_RE.test(combined))) {
     return {
       recommended_execution: 'forge',
@@ -327,13 +351,17 @@ export async function run(ctx) {
     let scored = managed
       .map((p) => ({
         item: p,
-        ...scoreTextMatch(tokens, [p.id, p.display_name, p.recommended_for, p.constraints, ...p._modalities, ...p._keywords]),
+        ...scoreTextMatch(
+          tokens,
+          [p.id, p.display_name, p.recommended_for, p.constraints, ...p._modalities, ...p._keywords],
+          { id: p.id, primary: p.recommended_for },
+        ),
       }))
       .filter((entry) => entry.score > 0);
     if (scored.some((entry) => entry.specificHits > 0)) {
       scored = scored.filter((entry) => entry.specificHits > 0);
     }
-    scored.sort((a, b) => b.specificHits - a.specificHits || b.score - a.score);
+    scored.sort((a, b) => b.exactId - a.exactId || b.specificHits - a.specificHits || b.score - a.score);
     managed = scored.map((entry) => entry.item);
   }
   const managedOut = managed.map(({ id, display_name, recommended_for, constraints, next_command }) => ({
@@ -371,14 +399,19 @@ export async function run(ctx) {
     let scored = forgeTools
       .map((t) => ({
         item: t,
-        ...scoreTextMatch(tokens, [t.tool, t._name, t._fullSummary, ...t.modalities, ...t._tasks, ...t._inputs, ...t._outputs]),
+        ...scoreTextMatch(
+          tokens,
+          [t.tool, t._name, t._fullSummary, ...t.modalities, ...t._tasks, ...t._inputs, ...t._outputs],
+          { id: t.tool, primary: t._fullSummary },
+        ),
       }))
       .filter((entry) => entry.score > 0);
     if (scored.some((entry) => entry.specificHits > 0)) {
       scored = scored.filter((entry) => entry.specificHits > 0);
     }
     scored.sort((a, b) =>
-      b.specificHits - a.specificHits
+      b.exactId - a.exactId
+      || b.specificHits - a.specificHits
       || (TIER_ORDER[a.item.tier] ?? 9) - (TIER_ORDER[b.item.tier] ?? 9)
       || b.score - a.score
       || a.item.tool.localeCompare(b.item.tool));

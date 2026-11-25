@@ -291,6 +291,7 @@ authentication using `ariax discover --query "<goal>"` or
 | Recover an attempt | `ariax operations [OPERATION_ID]`, `ariax recover OPERATION_ID [--wait]` |
 | Find and monitor | `ariax projects`, `ariax status <PROJECT_ID>`, `ariax jobs --project <PROJECT_ID>` |
 | Inspect output | `ariax logs <JOB_ID> --list`, `ariax logs <JOB_ID> --log-ref PATH`, `ariax results <PROJECT_ID> --download ./results` |
+| Scientific handoff summary | `ariax summary <PROJECT_ID> [--top 5] [--include-sequences] --json`, `ariax forge summary <PROJECT_ID> --json` |
 | Control a project | `ariax pause <PROJECT_ID>`, `ariax restart <PROJECT_ID>`, `ariax abort <PROJECT_ID>` |
 | Inspect run evidence | `ariax runs PROJECT_ID [--job JOB_ID] --json` |
 | Read candidate tables | `ariax candidates PROJECT_ID [--view final\|all\|diagnostics] [--all] --json` |

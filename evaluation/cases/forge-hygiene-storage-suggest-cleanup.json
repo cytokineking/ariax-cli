@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "id": "forge-hygiene-storage-suggest-cleanup",
+  "category": "forge_hygiene",
+  "runner": "forge_hygiene_storage_suggest",
+  "description": "ariax storage suggest surfaces Forge pack_archive/high_small_file_count suggestions with backend workspace/... paths, and ariax forge summary normalizes them to --src /workspace/... for ariax forge pack.",
+  "input": {
+    "suggestions": [
+      {
+        "path": "workspace/boltz2-raw",
+        "kind": "directory",
+        "file_count": 4200,
+        "bytes": 1610612736,
+        "suggestion": "pack_archive",
+        "reason": "high_small_file_count"
+      }
+    ]
+  },
+  "assertions": {
+    "expected_path": "workspace/boltz2-raw",
+    "expected_suggestion": "pack_archive",
+    "expected_reason": "high_small_file_count",
+    "expected_forge_summary_pack_src": "/workspace/boltz2-raw",
+    "max_stdout_bytes": 4000
+  }
+}

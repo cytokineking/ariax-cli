@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-managed-pxdesign-de-novo",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Explicit PXDesign de novo binder query routes to managed pxdesign.",
+  "input": {
+    "query": "de novo binder pxdesign"
+  },
+  "assertions": {
+    "recommended_execution_in": ["managed"],
+    "top_managed_protocol": "pxdesign",
+    "max_stdout_bytes": 6000
+  }
+}

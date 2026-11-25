@@ -57,12 +57,13 @@ import * as inputs from './commands/inputs.js';
 import * as feedback from './commands/feedback.js';
 import * as forge from './commands/forge.js';
 import * as storage from './commands/storage.js';
+import * as summary from './commands/summary.js';
 import * as discover from './commands/discover.js';
 
 const COMMANDS = {
   discover,
   me, protocols, pricing, schema, validate, submit,
-  projects, jobs, status, logs, pause, restart, abort, results, storage, upgrade,
+  projects, jobs, status, logs, pause, restart, abort, results, summary, storage, upgrade,
   login, logout,
   skills, operations, recover, inputs, candidates, runs,
   feedback, forge,
@@ -99,6 +100,7 @@ const COMMAND_OPTIONS = {
   runs: [['job', 'limit', 'cursor', 'all'], 1],
   candidates: [['view', 'limit', 'cursor', 'all', 'eligible', 'output', 'overwrite', 'details'], 1],
   results: [['path', 'download', 'overwrite', 'limit', 'cursor', 'details'], 1],
+  summary: [['top', 'include-sequences'], 1],
   upgrade: [['check', 'yes', 'channel'], 0],
   login: [['with-token', 'insecure-storage'], 0],
   logout: [[], 0],
@@ -179,7 +181,7 @@ function rejectedApiKeyAction({ command, apiKeySource } = {}) {
 function isForgeRead({ command, positionals = [] } = {}) {
   if (command !== 'forge') return false;
   const [action, subaction] = positionals;
-  return ['catalog', 'list', 'status', 'project', 'activity', 'operations', 'commands', 'command', 'watch', 'logs'].includes(action)
+  return ['catalog', 'list', 'status', 'project', 'summary', 'activity', 'operations', 'commands', 'command', 'watch', 'logs'].includes(action)
     || (action === 'tools' && subaction !== 'add')
     || (action === 'inputs' && ['list', 'status'].includes(subaction))
     || (action === 'files' && !['delete', 'hydrate', 'recover'].includes(subaction));
@@ -304,6 +306,7 @@ const HELP_TOPICS = {
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
   results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
+  summary: 'ariax summary <project-id> [--top N] [--include-sequences]',
   storage: storage.help,
   upgrade: 'ariax upgrade [--check] [--yes] [--channel github|npm]',
   login: 'ariax login [--with-token] [--insecure-storage]',

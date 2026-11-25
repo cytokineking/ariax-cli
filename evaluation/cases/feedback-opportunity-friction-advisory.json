@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "id": "feedback-opportunity-friction-advisory",
+  "category": "recovery_feedback",
+  "runner": "feedback_opportunity_advisory",
+  "description": "In an agent shell (CLAUDECODE=1), an exit-10 server error emits feedback_opportunity once on stderr and suppresses duplicates within cooldown; a human shell emits no notice.",
+  "input": {
+    "agent_env_var": "CLAUDECODE",
+    "agent_env_val": "1"
+  },
+  "assertions": {
+    "expected_exit_code": 10,
+    "expected_notice_code": "feedback_opportunity",
+    "expected_notice_reason": "server_error",
+    "require_cooldown_suppression": true,
+    "require_human_shell_silent": true
+  }
+}

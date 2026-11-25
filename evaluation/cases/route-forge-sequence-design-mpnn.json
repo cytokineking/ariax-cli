@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "id": "route-forge-sequence-design-mpnn",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Inverse folding sequence design MPNN query routes to Forge MPNN family and FAMPNN.",
+  "input": {
+    "query": "inverse folding sequence design mpnn"
+  },
+  "assertions": {
+    "recommended_execution_in": ["forge"],
+    "top_forge_tool_in": ["proteinmpnn", "solublempnn", "ligandmpnn", "abmpnn", "fampnn"],
+    "forge_tools_include_any": ["proteinmpnn", "solublempnn", "fampnn"],
+    "max_stdout_bytes": 6000
+  }
+}

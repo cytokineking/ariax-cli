@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-managed-boltzgen-nanobody",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Nanobody binder query ranks managed boltzgen first for turnkey VHH design.",
+  "input": {
+    "query": "nanobody binder"
+  },
+  "assertions": {
+    "recommended_execution_in": ["managed", "either"],
+    "top_managed_protocol": "boltzgen",
+    "max_stdout_bytes": 6000
+  }
+}

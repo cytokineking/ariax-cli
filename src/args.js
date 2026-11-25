@@ -66,6 +66,7 @@ const BOOLEAN_FLAGS = new Set([
   'refresh',
   'preview',
   'attach-last-error',
+  'include-sequences',
 ]);
 
 /**

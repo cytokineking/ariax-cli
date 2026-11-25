@@ -82,6 +82,16 @@ problems and scientific failure without presuming that poor refolding is a
 software bug. Missing or nonfinite values remain unknown, not zero or passed.
 Preserve useful partial outputs before deciding whether to retry.
 
+## Standardized handoff template
+
+Run `ariax summary <PROJECT> --json` (auto-routes managed and Forge projects) or `ariax forge summary <PROJECT> --json`, then present five concise sections:
+
+1. **Status & link:** project name, ID, protocol, status, and browser `project_url`.
+2. **Funnel & top candidates (or workspace):** planned → attempted → evaluated → passed → accepted counts (keep unknown counts as unknown, never `0`) with top-N metrics + explicit scales (`0..1`, `0..100`, `Å`), or Forge sync state, durability status, and key `/workspace` outputs.
+3. **Resources & storage:** GPUs, job/session count, runtime, recorded spend, and storage bytes/files.
+4. **Warnings & next actions:** zero-accepted pilots, incomplete sync, hygiene/cleanup alerts, human holds, and concrete follow-up CLI commands.
+5. **Caveat:** computational acceptance supports experimental prioritization only; it does not establish binding, affinity, stability, or activity.
+
 ## Metric references
 
 - [AlphaFold pLDDT: local confidence](https://www.ebi.ac.uk/training/online/courses/alphafold/inputs-and-outputs/evaluating-alphafolds-predicted-structures-using-confidence-scores/plddt-understanding-local-confidence/)

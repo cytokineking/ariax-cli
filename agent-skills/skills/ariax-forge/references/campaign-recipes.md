@@ -81,8 +81,8 @@ pricing/availability and `GPU_HOURS` from the approved total limit:
 ```sh
 ariax forge create --name "Protein binder pilot" --gpu "$GPU" --gpu-count 1 --min-ram-gib 100 --min-cpu-count 8 --min-disk-gib 250 --tools boltzgen,protenix-models,interface-scores --priority boltzgen --max-gpu-hours "$GPU_HOURS" --json
 ariax forge status "$SESSION" --json
-ariax forge tools wait "$SESSION" base --timeout 600 --json
-ariax forge tools wait "$SESSION" boltzgen --timeout 1800 --json
+ariax forge tools wait "$SESSION" base --wait-timeout 600 --json
+ariax forge tools wait "$SESSION" boltzgen --wait-timeout 1800 --json
 ```
 
 Set `SESSION` from the actual create response. Creating or resuming allocates
@@ -105,7 +105,7 @@ After **each** `forge run`, set `COMMAND` to its returned durable command ID and
 observe it before submitting the next dependent step:
 
 ```sh
-ariax forge watch "$SESSION" "$COMMAND" --timeout 1800 --json
+ariax forge watch "$SESSION" "$COMMAND" --wait-timeout 1800 --json
 ariax forge command "$SESSION" "$COMMAND" --json
 ariax forge logs "$SESSION" "$COMMAND" --tail 1000 --json
 ```
@@ -218,8 +218,8 @@ commands instead of uploading or downloading generated results.
 ```sh
 ariax forge inputs add "$SESSION" --file "$EVALUATION_JSON" --path protenix/evaluation.json --json
 ariax forge inputs add "$SESSION" --file "$CHAIN_ROLES_JSON" --path protenix/chain-roles.json --json
-ariax forge tools wait "$SESSION" protenix-models --timeout 1800 --json
-ariax forge tools wait "$SESSION" interface-scores --timeout 1800 --json
+ariax forge tools wait "$SESSION" protenix-models --wait-timeout 1800 --json
+ariax forge tools wait "$SESSION" interface-scores --wait-timeout 1800 --json
 ariax forge run "$SESSION" --tool protenix-models --gpus 0 --timeout-seconds 1800 --json -- forge-protenix --model_name protenix_base_default_v1.0.0 --input_json_path /inputs/protenix/evaluation.json --dump_dir /workspace/campaigns/evaluation/prediction --use_msa false --sample_diffusion.N_sample 1 --sample_diffusion.N_step 20 --model.N_cycle 3 --seeds 101 --need_atom_confidence true
 ```
 
@@ -273,7 +273,7 @@ against your declared construct and settings.
 
 ```sh
 ariax forge tools add "$SESSION" --tools freebindcraft --json
-ariax forge tools wait "$SESSION" freebindcraft --timeout 1800 --json
+ariax forge tools wait "$SESSION" freebindcraft --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$TARGET_PDB" --path freebindcraft/target.pdb --json
 ariax forge inputs add "$SESSION" --file "$SETTINGS_JSON" --path freebindcraft/settings.json --json
 ariax forge inputs add "$SESSION" --file "$ADVANCED_JSON" --path freebindcraft/advanced.json --json
@@ -307,7 +307,7 @@ its region map without invented individual source-residue correspondence.
 
 ```sh
 ariax forge tools add "$SESSION" --tools rfantibody --priority rfantibody --json
-ariax forge tools wait "$SESSION" rfantibody --timeout 1800 --json
+ariax forge tools wait "$SESSION" rfantibody --wait-timeout 1800 --json
 ariax forge inputs add "$SESSION" --file "$RF_TARGET_PDB" --path rfantibody/target.pdb --json
 ariax forge inputs add "$SESSION" --file "$FRAMEWORK_PDB" --path rfantibody/framework.pdb --json
 ariax forge inputs add "$SESSION" --file "$CAMPAIGNS/rfantibody-select.py" --path campaigns/rfantibody-select.py --json

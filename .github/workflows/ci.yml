@@ -18,4 +18,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - run: npm run test:agent-surface
+      - run: npm run test:evals
       - run: npm run test:package

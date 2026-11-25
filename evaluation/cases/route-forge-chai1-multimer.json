@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-forge-chai1-multimer",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Multimer complex structure prediction query naming chai1 routes to Forge chai1.",
+  "input": {
+    "query": "multimer complex structure prediction chai1"
+  },
+  "assertions": {
+    "recommended_execution_in": ["forge"],
+    "top_forge_tool_in": ["chai1"],
+    "max_stdout_bytes": 6000
+  }
+}

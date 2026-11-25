@@ -78,6 +78,7 @@ synchronization stays fast and stays under project quotas:
 ariax forge pack SESSION --src /scratch/run1 --dest /workspace/archives/run1.tar.zst --wait --json
 ariax forge files PROJECT --path /workspace --json
 ariax forge finish SESSION --wait --json      # drains commands + flushes + releases GPU
+ariax forge summary PROJECT --json            # standardized workspace, session & caveat handoff
 ariax storage suggest PROJECT --json          # inspect large/high-file-count dirs for cleanup
 ```
 

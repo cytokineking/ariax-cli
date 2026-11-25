@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-managed-esmfold2-triage",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Fast folding triage ESMFold query recommends managed esmfold2-pipeline first.",
+  "input": {
+    "query": "fast folding triage esmfold"
+  },
+  "assertions": {
+    "recommended_execution_in": ["managed", "either"],
+    "top_managed_protocol": "esmfold2-pipeline",
+    "max_stdout_bytes": 6000
+  }
+}

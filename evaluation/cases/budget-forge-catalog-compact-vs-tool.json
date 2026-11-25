@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "budget-forge-catalog-compact-vs-tool",
+  "category": "context_budget",
+  "runner": "budget_forge_catalog",
+  "description": "Default compact Forge catalog stays under 6 KB and --tool boltz2 --with-guide returns one tool record plus bundled guide in 1 call.",
+  "input": {
+    "tool": "boltz2"
+  },
+  "assertions": {
+    "max_compact_bytes": 6000,
+    "require_single_tool_with_guide": true,
+    "expected_guide_id": "boltz2"
+  }
+}

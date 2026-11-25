@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "id": "budget-project-summary-handoff",
+  "category": "context_budget",
+  "runner": "budget_summary_handoff",
+  "description": "ariax summary returns a complete canonical handoff under 4 KB with sequences omitted by default and included with --include-sequences.",
+  "input": {
+    "top": 5
+  },
+  "assertions": {
+    "max_default_summary_bytes": 4000,
+    "require_sequences_omitted_by_default": true,
+    "require_sequences_included_with_flag": true,
+    "require_null_preserved_for_unknown": true
+  }
+}

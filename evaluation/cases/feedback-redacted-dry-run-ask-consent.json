@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "feedback-redacted-dry-run-ask-consent",
+  "category": "recovery_feedback",
+  "runner": "feedback_redacted_dry_run",
+  "description": "Offline ariax feedback --dry-run redacts API keys, JWTs, query URLs, long sequences, and PDB coordinates while reporting consent_mode ask.",
+  "input": {
+    "type": "agent-friction",
+    "summary": "Schema validation failure with sensitive payload",
+    "sensitive_tokens": {
+      "api_key": "arx_evalsecretkey1234567890",
+      "jwt": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzNDU2In0.signatureTokenValue123456",
+      "signed_url": "https://storage.example.test/object.pdb?X-Amz-Signature=deadbeef12345",
+      "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+      "pdb_block": "ATOM      1  N   MET A   1      27.340  24.430   2.614  1.00  9.67           N\nATOM      2  CA  MET A   1      26.266  25.413   2.842  1.00 10.38           C\nATOM      3  C   MET A   1      26.913  26.639   3.531  1.00  9.62           C\n"
+    }
+  },
+  "assertions": {
+    "expected_consent_mode": "ask",
+    "min_redactions_applied": 5,
+    "require_zero_leaks": true
+  }
+}

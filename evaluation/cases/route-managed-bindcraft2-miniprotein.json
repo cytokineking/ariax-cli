@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "id": "route-managed-bindcraft2-miniprotein",
+  "category": "routing",
+  "runner": "discover_routing",
+  "description": "Default de novo miniprotein binder query routes to managed bindcraft2.",
+  "input": {
+    "query": "de novo miniprotein binder"
+  },
+  "assertions": {
+    "recommended_execution_in": ["managed"],
+    "top_managed_protocol": "bindcraft2",
+    "max_stdout_bytes": 6000
+  }
+}
