@@ -271,6 +271,7 @@ export async function run(ctx) {
         apiKey,
         timeoutMs: ctx.timeoutMs,
         fetchImpl: ctx.fetchImpl,
+        telemetry: ctx.telemetry,
       });
       return authClient.get('/api/v1/forge/catalog', { query: catalogQuery, attempts: 1 });
     }

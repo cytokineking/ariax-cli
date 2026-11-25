@@ -218,7 +218,7 @@ export async function forgeRequest(ctx, sessionId, method, routePath, options = 
     const { file, connection } = await sessionConnection(ctx, sessionId, options, attempt > 0);
     checkAbort(options.signal);
     const client = createClient({ baseUrl: connection.endpoint, apiKey: connection.access_token,
-      timeoutMs: ctx.timeoutMs, fetchImpl: ctx.fetchImpl });
+      timeoutMs: ctx.timeoutMs, fetchImpl: ctx.fetchImpl, telemetry: ctx.telemetry });
     try {
       const result = method === 'GET' ? await client.get(routePath, { ...options, attempts: 2 })
         : await client.post(routePath, options);

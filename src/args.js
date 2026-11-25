@@ -65,6 +65,7 @@ const BOOLEAN_FLAGS = new Set([
   'no-manifest',
   'refresh',
   'preview',
+  'attach-last-error',
 ]);
 
 /**
@@ -83,7 +84,7 @@ export function parseArgv(argv) {
 
   const takeValue = (i, name, raw) => {
     const next = argv[i + 1];
-    if (next === undefined || next.startsWith('-')) {
+    if (next === undefined || (next.startsWith('-') && next.length > 1)) {
       throw usageError(`Flag --${name} requires a value (got "${raw}").`);
     }
     return next;
@@ -150,7 +151,7 @@ export function parseArgv(argv) {
           throw usageError(
             `Flag "-${ch}" requires a value and must be last in "${tok}". Use "-${ch} <value>".`,
           );
-        } else if (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
+        } else if (i + 1 < argv.length && !(argv[i + 1].startsWith('-') && argv[i + 1].length > 1)) {
           target[long] = argv[i + 1];
           i += 1;
         } else {

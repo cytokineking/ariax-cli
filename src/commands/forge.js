@@ -741,6 +741,7 @@ async function catalogGet(ctx, routePath, options = {}) {
       apiKey,
       timeoutMs: ctx.timeoutMs,
       fetchImpl: ctx.fetchImpl,
+      telemetry: ctx.telemetry,
     });
     return authClient.get(routePath, options);
   }

@@ -296,7 +296,7 @@ authentication using `ariax discover --query "<goal>"` or
 | Read candidate tables | `ariax candidates PROJECT_ID [--view final\|all\|diagnostics] [--all] --json` |
 | Export configuration | `ariax projects export PROJECT_ID --output job.json` |
 | Change GPU preferences | `ariax gpu-preferences <PROJECT_ID> -f preferences.json` |
-| Record project feedback | `ariax feedback <PROJECT_ID> --category technical-support --message "Expected behavior, observed behavior, and actions tried" [--job JOB_ID]` |
+| Submit feedback for triage | `ariax feedback --type bug\|agent-friction\|docs-gap\|missing-capability\|technical-support\|feature-request\|other --summary "Short summary" --message "Details" [--attach-last-error] [--dry-run]` |
 | Check or install updates | `ariax upgrade --check`, `ariax upgrade` |
 
 Forge catalog `--compact` routes tool selection; combined status values do not
@@ -497,13 +497,23 @@ and public error, expected behavior, and actions tried. Omit credentials, signed
 URLs, and unnecessary input or log dumps. See the
 [shared recovery and support guide](agent-skills/core/managed-projects.md#provisioning-and-job-failures).
 
-Record project-related feedback with `ariax feedback`, using the category
-`technical-support`, `feature-request`, or `other`. It requires a write-scoped
-API key. Each successful submission returns a feedback ID. For assistance, email
-support@ariax.bio with that ID and the project ID.
-Recording feedback does not create a support ticket or send email. Keep
-messages concise (up to 8 KiB of UTF-8 text), and omit credentials, signed
-URLs, and unnecessary scientific inputs. See the
+Submit structured feedback to Ariax's engineering triage queue with
+`ariax feedback` (linking a project with `--project` is optional; legacy
+`ariax feedback <PROJECT_ID> --category ... --message "..."` syntax remains
+supported). Supported types are `bug`, `agent-friction`, `docs-gap`,
+`missing-capability`, `technical-support`, `feature-request`, and `other`, with
+optional `--severity blocker|high|medium|low`, `--file`, `--message -` (stdin),
+`--session`, `--command`, `--protocol`, `--tool`, `--failed-request-id`,
+`--attach-last-error`, `--operation-id`, and `--dry-run`. Submitting requires a
+write-scoped API key (`--dry-run` works offline without credentials) and returns
+a trackable `feedback_id`, `fingerprint`, and `triage_status`. For direct
+assistance, email support@ariax.bio with that `feedback_id`. Messages are
+bounded to 8 KiB of UTF-8 text; client-side redaction automatically scrubs API
+keys, tokens, query URLs, ≥60-character biological sequences / FASTA blocks, and
+raw PDB/mmCIF coordinate blocks before submission. Set
+`ARIAX_AUTO_FEEDBACK=ask|friction|off` (default: `ask`) to control agent
+friction advisories and `ARIAX_TRACE_ID=<uuid>` to attach a low-cardinality
+session correlation ID header (`X-Ariax-Session-Trace`). See the
 [feedback guide](agent-skills/core/feedback.md), also available through
 `ariax skills --reference feedback --read`.
 

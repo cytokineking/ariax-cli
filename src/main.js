@@ -3,7 +3,8 @@
  * Core operation uses built-in Node APIs; native keyring support is optional.
  * Exit codes are stable (see exit-codes.js).
  */
-import { isNonInteractiveEnv } from './agent-env.js';
+import path from 'node:path';
+import { detectAgentShell, isNonInteractiveEnv } from './agent-env.js';
 import { buildInfo, formatBuildInfo } from './build-info.js';
 import { parseArgv, usageError, isUsageError } from './args.js';
 import {
@@ -13,9 +14,17 @@ import {
   supportsStoredCredentials,
 } from './config.js';
 import { createCredentialStore } from './credentials.js';
+import {
+  commandTemplateFor,
+  evaluateFeedbackOpportunity,
+  recordCliError,
+  recordFeedbackAdvisory,
+} from './error-ring.js';
 import { ConnectivityError, createClient } from './http.js';
 import { parseFieldsOption, printData, printJson, printProgress, setOutputFields } from './output.js';
+import { defaultStateDir } from './state-dir.js';
 import { EXIT } from './exit-codes.js';
+import { isUUID } from './uuid.js';
 import {
   automaticUpdateNotice,
   formatUpdateNotice,
@@ -78,7 +87,12 @@ const COMMAND_OPTIONS = {
   pause: [[], 1],
   restart: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   abort: [[], 1],
-  feedback: [['category', 'message', 'job'], 1],
+  feedback: [[
+    'category', 'type', 'summary', 'message', 'file', 'f',
+    'severity', 'project', 'job', 'session', 'command',
+    'protocol', 'tool', 'failed-request-id', 'attach-last-error',
+    'operation-id', 'dry-run',
+  ], 1],
   operations: [[], 1],
   recover: [['wait', 'poll-interval', 'wait-timeout', 'details'], 1],
   'gpu-preferences': [['file'], 1],
@@ -129,9 +143,10 @@ function validateCommandArguments({ command, positionals, flags }) {
 const PUBLIC_COMMANDS = new Set(['discover', 'protocols', 'pricing', 'schema', 'skills', 'upgrade', 'login', 'logout', 'inputs']);
 
 /** Whether an invocation runs unauthenticated without requiring an API key. */
-export function isPublicInvocation(command, positionals = []) {
+export function isPublicInvocation(command, positionals = [], flags = {}) {
   if (PUBLIC_COMMANDS.has(command)) return true;
   if (command === 'forge' && positionals[0] === 'catalog') return true;
+  if (command === 'feedback' && flags?.['dry-run'] === true) return true;
   return false;
 }
 
@@ -168,6 +183,30 @@ function isForgeRead({ command, positionals = [] } = {}) {
     || (action === 'tools' && subaction !== 'add')
     || (action === 'inputs' && ['list', 'status'].includes(subaction))
     || (action === 'files' && !['delete', 'hydrate', 'recover'].includes(subaction));
+}
+
+function resolveErrorRootDir(context = {}) {
+  if (context?.config?.rootDir) return context.config.rootDir;
+  if (typeof context?.globals?.['root-dir'] === 'string' && context.globals['root-dir'].trim()) {
+    return path.resolve(context.globals['root-dir']);
+  }
+  if (Array.isArray(context?.argv)) {
+    for (let i = 0; i < context.argv.length; i += 1) {
+      const tok = context.argv[i];
+      if (tok === '--') break;
+      if (tok === '--root-dir' && typeof context.argv[i + 1] === 'string' && context.argv[i + 1].trim()) {
+        return path.resolve(context.argv[i + 1]);
+      }
+      if (tok.startsWith('--root-dir=') && tok.slice('--root-dir='.length).trim()) {
+        return path.resolve(tok.slice('--root-dir='.length));
+      }
+    }
+  }
+  const env = context?.env ?? process.env;
+  if (typeof env?.ARIAX_ROOT_DIR === 'string' && env.ARIAX_ROOT_DIR.trim()) {
+    return path.resolve(env.ARIAX_ROOT_DIR);
+  }
+  return path.resolve(defaultStateDir({ env }));
 }
 
 function reportError(err, jsonMode, authContext) {
@@ -212,6 +251,31 @@ function reportError(err, jsonMode, authContext) {
     }
     if (requestId) printProgress(`request-id: ${requestId}`);
   }
+
+  if (code !== EXIT.OK && code !== EXIT.INTERRUPTED) {
+    try {
+      const errorRoot = resolveErrorRootDir(authContext);
+      const env = authContext?.env ?? process.env;
+      const nowMs = Date.now();
+      const entry = {
+        command_template: commandTemplateFor(authContext?.command, authContext?.positionals),
+        exit_code: code,
+        error_code: apiCode ?? null,
+        http_status: typeof err?.status === 'number' ? err.status : null,
+        request_id: requestId ?? null,
+        timestamp: new Date(nowMs).toISOString(),
+      };
+      const buffer = recordCliError(errorRoot, entry, { now: nowMs });
+      const recorded = buffer?.entries?.[buffer.entries.length - 1] ?? entry;
+      const notice = evaluateFeedbackOpportunity(buffer, recorded, { env, now: nowMs });
+      if (notice) {
+        recordFeedbackAdvisory(errorRoot, recorded, { now: nowMs });
+        printProgress(JSON.stringify({ notice }));
+      }
+    } catch {
+      // Best-effort ring buffer and feedback advisory must never interfere with exit.
+    }
+  }
   return code;
 }
 
@@ -236,7 +300,7 @@ const HELP_TOPICS = {
   restart: 'ariax restart <project-id> [--wait]',
   'gpu-preferences': 'ariax gpu-preferences <project-id> -f preferences.json',
   abort: 'ariax abort <project-id>',
-  feedback: 'ariax feedback <project-id-or-exact-name> --category technical-support|feature-request|other --message TEXT [--job JOB_ID]',
+  feedback: 'ariax feedback --type bug|agent-friction|docs-gap|missing-capability|technical-support|feature-request|other --summary TEXT (--message TEXT|- | --file FILE) [--severity blocker|high|medium|low] [--project PROJECT] [--job UUID] [--session UUID] [--command UUID] [--protocol P] [--tool T] [--failed-request-id ID] [--attach-last-error] [--operation-id UUID] [--dry-run]',
   runs: 'ariax runs <project-id> [--job JOB_ID] [--limit N] [--cursor TOKEN] [--all]',
   candidates: 'ariax candidates <project-id> [--view final|all|diagnostics] [--limit N] [--cursor TOKEN] [--all] [--eligible] [--output shortlist.json] [--overwrite] [--details]',
   results: 'ariax results <project-id> [--path <artifact-path>] [--download <dir>] [--overwrite] [--limit N] [--cursor TOKEN] [--details]',
@@ -279,6 +343,8 @@ function printHelp(topic) {
   printData('Authentication: run ariax login (interactive), or set ARIAX_API_KEY for automation.');
   printData('Env: ARIAX_API_KEY (optional override), ARIAX_BASE_URL,');
   printData('  ARIAX_ALLOW_CUSTOM_ORIGIN=1 (intentional custom endpoints only),');
+  printData('  ARIAX_AUTO_FEEDBACK=ask|friction|off (feedback consent mode; default: ask),');
+  printData('  ARIAX_TRACE_ID=<uuid> (optional session trace correlation ID),');
   printData('  NO_UPDATE_NOTIFIER=1 (disable automatic version checks)');
   printData('Exit codes: 0 ok, 1 usage, 2 auth, 3 forbidden, 4 not found, 5 validation,');
   printData('  6 payment/credit, 7 conflict, 8 rate-limit, 9 network/timeout, 10 server,');
@@ -302,7 +368,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   try {
     parsed = parseArgv(argv);
   } catch (err) {
-    return reportError(err, detectRawJsonMode(argv));
+    return reportError(err, detectRawJsonMode(argv), { argv, env });
   }
   const { command, positionals, flags, globals } = parsed;
   // Forge's local wait timeout is specified in seconds by its public contract.
@@ -313,6 +379,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   }
 
   const argumentJsonMode = globals.json === true || (globals['no-json'] !== true && !process.stdout.isTTY);
+  const earlyContext = { command, positionals, globals, argv, env };
   try {
     if (Object.prototype.hasOwnProperty.call(flags, 'api-key')) {
       throw usageError('--api-key is intentionally unsupported because command-line secrets can leak. Run ariax login instead.');
@@ -324,7 +391,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
       else validateCommandArguments(parsed);
     }
   } catch (err) {
-    return reportError(err, argumentJsonMode);
+    return reportError(err, argumentJsonMode, earlyContext);
   }
 
   if (globals.version === true) {
@@ -338,7 +405,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     return EXIT.OK;
   }
   if (!Object.prototype.hasOwnProperty.call(COMMANDS, command)) {
-    return reportError(usageError(`unknown command "${command}". Run: ariax help`), argumentJsonMode);
+    return reportError(usageError(`unknown command "${command}". Run: ariax help`), argumentJsonMode, earlyContext);
   }
 
   const merged = { ...flags };
@@ -354,17 +421,33 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     config = loadConfig(merged, env);
   } catch (err) {
     const jsonMode = merged.json === true || (merged.json !== false && !process.stdout.isTTY);
-    return reportError(err, jsonMode);
+    return reportError(err, jsonMode, earlyContext);
   }
   const jsonMode = config.jsonMode;
+  const errContext = { command, positionals, globals, config, argv, env };
   const currentBuild = buildInfo();
   const currentVersion = currentBuild.version;
+  const telemetry = {
+    agent: detectAgentShell(env) ?? 'none',
+    cliChannel: currentBuild.channel || 'unknown',
+    commandTemplate: commandTemplateFor(command, positionals),
+    ...(isUUID(env?.ARIAX_TRACE_ID) ? { sessionTraceId: env.ARIAX_TRACE_ID.trim().toLowerCase() } : {}),
+  };
+
   let feedbackInput;
   if (command === 'feedback') {
     try {
-      feedbackInput = feedback.validateInput({ positionals, flags, currentVersion, currentBuild });
+      feedbackInput = await feedback.prepareInput({
+        positionals,
+        flags,
+        currentVersion,
+        currentBuild,
+        env,
+        config,
+        input: runtime.input ?? process.stdin,
+      });
     } catch (err) {
-      return reportError(err, jsonMode);
+      return reportError(err, jsonMode, errContext);
     }
   }
   const interactive = runtime.interactive ?? Boolean(
@@ -378,7 +461,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     try {
       outputFields = parseFieldsOption(globals.fields);
     } catch (err) {
-      return reportError(err, jsonMode);
+      return reportError(err, jsonMode, errContext);
     }
   }
 
@@ -386,11 +469,11 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
   if (globals.timeout !== undefined) {
     timeoutMs = Number(globals.timeout);
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-      return reportError(usageError('--timeout must be a positive number of milliseconds.'), jsonMode);
+      return reportError(usageError('--timeout must be a positive number of milliseconds.'), jsonMode, errContext);
     }
   }
 
-  const authenticated = !isPublicInvocation(command, positionals);
+  const authenticated = !isPublicInvocation(command, positionals, flags);
   if (authenticated) {
     if (!config.apiKey && supportsStoredCredentials(config.baseUrl)) {
       try {
@@ -400,7 +483,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
           config.apiKeySource = stored.storage;
         }
       } catch (err) {
-        return reportError(err, jsonMode);
+        return reportError(err, jsonMode, errContext);
       }
     }
     if (!config.apiKey && interactive && !jsonMode) {
@@ -415,6 +498,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
           fetchImpl,
           timeoutMs,
           credentialStore,
+          telemetry,
           input: runtime.input ?? process.stdin,
           errorOutput: runtime.errorOutput ?? process.stderr,
           promptApiKey: runtime.promptApiKey,
@@ -424,18 +508,18 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
         config.apiKey = result.apiKey;
         config.apiKeySource = result.storage;
       } catch (err) {
-        return reportError(err, jsonMode, { command: 'login', apiKeySource: config.apiKeySource });
+        return reportError(err, jsonMode, { ...errContext, command: 'login', apiKeySource: config.apiKeySource });
       }
     }
     try {
       requireApiKey(config);
     } catch (err) {
-      return reportError(Object.assign(err, { exitCode: EXIT.AUTH }), jsonMode);
+      return reportError(Object.assign(err, { exitCode: EXIT.AUTH }), jsonMode, errContext);
     }
     try {
       requireTrustedApiOrigin(config);
     } catch (err) {
-      return reportError(err, jsonMode);
+      return reportError(err, jsonMode, errContext);
     }
   }
 
@@ -460,6 +544,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     apiKey: authenticated ? config.apiKey : '',
     timeoutMs,
     fetchImpl,
+    telemetry,
     onRetry: (info) => {
       printProgress(`… retry ${info.attempt} for ${info.method} ${info.path} in ${info.waitMs}ms`);
     },
@@ -475,6 +560,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     fetchImpl,
     timeoutMs,
     credentialStore,
+    telemetry,
     env,
     input: runtime.input ?? process.stdin,
     errorOutput: runtime.errorOutput ?? process.stderr,
@@ -493,7 +579,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, runt
     return EXIT.OK;
   } catch (err) {
     setOutputFields(null);
-    return reportError(err, jsonMode, { command, positionals, apiKeySource: config.apiKeySource });
+    return reportError(err, jsonMode, { ...errContext, apiKeySource: config.apiKeySource });
   } finally {
     setOutputFields(null);
     const message = await pendingTerminalNotice;

@@ -256,6 +256,7 @@
     "src/credentials.js",
     "src/download-state.js",
     "src/download.js",
+    "src/error-ring.js",
     "src/exit-codes.js",
     "src/gpu-policy.js",
     "src/http.js",

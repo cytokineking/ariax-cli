@@ -60,6 +60,7 @@ export async function authenticateAndStore(ctx, { automatic = false } = {}) {
     apiKey,
     timeoutMs: ctx.timeoutMs,
     fetchImpl: ctx.fetchImpl,
+    telemetry: ctx.telemetry,
   });
   const response = await client.get('/api/v1/me');
 

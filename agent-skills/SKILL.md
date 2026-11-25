@@ -17,6 +17,9 @@ description: Route protein design, structure prediction, and molecular workflows
    - Check `ariax pricing --json` before allocating compute and stay within explicit user authorization.
    - Validate managed jobs (`ariax validate`) before `ariax submit`; set `--max-gpu-hours` on Forge sessions, follow **Scratch → Curate → Pack → Finish** (`ariax forge pack` for bulk `/scratch` outputs, then `ariax forge finish --wait`), and audit/clean storage with `ariax storage` (`usage`, `projects`, `project`, `entries`, `suggest`, `delete`).
    - Use `--wait` on `forge create`/`resume`/`close`/`run` (`forge run --wait` returns `output_tail` and exits with code `11` on remote script failure). Local interruptions do not stop remote compute — reconcile uncertain requests with `ariax operations` / `ariax recover ID` or `ariax forge operations` / `ariax forge recover ID` before starting replacement work.
-5. **Handoff:** Report computational scores alongside native filters and caveats (see [interpretation](core/interpretation.md)); computational pass ≠ wet-lab binding. Record project-linked bugs or feature requests with `ariax feedback` (see [feedback](core/feedback.md)); email `support@ariax.bio` only if asked.
+5. **Handoff:** Report computational scores alongside native filters and caveats (see [interpretation](core/interpretation.md)); computational pass ≠ wet-lab binding. Email `support@ariax.bio` only if asked.
+6. **Feedback & Triage:** `ariax feedback` feeds Ariax's engineering triage queue and returns a trackable `feedback_id` (see [feedback](core/feedback.md)).
+   - Default consent mode is `ask`: show a 1-line redacted summary or `--dry-run` output and ask before submitting unless `ARIAX_AUTO_FEEDBACK=friction` is set.
+   - Never include biological sequences, atomic coordinates, signed URLs, or credentials (client-side redaction scrubs common patterns automatically).
 
-Key references: [engine choice](core/engine-choice.md) · [managed lifecycle](core/managed-projects.md) · [recovery & support](core/recovery.md) · [Forge](skills/ariax-forge/SKILL.md) · [campaigns](core/campaigns.md)
+Key references: [engine choice](core/engine-choice.md) · [managed lifecycle](core/managed-projects.md) · [recovery & support](core/recovery.md) · [feedback](core/feedback.md) · [Forge](skills/ariax-forge/SKILL.md) · [campaigns](core/campaigns.md)

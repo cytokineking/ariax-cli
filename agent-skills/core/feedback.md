@@ -1,43 +1,31 @@
-# Project feedback
+# Feedback and engineering triage
 
-Use `ariax feedback` to record a project-related problem, feature request, or
-other observation for Ariax. Submit when the user asks you to report feedback
-or has already authorized reporting the issue. If you notice an unrelated
-improvement, offer a short report before submitting it. Do not treat routine
-campaign monitoring as permission to upload commentary.
+`ariax feedback` submits structured bug, friction, documentation, capability, support, or feature reports to Ariax's engineering triage queue and returns a trackable `feedback_id`. Linking a project is optional.
 
-```bash
-ariax feedback PROJECT_ID \
-  --category technical-support \
-  --message "The trajectory CSV is listed, but downloading it returns Archive manifest not found. Listing results succeeds; one download attempt failed." \
-  --job JOB_ID \
-  --json
+```sh
+ariax feedback --type bug|agent-friction|docs-gap|missing-capability|technical-support|feature-request|other \
+  --summary "Concise summary (<=200 chars)" \
+  --message "Expected vs. observed behavior (or - for stdin)" \
+  [--file report.md] [--severity blocker|high|medium|low] \
+  [--project PROJECT] [--job JOB_ID] [--session SESSION_ID] [--command COMMAND_ID] \
+  [--protocol PROTOCOL] [--tool TOOL] [--failed-request-id REQ_ID] \
+  [--attach-last-error] [--operation-id UUID] [--dry-run] [--json]
 ```
 
-Use the project UUID or exact unique name. `--job` is optional and must identify
-a job belonging to that project. Choose `technical-support`, `feature-request`,
-or `other`. Each invocation records one comment; combine related observations
-into one concise report. The message limit is 8 KiB of UTF-8 text.
+## Key flags and consent modes
 
-Describe expected versus observed behavior and actions already tried. Include
-useful public error text and request/operation IDs when available. Separate
-observations from suspected causes. The CLI supplies its version and available
-source revision; the server records the submitting account and time.
+- **`--attach-last-error`**: Attaches the strictly sanitized 6-field summary of the most recent CLI error from `.ariax/last-errors.json` (`command_template`, `exit_code`, `error_code`, `http_status`, `request_id`, `timestamp`) and fills `--failed-request-id` when absent.
+- **`--dry-run`**: Validates inputs, runs client-side redaction, and prints the exact JSON payload with `redactions_applied` and `consent_mode` without sending any HTTP request or requiring credentials.
+- **Consent (`ARIAX_AUTO_FEEDBACK`)**:
+  - `ask` (default): Show a 1-line redacted summary or `--dry-run` preview and ask the user before submitting.
+  - `friction`: Allows agent shells to submit friction/bug reports automatically when qualifying anomalies occur.
+  - `off`: Suppresses runtime `feedback_opportunity` advisories on stderr.
+- **Legacy syntax**: `ariax feedback PROJECT --category technical-support|feature-request|other --message "..." [--job JOB_ID]` remains supported.
 
-Exclude credentials, signed URLs, unnecessary scientific inputs, and bulk log
-dumps. Use public evidence only; do not seek or expose internal provisioning
-diagnostics. A report does not need every field to be useful.
+## Redaction and privacy
 
-A successful response includes `data.feedback_id`. Give that ID to the user.
-For assistance, recommend support@ariax.bio and
-include the feedback ID and project ID in the proposed email. Send email only
-when the user explicitly asks. Feedback records a comment; it does not create
-a support ticket or promise a response time.
+Never include credentials, signed URLs, biological sequences, atomic coordinates, or bulk logs. Before submission, the CLI automatically redacts API keys, Bearer tokens, JWTs, common cloud secret tokens, query/credential URLs, ≥60-character sequences / FASTA blocks, and raw PDB/mmCIF coordinate blocks.
 
-If submission times out or returns an uncertain outcome, do not claim it was
-recorded or loop submissions. The CLI does not automatically retry the POST;
-a deliberate resubmission can create a duplicate. The user can seek support
-with the project ID even without a feedback receipt.
+## Triage and support
 
-Recording feedback does not stop compute, restart a job, or change campaign
-settings. Continue to follow the [recovery and support guidance](recovery.md#provisioning-and-job-failures).
+Accepted submissions return `data.feedback_id`, `data.fingerprint`, and `data.triage_status` (pass `--operation-id UUID` for idempotent retries). For direct assistance, recommend emailing `support@ariax.bio` with the `feedback_id` only when the user asks. Recording feedback does not alter running compute; see [recovery and support](recovery.md#seek-technical-support).

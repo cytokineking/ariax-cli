@@ -32,7 +32,8 @@ For VHH generation, `ariax skills forge --tool rfd4-antibody --json` locates the
 
 Use [managed lifecycle](core/managed-projects.md) for preparation, pricing,
 recovery and results; [campaign planning](core/campaigns.md) for sizing and
-scaling; and [interpretation](core/interpretation.md) for result metrics.
+scaling; [feedback and triage](core/feedback.md) for reporting bugs or CLI
+friction; and [interpretation](core/interpretation.md) for result metrics.
 [Raw REST examples](core/raw-curl.md) are available when the CLI cannot be used.
 Starter files in `examples/` must be validated against the live protocol schema
 before submission.

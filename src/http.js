@@ -315,9 +315,25 @@ function buildUrl(baseUrl, path, query) {
   return direct.toString();
 }
 
+const ALLOWED_TELEMETRY_AGENTS = new Set([
+  'claude-code',
+  'codex',
+  'cursor',
+  'antigravity',
+  'gemini-cli',
+  'cline',
+  'opencode',
+  'windsurf',
+  'aider',
+  'agent',
+  'none',
+]);
+const ALLOWED_TELEMETRY_CHANNELS = new Set(['github', 'npm', 'source', 'unknown']);
+const COMMAND_TEMPLATE_RE = /^[a-z0-9._-]{1,64}$/;
+
 /**
  * Create a thin API client.
- * @param {{ baseUrl: string, apiKey?: string, timeoutMs?: number, fetchImpl?: typeof fetch, sleepImpl?: (ms:number,signal?:AbortSignal)=>Promise<void>, rand?: ()=>number, onRetry?: (info:{method:string,path:string,attempt:number,waitMs:number,status?:number})=>void }} opts
+ * @param {{ baseUrl: string, apiKey?: string, timeoutMs?: number, fetchImpl?: typeof fetch, sleepImpl?: (ms:number,signal?:AbortSignal)=>Promise<void>, rand?: ()=>number, onRetry?: (info:{method:string,path:string,attempt:number,waitMs:number,status?:number})=>void, telemetry?: { agent?: string, cliChannel?: string, commandTemplate?: string, sessionTraceId?: string } }} opts
  */
 export function createClient({
   baseUrl,
@@ -327,9 +343,25 @@ export function createClient({
   sleepImpl = sleep,
   rand = Math.random,
   onRetry,
+  telemetry,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
-  const cliVersion = buildInfo().version;
+  const info = buildInfo();
+  const cliVersion = info.version;
+  const defaultChannel = ALLOWED_TELEMETRY_CHANNELS.has(info.channel) ? info.channel : 'unknown';
+  const agentHeader = typeof telemetry?.agent === 'string' && ALLOWED_TELEMETRY_AGENTS.has(telemetry.agent)
+    ? telemetry.agent
+    : 'none';
+  const cliChannelHeader = typeof telemetry?.cliChannel === 'string' && ALLOWED_TELEMETRY_CHANNELS.has(telemetry.cliChannel)
+    ? telemetry.cliChannel
+    : defaultChannel;
+  const commandTemplateHeader = typeof telemetry?.commandTemplate === 'string'
+      && COMMAND_TEMPLATE_RE.test(telemetry.commandTemplate)
+    ? telemetry.commandTemplate
+    : undefined;
+  const sessionTraceHeader = isUUID(telemetry?.sessionTraceId)
+    ? telemetry.sessionTraceId.trim().toLowerCase()
+    : undefined;
 
   async function rawRequest(method, path, { query, body, idempotencyKey, timeout, signal } = {}) {
     if (signal?.aborted) throw interrupted(signal);
@@ -339,8 +371,12 @@ export function createClient({
       Accept: 'application/json',
       'X-Ariax-Client': 'cli',
       'X-Ariax-CLI-Version': cliVersion,
+      'X-Ariax-Agent': agentHeader,
+      'X-Ariax-CLI-Channel': cliChannelHeader,
       'X-Request-Id': requestId,
     };
+    if (commandTemplateHeader) headers['X-Ariax-Command'] = commandTemplateHeader;
+    if (sessionTraceHeader) headers['X-Ariax-Session-Trace'] = sessionTraceHeader;
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     if (idempotencyKey) headers['Idempotency-Key'] = String(idempotencyKey);
     let payload;
