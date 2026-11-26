@@ -28,8 +28,6 @@ const TERMINAL_COMMANDS = new Set(['succeeded', 'failed', 'cancelled', 'interrup
 const DEFAULT_WATCH_TAIL_LINES = 80;
 const MAX_WATCH_TAIL_LINES = 400;
 const MAX_WATCH_TAIL_BYTES = 4096;
-const CLOSE_PENDING_FILES_LIMIT = 100;
-const CLOSE_PENDING_BYTES_LIMIT = 500 * 1024 * 1024;
 const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
   'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id'];
 const OPTIONS = {
@@ -95,7 +93,7 @@ const SUBCOMMAND_HELP = Object.freeze({
   logs: `ariax forge logs SESSION COMMAND_ID [--tail 1000] [--cursor CURSOR] [--wait-seconds 0..25] [--retained]`,
   cancel: `ariax forge cancel SESSION COMMAND_ID [--wait] [--wait-timeout SECONDS]`,
   close: `ariax forge close SESSION [--force] [--wait] [--wait-timeout SECONDS]
-  Emergency teardown (75s sync ceiling). Prefer ariax forge finish --wait for normal completion.`,
+  Immediate stop (75s sync ceiling); refuses without --force if commands are running or files are pending. Prefer ariax forge finish --wait for normal completion.`,
   inputs: `ariax forge inputs add SESSION (--file FILE | --artifact PROJECT_ID:PATH | --url URL) --path PATH [--input-id UUID] [--wait-ready] [--wait-timeout SECONDS]
   ariax forge inputs add SESSION --manifest FILE [--batch-id UUID] [--concurrency 1..4] [--dry-run | --wait [--wait-timeout SECONDS]]
   ariax forge inputs list SESSION [--retained]
@@ -642,17 +640,37 @@ async function dispatchSaved(ctx, file, record, account, { previous, signal }) {
         checkIdentity(record, directAccount, id);
       }
       const viewQuery = { view: ctx.flags?.details === true ? 'full' : 'summary' };
-      const res = request.session_id
-        ? await forgeRequest(ctx, request.session_id, 'POST', request.path, {
+      let res;
+      if (kind === 'selection') {
+        try {
+          const signedRes = await ctx.client.post(`${API}/sessions/${request.session_id}/tools`, {
+            body: request.body,
+            query: viewQuery,
+            signal,
+          });
+          if (signedRes.data?.selection_id !== undefined && signedRes.data.selection_id !== id) {
+            throw new NetworkError('Forge response has no matching selection_id.');
+          }
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 404)) throw error;
+        }
+        res = await forgeRequest(ctx, request.session_id, 'POST', request.path, {
           body: request.body,
-          ...(kind === 'selection' ? { query: viewQuery } : {}),
+          query: viewQuery,
           signal,
-        })
-        : await ctx.client.post(request.path, {
+        });
+      } else if (request.session_id) {
+        res = await forgeRequest(ctx, request.session_id, 'POST', request.path, {
+          body: request.body,
+          signal,
+        });
+      } else {
+        res = await ctx.client.post(request.path, {
           body: request.body,
           ...(kind === 'session' || kind === 'limit' ? { query: viewQuery } : {}),
           signal,
         });
+      }
       const label = { session: 'session_id', command: 'command_id', selection: 'selection_id' }[kind];
       if (label && res.data?.[label] !== id) throw new NetworkError(`Forge response has no matching ${label}.`);
       if (kind === 'command') checkCommand(record, res);
@@ -955,6 +973,8 @@ function parsePackOutput(outputTail, { src, requestedDest, format, removeSrc, no
       file_count: typeof parsed?.file_count === 'number' && Number.isFinite(parsed.file_count) ? parsed.file_count : null,
       uncompressed_bytes: typeof parsed?.uncompressed_bytes === 'number' && Number.isFinite(parsed.uncompressed_bytes) ? parsed.uncompressed_bytes : null,
       compressed_bytes: typeof parsed?.compressed_bytes === 'number' && Number.isFinite(parsed.compressed_bytes) ? parsed.compressed_bytes : null,
+      ...(typeof parsed?.skipped_count === 'number' && Number.isFinite(parsed.skipped_count) ? { skipped_count: parsed.skipped_count } : {}),
+      ...(Array.isArray(parsed?.skipped_entries) && parsed.skipped_entries.length ? { skipped_entries: parsed.skipped_entries } : {}),
       removed_src: typeof parsed?.removed_src === 'boolean' ? parsed.removed_src : Boolean(removeSrc),
       fallback_notice: fallbackNotice,
     },
@@ -1528,6 +1548,10 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     `REMOVE_SRC=${posixQuote(removeSrc ? '1' : '0')}`,
     `NO_MANIFEST=${posixQuote(noManifest ? '1' : '0')}`,
     `PACK_ID=${posixQuote(packId)}`,
+    'if [ -L "$SRC" ]; then',
+    '  echo "pack error: source path must not be a symlink: $SRC" >&2',
+    '  exit 2',
+    'fi',
     'if [ ! -e "$SRC" ]; then',
     '  echo "pack error: source path does not exist: $SRC" >&2',
     '  exit 2',
@@ -1537,53 +1561,116 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     'trap \'rm -rf "$STAGE"\' EXIT',
     'PARENT="$(dirname "$SRC")"',
     'BASE="$(basename "$SRC")"',
-    'python3 - "$SRC" "$PARENT" "$STAGE/files.lst" "$STAGE/stats.json" <<\'PY\'',
+    'python3 - "$SRC" "$PARENT" "$STAGE/files.lst" "$STAGE/stats.json" "$STAGE/snapshot.json" <<\'PY\'',
     'import json, os, stat, sys',
-    'src, parent, list_path, stats_path = sys.argv[1:5]',
+    'src, parent, list_path, stats_path, snap_path = sys.argv[1:6]',
+    'try:',
+    '    root_st = os.lstat(src)',
+    'except OSError as exc:',
+    '    sys.stderr.write(f"pack error: cannot lstat source {src}: {exc}\\n")',
+    '    sys.exit(2)',
+    'if stat.S_ISLNK(root_st.st_mode):',
+    '    sys.stderr.write(f"pack error: source path must not be a symlink: {src}\\n")',
+    '    sys.exit(2)',
+    'if not (stat.S_ISREG(root_st.st_mode) or stat.S_ISDIR(root_st.st_mode)):',
+    '    sys.stderr.write(f"pack error: source path must be a regular file or directory: {src}\\n")',
+    '    sys.exit(2)',
+    'src_real = os.path.realpath(src)',
+    'for allowed_root in ("/workspace", "/scratch"):',
+    '    if src == allowed_root or src.startswith(allowed_root + "/"):',
+    '        root_real = os.path.realpath(allowed_root)',
+    '        if src_real == root_real or not src_real.startswith(root_real + os.sep):',
+    '            sys.stderr.write(f"pack error: source path escapes {allowed_root}: {src}\\n")',
+    '            sys.exit(2)',
+    '        break',
+    'def within_src(full_path):',
+    '    rp = os.path.realpath(full_path)',
+    '    return rp == src_real or rp.startswith(src_real + os.sep)',
+    'def rel_for(full_path):',
+    '    return os.path.relpath(full_path, parent)',
     'entries = []',
+    'snap_files = {}',
+    'snap_dirs = []',
     'file_count = 0',
     'uncompressed_bytes = 0',
-    'skipped = 0',
-    'visited_dirs = set()',
-    'def add_rel(full_path):',
-    '    rel = os.path.relpath(full_path, parent)',
-    '    if rel.startswith("-"):',
-    '        rel = "./" + rel',
-    '    entries.append(rel)',
-    'def walk_entry(full_path):',
-    '    global file_count, uncompressed_bytes, skipped',
-    '    try:',
-    '        st = os.stat(full_path)',
-    '    except OSError:',
-    '        skipped += 1',
-    '        return',
-    '    mode = st.st_mode',
-    '    if stat.S_ISREG(mode):',
-    '        add_rel(full_path)',
-    '        file_count += 1',
-    '        uncompressed_bytes += st.st_size',
-    '    elif stat.S_ISDIR(mode):',
-    '        key = (st.st_dev, st.st_ino)',
-    '        if key in visited_dirs:',
-    '            skipped += 1',
-    '            return',
-    '        visited_dirs.add(key)',
-    '        children = sorted(os.listdir(full_path))',
-    '        before = len(entries)',
-    '        for name in children:',
-    '            walk_entry(os.path.join(full_path, name))',
-    '        if len(entries) == before:',
-    '            add_rel(full_path)',
-    '    else:',
-    '        skipped += 1',
-    'walk_entry(src)',
+    'skipped_count = 0',
+    'skipped_entries = []',
+    'def record_skip(full_path, reason):',
+    '    global skipped_count',
+    '    skipped_count += 1',
+    '    if len(skipped_entries) < 50:',
+    '        skipped_entries.append({"path": rel_for(full_path), "reason": reason})',
+    'def add_entry(full_path):',
+    '    rel = rel_for(full_path)',
+    '    entries.append("./" + rel if rel.startswith("-") else rel)',
+    'if stat.S_ISREG(root_st.st_mode):',
+    '    rel = rel_for(src)',
+    '    add_entry(src)',
+    '    snap_files[rel] = [root_st.st_dev, root_st.st_ino, root_st.st_size, root_st.st_mtime_ns]',
+    '    file_count = 1',
+    '    uncompressed_bytes = root_st.st_size',
+    'else:',
+    '    def on_walk_err(err):',
+    '        record_skip(err.filename or src, "walk_error")',
+    '    for dirpath, dirnames, filenames in os.walk(src, topdown=True, followlinks=False, onerror=on_walk_err):',
+    '        if not within_src(dirpath):',
+    '            record_skip(dirpath, "outside_src")',
+    '            dirnames[:] = []',
+    '            continue',
+    '        snap_dirs.append(rel_for(dirpath))',
+    '        kept_dirs = []',
+    '        for name in sorted(dirnames):',
+    '            full_path = os.path.join(dirpath, name)',
+    '            try:',
+    '                st = os.lstat(full_path)',
+    '            except OSError:',
+    '                record_skip(full_path, "stat_error")',
+    '                continue',
+    '            if stat.S_ISLNK(st.st_mode):',
+    '                record_skip(full_path, "symlink")',
+    '                continue',
+    '            if not stat.S_ISDIR(st.st_mode):',
+    '                record_skip(full_path, "special_file")',
+    '                continue',
+    '            if not within_src(full_path):',
+    '                record_skip(full_path, "outside_src")',
+    '                continue',
+    '            kept_dirs.append(name)',
+    '        dirnames[:] = kept_dirs',
+    '        added_here = 0',
+    '        for name in sorted(filenames):',
+    '            full_path = os.path.join(dirpath, name)',
+    '            try:',
+    '                st = os.lstat(full_path)',
+    '            except OSError:',
+    '                record_skip(full_path, "stat_error")',
+    '                continue',
+    '            if stat.S_ISLNK(st.st_mode):',
+    '                record_skip(full_path, "symlink")',
+    '                continue',
+    '            if not stat.S_ISREG(st.st_mode):',
+    '                record_skip(full_path, "special_file")',
+    '                continue',
+    '            if not within_src(full_path):',
+    '                record_skip(full_path, "outside_src")',
+    '                continue',
+    '            rel = rel_for(full_path)',
+    '            add_entry(full_path)',
+    '            snap_files[rel] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns]',
+    '            file_count += 1',
+    '            uncompressed_bytes += st.st_size',
+    '            added_here += 1',
+    '        if not kept_dirs and added_here == 0:',
+    '            add_entry(dirpath)',
     'with open(list_path, "wb") as f:',
     '    for rel in entries:',
     '        f.write(rel.encode("utf-8") + b"\\0")',
     'with open(stats_path, "w", encoding="utf-8") as f:',
-    '    json.dump({"file_count": file_count, "uncompressed_bytes": uncompressed_bytes, "skipped_special_or_broken": skipped}, f)',
-    'if skipped:',
-    '    sys.stderr.write(f"pack notice: skipped {skipped} broken symlink or special file(s)\\n")',
+    '    json.dump({"file_count": file_count, "uncompressed_bytes": uncompressed_bytes, "skipped_count": skipped_count, "skipped_entries": skipped_entries}, f)',
+    'with open(snap_path, "w", encoding="utf-8") as f:',
+    '    json.dump({"src_real": src_real, "files": snap_files, "dirs": sorted(snap_dirs)}, f)',
+    'if skipped_count:',
+    '    sys.stderr.write(f"pack notice: skipped {skipped_count} symlink, special, or outside-source entry/entries\\n")',
     'PY',
     'ACTUAL_FORMAT="$FORMAT"',
     'ACTUAL_DEST="$DEST"',
@@ -1612,12 +1699,16 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     '  VERIFY_CMD=(gzip -t)',
     '  DECOMPRESS_CMD=(gzip -dc)',
     'fi',
+    'if [ -L "$ACTUAL_DEST" ]; then',
+    '  echo "pack error: destination path must not be a symlink: $ACTUAL_DEST" >&2',
+    '  exit 2',
+    'fi',
     'if [ -d "$ACTUAL_DEST" ]; then',
     '  echo "pack error: destination path is an existing directory: $ACTUAL_DEST" >&2',
     '  exit 2',
     'fi',
     'if [ -s "$STAGE/files.lst" ]; then',
-    '  tar -C "$PARENT" --dereference --no-recursion --null -T "$STAGE/files.lst" -cf - | "${COMPRESS_CMD[@]}" > "$STAGE/archive.tmp"',
+    '  tar -C "$PARENT" --no-recursion --null -T "$STAGE/files.lst" -cf - | "${COMPRESS_CMD[@]}" > "$STAGE/archive.tmp"',
     'else',
     '  tar -C "$PARENT" --no-recursion -cf - "$BASE" | "${COMPRESS_CMD[@]}" > "$STAGE/archive.tmp"',
     'fi',
@@ -1639,26 +1730,45 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     'PY',
     '  rm -f "$STAGE/archive.tmp"',
     'fi',
-    'python3 - "$SRC" "$ACTUAL_DEST" "$ACTUAL_FORMAT" "$SHARDED" "$COMPRESSED_BYTES" "$NO_MANIFEST" "$REMOVE_SRC" "$STAGE/stats.json" "$STAGE/entries.txt" "$STAGE/manifest.json" "$STAGE/summary.json" "$STAGE" <<\'PY\'',
+    'python3 - "$SRC" "$ACTUAL_DEST" "$ACTUAL_FORMAT" "$SHARDED" "$COMPRESSED_BYTES" "$NO_MANIFEST" "$STAGE/stats.json" "$STAGE/snapshot.json" "$STAGE/entries.txt" "$STAGE/manifest.json" "$STAGE/summary.json" "$STAGE/published.json" "$STAGE" <<\'PY\'',
     'import glob, json, os, sys',
-    'src, dest, fmt, sharded_s, comp_s, no_manifest_s, remove_src_s, stats_path, entries_path, manifest_path, summary_path, stage = sys.argv[1:13]',
+    'src, dest, fmt, sharded_s, comp_s, no_manifest_s, stats_path, snap_path, entries_path, manifest_path, summary_path, published_path, stage = sys.argv[1:14]',
     'sharded = sharded_s == "1"',
     'no_manifest = no_manifest_s == "1"',
-    'remove_src = remove_src_s == "1"',
+    'comp_bytes = int(comp_s)',
     'stats = json.load(open(stats_path, encoding="utf-8"))',
+    'snap = json.load(open(snap_path, encoding="utf-8"))',
     'sample = []',
+    'archived = set()',
     'with open(entries_path, encoding="utf-8", errors="replace") as f:',
     '    for line in f:',
     '        line = line.rstrip("\\r\\n")',
     '        if line:',
-    '            sample.append(line)',
-    '            if len(sample) >= 50:',
-    '                break',
+    '            if len(sample) < 50:',
+    '                sample.append(line)',
+    '            norm = line[2:] if line.startswith("./") else line',
+    '            archived.add(norm.rstrip("/"))',
+    'if not archived:',
+    '    sys.stderr.write("pack error: archive verification failed; archive is empty\\n")',
+    '    sys.exit(4)',
+    'missing = [rel for rel in snap["files"] if rel not in archived]',
+    'if missing:',
+    '    sys.stderr.write(f"pack error: archive verification failed; {len(missing)} expected file(s) missing from archive\\n")',
+    '    sys.exit(4)',
     'shards = []',
+    'expected_published = {}',
     'if sharded:',
-    '    for p in sorted(glob.glob(os.path.join(stage, "archive.part*"))):',
+    '    parts = sorted(glob.glob(os.path.join(stage, "archive.part*")))',
+    '    if not parts:',
+    '        sys.stderr.write("pack error: no archive shards found\\n")',
+    '        sys.exit(4)',
+    '    for p in parts:',
     '        suffix = os.path.basename(p).split("archive.", 1)[1]',
-    '        shards.append(f"{dest}.{suffix}")',
+    '        out_path = f"{dest}.{suffix}"',
+    '        shards.append(out_path)',
+    '        expected_published[out_path] = os.path.getsize(p)',
+    'else:',
+    '    expected_published[dest] = comp_bytes',
     'manifest = {',
     '    "src": src,',
     '    "dest": dest,',
@@ -1667,14 +1777,19 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     '    "shards": shards,',
     '    "file_count": stats["file_count"],',
     '    "uncompressed_bytes": stats["uncompressed_bytes"],',
-    '    "compressed_bytes": int(comp_s),',
+    '    "compressed_bytes": comp_bytes,',
+    '    "skipped_count": stats["skipped_count"],',
+    '    "skipped_entries": stats["skipped_entries"],',
     '    "sample_entries": sample,',
     '}',
     'if not no_manifest:',
     '    with open(manifest_path, "w", encoding="utf-8") as f:',
     '        json.dump(manifest, f, indent=2)',
     '        f.write("\\n")',
-    'summary = {**manifest, "manifest_path": None if no_manifest else f"{dest}.manifest.json", "removed_src": remove_src}',
+    '    expected_published[f"{dest}.manifest.json"] = os.path.getsize(manifest_path)',
+    'with open(published_path, "w", encoding="utf-8") as f:',
+    '    json.dump(expected_published, f)',
+    'summary = {**manifest, "manifest_path": None if no_manifest else f"{dest}.manifest.json", "removed_src": False}',
     'with open(summary_path, "w", encoding="utf-8") as f:',
     '    json.dump(summary, f)',
     '    f.write("\\n")',
@@ -1687,8 +1802,8 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     '    mv -f "$p" "${ACTUAL_DEST}.${suffix}"',
     '  done',
     'else',
-    '  if [ -d "$ACTUAL_DEST" ]; then',
-    '    echo "pack error: destination path is an existing directory: $ACTUAL_DEST" >&2',
+    '  if [ -L "$ACTUAL_DEST" ] || [ -d "$ACTUAL_DEST" ]; then',
+    '    echo "pack error: destination path is invalid: $ACTUAL_DEST" >&2',
     '    exit 2',
     '  fi',
     '  mv -f "$STAGE/archive.tmp" "$ACTUAL_DEST"',
@@ -1696,8 +1811,95 @@ function buildPackScript({ src, dest, format, explicitFormat, maxShardGib, remov
     'if [ "$NO_MANIFEST" = "0" ]; then',
     '  mv -f "$STAGE/manifest.json" "${ACTUAL_DEST}.manifest.json"',
     'fi',
+    'python3 - "$SRC" "$PARENT" "$REMOVE_SRC" "$STAGE/stats.json" "$STAGE/snapshot.json" "$STAGE/published.json" "$STAGE/summary.json" <<\'PY\'',
+    'import json, os, stat, sys',
+    'src, parent, remove_src_s, stats_path, snap_path, published_path, summary_path = sys.argv[1:8]',
+    'remove_src = remove_src_s == "1"',
+    'stats = json.load(open(stats_path, encoding="utf-8"))',
+    'snap = json.load(open(snap_path, encoding="utf-8"))',
+    'expected_published = json.load(open(published_path, encoding="utf-8"))',
+    'for out_path, expected_size in expected_published.items():',
+    '    try:',
+    '        st = os.lstat(out_path)',
+    '    except OSError:',
+    '        sys.stderr.write(f"pack error: published output missing: {out_path}\\n")',
+    '        sys.exit(4)',
+    '    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_size != expected_size:',
+    '        sys.stderr.write(f"pack error: published output size/type mismatch for {out_path}\\n")',
+    '        sys.exit(4)',
+    'if not remove_src:',
+    '    sys.exit(0)',
+    'refusal = None',
+    'if stats["skipped_count"] > 0:',
+    '    refusal = f"{stats[\'skipped_count\']} entry/entries were skipped during packing"',
+    'else:',
+    '    def check_unchanged():',
+    '        try:',
+    '            root_st = os.lstat(src)',
+    '        except OSError:',
+    '            return "source disappeared or became unreadable during packing"',
+    '        if stat.S_ISLNK(root_st.st_mode):',
+    '            return "source became a symlink during packing"',
+    '        if os.path.realpath(src) != snap["src_real"]:',
+    '            return "source resolved path changed during packing"',
+    '        cur_files = {}',
+    '        cur_dirs = []',
+    '        if stat.S_ISREG(root_st.st_mode):',
+    '            cur_files[os.path.relpath(src, parent)] = [root_st.st_dev, root_st.st_ino, root_st.st_size, root_st.st_mtime_ns]',
+    '        elif stat.S_ISDIR(root_st.st_mode):',
+    '            walk_failed = False',
+    '            def on_err(_err):',
+    '                nonlocal walk_failed',
+    '                walk_failed = True',
+    '            for dirpath, dirnames, filenames in os.walk(src, topdown=True, followlinks=False, onerror=on_err):',
+    '                cur_dirs.append(os.path.relpath(dirpath, parent))',
+    '                for name in dirnames:',
+    '                    p = os.path.join(dirpath, name)',
+    '                    try:',
+    '                        st = os.lstat(p)',
+    '                    except OSError:',
+    '                        return f"directory changed during packing: {name}"',
+    '                    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):',
+    '                        return "new symlink or special directory entry appeared during packing"',
+    '                for name in filenames:',
+    '                    p = os.path.join(dirpath, name)',
+    '                    try:',
+    '                        st = os.lstat(p)',
+    '                    except OSError:',
+    '                        return f"file changed during packing: {name}"',
+    '                    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):',
+    '                        return "new symlink or special file appeared during packing"',
+    '                    cur_files[os.path.relpath(p, parent)] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns]',
+    '            if walk_failed:',
+    '                return "directory walk error during post-pack verification"',
+    '        else:',
+    '            return "source changed to special file during packing"',
+    '        if cur_files != snap["files"] or sorted(cur_dirs) != snap["dirs"]:',
+    '            return "source files or directories changed during packing"',
+    '        return None',
+    '    refusal = check_unchanged()',
+    'if refusal:',
+    '    summary = json.load(open(summary_path, encoding="utf-8"))',
+    '    summary["removed_src"] = False',
+    '    summary["remove_src_refused_reason"] = refusal',
+    '    with open(summary_path, "w", encoding="utf-8") as f:',
+    '        json.dump(summary, f)',
+    '        f.write("\\n")',
+    '    sys.stdout.write(json.dumps(summary) + "\\n")',
+    '    sys.stderr.write(f"pack error: refusing --remove-src ({refusal}); source preserved at {src}\\n")',
+    '    sys.exit(5)',
+    'PY',
     'if [ "$REMOVE_SRC" = "1" ]; then',
     '  rm -rf "$SRC"',
+    '  python3 - "$STAGE/summary.json" <<\'PY\'',
+    'import json, sys',
+    'p = sys.argv[1]',
+    's = json.load(open(p, encoding="utf-8"))',
+    's["removed_src"] = True',
+    'with open(p, "w", encoding="utf-8") as f:',
+    '    json.dump(s, f)',
+    '    f.write("\\n")',
+    'PY',
     'fi',
     'cat "$STAGE/summary.json"',
   ].join('\n');
@@ -2312,27 +2514,60 @@ async function runAction(ctx) {
   }
   if (action === 'close') {
     if (flags['wait-timeout'] !== undefined && !flags.wait) throw usageError('forge close: --wait-timeout requires --wait.');
-    const preCloseSync = await observeSessionSync(ctx, sessionId, sessionPath, null, {
+    let sessionData = null;
+    try {
+      sessionData = (await ctx.client.get(sessionPath, { attempts: 1 })).data;
+    } catch (error) {
+      if (error instanceof ApiError && [401, 403, 404].includes(error.status)) throw error;
+    }
+    const preCloseSync = await observeSessionSync(ctx, sessionId, sessionPath, sessionData, {
       tryDirect: false,
       propagateAuthErrors: true,
     });
-    if (flags.force !== true && preCloseSync) {
-      const pendingFiles = typeof preCloseSync.pending_files === 'number' && Number.isFinite(preCloseSync.pending_files) ? preCloseSync.pending_files : 0;
-      const pendingBytes = typeof preCloseSync.pending_bytes === 'number' && Number.isFinite(preCloseSync.pending_bytes) ? preCloseSync.pending_bytes : 0;
-      if (pendingFiles > CLOSE_PENDING_FILES_LIMIT || pendingBytes > CLOSE_PENDING_BYTES_LIMIT) {
+    if (flags.force !== true) {
+      const readActiveCommands = (source) => {
+        if (!source || typeof source !== 'object') return null;
+        for (const value of [
+          source.active_commands,
+          source.runtime_observation?.active_commands,
+          source.synchronization?.active_commands,
+          source.runtime_observation?.synchronization?.active_commands,
+        ]) {
+          if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+          if (Array.isArray(value)) return value.length;
+        }
+        return null;
+      };
+      let activeCommands = readActiveCommands(sessionData) ?? readActiveCommands(preCloseSync);
+      if (activeCommands === null && sessionData?.state === 'available') {
+        try {
+          const liveCmds = await forgeRequest(ctx, sessionId, 'GET', '/v1/commands', { query: { view: 'summary' } });
+          if (Array.isArray(liveCmds.data?.commands)) {
+            activeCommands = liveCmds.data.commands.filter(c => !TERMINAL_COMMANDS.has(c?.state)).length;
+          }
+        } catch { /* Direct daemon command inspection is best-effort. */ }
+      }
+      activeCommands ??= 0;
+      const pendingFiles = typeof preCloseSync?.pending_files === 'number' && Number.isFinite(preCloseSync.pending_files) ? preCloseSync.pending_files : 0;
+      const pendingBytes = typeof preCloseSync?.pending_bytes === 'number' && Number.isFinite(preCloseSync.pending_bytes) ? preCloseSync.pending_bytes : 0;
+      if (activeCommands > 0 || pendingFiles > 0) {
+        const reasons = [];
+        if (activeCommands > 0) reasons.push(`${activeCommands} active command(s) running`);
+        if (pendingFiles > 0) reasons.push(`${pendingFiles} pending file(s) (${formatBytes(pendingBytes)}) awaiting sync`);
         const guardError = new ApiError({
           status: 409,
-          code: 'pending_files_use_finish',
-          message: `Session ${sessionId} has ${pendingFiles} pending file(s) (${formatBytes(pendingBytes)}) awaiting sync. \`ariax forge close\` has a 75-second final sync ceiling and may drop unsaved files.`,
+          code: pendingFiles > 0 ? 'pending_files_use_finish' : 'active_commands_use_finish',
+          message: `Session ${sessionId} has ${reasons.join(' and ')}. \`ariax forge close\` stops immediately (75-second final sync ceiling) and may interrupt running commands or drop unsaved files.`,
           details: {
             session_id: sessionId,
+            active_commands: activeCommands,
             pending_files: pendingFiles,
             pending_bytes: pendingBytes,
             close_sync_ceiling_seconds: 75,
           },
           retryable: false,
         });
-        guardError.action = `Run \`ariax forge finish ${sessionId} --wait --json\` to drain and save all files cleanly, or re-run with \`--force\` to close immediately.`;
+        guardError.action = `Run \`ariax forge finish ${sessionId} --wait\` to drain running commands and flush all files cleanly (GPU billing continues while draining), or \`ariax forge close ${sessionId} --force\` to stop immediately.`;
         throw guardError;
       }
     }

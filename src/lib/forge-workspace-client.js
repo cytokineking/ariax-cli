@@ -50,18 +50,6 @@ export function presentForgeTool(tool) {
     for (const [id, modes] of modelModes) result.models.push({ id, modes: [...modes] });
   }
   if (toolModes.size) result.modes = [...toolModes];
-  // These catalog labels describe internal test history. Keep the attribution,
-  // license conditions and citation links as provided by the source.
-  if (Array.isArray(capabilities.terms)) {
-    capabilities.terms = capabilities.terms.map(term =>
-      term?.name === 'UniProt-derived qualification fixture sequences'
-        ? { ...term, name: 'UniProt-derived example sequences' } : term);
-  }
-  if (Array.isArray(capabilities.citations)) {
-    capabilities.citations = capabilities.citations.map(citation =>
-      citation?.title === 'Native expected-TM export, exact two-file changes applied by B47 selected source'
-        ? { ...citation, title: 'Native expected-TM export' } : citation);
-  }
   return { ...result, capabilities };
 }
 

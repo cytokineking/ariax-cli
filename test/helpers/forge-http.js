@@ -214,6 +214,10 @@ async function boundary(root) {
         } else if (direct && direct[2] === '/v1/inputs') {
           assert.ok(records.some(record => record.actor_user_id === user && record.id === body.input_id
             && record.request.body?.source?.kind === body.source.kind), 'input import has no durable request');
+        } else if (!direct && /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})\/tools$/.test(url.pathname)) {
+          const sid = /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})\/tools$/.exec(url.pathname)[1];
+          assert.ok(records.some(record => record.actor_user_id === user
+            && isDeepStrictEqual(record.request, { method: 'POST', session_id: sid, path: '/v1/tools', body })), 'signed tool selection has no durable request');
         } else if (!url.pathname.endsWith('/files/presign')) assert.ok(records.some(record => record.actor_user_id === user
           && isDeepStrictEqual(record.request, { method: 'POST', ...(direct ? {session_id:direct[1]} : {}), path: direct ? direct[2] : url.pathname, body })), 'mutation has no durable request');
       }
@@ -540,6 +544,13 @@ async function boundary(root) {
       if (parts[5] === 'tools') {
         if (req.method === 'GET') return reply(res, 200, {tools:session.data.tools});
         assert.equal(req.method, 'POST');
+        if (direct) {
+          const committed = session.selections.get(body.selection_id);
+          assert.ok(committed && isDeepStrictEqual(committed, body), 'daemon /v1/tools wake must follow signed API commit');
+          state.daemonToolWakes = (state.daemonToolWakes ?? 0) + 1;
+          return reply(res, 202, { ...session.data, selection_id: body.selection_id });
+        }
+        state.signedToolCommits = (state.signedToolCommits ?? 0) + 1;
         const previous = session.selections.get(body.selection_id);
         if (previous && !isDeepStrictEqual(previous, body)) return error(res, 409, 'idempotency_conflict', 'Selection request differs');
         if (!previous) {
@@ -915,6 +926,7 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     const explicitRetry = await invoke(['forge', 'tools', 'add', sessionId, '--tools', 'boltz2,ipsae', '--priority', 'ipsae']);
     assert.notEqual(explicitRetry.payload.data.selection_id, selectionId);
     assert.equal(state.preparations, 3);
+    assert.ok(state.signedToolCommits >= 3 && state.daemonToolWakes >= 3, 'tool selection must commit via signed API before daemon wake');
     assert.deepEqual(session.selections.get(explicitRetry.payload.data.selection_id).priority, ['ipsae', 'boltz2']);
     assert.equal(session.data.tools[0].state, 'ready');
     assert.equal((await invoke(retryCreate)).payload.data.session_id, sessionId);
@@ -969,6 +981,10 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.equal((await invoke(['forge', 'command', sessionId, longId])).payload.data.state, 'running');
     assert.equal(state.posts, beforeWatch, 'local waits cancelled remote work');
     assert.equal(state.executions, 2);
+    const blockedClose = await invoke(['forge', 'close', sessionId], { code: 7 });
+    assert.equal(blockedClose.payload.error.code, 'active_commands_use_finish');
+    assert.match(blockedClose.payload.error.action, /ariax forge finish.*--force/);
+    assert.equal(state.releases, 0, 'close guard released session while command was active');
     await invoke(['forge', 'cancel', sessionId, longId]);
     await invoke(['forge', 'cancel', sessionId, longId]);
     assert.equal((await invoke(['forge', 'watch', sessionId, longId, '--timeout', '30'])).payload.data.state, 'cancelled');
