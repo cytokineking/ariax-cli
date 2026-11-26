@@ -137,6 +137,6 @@ export async function run(ctx) {
   printData('Turbo standard total: single-GPU hourly price × GPU count.');
   if (data.preview_channel === 'cli') {
     printData('CLI preview. The rate locks when Ariax records the GPU allocation request.');
-    if (data.promotion?.active) printData(`${data.promotion.label || 'CLI promotion'}${data.promotion.ends_at ? ` · ends ${data.promotion.ends_at}` : ''}`);
+    if (data.promotion?.active) printData(`${data.promotion.label || 'CLI/Agent pricing'}${data.promotion.ends_at ? ` · ends ${data.promotion.ends_at}` : ''}`);
   }
 }
