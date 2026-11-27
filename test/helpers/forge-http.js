@@ -76,7 +76,7 @@ async function boundary(root) {
     state.allocations++;
     const allocatedAt = new Date().toISOString();
     assert.equal(body.files_contract, 2);
-    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), inputs: new Map(), inputRequests: new Map(), data: {
+    const session = { owner: user, request: body, commands: new Map(), selections: new Map(), syncs: new Map(), inputs: new Map(), inputRequests: new Map(), signedInputs: new Map(), data: {
       session_id: body.session_id, project_id: project.id, name: project.name,
       state: 'starting', gpu_type: body.gpu_type, gpu_count: body.gpu_count,
       tools: [toolState('base', 'queued'), ...body.tools.map(tool => toolState(tool, 'queued'))],
@@ -94,19 +94,28 @@ async function boundary(root) {
       const event = {method:req.method,path:url.pathname,at:Date.now(),target:url.searchParams.get('path')};
       state.requests.push(event);
       res.on('finish',() => {event.status=res.statusCode;});
-      if (req.method === 'PUT' && url.pathname.startsWith('/__part/')) {
-        const [, , projectId, operationId, attemptId, number] = url.pathname.split('/');
-        const operation = projects.get(projectId)?.fileOperations.get(operationId);
-        if (!operation || operation.attempt_id !== attemptId || url.searchParams.get('signature') !== 'private-transfer-grant') return error(res,403,'forbidden','Transfer denied');
+      if (req.method === 'PUT' && url.pathname.startsWith('/__r2/')) {
+        const [, , sessionId, inputId, kind, number] = url.pathname.split('/');
+        const staged = sessions.get(sessionId)?.signedInputs.get(inputId);
+        if (!staged || url.searchParams.get('signature') !== 'private-transfer-grant') return error(res,403,'forbidden','Transfer denied');
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const bytes = Buffer.concat(chunks);
-        assert.equal(req.headers['content-length'],String(bytes.length));
-        assert.equal(req.headers['content-md5'],digest(bytes).toString('base64'));
-        state.objectTransfers.set(operationId,(state.objectTransfers.get(operationId) ?? 0)+1);
-        operation.parts.set(Number(number),bytes);
+        if (req.headers['content-length'] !== undefined) assert.equal(req.headers['content-length'],String(bytes.length));
+        if (req.headers['content-md5'] !== undefined) assert.equal(req.headers['content-md5'],digest(bytes).toString('base64'));
+        state.objectTransfers.set(inputId,(state.objectTransfers.get(inputId) ?? 0)+1);
         if (state.drop === 'input-put') { state.drop = null; req.socket.destroy(); return; }
-        res.writeHead(200); res.end(); return;
+        const etag = `"${digest(bytes).toString('hex')}"`;
+        if (kind === 'single') {
+          assert.equal(bytes.length, staged.body.source.size_bytes);
+          assert.equal(fileChecksum(bytes), staged.body.source.checksum);
+          staged.bytes = bytes;
+          staged.state = 'queued';
+        } else {
+          assert.equal(kind, 'part');
+          staged.parts.set(Number(number), { bytes, etag });
+        }
+        res.writeHead(200, { etag }); res.end(); return;
       }
       if (req.method === 'GET' && url.pathname.startsWith('/__object/')) {
         const project = projects.get(url.pathname.slice('/__object/'.length));
@@ -197,11 +206,11 @@ async function boundary(root) {
         const files = await fs.readdir(path.join(root, '.ariax/forge'));
         const records = await Promise.all(files.filter(f => f.endsWith('.json')).map(async f =>
           JSON.parse(await fs.readFile(path.join(root, '.ariax/forge', f), 'utf8'))));
-        const projectMutation = /\/files\/intents(?:\/([0-9a-f-]{36}))?/.exec(url.pathname);
-        if (projectMutation) {
-          const operationId = projectMutation[1] ?? body?.operation_id;
-          assert.ok(records.some(record => record.actor_user_id === user && record.id === operationId
-            && record.request.type === 'project-file-input-v2'), 'project input has no durable request');
+        const signedInput = !direct && /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})\/inputs(?:\/([0-9a-f-]{36})\/(parts|complete))?$/.exec(url.pathname);
+        if (signedInput) {
+          const inputId = signedInput[2] ?? body?.input_id;
+          assert.ok(records.some(record => record.actor_user_id === user && record.id === inputId
+            && record.request.session_id === signedInput[1] && record.request.path === '/v1/inputs'), 'signed input has no durable request');
         } else if (url.pathname.endsWith('/files/recover')) {
           assert.ok(records.some(record => record.actor_user_id === user && record.id === body.operation_id
             && record.request.type === 'project-file-copy-v1' && isDeepStrictEqual(record.request.body,body)), 'file recovery has no durable request');
@@ -287,6 +296,7 @@ async function boundary(root) {
                 : state.pendingInstall ? 'pending' : 'unknown'});
           }
           if (req.method === 'POST' && ['delete','delete-batch'].includes(parts[6])) {
+            if (active) return error(res,409,'project_session_active','Project has an active Forge session');
             if (parts[6] === 'delete-batch') state.deleteBatches = (state.deleteBatches ?? 0) + 1;
             const items = parts[6] === 'delete' ? [body] : body.items;
             const results = items.map(item => {
@@ -298,7 +308,7 @@ async function boundary(root) {
                 const exists = project.files.has(item.path);
                 if ((exists ? 1 : 0) !== item.expected_version) return {operation_id:item.operation_id,error:{code:'file_revision_conflict'}};
                 project.files.delete(item.path);
-                operation = {body:item,deletion:true,source:active ? 'host' : 'offline',version:++project.fileRevision};
+                operation = {body:item,deletion:true,source:'offline',version:++project.fileRevision};
                 project.fileOperations.set(item.operation_id,operation);
               }
               return {operation_id:item.operation_id,state:'deleted',version:operation.version};
@@ -306,6 +316,7 @@ async function boundary(root) {
             return reply(res,200,parts[6] === 'delete' ? results[0] : {items:results});
           }
           if (req.method === 'POST' && parts[6] === 'recover') {
+            if (active && state.rejectActiveRecover) return error(res,409,'project_session_active','Project has an active Forge session');
             state.copyPosts++;
             let operation = project.fileOperations.get(body.operation_id);
             if (operation && !isDeepStrictEqual(operation.body,body)) return error(res,409,'idempotency_conflict','File recovery request differs');
@@ -341,56 +352,6 @@ async function boundary(root) {
             if (state.fileBadPath) entries[0] = {path:'/workspace/../escape',kind:'file',size_bytes:1,version:1,mode:0o644};
             if (state.fileBadSize) entries[0].size_bytes = null;
             return reply(res, 200, {entries:entries.slice(0,1),next_cursor:entries.length>1?entries[0].path:null,...pageState});
-          }
-          if (req.method === 'POST' && parts[6] === 'intents') {
-            if (parts.length === 7) {
-              if (body.path===state.rejectInputPath) return error(res,422,'invalid_input','private-staging-error https://example.org/?signature=private-transfer-grant');
-              assert.equal(body.session_id,active?.data.session_id);
-              assert.equal(body.control_revision,project.control.revision);
-              assert.equal(body.writer_epoch,state.fileWriterEpoch ?? 1);
-              assert.equal(body.part_size,partSize);
-              assert.match(body.checksum,/^[0-9a-f]{32}-[1-9][0-9]*$/);
-              let operation = project.fileOperations.get(body.operation_id);
-              if (operation && !isDeepStrictEqual(operation.body,body)) return error(res,409,'idempotency_conflict','Input intent differs');
-              if (!operation) {
-                assert.ok(body.expected_project_revision>=0 && body.expected_project_revision<=project.fileRevision);
-                assert.equal(body.expected_version,0);
-                operation = {body,state:'open',parts:new Map(),attempt_id:null};
-                project.fileOperations.set(body.operation_id,operation);
-              }
-              if (state.drop === 'input-intent') { state.drop = null; req.socket.destroy(); return; }
-              return reply(res,200,{state:operation.state,...(operation.version ? {version:operation.version} : {})});
-            }
-            const operation = project.fileOperations.get(parts[7]);
-            if (!operation) return error(res,404,'not_found','File operation not found');
-            if (parts.length === 9 && parts[8] === 'attempts') {
-              if (operation.state === 'published') return reply(res,200,{state:'published',version:operation.version});
-              operation.attempt_id ??= randomUUID();
-              if (state.drop === 'input-attempt') { state.drop = null; req.socket.destroy(); return; }
-              return reply(res,200,{state:'uploading',attempt_id:operation.attempt_id});
-            }
-            assert.equal(parts[9],operation.attempt_id);
-            if (parts[10] === 'parts') {
-              if (operation.state === 'published') return reply(res,200,{state:'published',version:operation.version});
-              const remaining = Math.max(0,operation.body.size_bytes-(body.number-1)*partSize);
-              const grant = new URL(`http://127.0.0.1:${server.address().port}/__part/${project.id}/${parts[7]}/${parts[9]}/${body.number}`);
-              grant.searchParams.set('signature','private-transfer-grant');
-              return reply(res,200,{upload_url:grant.href,upload_method:'PUT',upload_headers:{
-                'Content-Length':String(Math.min(partSize,remaining)),'Content-MD5':body.md5},expires_in:900});
-            }
-            assert.equal(parts[10],'complete');
-            if (operation.state !== 'published') {
-              const count = Math.max(1,Math.ceil(operation.body.size_bytes/partSize));
-              assert.equal(operation.parts.size,count);
-              const bytes = Buffer.concat(Array.from({length:count},(_,index) => operation.parts.get(index+1)));
-              assert.equal(bytes.length,operation.body.size_bytes);
-              assert.equal(fileChecksum(bytes),operation.body.checksum);
-              project.files.set(operation.body.path,bytes);
-              operation.version = ++project.fileRevision;
-              operation.state = 'published';
-            }
-            if (state.drop === 'input-complete') { state.drop = null; req.socket.destroy(); return; }
-            return reply(res,200,{state:'published',version:operation.version});
           }
           assert.equal(req.method, 'POST');
           assert.equal(parts[6], 'presign');
@@ -484,13 +445,138 @@ async function boundary(root) {
         if (req.method === 'GET') {
           if (direct && state.liveInputMissing) return error(res,404,'not_found','Input not found');
           const input = session.inputs.get(parts[6]);
-          return input ? reply(res,200,input) : error(res,404,'not_found','Input not found');
+          if (input) {
+            if (direct && input.state === 'pending') {
+              if (state.confirmAfterReads > 0 && --state.confirmAfterReads === 0) state.confirmInstall = true;
+              if (state.conflictInstall) input.state = 'failed';
+              else if (state.confirmInstall) {
+                input.state = 'ready';
+                const staged = session.signedInputs.get(parts[6]);
+                if (staged?.bytes) {
+                  const installed = path.join(root,'inputs',input.path);
+                  await fs.mkdir(path.dirname(installed),{recursive:true});
+                  await fs.writeFile(installed,staged.bytes);
+                  staged.state = 'ready';
+                }
+              }
+            }
+            return reply(res,200,input);
+          }
+          if (!direct) {
+            const staged = session.signedInputs.get(parts[6]);
+            if (staged) return reply(res,200,{input_id:parts[6],path:staged.body.path,state:staged.state,size_bytes:staged.body.source?.size_bytes ?? 0});
+          }
+          return error(res,404,'not_found','Input not found');
         }
+        assert.equal(req.method, 'POST');
+        if (!direct) {
+          if (parts.length === 6) {
+            if (body.path === state.rejectInputPath || `/inputs/${body.path}` === state.rejectInputPath) {
+              return error(res,422,'invalid_input','private-staging-error https://example.org/?signature=private-transfer-grant');
+            }
+            const priorSigned = session.signedInputs.get(body.input_id);
+            const priorDirect = session.inputRequests.get(body.input_id);
+            if ((priorSigned && !isDeepStrictEqual(priorSigned.body, body))
+                || (priorDirect && body.source?.kind !== 'upload' && !isDeepStrictEqual(priorDirect, body))) {
+              return error(res,409,'idempotency_conflict','Input request differs');
+            }
+            let staged = priorSigned;
+            if (!staged) {
+              if (project.files.has(`/inputs/${body.path}`)) return error(res,409,'input_exists','Input path already exists');
+              if (body.source?.kind === 'upload') {
+                assert.equal(body.source.part_size, partSize);
+                assert.match(body.source.checksum, /^[0-9a-f]{32}-[1-9][0-9]*$/);
+                assert.ok(Number.isSafeInteger(body.source.size_bytes) && body.source.size_bytes >= 0);
+                staged = { body, state: 'uploading', parts: new Map(), bytes: null,
+                  upload_id: body.source.size_bytes > partSize ? randomUUID() : null };
+              } else {
+                assert.ok(['artifact','url'].includes(body.source?.kind));
+                staged = { body, state: 'authorized' };
+                state.signedInputAuthorizations = (state.signedInputAuthorizations ?? 0) + 1;
+              }
+              session.signedInputs.set(body.input_id, staged);
+            }
+            if (state.drop === 'input-init') { state.drop = null; req.socket.destroy(); return; }
+            if (body.source?.kind === 'upload') {
+              if (['queued','ready'].includes(staged.state)) {
+                return reply(res,200,{input_id:body.input_id,path:body.path,state:staged.state,size_bytes:body.source.size_bytes});
+              }
+              if (body.source.size_bytes <= partSize) {
+                const grant = new URL(`http://127.0.0.1:${server.address().port}/__r2/${session.data.session_id}/${body.input_id}/single`);
+                grant.searchParams.set('signature','private-transfer-grant');
+                return reply(res,200,{input_id:body.input_id,path:body.path,state:'uploading',upload:{
+                  mode:'single',method:'PUT',url:grant.href,headers:{'Content-Length':String(body.source.size_bytes)},
+                  expires_at:new Date(Date.now()+900000).toISOString(),
+                }});
+              }
+              return reply(res,200,{input_id:body.input_id,path:body.path,state:'uploading',upload:{
+                mode:'multipart',upload_id:staged.upload_id,part_size:partSize,
+                part_count:Math.ceil(body.source.size_bytes/partSize),
+              }});
+            }
+            return reply(res,200,{input_id:body.input_id,path:body.path,state:'authorized'});
+          }
+          const staged = session.signedInputs.get(parts[6]);
+          if (!staged) return error(res,404,'not_found','Input not found');
+          if (parts[7] === 'parts') {
+            if (['queued','ready'].includes(staged.state)) {
+              return reply(res,200,{input_id:parts[6],path:staged.body.path,state:staged.state});
+            }
+            if (state.drop === 'input-part') { state.drop = null; req.socket.destroy(); return; }
+            const remaining = Math.max(0,staged.body.source.size_bytes-(body.number-1)*partSize);
+            const grant = new URL(`http://127.0.0.1:${server.address().port}/__r2/${session.data.session_id}/${parts[6]}/part/${body.number}`);
+            grant.searchParams.set('signature','private-transfer-grant');
+            return reply(res,200,{number:body.number,method:'PUT',url:grant.href,headers:{
+              'Content-Length':String(Math.min(partSize,remaining)),'Content-MD5':body.md5},
+              expires_at:new Date(Date.now()+900000).toISOString()});
+          }
+          assert.equal(parts[7],'complete');
+          if (!['queued','ready'].includes(staged.state)) {
+            const count = Math.max(1,Math.ceil(staged.body.source.size_bytes/partSize));
+            assert.equal(body.parts?.length, count);
+            const buffers = [];
+            for (let index = 0; index < count; index++) {
+              const partNumber = index + 1;
+              const entry = staged.parts.get(partNumber);
+              assert.ok(entry, `missing uploaded part ${partNumber}`);
+              assert.equal(body.parts[index].number, partNumber);
+              assert.equal(body.parts[index].etag, entry.etag);
+              buffers.push(entry.bytes);
+            }
+            const bytes = Buffer.concat(buffers);
+            assert.equal(bytes.length, staged.body.source.size_bytes);
+            assert.equal(fileChecksum(bytes), staged.body.source.checksum);
+            staged.bytes = bytes;
+            staged.state = 'queued';
+          }
+          if (state.drop === 'input-complete') { state.drop = null; req.socket.destroy(); return; }
+          return reply(res,200,{input_id:parts[6],path:staged.body.path,state:'queued'});
+        }
+        const signed = session.signedInputs.get(body.input_id);
+        assert.ok(signed, 'daemon /v1/inputs must follow signed control-plane /sessions/:id/inputs');
         const prior = session.inputRequests.get(body.input_id);
         if (prior && !isDeepStrictEqual(prior,body)) return error(res,409,'idempotency_conflict','Input request differs');
         let input = session.inputs.get(body.input_id);
         if (!prior) {
-          input = {input_id:body.input_id,path:body.path,state:'ready',size_bytes:0};
+          if (body.source?.kind === 'upload') {
+            assert.equal(signed.body.source.kind, 'upload');
+            assert.equal(signed.body.path, body.path);
+            assert.equal(signed.body.source.size_bytes, body.source.size_bytes);
+            assert.ok(['queued','ready'].includes(signed.state), 'upload must be staged before daemon materialization');
+            const initialState = state.pendingInputInstall && !state.confirmInstall ? 'pending' : 'ready';
+            input = {input_id:body.input_id,path:body.path,state:initialState,size_bytes:body.source.size_bytes};
+            project.files.set(`/inputs/${body.path}`, signed.bytes);
+            project.fileRevision++;
+            if (initialState === 'ready') {
+              const installed = path.join(root,'inputs',body.path);
+              await fs.mkdir(path.dirname(installed),{recursive:true});
+              await fs.writeFile(installed,signed.bytes);
+              signed.state = 'ready';
+            }
+          } else {
+            assert.ok(isDeepStrictEqual(signed.body, body), 'daemon input request must match signed control-plane authorization');
+            input = {input_id:body.input_id,path:body.path,state:'ready',size_bytes:0};
+          }
           session.inputRequests.set(body.input_id,body);
           session.inputs.set(body.input_id,input);
           state.inputAdmissions++;
@@ -1185,7 +1271,7 @@ export async function exerciseForgeBatch(script, baseEnv = process.env) {
   const read=id=>fs.readFile(path.join(root,'.ariax/forge',`${id}.json`),'utf8').then(JSON.parse);
   const write=(id,record)=>fs.writeFile(path.join(root,'.ariax/forge',`${id}.json`),JSON.stringify(record),{mode:0o600});
   const transfers=()=>[...state.objectTransfers.values()].reduce((a,b)=>a+b,0);
-  const metrics=from=>({api_requests:state.requests.slice(from).filter(e=>!e.path.startsWith('/__part/')&&!e.path.startsWith('/__object/')).length,
+  const metrics=from=>({api_requests:state.requests.slice(from).filter(e=>!e.path.startsWith('/__r2/')&&!e.path.startsWith('/__object/')).length,
     mutation_requests:state.requests.slice(from).filter(e=>e.method==='POST').length,
     throttled:state.requests.slice(from).filter(e=>e.status===429).length});
   try {
@@ -1206,7 +1292,7 @@ export async function exerciseForgeBatch(script, baseEnv = process.env) {
     assert.equal(control.result.data.ready_count,4);assert.equal(transfers()-controlBefore,4);
     console.log('FORGE_BATCH_CONTROL',JSON.stringify({...metrics(controlFrom),ready:4,object_transfers:4}));
 
-    state.rateLimits={mutation:{limit:30,windowMs:2000},read:{limit:300,windowMs:2000}};
+    state.rateLimits={mutation:{limit:8,windowMs:1000},read:{limit:300,windowMs:2000}};
     const from=state.requests.length,before=transfers(),started=Date.now();
     const limited=await batch(21,'quota');
     assert.equal(limited.result.data.ready_count,21);assert.equal(limited.result.data.failed_count,0);
@@ -1240,12 +1326,14 @@ export async function exerciseForgeBatch(script, baseEnv = process.env) {
     assert.equal(transfers()-recoverBefore,1);assert.deepEqual((await read(partial.id)).request,partial.record.request);
     console.log('FORGE_BATCH_PARTIAL',JSON.stringify({ready_before:2,failed_before:1,ready_after:3,recovery_transfers:1}));
 
+    const multiBatchFile=path.join(root,'multi-batch.bin');
+    await fs.writeFile(multiBatchFile,Buffer.alloc(partSize + 17,0x62));
     state.drop='input-complete';
-    const lost=await batch(3,'lost',7);
+    const lost=await batch(2,'lost',7,multiBatchFile);
     assert.equal(lost.result.error.details.unknown_count,1);
     const lostBefore=transfers();
-    assert.equal((await invoke(['forge','recover',lost.id,'--wait'])).data.ready_count,3);
-    assert.equal(transfers(),lostBefore,'published input was transferred again after a lost reply');
+    assert.equal((await invoke(['forge','recover',lost.id,'--wait'])).data.ready_count,2);
+    assert.equal(transfers(),lostBefore,'staged multipart input was transferred again after a lost complete reply');
 
     // A native interrupted-batch fixture: 99 installed children and one child
     // whose immutable ID was saved, but whose own journal was never created.
@@ -1255,41 +1343,29 @@ export async function exerciseForgeBatch(script, baseEnv = process.env) {
     hundred.request.body.files=Array.from({length:100},(_,i)=>({...sample,input_id:randomUUID(),path:`read-quota/f${i}.txt`}));
     for(const file of hundred.request.body.files.slice(0,99)) {
       const child=structuredClone(template);child.id=file.input_id;
-      child.request.body.operation_id=file.input_id;child.request.body.path=`/inputs/${file.path}`;
-      const version=++project.fileRevision;
-      project.fileOperations.set(file.input_id,{body:child.request.body,state:'published',parts:new Map([[1,bytes]]),attempt_id:randomUUID(),version});
-      project.files.set(child.request.body.path,bytes);
-      child.result={input_id:file.input_id,path:file.path,size_bytes:bytes.length,project_id:pid,state:'ready',storage_state:'published',installation_status:'applied',version};
+      child.request.body.input_id=file.input_id;child.request.body.path=file.path;
+      child.upload_stage='staged';
+      session.signedInputs.set(file.input_id,{body:child.request.body,state:'ready',parts:new Map(),bytes,upload_id:null});
+      session.inputRequests.set(file.input_id,{input_id:file.input_id,path:file.path,source:{kind:'upload',size_bytes:bytes.length}});
+      session.inputs.set(file.input_id,{input_id:file.input_id,path:file.path,state:'ready',size_bytes:bytes.length});
+      project.files.set(`/inputs/${file.path}`,bytes);
+      child.result={input_id:file.input_id,path:file.path,size_bytes:bytes.length,state:'ready'};
       await write(file.input_id,child);
     }
     await write(hundredId,hundred);
-    state.rateLimits={read:{limit:300,windowMs:2000},mutation:{limit:30,windowMs:2000}};
     const readFrom=state.requests.length,readBefore=transfers(),readStarted=Date.now();
     const all=(await invoke(['forge','recover',hundredId,'--wait','--wait-timeout','30'])).data;
     assert.equal(all.ready_count,100);assert.equal(transfers()-readBefore,1);
-    assert.ok(state.rateLimits.read.throttled>0 && state.rateLimits.read.windows>=2);
-    assert.ok(Date.now()-readStarted<25_000,'read throttling prevented forward progress');
-    const checks=state.requests.slice(readFrom);
-    for(const file of hundred.request.body.files.slice(0,99)) {
-      assert.ok(checks.filter(e=>e.path.endsWith('/metadata')&&e.target===`/inputs/${file.path}`).length>=2,'final version check was omitted');
-    }
-    console.log('FORGE_BATCH_READ_QUOTA',JSON.stringify({...metrics(readFrom),ready:100,object_transfers:1,elapsed_ms:Date.now()-readStarted,
-      read_windows:state.rateLimits.read.windows}));
+    assert.ok(Date.now()-readStarted<25_000,'batch recovery did not make forward progress');
+    console.log('FORGE_BATCH_READ_QUOTA',JSON.stringify({...metrics(readFrom),ready:100,object_transfers:1,elapsed_ms:Date.now()-readStarted}));
 
-    const changed=`/inputs/${hundred.request.body.files[0].path}`;
-    state.rateLimits={read:{limit:300,windowMs:2000,onThrottle:()=>{state.changedVersionPath=changed;}}};
-    const changedBefore=transfers();
-    const changedResult=await invoke(['forge','recover',hundredId,'--wait','--wait-timeout','30'],7);
-    assert.equal(changedResult.error.details.failed_count,1);assert.equal(changedResult.error.details.ready_count,99);
-    assert.equal(transfers(),changedBefore,'a replaced published path was uploaded again');
-    state.rateLimits=null;state.changedVersionPath=null;
-    for(const change of ['writer','control']) {
-      state.fileWriterEpoch=change==='writer'?2:1;project.control.revision=change==='control'?1:0;
-      const stopped=await invoke(['forge','recover',hundredId,'--wait','--wait-timeout','0.8'],9);
-      assert.equal(stopped.error.details.ready_count,0,`${change} mismatch was reported ready`);
-      assert.equal(stopped.error.details.pending_count,100);
-    }
-    state.fileWriterEpoch=1;project.control.revision=0;
+    const failedChildId=hundred.request.body.files[0].input_id;
+    session.inputs.get(failedChildId).state='failed';
+    const failedBefore=transfers();
+    const failedResult=await invoke(['forge','recover',hundredId,'--wait','--wait-timeout','30'],7);
+    assert.equal(failedResult.error.details.failed_count,1);assert.equal(failedResult.error.details.ready_count,99);
+    assert.equal(transfers(),failedBefore,'a failed input was uploaded again');
+    session.inputs.get(failedChildId).state='ready';
 
     if(process.platform!=='win32') {
       const fifo=path.join(root,'fifo');await execute('mkfifo',[fifo]);
@@ -1341,8 +1417,23 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const session = state.sessions.get(sid), project = state.projects.get(pid);
     assert.deepEqual((await record(sid)).request.body.hardware, { min_ram_gib: 64, min_cpu_count: 8, min_disk_gib: 250 });
     assert.equal(Date.parse(session.data.expires_at) - Date.parse(session.data.allocated_at), 4 * 3600000);
+    // Stage a local input while the session is still starting (before daemon connect).
+    const startingPath = path.join(root, 'starting-input');
+    await fs.writeFile(startingPath, 'pre-staged');
+    const startingId = randomUUID();
+    const stagedStarting = await invoke(['forge', 'inputs', 'add', sid, '--file', startingPath, '--path', 'harness/starting.txt', '--input-id', startingId]);
+    assert.equal(stagedStarting.payload.data.state, 'queued');
+    assert.equal(stagedStarting.payload.data.upload_state, 'staged');
+    assert.equal(state.connects, 0, 'staging while starting attempted daemon connect');
+    assert.equal((await invoke(['forge', 'inputs', 'status', sid, startingId])).payload.data.state, 'queued');
     session.data.state = 'available';
     session.data.tools.forEach(t => t.state = 'ready');
+    const startingTransfers = state.objectTransfers.get(startingId);
+    const materializedStarting = await invoke(['forge', 'recover', startingId, '--wait']);
+    assert.equal(materializedStarting.payload.data.state, 'ready');
+    assert.equal(state.objectTransfers.get(startingId), startingTransfers, 'recovering staged upload re-uploaded bytes');
+    assert.deepEqual(project.files.get('/inputs/harness/starting.txt'), Buffer.from('pre-staged'));
+
     assert.equal((await record(sid)).request.body.files_contract,2);
     const legacyId = randomUUID(), legacy = await record(sid);
     legacy.id = legacyId;
@@ -1358,30 +1449,26 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     await fs.writeFile(emptyPath,Buffer.alloc(0));
     await fs.writeFile(multiPath,Buffer.alloc(partSize + 23,0x61));
     const emptyId = randomUUID();
+    const emptyReqFrom = state.requests.length;
+    state.pendingInputInstall = true;
     const empty = await invoke(['forge','inputs','add',sid,'--file',emptyPath,'--path','harness/empty','--input-id',emptyId]);
-    assert.equal(empty.payload.data.storage_state,'published');
     assert.equal(empty.payload.data.state,'pending');
-    assert.equal(empty.payload.data.installation_status,'unconfirmed');
     assert.equal(project.files.get('/inputs/harness/empty').length,0);
+    const emptyRequests = state.requests.slice(emptyReqFrom);
+    assert.ok(emptyRequests.some(e => e.method === 'PUT' && e.path.endsWith(`/${emptyId}/single`)), 'small upload must use single-part PUT');
+    assert.equal(emptyRequests.some(e => e.path.endsWith('/parts') || e.path.endsWith('/complete')), false, 'single-part upload must not call multipart /parts or /complete');
     assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
     await invoke(['forge','inputs','status',sid,emptyId],4,false,'arx_forge_othercredential');
     assert.ok((await invoke(['forge','inputs','list',sid])).payload.data.inputs.some(item => item.input_id === emptyId));
-    state.pendingInstall = true;
-    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.installation_status,'pending');
-    state.pendingInstall = false;
     state.conflictInstall = true;
     assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'failed');
     state.conflictInstall = false;
-    state.noFileWriter = true;
-    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
-    state.noFileWriter = false;
+    session.inputs.get(emptyId).state = 'pending';
     state.confirmInstall = true;
     assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'ready');
     assert.equal((await invoke(['forge','inputs','list',sid])).payload.data.inputs.find(item => item.input_id === emptyId).state,'ready');
-    state.fileWriterEpoch = 2;
-    assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
-    state.fileWriterEpoch = 1;
     state.confirmInstall = false;
+    state.pendingInputInstall = false;
     const collisionId = randomUUID();
     session.inputs.set(collisionId,{input_id:collisionId,path:'collision.txt',state:'ready',size_bytes:0});
     session.inputRequests.set(collisionId,{input_id:collisionId,path:'collision.txt',source:{kind:'artifact',project_id:pid,path:'different.txt'}});
@@ -1390,9 +1477,11 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(conflictingInput.payload.error.code,'idempotency_conflict');
     state.drop = 'direct-input';
     const beforeArtifact = state.inputAdmissions;
+    const beforeArtifactAuth = state.signedInputAuthorizations ?? 0;
     const artifact = await invoke(['forge','inputs','add',sid,'--artifact',`${pid}:artifact.txt`,'--path','artifact.txt']);
     assert.equal(artifact.payload.data.state,'ready');
     assert.equal(state.inputAdmissions,beforeArtifact + 1,'lost input response caused a duplicate import');
+    assert.ok((state.signedInputAuthorizations ?? 0) > beforeArtifactAuth,'artifact input was not authorized via signed /sessions/:id/inputs');
     assert.equal((await invoke(['forge','inputs','status',sid,artifact.payload.data.input_id])).payload.data.state,'ready');
     const artifactPosts = state.posts;
     assert.equal((await invoke(['forge','recover',artifact.payload.data.input_id])).payload.data.state,'ready');
@@ -1406,11 +1495,14 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     artifactRecord.path = 'other.txt';
     assert.equal((await invoke(['forge','recover',artifact.payload.data.input_id],7)).payload.error.code,'request_conflict');
     artifactRecord.path = 'artifact.txt';
+    const beforeUrlAuth = state.signedInputAuthorizations ?? 0;
     const remote = await invoke(['forge','inputs','add',sid,'--url','https://example.org/input.dat','--path','remote.dat']);
     assert.equal(remote.payload.data.state,'ready');
+    assert.ok((state.signedInputAuthorizations ?? 0) > beforeUrlAuth,'url input was not authorized via signed /sessions/:id/inputs');
     const urlId = remote.payload.data.input_id;
     assert.doesNotMatch(JSON.stringify(await record(urlId)),/example\.org/);
     session.inputs.delete(urlId);
+    session.signedInputs.delete(urlId);
     const urlPosts = state.posts;
     assert.equal((await invoke(['forge','recover',urlId],7)).payload.error.code,'input_unconfirmed');
     const unacceptedUrl = await record(urlId), unacceptedUrlId = randomUUID();
@@ -1423,31 +1515,60 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     await invoke(['forge','recover',emptyId],1,false,'arx_forge_othercredential');
     const publishedPosts = state.posts;
     await fs.rename(emptyPath,`${emptyPath}.moved`);
-    assert.equal((await invoke(['forge','recover',emptyId])).payload.data.storage_state,'published');
+    assert.equal((await invoke(['forge','recover',emptyId])).payload.data.state,'ready');
     await fs.rename(`${emptyPath}.moved`,emptyPath);
-    assert.equal(state.posts,publishedPosts,'published input required a source or repeated an upload');
-    const emptyOperation = project.fileOperations.get(emptyId);
-    emptyOperation.state = 'open';
+    assert.equal(state.posts,publishedPosts,'materialized input required a source or repeated an upload');
+    const savedEmptyLive = session.inputs.get(emptyId);
+    const savedEmptySigned = session.signedInputs.get(emptyId);
+    const savedEmptyJournal = await record(emptyId);
+    session.inputs.delete(emptyId);
+    savedEmptySigned.state = 'uploading';
+    await fs.writeFile(path.join(root,'.ariax/forge',`${emptyId}.json`),JSON.stringify({...savedEmptyJournal,upload_stage:'uploading',result:null}),{mode:0o600});
     await fs.writeFile(emptyPath,'changed');
     const beforeChangedSource = state.posts;
     assert.equal((await invoke(['forge','recover',emptyId],7)).payload.error.code,'request_conflict');
     assert.equal(state.posts,beforeChangedSource,'changed input bytes were uploaded under the old ID');
     await fs.writeFile(emptyPath,Buffer.alloc(0));
-    emptyOperation.state = 'published';
-    for (const loss of ['input-intent','input-attempt','input-put','input-complete']) {
+    await fs.writeFile(path.join(root,'.ariax/forge',`${emptyId}.json`),JSON.stringify(savedEmptyJournal),{mode:0o600});
+    savedEmptySigned.state = 'ready';
+    savedEmptyLive.state = 'pending';
+    session.inputs.set(emptyId,savedEmptyLive);
+    for (const loss of ['input-init','input-part','input-put','input-complete','direct-input']) {
       const id = randomUUID(), target = `harness/${loss}`;
       const args = ['forge','inputs','add',sid,'--file',multiPath,'--path',target,'--input-id',id];
+      const reqFrom = state.requests.length;
       state.drop = loss;
       const lost = await invoke(args);
       assert.doesNotMatch(lost.stdout+lost.stderr,/private-transfer-grant|signature=/);
+      assert.equal(lost.payload.data.state,'ready');
       const retried = await invoke(args);
-      assert.equal(retried.payload.data.state,'pending');
-      assert.equal(retried.payload.data.storage_state,'published');
+      assert.equal(retried.payload.data.state,'ready');
       assert.deepEqual(project.files.get(`/inputs/${target}`),await fs.readFile(multiPath));
+      const reqs = state.requests.slice(reqFrom);
+      assert.ok(reqs.some(e => e.method === 'POST' && e.path.endsWith(`/${id}/parts`)), `multipart ${loss} missing /parts`);
+      assert.ok(reqs.some(e => e.method === 'POST' && e.path.endsWith(`/${id}/complete`)), `multipart ${loss} missing /complete`);
       const journal = await record(id);
-      assert.match(journal.request.body.checksum,/-2$/);
+      assert.match(journal.request.body.source.checksum,/-2$/);
       assert.doesNotMatch(JSON.stringify(journal),/private-transfer-grant|signature=|upload_url|upload_headers/);
     }
+    // Active-session external file deletion must be refused with 409 project_session_active + clear guidance.
+    project.files.set('/workspace/active-blocked.txt', Buffer.from('live'));
+    project.files.set('/workspace/active-dir/a.txt', Buffer.from('live-nested'));
+    const activeDelete = await invoke(['forge','files','delete',pid,'--path','/workspace/active-blocked.txt'], 7);
+    assert.equal(activeDelete.payload.error.code, 'project_session_active');
+    assert.match(activeDelete.payload.error.action, /Pause or close the active session first.*ariax forge run/);
+    assert.equal(project.files.has('/workspace/active-blocked.txt'), true, 'active-session delete removed file');
+    const activeTreeDelete = await invoke(['forge','files','delete',pid,'--path','/workspace/active-dir','--recursive'], 7);
+    assert.equal(activeTreeDelete.payload.error.code, 'project_session_active');
+    assert.match(activeTreeDelete.payload.error.action, /Pause or close the active session first.*ariax forge run/);
+    assert.equal(project.files.has('/workspace/active-dir/a.txt'), true, 'active-session recursive delete removed file');
+    state.rejectActiveRecover = true;
+    const activeRecoverRefused = await invoke(['forge','files','recover',pid,'--path','/workspace/blocked-recover.dat','--catalog',`${pid}:/workspace/active-blocked.txt`,'--version','1'], 7);
+    assert.equal(activeRecoverRefused.payload.error.code, 'project_session_active');
+    assert.match(activeRecoverRefused.payload.error.action, /Pause or close the active session first.*ariax forge run/);
+    state.rejectActiveRecover = false;
+    project.files.delete('/workspace/active-blocked.txt');
+    project.files.delete('/workspace/active-dir/a.txt');
     project.files.set('/workspace/source.dat',Buffer.from('original'));
     const copyId = randomUUID();
     const beforeVersion = state.posts;
@@ -1614,6 +1735,7 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal((await invoke(['forge','recover',inputWaitId,'--wait'])).payload.data.state,'succeeded');
     assert.equal(state.executions,beforeRepeatRecovery,'completed science was replayed');
     state.confirmInstall = false;
+    session.inputs.get(emptyId).state = 'pending';
     state.confirmAfterReads = 2;
     const singleWait = await invoke(['forge','run',sid,'--tool','base','--wait-ready','--input-ids',emptyId,
       '--wait','--wait-timeout','15','--',process.execPath,'-e','process.exit(0)']);

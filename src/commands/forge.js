@@ -109,7 +109,8 @@ const SUBCOMMAND_HELP = Object.freeze({
   ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge files hydrate SESSION --path PATH [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
-  'files delete': `ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
+  'files delete': `ariax forge files delete PROJECT --path PATH [--recursive] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]
+  Offline only (refused while a session is active; edit/delete /workspace files inside an active session via ariax forge run).`,
   'files hydrate': `ariax forge files hydrate SESSION --path PATH [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
   'files recover': `ariax forge files recover PROJECT --path DEST (--catalog PROJECT:PATH --version N | --archive PROJECT:CHECKPOINT:PATH | --artifact PROJECT:PATH) [--overwrite] [--operation-id UUID] [--wait] [--wait-timeout SECONDS]`,
   download: `ariax forge download PROJECT PATH --dest LOCAL`,
@@ -504,7 +505,6 @@ function savedKind(id, request) {
   if (request.path === '/v1/sync' && request.body.sync_id === id) return 'sync';
   if (request.path === '/v1/files/hydrate' && request.body.operation_id === id) return 'file-hydration';
   if (request.path === '/v1/inputs' && request.body.input_id === id) return 'input';
-  if (request.type === 'project-file-input-v2' && request.body.operation_id === id) return 'input';
   if (request.type === 'project-input-batch-v1' && request.body.batch_id === id) return 'input-batch';
   if (request.type === 'project-file-copy-v1' && request.body.operation_id === id) return 'file-recovery';
   if (['project-file-delete-v1','project-file-delete-tree-v1'].includes(request.type) && request.body.operation_id === id) return 'file-deletion';
@@ -1497,7 +1497,12 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
     if (kind === 'session') result = await ctx.client.get(`${API}/sessions/${id}`, {signal});
     else if (kind === 'close') result = await ctx.client.get(record.request.path.slice(0,-'/close'.length), {signal});
     else if (kind === 'selection') result = await forgeRequest(ctx,session,'GET','/v1/session',{signal});
-    else if (kind === 'input') result = await inputStatus(ctx,session,id,{signal,account});
+    else if (kind === 'input') {
+      const latest = readRecordFor(ctx, id) ?? record;
+      result = latest.request?.type === 'session-file-input-v1' && data.state === 'queued'
+        ? await recoverFile(ctx, id, latest, { signal, account })
+        : await inputStatus(ctx, session, id, { signal, account });
+    }
     else if (kind === 'file-recovery' || kind === 'file-deletion') result = await recoverFile(ctx,id,readRecordFor(ctx,id) ?? record,{signal,account});
     else if (kind === 'file-hydration') result = await forgeRequest(ctx,session,'GET',`/v1/files/hydrate/${id}`,{signal});
     else result = await readSync(ctx,session,id,{signal});
@@ -2682,6 +2687,11 @@ export async function run(ctx) {
     } else if (['limit_revision_conflict', 'session_closing'].includes(error.code)) {
       const session = action === 'recover' ? recoveredSession : ctx.positionals[1];
       error.action = `Inspect ${session ? `ariax forge status ${session}` : 'the session status'} for the current state, max_gpu_hours, limit_revision, applied_limit_revision and expires_at before another edit. A revision conflict does not establish whether the earlier edit was applied. Closing compute must finish cleanup.`;
+    } else if (error.code === 'project_session_active' && (
+      ['files delete', 'files recover'].includes(action)
+      || (action === 'recover' && ['project-file-delete-v1', 'project-file-delete-tree-v1', 'project-file-copy-v1'].includes(recovered?.request?.type))
+    )) {
+      error.action = 'This project has an active Forge session. Pause or close the active session first to modify saved files externally, or edit/delete /workspace files inside the session via `ariax forge run`.';
     } else if (['session_cleanup_pending', 'project_session_active'].includes(error.code)) {
       error.action = `Inspect the project history and active session status. Wait for confirmed cleanup before resuming; keep the same project and saved session request.`;
     } else if (error.code === 'session_unready') {

@@ -13,7 +13,7 @@ import { ApiError, NetworkError, backoffDelay, validateTransferUrl } from '../ht
 import { printProgress } from '../output.js';
 import { workspacePath, listProjectFiles, projectFileGrant, readSync, startSync } from '../lib/forge-workspace-client.js';
 import { isForgeOperationTerminal, pruneExpiredRecords } from '../state-dir.js';
-import { uuid, required, recordPath, findRecord, readRecordFor, listRecordFiles, readRecord, saveResult, report, poll, failed, projectUrl, transient, controlled, localWaitSeconds, emitHygieneNotices, observeSessionSync } from './forge.js';
+import { uuid, required, recordPath, findRecord, readRecordFor, readRecord, saveResult, report, poll, failed, projectUrl, transient, controlled, localWaitSeconds, emitHygieneNotices, observeSessionSync } from './forge.js';
 
 function safePath(value, absolute = false) {
   const relative = absolute ? value?.replace(/^\/(workspace|inputs)\//, '') : value;
@@ -27,7 +27,7 @@ function safePath(value, absolute = false) {
 }
 
 async function fileRecord(ctx, id, request, label, signal) {
-  const account = request.session_id && !['project-file-copy-v1','project-file-delete-v1','project-file-delete-tree-v1'].includes(request.type)
+  const account = request.session_id && ![SESSION_INPUT_UPLOAD, INPUT_BATCH, FILE_COPY, FILE_DELETE, FILE_DELETE_TREE].includes(request.type)
     ? await forgeAccountIdentity(ctx, request.session_id, {signal})
     : await accountIdentity(ctx, {signal});
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
@@ -56,12 +56,13 @@ async function fileRecord(ctx, id, request, label, signal) {
 }
 
 const PART_SIZE = 16 * 1024 * 1024;
-const PROJECT_INPUT = 'project-file-input-v2';
+const SESSION_INPUT_UPLOAD = 'session-file-input-v1';
 const INPUT_BATCH = 'project-input-batch-v1';
 const FILE_COPY = 'project-file-copy-v1';
 const FILE_DELETE = 'project-file-delete-v1';
 const FILE_DELETE_TREE = 'project-file-delete-tree-v1';
 const API = '/api/v1/forge';
+const ACTIVE_SESSION_FILE_MUTATION_ACTION = 'This project has an active Forge session. Pause or close the active session first to modify saved files externally, or edit/delete /workspace files inside the session via `ariax forge run`.';
 
 function fileSnapshot(fd, file) {
   const info = fs.fstatSync(fd);
@@ -103,13 +104,32 @@ async function checksums(fd, metadata, signal) {
     checksum:`${createHash('md5').update(Buffer.concat(digests)).digest('hex')}-${count}`};
 }
 
-async function putPart(grant, body, md5, signal) {
-  const url = validateTransferUrl(grant.upload_url, 'Upload');
-  if (grant.upload_method !== 'PUT' || !grant.upload_headers
-      || grant.upload_headers['Content-Length'] !== String(body.length)
-      || grant.upload_headers['Content-MD5'] !== md5
-      || Object.keys(grant.upload_headers).some(key => !['Content-Length', 'Content-MD5'].includes(key))) {
+function readVerifiedPart(fd, localFile, metadata, index, expectedMd5) {
+  if (!isDeepStrictEqual(fileSnapshot(fd, localFile), metadata)) {
+    throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+  }
+  const bytes = readPart(fd, Math.min(PART_SIZE, metadata.size_bytes - index * PART_SIZE), index * PART_SIZE);
+  if (createHash('md5').update(bytes).digest('base64') !== expectedMd5) {
+    throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+  }
+  return bytes;
+}
+
+async function putUpload(grant, body, md5, signal) {
+  const url = validateTransferUrl(grant?.url, 'Upload');
+  const rawHeaders = grant?.headers ?? {};
+  if ((grant?.method ?? 'PUT') !== 'PUT' || !rawHeaders || typeof rawHeaders !== 'object' || Array.isArray(rawHeaders)) {
     throw new Error('Forge returned an invalid upload grant.');
+  }
+  const headers = {};
+  for (const [key, value] of Object.entries(rawHeaders)) {
+    const lower = key.toLowerCase();
+    if (typeof value !== 'string' || ['authorization', 'cookie', 'host', 'proxy-authorization'].includes(lower)
+        || (lower === 'content-length' && value !== String(body.length))
+        || (lower === 'content-md5' && value !== md5)) {
+      throw new Error('Forge returned an invalid upload grant.');
+    }
+    headers[key] = value;
   }
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -117,68 +137,55 @@ async function putPart(grant, body, md5, signal) {
   if (signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), 900000);
   try {
-    const response = await fetch(url, {method:'PUT',headers:grant.upload_headers,body,redirect:'error',signal:controller.signal});
+    const response = await fetch(url, {method:'PUT',headers,body,redirect:'error',signal:controller.signal});
+    const etag = response.headers.get('etag');
     await response.body?.cancel();
     if (!response.ok) throw new Error(`Upload failed (HTTP ${response.status}); retry with the same input ID.`);
-  } catch (error) {
+    return { etag };
+  } catch {
     // fetch errors can carry a credentialed URL through their nested cause.
     throw new NetworkError(controller.signal.aborted ? 'Upload exceeded its 900 second limit; retry with the same input ID.' : 'Upload did not complete; retry with the same input ID.');
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
-}
-
-function projectInputResult(record, operation, applied = false, removed = false) {
-  const storage = operation?.state ?? 'unconfirmed';
-  const conflict = storage === 'published' && operation?.local_state === 'conflict';
-  const installing = storage === 'published' && operation?.local_state === 'pending';
-  return {input_id:record.id,path:record.request.body.path.slice('/inputs/'.length),
-    size_bytes:record.request.body.size_bytes,project_id:record.request.project_id,
-    state:applied ? 'ready' : removed || storage === 'expired' || conflict ? 'failed' : 'pending',storage_state:storage,
-    installation_status:applied ? 'applied' : conflict ? 'conflict' : installing ? 'pending'
-      : storage === 'published' ? 'unconfirmed' : 'pending',
-    ...(operation?.version !== undefined && operation.version !== null ? {version:operation.version} : {}),
-    ...(!applied ? {action:removed ? 'The input was deleted or replaced. Add a new input before using this path.'
-      : conflict ? 'The project file could not be installed in the active workspace. Inspect the operation before continuing.'
-      : installing ? 'The file is saved and workspace installation is still pending. Inspect the same input ID.'
-      : storage === 'published'
-      ? 'Project storage is saved, but this server does not confirm installation in the running workspace. Do not dispatch a command until the server exposes that confirmation.'
-      : storage === 'expired' ? 'The input operation expired. Inspect the project path and use a new input ID if the file is absent.'
-      : 'Retry the original input request with the same input ID and source file.'} : {})};
 }
 
 function writeInputRecord(file, record) {
   atomicWrite(file, JSON.stringify(record, null, 2) + '\n');
 }
 
-async function projectInputStatus(ctx, record, knownAccount, signal) {
-  const account = knownAccount ?? await accountIdentity(ctx, {signal});
-  if (Object.keys(account).some(field => record[field] !== account[field])) {
-    throw new ApiError({status:404,code:'not_found',message:'Forge input not found.'});
-  }
-  let operation;
-  try { operation = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/operations/${record.id}`, {signal})).data; }
-  catch (error) { if (error.status !== 404) throw error; }
-  if (operation && (operation.operation_id !== record.id || operation.session_id !== record.request.session_id
-      || !['open', 'published', 'expired'].includes(operation.state)
-      || (operation.local_state !== undefined && !['ready','pending','conflict','unknown','not_applicable'].includes(operation.local_state)))) {
-    throw new Error('Project input operation response does not match the retained request.');
-  }
-  // A host-backed local_state is an installation observation, not merely the
-  // SQL publication receipt. Older servers omit it and remain unconfirmed.
-  let applied = false, removed = false;
-  if (operation?.state === 'published' && operation.source === 'host' && operation.local_state === 'ready'
-      && Number.isSafeInteger(operation.version) && operation.version > 0) {
-    const context = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/status`, {signal})).data;
-    applied = context.session_id === record.request.session_id && context.writer_session_id === record.request.session_id
-      && context.writer_epoch === record.request.body.writer_epoch && context.control_revision === record.request.body.control_revision
-      && context.session_state === 'available' && context.hydration_state === 'ready';
-    if (applied) {
-      const saved = (await ctx.client.get(`${API}/projects/${record.request.project_id}/files/metadata`,
-        {query:{path:record.request.body.path},signal})).data;
-      removed = saved.kind !== 'file' || saved.version !== operation.version;
-      applied = !removed;
+async function authorizeAndDispatchInput(ctx, sessionId, payload, signal) {
+  try {
+    const authorized = await ctx.client.post(`${API}/sessions/${sessionId}/inputs`, { body: payload, signal });
+    if (authorized.data?.input_id !== undefined && authorized.data.input_id !== payload.input_id) {
+      throw new NetworkError('Forge input authorization returned a mismatched input_id.');
     }
+  } catch (error) {
+    if (!(payload.source?.kind === 'url' && error instanceof ApiError && error.status === 404)) throw error;
   }
-  return projectInputResult(record, operation, applied, removed);
+  return forgeRequest(ctx, sessionId, 'POST', '/v1/inputs', { body: payload, signal });
+}
+
+async function materializeUpload(ctx, sessionId, sessionPath, file, record, { signal, knownSessionState, waitReady = false } = {}) {
+  const { input_id: id, path: target, source } = record.request.body;
+  let sessionState = knownSessionState;
+  if (waitReady) { await waitForInputsReady(ctx, sessionId, sessionPath, signal); sessionState = 'available'; }
+  else if (!sessionState) sessionState = (await ctx.client.get(sessionPath, { query: { view: 'summary' }, signal })).data?.state ?? null;
+  if (['closing', 'closed', 'failed'].includes(sessionState)) failed('session_unavailable', `Session ${sessionId} is ${sessionState}`);
+  if (sessionState !== 'available') {
+    const data = { input_id: id, path: target, size_bytes: source.size_bytes,
+      ...(record.request.project_id ? { project_id: record.request.project_id } : {}),
+      state: 'queued', upload_state: 'staged',
+      action: `Upload is staged in object storage while session ${sessionId} is ${sessionState ?? 'starting'}. Once available, materialize with ariax forge recover ${id} --wait.` };
+    saveResult(file, readRecord(file) ?? record, data);
+    return { data };
+  }
+  const res = await forgeRequest(ctx, sessionId, 'POST', '/v1/inputs', {
+    body: { input_id: id, path: target, source: { kind: 'upload', size_bytes: source.size_bytes } }, signal,
+  });
+  if (res.data?.input_id !== id || res.data?.path !== target) {
+    throw new ApiError({ status: 409, code: 'request_conflict', message: `Forge input ${id} does not match its saved path.` });
+  }
+  saveResult(file, readRecord(file) ?? record, res.data);
+  return res;
 }
 
 function inputExistsAction(target, projectId) {
@@ -261,9 +268,9 @@ async function listProjectFilesRecursive(ctx, projectId, rootPath, { maxFiles = 
   };
 }
 
-async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal, source) {
+async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, localFile, signal, { source, knownProjectId, knownSessionState, waitReady = false } = {}) {
   const fd = openRegularFile(localFile);
-  let resolvedProjectId = null;
+  let resolvedProjectId = knownProjectId ?? null, sessionState = knownSessionState ?? null;
   try {
     const metadata = fileSnapshot(fd, localFile);
     const digests = await checksums(fd, metadata, signal);
@@ -274,99 +281,93 @@ async function addProjectInput(ctx, sessionId, sessionPath, id, target, localFil
     let request;
     if (prior) {
       request = prior.request;
-      const savedProject = uuid(request?.project_id, 'project ID');
-      resolvedProjectId = savedProject;
-      if (request?.type !== PROJECT_INPUT || request.session_id !== sessionId
-          || request.body?.operation_id !== id || request.body?.path !== `/inputs/${target}`
-          || request.path !== `${API}/projects/${savedProject}/files/intents`
-          || request.body?.session_id !== sessionId || request.body?.part_size !== PART_SIZE
-          || request.body?.checksum !== digests.checksum || !isDeepStrictEqual(request.local_file, metadata)) {
+      if (isUUID(request?.project_id)) resolvedProjectId = request.project_id;
+      if (request?.type !== SESSION_INPUT_UPLOAD || request.session_id !== sessionId || request.path !== '/v1/inputs'
+          || request.body?.input_id !== id || request.body?.path !== target || request.body?.source?.kind !== 'upload'
+          || request.body?.source?.size_bytes !== metadata.size_bytes || request.body?.source?.part_size !== PART_SIZE
+          || request.body?.source?.checksum !== digests.checksum || !isDeepStrictEqual(request.local_file, metadata)) {
         throw new ApiError({status:409,code:'request_conflict',message:`Forge request ${id} differs from its saved input. Use the original request to retry.`});
       }
     } else {
-      const session = (await ctx.client.get(sessionPath, {signal})).data;
-      const projectId = uuid(session.project_id, 'project ID');
-      resolvedProjectId = projectId;
-      const base = `${API}/projects/${projectId}/files`;
-      const context = (await ctx.client.get(`${base}/status`, {signal})).data;
-      if (context.session_id !== sessionId || context.writer_session_id !== sessionId
-          || context.session_state !== 'available' || context.hydration_state !== 'ready'
-          || !Number.isSafeInteger(context.control_revision) || context.control_revision < 0
-          || !Number.isSafeInteger(context.writer_epoch) || context.writer_epoch < 0) {
-        throw new ApiError({status:409,code:'session_unready',message:'The original project workspace is not ready for input installation.'});
+      if (!resolvedProjectId || !sessionState) {
+        const session = (await ctx.client.get(sessionPath, { query: { view: 'summary' }, signal })).data;
+        if (!resolvedProjectId && isUUID(session?.project_id)) resolvedProjectId = session.project_id;
+        if (!sessionState && typeof session?.state === 'string') sessionState = session.state;
       }
-      const remote = (await ctx.client.get(`${base}/metadata`,{query:{path:`/inputs/${target}`},signal})).data;
-      if (remote.kind !== 'absent' || remote.version !== 0 || !Number.isSafeInteger(remote.mutation_revision) || remote.mutation_revision < 0) {
-        const existsErr = new ApiError({status:409,code:'input_exists',message:'This project input path already exists; choose a new path.'});
-        existsErr.action = inputExistsAction(target, projectId);
-        throw existsErr;
+      if (resolvedProjectId) {
+        const remote = (await ctx.client.get(`${API}/projects/${resolvedProjectId}/files/metadata`, { query: { path: `/inputs/${target}` }, signal })).data;
+        if (remote && remote.kind !== 'absent') {
+          const existsErr = new ApiError({status:409,code:'input_exists',message:'This project input path already exists; choose a new path.'});
+          existsErr.action = inputExistsAction(target, resolvedProjectId);
+          throw existsErr;
+        }
       }
-      request = {type:PROJECT_INPUT,method:'POST',session_id:sessionId,project_id:projectId,path:`${base}/intents`,
-        body:{operation_id:id,session_id:sessionId,path:`/inputs/${target}`,operation_started_at:new Date().toISOString(),
-          control_revision:context.control_revision,writer_epoch:context.writer_epoch,expected_version:remote.version,
-          expected_project_revision:remote.mutation_revision,size_bytes:metadata.size_bytes,part_size:PART_SIZE,
-          checksum:digests.checksum,mode:0o644},local_file:metadata};
+      request = {
+        type: SESSION_INPUT_UPLOAD, method: 'POST', session_id: sessionId,
+        ...(resolvedProjectId ? { project_id: resolvedProjectId } : {}), path: '/v1/inputs',
+        body: { input_id: id, path: target, source: { kind: 'upload', size_bytes: metadata.size_bytes, part_size: PART_SIZE, checksum: digests.checksum } },
+        local_file: metadata,
+      };
     }
-    const {file,record} = await fileRecord(ctx,id,request,'input_id',signal);
-    const base = request.path;
-    let result = await ctx.client.post(base,{body:request.body,signal});
-    if (!['open','published'].includes(result.data?.state)) throw new Error('Project input intent returned an incompatible state.');
-    if (result.data.state === 'open') {
-      let attemptId = record.attempt_id ? uuid(record.attempt_id, 'upload attempt ID') : undefined;
-      if (record.upload_stage !== 'completing' || !attemptId) {
-        const attempt = await ctx.client.post(`${base}/${id}/attempts`,{signal});
-        if (attempt.data?.state === 'published') result = attempt;
-        else {
-          attemptId = uuid(attempt.data?.attempt_id, 'upload attempt ID');
-          record.attempt_id = attemptId;
-          record.upload_stage = attempt.data.state;
+    const { file, record } = await fileRecord(ctx, id, request, 'input_id', signal);
+    const inputBase = `${API}/sessions/${sessionId}/inputs`;
+    const markStaged = () => { record.upload_stage = 'staged'; writeInputRecord(file, record); };
+    if (record.upload_stage !== 'staged') {
+      const init = await ctx.client.post(inputBase, { body: request.body, signal });
+      if (init.data?.input_id !== undefined && init.data.input_id !== id) throw new NetworkError('Forge input staging returned a mismatched input_id.');
+      const upload = init.data?.upload;
+      if (!upload) {
+        if (['queued', 'staged', 'downloading', 'materializing', 'ready'].includes(init.data?.state)) markStaged();
+        else if (init.data?.state === 'failed') { saveResult(file, record, init.data); return init; }
+        else throw new Error('Forge input staging returned an incompatible upload response.');
+      } else if (upload.mode === 'single') {
+        if (digests.parts.length !== 1 || metadata.size_bytes > PART_SIZE) throw new Error('Forge returned single-part upload for a multipart input.');
+        await putUpload(upload, readVerifiedPart(fd, localFile, metadata, 0, digests.parts[0]), digests.parts[0], signal);
+        if (!isDeepStrictEqual(fileSnapshot(fd, localFile), metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+        markStaged();
+      } else if (upload.mode === 'multipart') {
+        if (typeof upload.upload_id !== 'string' || !upload.upload_id
+            || (upload.part_size !== undefined && upload.part_size !== PART_SIZE)
+            || (upload.part_count !== undefined && upload.part_count !== digests.parts.length)) {
+          throw new Error('Forge returned an invalid multipart upload plan.');
+        }
+        if (record.upload_id !== upload.upload_id) {
+          record.upload_id = upload.upload_id;
+          record.uploaded_parts = {};
+          record.upload_stage = 'uploading';
           writeInputRecord(file, record);
-          if (!['creating','uploading','completing','completed'].includes(record.upload_stage)) throw new Error('Project upload attempt returned an incompatible state.');
-          if (record.upload_stage === 'creating') {
-            const data = projectInputResult(record,{state:'open'});
-            saveResult(file,record,data);
-            return {...attempt,data};
-          }
         }
-      }
-      if (result.data.state !== 'published') {
-        if (record.upload_stage === 'uploading') {
-          for (let index = 0; index < digests.parts.length; index++) {
-            if (!isDeepStrictEqual(fileSnapshot(fd,localFile),metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
-            const bytes = readPart(fd,Math.min(PART_SIZE,metadata.size_bytes-index*PART_SIZE),index*PART_SIZE);
-            if (createHash('md5').update(bytes).digest('base64') !== digests.parts[index]) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
-            const grant = await ctx.client.post(`${base}/${id}/attempts/${attemptId}/parts`,{body:{number:index+1,md5:digests.parts[index]},signal});
-            if (grant.data?.state === 'published') { result = grant; break; }
-            await putPart(grant.data,bytes,digests.parts[index],signal);
-          }
+        record.uploaded_parts ??= {};
+        for (let index = 0; index < digests.parts.length; index++) {
+          const partNumber = index + 1;
+          if (!isDeepStrictEqual(fileSnapshot(fd, localFile), metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+          if (typeof record.uploaded_parts[partNumber] === 'string' && record.uploaded_parts[partNumber]) continue;
+          const bytes = readVerifiedPart(fd, localFile, metadata, index, digests.parts[index]);
+          const partRes = await ctx.client.post(`${inputBase}/${id}/parts`, { body: { number: partNumber, md5: digests.parts[index] }, signal });
+          if (!partRes.data?.url && ['queued', 'staged', 'downloading', 'materializing', 'ready'].includes(partRes.data?.state)) { markStaged(); break; }
+          if (partRes.data?.number !== undefined && partRes.data.number !== partNumber) throw new Error('Forge returned an invalid part upload grant.');
+          const { etag } = await putUpload(partRes.data, bytes, digests.parts[index], signal);
+          if (typeof etag !== 'string' || !etag.trim()) throw new NetworkError('Upload did not return a part ETag; retry with the same input ID.');
+          record.uploaded_parts[partNumber] = etag.trim();
+          writeInputRecord(file, record);
         }
-        if (result.data.state !== 'published') {
-          if (!isDeepStrictEqual(fileSnapshot(fd,localFile),metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+        if (record.upload_stage !== 'staged') {
+          if (!isDeepStrictEqual(fileSnapshot(fd, localFile), metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+          const parts = digests.parts.map((_, idx) => ({ number: idx + 1, etag: record.uploaded_parts[idx + 1] }));
           record.upload_stage = 'completing';
-          writeInputRecord(file,record);
-          try { result = await ctx.client.post(`${base}/${id}/attempts/${attemptId}/complete`,{signal}); }
-          catch (error) {
-            // The backend decides when an uncertain completion is old enough
-            // to abandon. A later retry asks for the current attempt again.
-            if (error.code === 'upload_unconfirmed') {
-              record.upload_stage = 'completion_unconfirmed';
-              writeInputRecord(file,record);
-            }
-            throw error;
-          }
-          if (result.data?.state !== 'published') throw new Error('Project upload completion returned an incompatible state.');
+          writeInputRecord(file, record);
+          const completed = await ctx.client.post(`${inputBase}/${id}/complete`, { body: { parts }, signal });
+          if (completed.data?.input_id !== undefined && completed.data.input_id !== id) throw new NetworkError('Forge multipart completion returned a mismatched input_id.');
+          markStaged();
         }
+      } else {
+        throw new Error('Forge returned an unsupported upload mode.');
       }
     }
-    const data = await projectInputStatus(ctx,record,undefined,signal);
-    saveResult(file,record,data);
-    return {...result,data};
+    return await materializeUpload(ctx, sessionId, sessionPath, file, readRecord(file) ?? record, { signal, knownSessionState: sessionState, waitReady });
   } catch (error) {
-    if (error?.code === 'input_exists' || error?.code === 'input_path_exists') {
-      error.action = inputExistsAction(target, resolvedProjectId);
-    } else if (!error.action) {
-      error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id}, the original source, account and root directory.`;
-    }
+    if (error?.code === 'input_exists' || error?.code === 'input_path_exists') error.action = inputExistsAction(target, resolvedProjectId);
+    else if (!error.action) error.action = `Inspect ariax forge inputs status ${sessionId} ${id}; retry with --input-id ${id}, the original source, account and root directory.`;
     throw error;
   } finally { fs.closeSync(fd); }
 }
@@ -507,17 +508,18 @@ async function recoverInputBatch(ctx, record, {signal, account, wait = false, co
       signal?.throwIfAborted();
       const child = readRecord(recordPath(ctx,file.input_id));
       if (child) {
-        if (child.id !== file.input_id || child.request.type !== PROJECT_INPUT || child.request.session_id !== session
-            || child.request.project_id !== project || child.request.body.path !== `/inputs/${file.path}`
-            || child.request.body.checksum !== file.checksum || !isDeepStrictEqual(child.request.local_file,file.local_file)
+        if (child.id !== file.input_id || child.request.type !== SESSION_INPUT_UPLOAD || child.request.session_id !== session
+            || (child.request.project_id && child.request.project_id !== project)
+            || child.request.body?.path !== file.path
+            || child.request.body?.source?.checksum !== file.checksum || !isDeepStrictEqual(child.request.local_file,file.local_file)
             || Object.keys(account).some(field => child[field] !== account[field])) {
           throw usageError('Batch child differs from its saved source or account; no upload was sent.');
         }
-        try { return {child,current:await inputStatus(ctx,session,file.input_id,{signal,account})}; }
+        try { return {child,current:await observeInput(ctx,session,file.input_id,child,signal)}; }
         catch (error) { if (error.status === 429) throw error; return {child,error}; }
       }
       try {
-        await ctx.client.get(`${API}/projects/${project}/files/operations/${file.input_id}`,{signal});
+        await ctx.client.get(`${API}/sessions/${session}/inputs/${file.input_id}`,{signal});
       } catch (error) { if (error.status === 429) throw error; return error.status === 404 ? {} : {error}; }
       throw usageError('A batch input exists without its original child journal; restore the journal before recovery.');
   };
@@ -534,12 +536,12 @@ async function recoverInputBatch(ctx, record, {signal, account, wait = false, co
     const {child,current,error} = previous ?? await observe(file);
     try {
       if (error) throw error;
-      if (current?.data.storage_state === 'published' || current?.data.state === 'failed') {
+      if (current && !current.retained && ['ready','failed'].includes(current.data?.state)) {
         saveResult(recordPath(ctx,file.input_id),child,current.data);
         rows[index] = current.data;
       } else {
         rows[index] = (child ? await recoverFile(ctx,file.input_id,child,{signal,account})
-          : await addProjectInput(ctx,session,`${API}/sessions/${session}`,file.input_id,file.path,file.local_file.path,signal,file)).data;
+          : await addSessionUploadInput(ctx,session,`${API}/sessions/${session}`,file.input_id,file.path,file.local_file.path,signal,{source:file,knownProjectId:project})).data;
       }
     } catch (error) {
       if (signal?.aborted || error.status === 429) throw error;
@@ -549,8 +551,7 @@ async function recoverInputBatch(ctx, record, {signal, account, wait = false, co
   });
   outcome();
   do {
-    // Do not substitute cached readiness for the final native writer/version
-    // and installation checks. This verification also resumes across GET 429s.
+    // Verify live daemon materialization across all files in the batch.
     await phase(async (file,index) => {
       try { rows[index] = (await inputStatus(ctx,session,file.input_id,{signal,account})).data; }
       catch (error) {
@@ -595,16 +596,7 @@ async function addInputBatch(ctx, session, sessionPath) {
   });
 }
 
-// Use the same installation confirmation as `inputs status`, including the
-// project workspace writer and hydration checks for local uploads.
-export async function inputStatus(ctx, sessionId, id, {signal, account} = {}) {
-  const record = readRecordFor(ctx, id);
-  if (record?.request?.type === PROJECT_INPUT) {
-    if (record.id !== id || record.request.session_id !== sessionId) {
-      throw new ApiError({status:404,code:'not_found',message:'Forge input not found in this session.'});
-    }
-    return {data:await projectInputStatus(ctx,record,account,signal)};
-  }
+export async function inputStatus(ctx, sessionId, id, {signal} = {}) {
   return forgeRequest(ctx,sessionId,'GET',`/v1/inputs/${id}`,{signal});
 }
 
@@ -617,14 +609,14 @@ async function observeInput(ctx, session, id, record, signal) {
     }
     return await forgeRequest(ctx,session,'GET',`/v1/inputs/${id}`,{signal});
   } catch (error) {
-    if (error.status !== 404 && error.code !== 'session_unready' && !transient(error)) throw error;
+    if (error.status === 429 || (error.status !== 404 && error.code !== 'session_unready' && !transient(error))) throw error;
     directError = error;
   }
   let retained;
   try { retained = await ctx.client.get(`${API}/sessions/${session}/inputs/${id}`,{signal}); }
   catch (error) { if (error.status !== 404) throw error; }
   if (retained) return { ...retained, meta:{...retained.meta,source:'retained'}, retained:true };
-  if (directError.status !== 404) throw directError;
+  if (directError.status !== 404 && !(record.request?.type === SESSION_INPUT_UPLOAD && directError.code === 'session_unready')) throw directError;
   return null;
 }
 
@@ -675,14 +667,14 @@ async function recoverCopy(ctx, record, signal) {
 
 // The URL itself is deliberately not journaled. A same-process retry can use
 // the original in-memory URL; a later recovery may only observe its outcome.
-export async function recoverFile(ctx, id, record, {signal, account, body, retryFailedSync = false} = {}) {
+export async function recoverFile(ctx, id, record, {signal, account, body, retryFailedSync = false, waitReady = false} = {}) {
   const request = record.request, session = uuid(request?.session_id,'session ID');
   if (request.type === INPUT_BATCH) return recoverInputBatch(ctx,record,{signal,account,wait:!!ctx.flags.wait});
   const file = recordPath(ctx,id,true);
   for (let attempt = 0; ; attempt++) {
     try {
       let result;
-      if (request.type !== PROJECT_INPUT && request.type !== FILE_COPY && request.type !== FILE_DELETE && request.type !== FILE_DELETE_TREE && request.path !== '/v1/inputs') {
+      if (request.type !== SESSION_INPUT_UPLOAD && request.type !== FILE_COPY && request.type !== FILE_DELETE && request.type !== FILE_DELETE_TREE && request.path !== '/v1/inputs') {
         const identity = await forgeAccountIdentity(ctx,session,{signal});
         if (Object.keys(identity).some(field => record[field] !== identity[field])) {
           throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
@@ -696,24 +688,39 @@ export async function recoverFile(ctx, id, record, {signal, account, body, retry
         const identity = account ?? await accountIdentity(ctx,{signal});
         if (Object.keys(identity).some(field => record[field] !== identity[field])) throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
         result = await recoverCopy(ctx,record,signal);
-      } else if (request.type === PROJECT_INPUT) {
-        const project = uuid(request.project_id,'project ID');
-        const target = safePath(request.body?.path?.replace(/^\/inputs\//,''));
-        if (request.method !== 'POST' || request.path !== `${API}/projects/${project}/files/intents`
-            || request.body?.operation_id !== id || request.body?.session_id !== session
-            || request.body?.path !== `/inputs/${target}`
+      } else if (request.type === SESSION_INPUT_UPLOAD) {
+        const identity = account ?? await accountIdentity(ctx,{signal});
+        if (Object.keys(identity).some(field => record[field] !== identity[field])) {
+          throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
+        }
+        const target = safePath(request.body?.path);
+        if (request.method !== 'POST' || request.path !== '/v1/inputs'
+            || request.body?.input_id !== id || request.body?.source?.kind !== 'upload'
             || typeof request.local_file?.path !== 'string' || !path.isAbsolute(request.local_file.path)) {
           throw usageError(`Saved Forge input ${id} is malformed; no request was sent.`);
         }
-        result = await inputStatus(ctx,session,id,{signal,account});
-        if (result.data.storage_state === 'unconfirmed' && record.result) {
-          throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from project history. Inspect the project before another upload.`});
+        const observed = await observeInput(ctx,session,id,record,signal);
+        if (observed && (observed.data?.input_id !== id || observed.data?.path !== target)) {
+          throw new ApiError({status:409,code:'request_conflict',message:`Forge input ${id} does not match its saved path.`});
         }
-        if (result.data.storage_state === 'open' || result.data.storage_state === 'unconfirmed') {
-          try { result = await addProjectInput(ctx,session,`${API}/sessions/${session}`,id,target,request.local_file.path,signal); }
-          catch (error) {
+        if (observed && !observed.retained) {
+          result = observed;
+        } else if (observed?.retained && ['ready','failed'].includes(observed.data?.state)) {
+          result = observed;
+        } else if (record.upload_stage === 'staged' || ['queued','staged'].includes(observed?.data?.state)) {
+          if (record.upload_stage !== 'staged') {
+            record.upload_stage = 'staged';
+            writeInputRecord(file, record);
+          }
+          result = await materializeUpload(ctx,session,`${API}/sessions/${session}`,file,record,{signal,waitReady});
+        } else if (!observed && record.result?.state === 'ready') {
+          throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from session history. Inspect the project before another upload.`});
+        } else {
+          try {
+            result = await addSessionUploadInput(ctx,session,`${API}/sessions/${session}`,id,target,request.local_file.path,signal,{waitReady});
+          } catch (error) {
             if (error.code !== 'ENOENT') throw error;
-            throw usageError(`Input ${id} is not yet published. Restore its original unchanged source file before recovery.`);
+            throw usageError(`Input ${id} is not yet staged. Restore its original unchanged source file before recovery.`);
           }
         }
       } else if (request.path === '/v1/sync' && request.body?.sync_id === id) {
@@ -740,7 +747,7 @@ export async function recoverFile(ctx, id, record, {signal, account, body, retry
               : `Inspect input ${id} and its retained history before another action.`;
             throw error;
           }
-          result = await forgeRequest(ctx,session,'POST','/v1/inputs',{body:body ?? request.body,signal});
+          result = await authorizeAndDispatchInput(ctx,session,body ?? request.body,signal);
         }
         if (!result) {
           if (record.result) throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from session history. Inspect the project before another import.`});
@@ -751,7 +758,7 @@ export async function recoverFile(ctx, id, record, {signal, account, body, retry
           }
           const source = body ?? request.body;
           if (!['artifact','url'].includes(source.source?.kind)) throw usageError(`Saved Forge input ${id} cannot be replayed.`);
-          result = await forgeRequest(ctx,session,'POST','/v1/inputs',{body:source,signal});
+          result = await authorizeAndDispatchInput(ctx,session,source,signal);
         }
       } else throw usageError(`Saved Forge operation ${id} cannot be recovered as a file operation.`);
       if (request.path === '/v1/inputs' && (result.data?.input_id !== id || result.data?.path !== request.body.path)) {
@@ -1134,11 +1141,18 @@ async function runDelete(ctx, projectId) {
       result = request.type === FILE_DELETE_TREE ? await recoverDeleteTree(ctx,readRecord(file),signal) : await recoverDelete(ctx,readRecord(file),signal);
       saveResult(file,readRecord(file),result.data);
     }
-    if (result.data.state === 'failed' || result.data.cleanup_state === 'attention') failed('file_delete_failed',
-      result.data.recovery_path ? `A replacement was preserved at ${result.data.recovery_path}.` : `File deletion ${id} needs attention`,
-      result.data.error ?? result.data.failures?.[0]?.error ??
-        (result.data.failure_code ? {message:result.data.failure_code} : undefined),
-      'Inspect the file and cleanup status before another action.');
+    if (result.data.state === 'failed' || result.data.cleanup_state === 'attention') {
+      const firstError = result.data.error ?? result.data.failures?.[0]?.error;
+      if (firstError?.code === 'project_session_active') {
+        const conflict = new ApiError({ status: 409, code: 'project_session_active', message: firstError.message || 'Project has an active Forge session.' });
+        conflict.action = ACTIVE_SESSION_FILE_MUTATION_ACTION;
+        throw conflict;
+      }
+      failed('file_delete_failed',
+        result.data.recovery_path ? `A replacement was preserved at ${result.data.recovery_path}.` : `File deletion ${id} needs attention`,
+        firstError ?? (result.data.failure_code ? {message:result.data.failure_code} : undefined),
+        'Inspect the file and cleanup status before another action.');
+    }
     return report(ctx,result);
   });
 }
@@ -1192,7 +1206,7 @@ async function runCopy(ctx, projectId) {
   });
 }
 
-async function waitForInputsReady(ctx, sessionId, sessionPath, signal, { requireWorkspaceReady = false } = {}) {
+async function waitForInputsReady(ctx, sessionId, sessionPath, signal) {
   let lastState;
   for (;;) {
     const lifecycle = (await ctx.client.get(sessionPath, { query: { view: 'summary' }, signal })).data;
@@ -1240,18 +1254,7 @@ async function waitForInputsReady(ctx, sessionId, sessionPath, signal, { require
       } else if (!baseReady) {
         statusText = `tool base: ${baseTool.state}`;
       }
-      if (baseReady) {
-        if (!requireWorkspaceReady || !isUUID(lifecycle.project_id)) return;
-        const fsStatus = (await ctx.client.get(`${API}/projects/${lifecycle.project_id}/files/status`, { signal })).data;
-        const wsReady = fsStatus.session_id === sessionId
-          && fsStatus.writer_session_id === sessionId
-          && fsStatus.session_state === 'available'
-          && fsStatus.hydration_state === 'ready'
-          && Number.isSafeInteger(fsStatus.control_revision) && fsStatus.control_revision >= 0
-          && Number.isSafeInteger(fsStatus.writer_epoch) && fsStatus.writer_epoch >= 0;
-        if (wsReady) return;
-        statusText = `workspace hydration: ${fsStatus.hydration_state ?? fsStatus.session_state ?? 'pending'}`;
-      }
+      if (baseReady) return;
     }
     if (statusText !== lastState) {
       printProgress(`Waiting for input readiness (${sessionId}): ${statusText}`);
@@ -1294,11 +1297,8 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
       if (!info.isFile() || info.isSymbolicLink() || info.size > 20*1024**3) throw usageError('Forge upload requires a regular file up to 20 GiB.');
       const runFileUpload = async (signal) => {
         for (;;) {
-          if (waitReady) {
-            await waitForInputsReady(ctx, sessionId, sessionPath, signal, { requireWorkspaceReady: true });
-          }
           try {
-            return report(ctx, await addProjectInput(ctx, sessionId, sessionPath, id, target, localFile, signal));
+            return report(ctx, await addSessionUploadInput(ctx, sessionId, sessionPath, id, target, localFile, signal, { waitReady }));
           } catch (error) {
             if (signal?.aborted) throw error;
             if (waitReady && isReadinessRetryable(error)) {
@@ -1309,7 +1309,7 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
             const record = readRecord(recordPath(ctx,id));
             if (!record || !transient(error)) throw error;
             printProgress(`Temporary error; reconciling saved operation ${id}.`);
-            try { return report(ctx,await recoverFile(ctx,id,record,{signal, account:await accountIdentity(ctx, {signal})})); }
+            try { return report(ctx,await recoverFile(ctx,id,record,{signal, account:await accountIdentity(ctx, {signal}), waitReady})); }
             catch (recoveryError) {
               recoveryError.action ||= `Recover input ${id} with ariax forge recover ${id} using the original root, account and API origin.`;
               throw recoveryError;
@@ -1345,7 +1345,7 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     const runDirectInput = async (signal) => {
       for (;;) {
         if (waitReady) {
-          await waitForInputsReady(ctx, sessionId, sessionPath, signal, { requireWorkspaceReady: false });
+          await waitForInputsReady(ctx, sessionId, sessionPath, signal);
         }
         try {
           const {record} = await fileRecord(ctx,id,request,'input_id',signal);
@@ -1378,32 +1378,11 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   if (action === 'inputs list') {
     const result = await read(`${direct}/inputs`);
     if (!Array.isArray(result.data.inputs)) result.data.inputs = [];
-    const entries = listRecordFiles(ctx);
     let resolvedProjectId = null;
-    if (entries.length) {
-      const account = await accountIdentity(ctx);
-      const records = entries.slice(0,10000);
-      const local = [];
-      for (const entry of records) {
-        const record = readRecord(entry.file);
-        if (record?.request?.type !== PROJECT_INPUT || record.request.session_id !== sessionId
-            || Object.keys(account).some(field => record[field] !== account[field])) continue;
-        if (!resolvedProjectId && isUUID(record.request.project_id)) resolvedProjectId = record.request.project_id;
-        local.push(record);
-      }
-      for (let offset = 0; offset < local.length; offset += 8) {
-        const observed = await Promise.all(local.slice(offset,offset + 8)
-          .map(record => projectInputStatus(ctx,record,account)));
-        result.data.inputs.push(...observed.map(item => ({...item,visibility:'local_journal'})));
-      }
-      if (entries.length > records.length) result.data.local_input_journals_truncated = true;
-    }
     let remoteInputsChecked = false;
     try {
-      if (!resolvedProjectId) {
-        const sess = await ctx.client.get(sessionPath, { query: { view: 'summary' }, attempts: 1 });
-        if (isUUID(sess.data?.project_id)) resolvedProjectId = sess.data.project_id;
-      }
+      const sess = await ctx.client.get(sessionPath, { query: { view: 'summary' }, attempts: 1 });
+      if (isUUID(sess.data?.project_id)) resolvedProjectId = sess.data.project_id;
       if (resolvedProjectId) {
         const remote = await listProjectFilesRecursive(ctx, resolvedProjectId, '/inputs', { maxFiles: 200, maxPages: 40 });
         remoteInputsChecked = true;
@@ -1430,11 +1409,9 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
         if (remote.data.truncated) result.data.remote_inputs_truncated = true;
       }
     } catch {
-      // Remote /inputs listing is best-effort; retain live/local journal items.
+      // Remote /inputs listing is best-effort; retain live/retained items.
     }
-    if (!remoteInputsChecked && entries.length) {
-      result.data.local_input_journals_only = true;
-    } else if (remoteInputsChecked) {
+    if (remoteInputsChecked) {
       result.data.remote_inputs_checked = true;
       result.data.project_id = resolvedProjectId;
     }
@@ -1442,13 +1419,22 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
   }
   if (action === 'inputs status') {
     const id = uuid(ctx.positionals[3],'input ID');
-    const found = findRecord(ctx,id), record = found.record;
-    if (record?.request?.type === PROJECT_INPUT && record.request.session_id === sessionId) {
-      const data = await projectInputStatus(ctx,record);
-      saveResult(found.legacy ? recordPath(ctx,id,true) : found.file,record,data);
-      return report(ctx,{data});
+    if (flags.retained) return report(ctx,await read(`${direct}/inputs/${id}`));
+    try {
+      const live = await forgeRequest(ctx, sessionId, 'GET', `${direct}/inputs/${id}`);
+      const found = findRecord(ctx, id);
+      if (found.record?.request?.type === SESSION_INPUT_UPLOAD && found.record.request.session_id === sessionId) {
+        saveResult(found.legacy ? recordPath(ctx, id, true) : found.file, found.record, live.data);
+      }
+      return report(ctx, live);
+    } catch (error) {
+      if (error.status !== 404 && error.code !== 'session_unready') throw error;
+      const found = findRecord(ctx, id);
+      if (found.record?.request?.type !== SESSION_INPUT_UPLOAD || found.record.request.session_id !== sessionId) throw error;
+      const staged = await ctx.client.get(`${sessionPath}/inputs/${id}`);
+      saveResult(found.legacy ? recordPath(ctx, id, true) : found.file, found.record, staged.data);
+      return report(ctx, staged);
     }
-    return report(ctx,await read(`${direct}/inputs/${id}`));
   }
   if (action === 'sync') {
     const id = flags['sync-id'] === undefined ? randomUUID() : uuid(flags['sync-id'], 'sync ID');
