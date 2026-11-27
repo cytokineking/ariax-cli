@@ -982,6 +982,12 @@ async function startEvalServer() {
         });
       }
 
+      const signedInputsPost = /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})\/inputs$/.exec(p);
+      if (req.method === 'POST' && signedInputsPost) {
+        const body = await readJsonBody(req);
+        return reply(res, 200, { input_id: body.input_id, path: body.path, state: 'queued' });
+      }
+
       const directInputsPost = /^\/__direct\/([0-9a-f-]{36})\/v1\/inputs$/.exec(p);
       if (req.method === 'POST' && directInputsPost) {
         const body = await readJsonBody(req);

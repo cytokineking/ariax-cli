@@ -153,13 +153,9 @@ function writeInputRecord(file, record) {
 }
 
 async function authorizeAndDispatchInput(ctx, sessionId, payload, signal) {
-  try {
-    const authorized = await ctx.client.post(`${API}/sessions/${sessionId}/inputs`, { body: payload, signal });
-    if (authorized.data?.input_id !== undefined && authorized.data.input_id !== payload.input_id) {
-      throw new NetworkError('Forge input authorization returned a mismatched input_id.');
-    }
-  } catch (error) {
-    if (!(payload.source?.kind === 'url' && error instanceof ApiError && error.status === 404)) throw error;
+  const authorized = await ctx.client.post(`${API}/sessions/${sessionId}/inputs`, { body: payload, signal });
+  if (authorized.data?.input_id !== undefined && authorized.data.input_id !== payload.input_id) {
+    throw new NetworkError('Forge input authorization returned a mismatched input_id.');
   }
   return forgeRequest(ctx, sessionId, 'POST', '/v1/inputs', { body: payload, signal });
 }
@@ -324,6 +320,10 @@ async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, lo
         if (digests.parts.length !== 1 || metadata.size_bytes > PART_SIZE) throw new Error('Forge returned single-part upload for a multipart input.');
         await putUpload(upload, readVerifiedPart(fd, localFile, metadata, 0, digests.parts[0]), digests.parts[0], signal);
         if (!isDeepStrictEqual(fileSnapshot(fd, localFile), metadata)) throw new Error('Local input changed during upload; use a new input ID for the completed file.');
+        record.upload_stage = 'completing';
+        writeInputRecord(file, record);
+        const completed = await ctx.client.post(`${inputBase}/${id}/complete`, { body: { parts: [] }, signal });
+        if (completed.data?.input_id !== undefined && completed.data.input_id !== id) throw new NetworkError('Forge upload completion returned a mismatched input_id.');
         markStaged();
       } else if (upload.mode === 'multipart') {
         if (typeof upload.upload_id !== 'string' || !upload.upload_id

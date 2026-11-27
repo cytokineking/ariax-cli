@@ -110,7 +110,6 @@ async function boundary(root) {
           assert.equal(bytes.length, staged.body.source.size_bytes);
           assert.equal(fileChecksum(bytes), staged.body.source.checksum);
           staged.bytes = bytes;
-          staged.state = 'queued';
         } else {
           assert.equal(kind, 'part');
           staged.parts.set(Number(number), { bytes, etag });
@@ -532,28 +531,38 @@ async function boundary(root) {
           }
           assert.equal(parts[7],'complete');
           if (!['queued','ready'].includes(staged.state)) {
-            const count = Math.max(1,Math.ceil(staged.body.source.size_bytes/partSize));
-            assert.equal(body.parts?.length, count);
-            const buffers = [];
-            for (let index = 0; index < count; index++) {
-              const partNumber = index + 1;
-              const entry = staged.parts.get(partNumber);
-              assert.ok(entry, `missing uploaded part ${partNumber}`);
-              assert.equal(body.parts[index].number, partNumber);
-              assert.equal(body.parts[index].etag, entry.etag);
-              buffers.push(entry.bytes);
+            if (!staged.upload_id) {
+              assert.ok(Buffer.isBuffer(staged.bytes), 'single-part upload missing staged bytes before complete');
+              assert.equal(staged.bytes.length, staged.body.source.size_bytes);
+              assert.equal(fileChecksum(staged.bytes), staged.body.source.checksum);
+              staged.state = 'queued';
+            } else {
+              const count = Math.max(1,Math.ceil(staged.body.source.size_bytes/partSize));
+              assert.equal(body.parts?.length, count);
+              const buffers = [];
+              for (let index = 0; index < count; index++) {
+                const partNumber = index + 1;
+                const entry = staged.parts.get(partNumber);
+                assert.ok(entry, `missing uploaded part ${partNumber}`);
+                assert.equal(body.parts[index].number, partNumber);
+                assert.equal(body.parts[index].etag, entry.etag);
+                buffers.push(entry.bytes);
+              }
+              const bytes = Buffer.concat(buffers);
+              assert.equal(bytes.length, staged.body.source.size_bytes);
+              assert.equal(fileChecksum(bytes), staged.body.source.checksum);
+              staged.bytes = bytes;
+              staged.state = 'queued';
             }
-            const bytes = Buffer.concat(buffers);
-            assert.equal(bytes.length, staged.body.source.size_bytes);
-            assert.equal(fileChecksum(bytes), staged.body.source.checksum);
-            staged.bytes = bytes;
-            staged.state = 'queued';
           }
           if (state.drop === 'input-complete') { state.drop = null; req.socket.destroy(); return; }
           return reply(res,200,{input_id:parts[6],path:staged.body.path,state:'queued'});
         }
         const signed = session.signedInputs.get(body.input_id);
         assert.ok(signed, 'daemon /v1/inputs must follow signed control-plane /sessions/:id/inputs');
+        if (signed.body.source?.kind === 'upload' && signed.state === 'uploading') {
+          return error(res,409,'upload_incomplete','Input upload is incomplete');
+        }
         const prior = session.inputRequests.get(body.input_id);
         if (prior && !isDeepStrictEqual(prior,body)) return error(res,409,'idempotency_conflict','Input request differs');
         let input = session.inputs.get(body.input_id);
@@ -1456,7 +1465,8 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     assert.equal(project.files.get('/inputs/harness/empty').length,0);
     const emptyRequests = state.requests.slice(emptyReqFrom);
     assert.ok(emptyRequests.some(e => e.method === 'PUT' && e.path.endsWith(`/${emptyId}/single`)), 'small upload must use single-part PUT');
-    assert.equal(emptyRequests.some(e => e.path.endsWith('/parts') || e.path.endsWith('/complete')), false, 'single-part upload must not call multipart /parts or /complete');
+    assert.equal(emptyRequests.some(e => e.path.endsWith('/parts')), false, 'single-part upload must not call multipart /parts');
+    assert.ok(emptyRequests.some(e => e.method === 'POST' && e.path.endsWith(`/${emptyId}/complete`)), 'single-part upload must confirm completion via /complete');
     assert.equal((await invoke(['forge','inputs','status',sid,emptyId])).payload.data.state,'pending');
     await invoke(['forge','inputs','status',sid,emptyId],4,false,'arx_forge_othercredential');
     assert.ok((await invoke(['forge','inputs','list',sid])).payload.data.inputs.some(item => item.input_id === emptyId));
