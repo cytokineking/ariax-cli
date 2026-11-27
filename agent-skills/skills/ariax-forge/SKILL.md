@@ -91,8 +91,9 @@ ariax storage suggest PROJECT --json          # inspect large/high-file-count di
   live daemon telemetry on active sessions while `cleanup_suggestions` reflects
   saved-storage catalog rules from `ariax storage suggest`.
 - `ariax forge close SESSION [--wait]` is for emergency/immediate teardown (75s
-  sync ceiling) and refuses by default when >100 files or >500 MiB remain
-  unsynced (pass `--force` only when intentionally discarding unsaved files).
+  sync ceiling) and refuses by default when commands are active (or status
+  cannot be verified) or any unsynced files remain pending (pass `--force` only
+  when intentionally interrupting work or discarding unsaved files).
 - Use `ariax forge cancel SESSION COMMAND_ID [--wait]` to cancel one command, `ariax forge limit SESSION --gpu-hours H` to edit a session cap, `ariax forge resume PROJECT --gpu GPU --wait` to reopen saved files (`--hydrate PATH` selects a subset; `--manifest FILE` stages multi-file input batches), and `ariax storage` / `ariax delete PROJECT --yes` to audit or clean up storage.
 
 **Deep references:** [outputs & file ops](outputs.md) · [storage & deletion](../../core/storage.md) · [recovery, holds & deletions](references/recovery.md) · [campaign recipes](references/campaign-recipes.md) · [custom code](references/custom-code.md) · [Adaptyv ordering](references/adaptyv-ordering.md)

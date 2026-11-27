@@ -27,7 +27,7 @@ function safePath(value, absolute = false) {
 }
 
 async function fileRecord(ctx, id, request, label, signal) {
-  const account = request.session_id && ![SESSION_INPUT_UPLOAD, INPUT_BATCH, FILE_COPY, FILE_DELETE, FILE_DELETE_TREE].includes(request.type)
+  const account = request.session_id && request.path !== '/v1/inputs' && ![SESSION_INPUT_UPLOAD, INPUT_BATCH, FILE_COPY, FILE_DELETE, FILE_DELETE_TREE].includes(request.type)
     ? await forgeAccountIdentity(ctx, request.session_id, {signal})
     : await accountIdentity(ctx, {signal});
   fs.mkdirSync(ctx.config.rootDir, { recursive: true, mode: 0o700 });
@@ -152,10 +152,33 @@ function writeInputRecord(file, record) {
   atomicWrite(file, JSON.stringify(record, null, 2) + '\n');
 }
 
-async function authorizeAndDispatchInput(ctx, sessionId, payload, signal) {
-  const authorized = await ctx.client.post(`${API}/sessions/${sessionId}/inputs`, { body: payload, signal });
+async function authorizeAndDispatchInput(ctx, sessionId, payload, { signal, knownSessionState, waitReady = false } = {}) {
+  const sessionPath = `${API}/sessions/${sessionId}`;
+  let sessionState = knownSessionState ?? null;
+  if (waitReady) {
+    await waitForInputsReady(ctx, sessionId, sessionPath, signal);
+    sessionState = 'available';
+  } else if (!sessionState) {
+    sessionState = (await ctx.client.get(sessionPath, { query: { view: 'summary' }, signal })).data?.state ?? null;
+  }
+  if (['closing', 'closed', 'failed'].includes(sessionState)) {
+    failed('session_unavailable', `Session ${sessionId} is ${sessionState}`);
+  }
+  const authorized = await ctx.client.post(`${sessionPath}/inputs`, { body: payload, signal });
   if (authorized.data?.input_id !== undefined && authorized.data.input_id !== payload.input_id) {
     throw new NetworkError('Forge input authorization returned a mismatched input_id.');
+  }
+  if (sessionState !== 'available') {
+    return {
+      ...authorized,
+      data: {
+        input_id: payload.input_id,
+        path: payload.path,
+        ...(authorized.data?.size_bytes !== undefined ? { size_bytes: authorized.data.size_bytes } : {}),
+        state: authorized.data?.state ?? 'queued',
+        action: 'Staged for automatic delivery when the session becomes available.',
+      },
+    };
   }
   return forgeRequest(ctx, sessionId, 'POST', '/v1/inputs', { body: payload, signal });
 }
@@ -170,7 +193,7 @@ async function materializeUpload(ctx, sessionId, sessionPath, file, record, { si
     const data = { input_id: id, path: target, size_bytes: source.size_bytes,
       ...(record.request.project_id ? { project_id: record.request.project_id } : {}),
       state: 'queued', upload_state: 'staged',
-      action: `Upload is staged in object storage while session ${sessionId} is ${sessionState ?? 'starting'}. Once available, materialize with ariax forge recover ${id} --wait.` };
+      action: `Upload is staged in object storage while session ${sessionId} is ${sessionState ?? 'starting'}. It will be delivered automatically via sync-state when the session becomes available; inspect with ariax forge inputs status ${sessionId} ${id}.` };
     saveResult(file, readRecord(file) ?? record, data);
     return { data };
   }
@@ -273,6 +296,8 @@ async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, lo
     if (source && (!isDeepStrictEqual(source.local_file, metadata) || source.checksum !== digests.checksum)) {
       throw usageError('Batch source changed; recover the original unchanged file or start a new batch.');
     }
+    const isSinglePart = metadata.size_bytes <= PART_SIZE && digests.parts.length === 1;
+    const expectedMd5 = isSinglePart ? digests.parts[0] : undefined;
     const prior = readRecordFor(ctx, id);
     let request;
     if (prior) {
@@ -281,7 +306,9 @@ async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, lo
       if (request?.type !== SESSION_INPUT_UPLOAD || request.session_id !== sessionId || request.path !== '/v1/inputs'
           || request.body?.input_id !== id || request.body?.path !== target || request.body?.source?.kind !== 'upload'
           || request.body?.source?.size_bytes !== metadata.size_bytes || request.body?.source?.part_size !== PART_SIZE
-          || request.body?.source?.checksum !== digests.checksum || !isDeepStrictEqual(request.local_file, metadata)) {
+          || request.body?.source?.checksum !== digests.checksum
+          || (request.body?.source?.md5 !== undefined && request.body.source.md5 !== expectedMd5)
+          || !isDeepStrictEqual(request.local_file, metadata)) {
         throw new ApiError({status:409,code:'request_conflict',message:`Forge request ${id} differs from its saved input. Use the original request to retry.`});
       }
     } else {
@@ -301,7 +328,17 @@ async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, lo
       request = {
         type: SESSION_INPUT_UPLOAD, method: 'POST', session_id: sessionId,
         ...(resolvedProjectId ? { project_id: resolvedProjectId } : {}), path: '/v1/inputs',
-        body: { input_id: id, path: target, source: { kind: 'upload', size_bytes: metadata.size_bytes, part_size: PART_SIZE, checksum: digests.checksum } },
+        body: {
+          input_id: id,
+          path: target,
+          source: {
+            kind: 'upload',
+            size_bytes: metadata.size_bytes,
+            part_size: PART_SIZE,
+            checksum: digests.checksum,
+            ...(isSinglePart ? { md5: digests.parts[0] } : {}),
+          },
+        },
         local_file: metadata,
       };
     }
@@ -313,7 +350,7 @@ async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, lo
       if (init.data?.input_id !== undefined && init.data.input_id !== id) throw new NetworkError('Forge input staging returned a mismatched input_id.');
       const upload = init.data?.upload;
       if (!upload) {
-        if (['queued', 'staged', 'downloading', 'materializing', 'ready'].includes(init.data?.state)) markStaged();
+        if (['queued', 'importing', 'ready'].includes(init.data?.state)) markStaged();
         else if (init.data?.state === 'failed') { saveResult(file, record, init.data); return init; }
         else throw new Error('Forge input staging returned an incompatible upload response.');
       } else if (upload.mode === 'single') {
@@ -344,7 +381,7 @@ async function addSessionUploadInput(ctx, sessionId, sessionPath, id, target, lo
           if (typeof record.uploaded_parts[partNumber] === 'string' && record.uploaded_parts[partNumber]) continue;
           const bytes = readVerifiedPart(fd, localFile, metadata, index, digests.parts[index]);
           const partRes = await ctx.client.post(`${inputBase}/${id}/parts`, { body: { number: partNumber, md5: digests.parts[index] }, signal });
-          if (!partRes.data?.url && ['queued', 'staged', 'downloading', 'materializing', 'ready'].includes(partRes.data?.state)) { markStaged(); break; }
+          if (!partRes.data?.url && ['queued', 'importing', 'ready'].includes(partRes.data?.state)) { markStaged(); break; }
           if (partRes.data?.number !== undefined && partRes.data.number !== partNumber) throw new Error('Forge returned an invalid part upload grant.');
           const { etag } = await putUpload(partRes.data, bytes, digests.parts[index], signal);
           if (typeof etag !== 'string' || !etag.trim()) throw new NetworkError('Upload did not return a part ETag; retry with the same input ID.');
@@ -616,7 +653,7 @@ async function observeInput(ctx, session, id, record, signal) {
   try { retained = await ctx.client.get(`${API}/sessions/${session}/inputs/${id}`,{signal}); }
   catch (error) { if (error.status !== 404) throw error; }
   if (retained) return { ...retained, meta:{...retained.meta,source:'retained'}, retained:true };
-  if (directError.status !== 404 && !(record.request?.type === SESSION_INPUT_UPLOAD && directError.code === 'session_unready')) throw directError;
+  if (directError.status !== 404 && !((record.request?.type === SESSION_INPUT_UPLOAD || record.request?.path === '/v1/inputs') && directError.code === 'session_unready')) throw directError;
   return null;
 }
 
@@ -667,7 +704,7 @@ async function recoverCopy(ctx, record, signal) {
 
 // The URL itself is deliberately not journaled. A same-process retry can use
 // the original in-memory URL; a later recovery may only observe its outcome.
-export async function recoverFile(ctx, id, record, {signal, account, body, retryFailedSync = false, waitReady = false} = {}) {
+export async function recoverFile(ctx, id, record, {signal, account, body, retryFailedSync = false, waitReady = false, knownSessionState} = {}) {
   const request = record.request, session = uuid(request?.session_id,'session ID');
   if (request.type === INPUT_BATCH) return recoverInputBatch(ctx,record,{signal,account,wait:!!ctx.flags.wait});
   const file = recordPath(ctx,id,true);
@@ -707,7 +744,7 @@ export async function recoverFile(ctx, id, record, {signal, account, body, retry
           result = observed;
         } else if (observed?.retained && ['ready','failed'].includes(observed.data?.state)) {
           result = observed;
-        } else if (record.upload_stage === 'staged' || ['queued','staged'].includes(observed?.data?.state)) {
+        } else if (record.upload_stage === 'staged' || ['queued','importing'].includes(observed?.data?.state)) {
           if (record.upload_stage !== 'staged') {
             record.upload_stage = 'staged';
             writeInputRecord(file, record);
@@ -732,33 +769,83 @@ export async function recoverFile(ctx, id, record, {signal, account, body, retry
         }
         if (!result) result = await startSync(ctx,session,id,{signal});
       } else if (request.path === '/v1/inputs' && request.body?.input_id === id) {
-        result = await observeInput(ctx,session,id,record,signal);
-        if (result && (result.data?.input_id !== id || result.data?.path !== request.body.path)) {
-          throw new ApiError({status:409,code:'request_conflict',message:`Forge input ${id} does not match its saved path.`});
+        const identity = account ?? await accountIdentity(ctx, { signal });
+        if (Object.keys(identity).some(field => record[field] !== identity[field])) {
+          throw usageError(`Forge operation ${id} belongs to another account or API origin.`);
         }
-        if (result && (!record.result || body)) {
-          // The public input record omits its source. An existing ID can have
-          // the right path but different bytes; let the server compare the
-          // original source before attributing it to this saved request.
-          if (result.retained || (request.body.source?.kind === 'url' && !body)) {
-            const error = new ApiError({status:409,code:'input_unconfirmed',message:`Input ${id} exists, but its original source cannot be confirmed from this saved record.`});
-            error.action = request.body.source?.kind === 'url'
-              ? `Repeat the original inputs add with its URL and --input-id ${id} while the session is active, or inspect retained history.`
-              : `Inspect input ${id} and its retained history before another action.`;
-            throw error;
-          }
-          result = await authorizeAndDispatchInput(ctx,session,body ?? request.body,signal);
+        let sessionState = knownSessionState ?? null;
+        if (waitReady) {
+          await waitForInputsReady(ctx, session, `${API}/sessions/${session}`, signal);
+          sessionState = 'available';
+        } else if (!sessionState) {
+          sessionState = (await ctx.client.get(`${API}/sessions/${session}`, { query: { view: 'summary' }, signal })).data?.state ?? null;
         }
-        if (!result) {
-          if (record.result) throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from session history. Inspect the project before another import.`});
-          if (request.body.source?.kind === 'url' && !body) {
-            const error = usageError(`The original URL for input ${id} was not saved. Repeat inputs add with the original URL and --input-id ${id}.`);
-            error.action = `Use the original URL, root directory, account and API origin for input ${id}.`;
-            throw error;
+        if (sessionState !== 'available') {
+          let retained;
+          try { retained = await ctx.client.get(`${API}/sessions/${session}/inputs/${id}`, { signal }); }
+          catch (error) { if (error.status !== 404) throw error; }
+          if (retained) {
+            if (retained.data?.input_id !== id || retained.data?.path !== request.body.path) {
+              throw new ApiError({ status: 409, code: 'request_conflict', message: `Forge input ${id} does not match its saved path.` });
+            }
+            if (body && !['closing', 'closed', 'failed'].includes(sessionState)) {
+              result = await authorizeAndDispatchInput(ctx, session, body, { signal, knownSessionState: sessionState, waitReady });
+            } else if (['closing', 'closed', 'failed'].includes(sessionState) || ['ready', 'failed'].includes(retained.data?.state)) {
+              result = { ...retained, meta: { ...retained.meta, source: 'retained' }, retained: true };
+            } else {
+              result = {
+                ...retained,
+                data: {
+                  ...retained.data,
+                  action: 'Staged for automatic delivery when the session becomes available.',
+                },
+              };
+            }
+          } else {
+            if (record.result) {
+              throw new ApiError({ status: 409, code: 'input_unconfirmed', message: `Previously observed input ${id} is absent from session history. Inspect the project before another import.` });
+            }
+            if (['closing', 'closed', 'failed'].includes(sessionState)) {
+              failed('session_unavailable', `Session ${session} is ${sessionState}`);
+            }
+            if (request.body.source?.kind === 'url' && !body) {
+              const error = usageError(`The original URL for input ${id} was not saved. Repeat inputs add with the original URL and --input-id ${id}.`);
+              error.action = `Use the original URL, root directory, account and API origin for input ${id}.`;
+              throw error;
+            }
+            const source = body ?? request.body;
+            if (!['artifact', 'url'].includes(source.source?.kind)) throw usageError(`Saved Forge input ${id} cannot be replayed.`);
+            result = await authorizeAndDispatchInput(ctx, session, source, { signal, knownSessionState: sessionState, waitReady });
           }
-          const source = body ?? request.body;
-          if (!['artifact','url'].includes(source.source?.kind)) throw usageError(`Saved Forge input ${id} cannot be replayed.`);
-          result = await authorizeAndDispatchInput(ctx,session,source,signal);
+        } else {
+          result = await observeInput(ctx,session,id,record,signal);
+          if (result && (result.data?.input_id !== id || result.data?.path !== request.body.path)) {
+            throw new ApiError({status:409,code:'request_conflict',message:`Forge input ${id} does not match its saved path.`});
+          }
+          if (result && (!record.result || body)) {
+            // The public input record omits its source. An existing ID can have
+            // the right path but different bytes; let the server compare the
+            // original source before attributing it to this saved request.
+            if (result.retained || (request.body.source?.kind === 'url' && !body)) {
+              const error = new ApiError({status:409,code:'input_unconfirmed',message:`Input ${id} exists, but its original source cannot be confirmed from this saved record.`});
+              error.action = request.body.source?.kind === 'url'
+                ? `Repeat the original inputs add with its URL and --input-id ${id} while the session is active, or inspect retained history.`
+                : `Inspect input ${id} and its retained history before another action.`;
+              throw error;
+            }
+            result = await authorizeAndDispatchInput(ctx,session,body ?? request.body,{signal,knownSessionState:sessionState,waitReady});
+          }
+          if (!result) {
+            if (record.result) throw new ApiError({status:409,code:'input_unconfirmed',message:`Previously observed input ${id} is absent from session history. Inspect the project before another import.`});
+            if (request.body.source?.kind === 'url' && !body) {
+              const error = usageError(`The original URL for input ${id} was not saved. Repeat inputs add with the original URL and --input-id ${id}.`);
+              error.action = `Use the original URL, root directory, account and API origin for input ${id}.`;
+              throw error;
+            }
+            const source = body ?? request.body;
+            if (!['artifact','url'].includes(source.source?.kind)) throw usageError(`Saved Forge input ${id} cannot be replayed.`);
+            result = await authorizeAndDispatchInput(ctx,session,source,{signal,knownSessionState:sessionState,waitReady});
+          }
         }
       } else throw usageError(`Saved Forge operation ${id} cannot be recovered as a file operation.`);
       if (request.path === '/v1/inputs' && (result.data?.input_id !== id || result.data?.path !== request.body.path)) {
@@ -1349,7 +1436,7 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
         }
         try {
           const {record} = await fileRecord(ctx,id,request,'input_id',signal);
-          return report(ctx,await recoverFile(ctx,id,record,{body,signal}));
+          return report(ctx,await recoverFile(ctx,id,record,{body,signal,knownSessionState:waitReady ? 'available' : undefined}));
         } catch (error) {
           if (signal?.aborted) throw error;
           if (waitReady && isReadinessRetryable(error)) {
@@ -1423,14 +1510,14 @@ export async function runFiles(ctx, action, sessionId, sessionPath, projectId) {
     try {
       const live = await forgeRequest(ctx, sessionId, 'GET', `${direct}/inputs/${id}`);
       const found = findRecord(ctx, id);
-      if (found.record?.request?.type === SESSION_INPUT_UPLOAD && found.record.request.session_id === sessionId) {
+      if ((found.record?.request?.type === SESSION_INPUT_UPLOAD || found.record?.request?.path === '/v1/inputs') && found.record.request.session_id === sessionId) {
         saveResult(found.legacy ? recordPath(ctx, id, true) : found.file, found.record, live.data);
       }
       return report(ctx, live);
     } catch (error) {
       if (error.status !== 404 && error.code !== 'session_unready') throw error;
       const found = findRecord(ctx, id);
-      if (found.record?.request?.type !== SESSION_INPUT_UPLOAD || found.record.request.session_id !== sessionId) throw error;
+      if ((found.record?.request?.type !== SESSION_INPUT_UPLOAD && found.record?.request?.path !== '/v1/inputs') || found.record.request.session_id !== sessionId) throw error;
       const staged = await ctx.client.get(`${sessionPath}/inputs/${id}`);
       saveResult(found.legacy ? recordPath(ctx, id, true) : found.file, found.record, staged.data);
       return report(ctx, staged);

@@ -59,8 +59,9 @@ ariax forge link PROJECT /workspace/result.txt --json                           
   scripts/files under a new `--path` (e.g. `fixed/script.py`). Local multipart
   uploads report `ready` only after daemon-backed workspace confirmation (not
   storage publication alone).
-- **Pack & Hygiene notices:** `forge pack` stages under `/scratch/.ariax-pack-<id>/`,
-  dereferences valid symlinks while skipping broken symlinks/sockets, verifies
+- **Pack & Hygiene notices:** `forge pack` stages in an exclusive temporary
+  directory under `/scratch/`, skips symlinks and special files (which also
+  blocks `--remove-src` so skipped entries are never discarded), verifies
   integrity, shards archives larger than `--max-shard-gib` (1–18, default 10),
   writes `<dest>.manifest.json` (unless `--no-manifest`), and moves finalized
   files into `/workspace/`. `forge status`, `sync`, `finish`, and `close` emit
@@ -96,8 +97,9 @@ ariax forge logs SESSION COMMAND_ID --tail 1000 --retained --json
 
 - Check `finish`'s `execution`, `drain`, `durability`, `release`, and
   `termination` separately. `forge close [--wait]` is for immediate teardown
-  (75s sync ceiling) and refuses by default when >100 files or >500 MiB are
-  pending sync (`--force` bypasses the guard when intentionally discarding).
+  (75s sync ceiling) and refuses by default when commands are active (or status
+  cannot be verified) or any files are pending sync (`--force` bypasses the
+  guard when intentionally interrupting work or discarding unsaved files).
 - `ariax forge resume PROJECT --gpu GPU [--wait] [--hydrate PATH ...]` opens a
   new allocation in the same project with its saved files (never replays
   commands; recreate custom scratch environments explicitly per

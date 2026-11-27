@@ -107,6 +107,7 @@ async function boundary(root) {
         if (state.drop === 'input-put') { state.drop = null; req.socket.destroy(); return; }
         const etag = `"${digest(bytes).toString('hex')}"`;
         if (kind === 'single') {
+          assert.equal(req.headers['content-md5'], staged.body.source.md5, 'single-part PUT must send Content-MD5 matching source.md5');
           assert.equal(bytes.length, staged.body.source.size_bytes);
           assert.equal(fileChecksum(bytes), staged.body.source.checksum);
           staged.bytes = bytes;
@@ -260,7 +261,8 @@ async function boundary(root) {
           if (req.method === 'GET' && parts[6] === 'status') return reply(res,200,{
             session_id:active?.data.session_id ?? history[0]?.data.session_id,writer_session_id:active?.data.session_id ?? null,
             session_state:active?.data.state ?? 'closed',hydration_state:'ready',control_revision:project.control.revision,
-            writer_epoch:state.fileWriterEpoch ?? 1,mutation_revision:project.fileRevision,sync_state:'saved',last_synced_at:null,durability_gap:false});
+            writer_epoch:state.fileWriterEpoch ?? 1,mutation_revision:project.fileRevision,sync_state:'saved',last_synced_at:null,durability_gap:false,
+            ...(state.filesStatusObservation ? { runtime_observation: state.filesStatusObservation } : {})});
           if (req.method === 'GET' && parts[6] === 'metadata') {
             const name = url.searchParams.get('path'), file = project.files.get(name);
             const version=[...project.fileOperations.values()].findLast(op => op.body.path===name && op.state==='published')?.version ?? 1;
@@ -486,25 +488,33 @@ async function boundary(root) {
                 assert.equal(body.source.part_size, partSize);
                 assert.match(body.source.checksum, /^[0-9a-f]{32}-[1-9][0-9]*$/);
                 assert.ok(Number.isSafeInteger(body.source.size_bytes) && body.source.size_bytes >= 0);
+                if (body.source.size_bytes <= partSize) {
+                  assert.equal(typeof body.source.md5, 'string', 'single-part upload must supply source.md5');
+                  const decoded = Buffer.from(body.source.md5, 'base64');
+                  assert.equal(decoded.length, 16, 'source.md5 must decode to 16 bytes');
+                  assert.equal(decoded.toString('base64'), body.source.md5, 'source.md5 must be canonical base64');
+                } else {
+                  assert.equal(body.source.md5, undefined, 'multipart upload must not supply single-part source.md5');
+                }
                 staged = { body, state: 'uploading', parts: new Map(), bytes: null,
                   upload_id: body.source.size_bytes > partSize ? randomUUID() : null };
               } else {
                 assert.ok(['artifact','url'].includes(body.source?.kind));
-                staged = { body, state: 'authorized' };
+                staged = { body, state: 'queued' };
                 state.signedInputAuthorizations = (state.signedInputAuthorizations ?? 0) + 1;
               }
               session.signedInputs.set(body.input_id, staged);
             }
             if (state.drop === 'input-init') { state.drop = null; req.socket.destroy(); return; }
             if (body.source?.kind === 'upload') {
-              if (['queued','ready'].includes(staged.state)) {
+              if (['queued','importing','ready'].includes(staged.state)) {
                 return reply(res,200,{input_id:body.input_id,path:body.path,state:staged.state,size_bytes:body.source.size_bytes});
               }
               if (body.source.size_bytes <= partSize) {
                 const grant = new URL(`http://127.0.0.1:${server.address().port}/__r2/${session.data.session_id}/${body.input_id}/single`);
                 grant.searchParams.set('signature','private-transfer-grant');
                 return reply(res,200,{input_id:body.input_id,path:body.path,state:'uploading',upload:{
-                  mode:'single',method:'PUT',url:grant.href,headers:{'Content-Length':String(body.source.size_bytes)},
+                  mode:'single',method:'PUT',url:grant.href,headers:{'Content-Length':String(body.source.size_bytes),'Content-MD5':body.source.md5},
                   expires_at:new Date(Date.now()+900000).toISOString(),
                 }});
               }
@@ -513,7 +523,7 @@ async function boundary(root) {
                 part_count:Math.ceil(body.source.size_bytes/partSize),
               }});
             }
-            return reply(res,200,{input_id:body.input_id,path:body.path,state:'authorized'});
+            return reply(res,200,{input_id:body.input_id,path:body.path,state:staged.state});
           }
           const staged = session.signedInputs.get(parts[6]);
           if (!staged) return error(res,404,'not_found','Input not found');
@@ -645,6 +655,7 @@ async function boundary(root) {
           state.daemonToolWakes = (state.daemonToolWakes ?? 0) + 1;
           return reply(res, 202, { ...session.data, selection_id: body.selection_id });
         }
+        if (state.signedToolsNotFound) return error(res, 404, 'not_found', 'Signed tools route unavailable');
         state.signedToolCommits = (state.signedToolCommits ?? 0) + 1;
         const previous = session.selections.get(body.selection_id);
         if (previous && !isDeepStrictEqual(previous, body)) return error(res, 409, 'idempotency_conflict', 'Selection request differs');
@@ -673,7 +684,10 @@ async function boundary(root) {
       }
       assert.equal(parts[5], 'commands');
       if (parts.length === 6) {
-        if (req.method === 'GET') return reply(res, 200, { commands: [...session.commands.values()].map(c => c.data) });
+        if (req.method === 'GET') {
+          if (direct && state.commandsUnavailable) return error(res, 503, 'runtime_unavailable', 'Daemon command inspection unavailable');
+          return reply(res, 200, { commands: [...session.commands.values()].map(c => c.data) });
+        }
         assert.equal(req.method, 'POST');
         if (state.commandFailures > 0) {
           state.commandFailures--;
@@ -1022,6 +1036,12 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     assert.notEqual(explicitRetry.payload.data.selection_id, selectionId);
     assert.equal(state.preparations, 3);
     assert.ok(state.signedToolCommits >= 3 && state.daemonToolWakes >= 3, 'tool selection must commit via signed API before daemon wake');
+    // Signed /tools 404 must fail closed instead of falling back to direct /v1/tools.
+    const wakesBefore404 = state.daemonToolWakes;
+    state.signedToolsNotFound = true;
+    await invoke(['forge', 'tools', 'add', sessionId, '--tools', 'ipsae'], { code: 4 });
+    state.signedToolsNotFound = false;
+    assert.equal(state.daemonToolWakes, wakesBefore404, 'signed /tools 404 fell back to daemon /v1/tools');
     assert.deepEqual(session.selections.get(explicitRetry.payload.data.selection_id).priority, ['ipsae', 'boltz2']);
     assert.equal(session.data.tools[0].state, 'ready');
     assert.equal((await invoke(retryCreate)).payload.data.session_id, sessionId);
@@ -1084,6 +1104,19 @@ export async function exerciseForgeCli(script, baseEnv = process.env) {
     await invoke(['forge', 'cancel', sessionId, longId]);
     assert.equal((await invoke(['forge', 'watch', sessionId, longId, '--timeout', '30'])).payload.data.state, 'cancelled');
     assert.equal((await invoke(['forge', 'commands', sessionId])).payload.data.commands.length, 2);
+    // Boolean active_commands=true from DB-backed /files/status must block unforced close.
+    state.filesStatusObservation = { synchronization: { active_commands: true, pending_files: 0, pending_bytes: 0 } };
+    const boolBlockedClose = await invoke(['forge', 'close', sessionId], { code: 7 });
+    assert.equal(boolBlockedClose.payload.error.code, 'active_commands_use_finish');
+    assert.equal(state.releases, 0, 'close guard ignored boolean active_commands=true');
+    state.filesStatusObservation = null;
+    // Unverifiable active commands on an available session must fail closed (409) instead of assuming 0.
+    state.commandsUnavailable = true;
+    const unknownBlockedClose = await invoke(['forge', 'close', sessionId], { code: 7 });
+    assert.equal(unknownBlockedClose.payload.error.code, 'active_commands_unknown');
+    assert.match(unknownBlockedClose.payload.error.action, /ariax forge finish.*--force/);
+    assert.equal(state.releases, 0, 'close guard closed session when command status was unverifiable');
+    state.commandsUnavailable = false;
 
     const failedRun = await invoke(['forge', 'run', sessionId, '--tool', 'base', '--', process.execPath, '-e', 'process.exit(2)']);
     const failedId = failedRun.payload.data.command_id;
@@ -1426,15 +1459,26 @@ export async function exerciseForgeControls(script, baseEnv = process.env) {
     const session = state.sessions.get(sid), project = state.projects.get(pid);
     assert.deepEqual((await record(sid)).request.body.hardware, { min_ram_gib: 64, min_cpu_count: 8, min_disk_gib: 250 });
     assert.equal(Date.parse(session.data.expires_at) - Date.parse(session.data.allocated_at), 4 * 3600000);
-    // Stage a local input while the session is still starting (before daemon connect).
+    // Stage local, URL, and artifact inputs while the session is still starting (before daemon connect).
     const startingPath = path.join(root, 'starting-input');
     await fs.writeFile(startingPath, 'pre-staged');
     const startingId = randomUUID();
     const stagedStarting = await invoke(['forge', 'inputs', 'add', sid, '--file', startingPath, '--path', 'harness/starting.txt', '--input-id', startingId]);
     assert.equal(stagedStarting.payload.data.state, 'queued');
     assert.equal(stagedStarting.payload.data.upload_state, 'staged');
+    assert.match(stagedStarting.payload.data.action, /automatically.*sync-state/i);
+    const startingUrlId = randomUUID();
+    const stagedUrl = await invoke(['forge', 'inputs', 'add', sid, '--url', 'https://example.org/preboot.cif', '--path', 'harness/preboot-url.cif', '--input-id', startingUrlId]);
+    assert.equal(stagedUrl.payload.data.state, 'queued');
+    assert.match(stagedUrl.payload.data.action, /automatic delivery/i);
+    const startingArtId = randomUUID();
+    const stagedArt = await invoke(['forge', 'inputs', 'add', sid, '--artifact', `${pid}:output/preboot.cif`, '--path', 'harness/preboot-art.cif', '--input-id', startingArtId]);
+    assert.equal(stagedArt.payload.data.state, 'queued');
+    assert.match(stagedArt.payload.data.action, /automatic delivery/i);
     assert.equal(state.connects, 0, 'staging while starting attempted daemon connect');
     assert.equal((await invoke(['forge', 'inputs', 'status', sid, startingId])).payload.data.state, 'queued');
+    assert.equal((await invoke(['forge', 'inputs', 'status', sid, startingUrlId])).payload.data.state, 'queued');
+    assert.equal((await invoke(['forge', 'inputs', 'status', sid, startingArtId])).payload.data.state, 'queued');
     session.data.state = 'available';
     session.data.tools.forEach(t => t.state = 'ready');
     const startingTransfers = state.objectTransfers.get(startingId);

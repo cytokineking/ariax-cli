@@ -396,8 +396,8 @@ seconds; `--timeout-seconds` sets it for a new finish request. The result
 separately reports execution, pre-stop save, final durability and release. A
 local wait timeout does not extend the remote deadline or cancel the request.
 `ariax forge close SESSION [--wait]` stops immediately (75-second final sync
-ceiling) and guards against closing when >100 files or >500 MiB remain pending
-sync unless `--force` is passed. `ariax forge create`, `resume`, and `close`
+ceiling) and guards against closing when commands are active (or status cannot
+be verified) or any files remain pending sync unless `--force` is passed. `ariax forge create`, `resume`, and `close`
 support `--wait` and `--wait-timeout`. `ariax forge run --wait`, `pack --wait`,
 and `watch` return a bounded `output_tail` (configurable with `--tail N`,
 default 80 lines / 4 KiB) and exit with code `11` when a remote command fails.

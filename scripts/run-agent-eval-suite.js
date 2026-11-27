@@ -900,6 +900,13 @@ async function startEvalServer() {
         });
       }
 
+      const signedToolsPost = /^\/api\/v1\/forge\/sessions\/([0-9a-f-]{36})\/tools$/.exec(p);
+      if (req.method === 'POST' && signedToolsPost) {
+        const body = await readJsonBody(req);
+        state.phase7Queries.push(`POST ${p}${url.search}`);
+        return reply(res, 202, { selection_id: body.selection_id, selected_tools: body.tools });
+      }
+
       // Phase 7: Direct tools, commands, cancel, sync, inputs for forgeSessionPhase7
       const directTools = /^\/__direct\/([0-9a-f-]{36})\/v1\/tools$/.exec(p);
       if (directTools) {
@@ -1272,7 +1279,8 @@ async function runV2Case(def, envCtx) {
     const argv = serverState.capturedPackCommands[0].argv;
     assert.equal(argv[0], 'bash');
     const script = argv[argv.length - 1];
-    assert.match(script, /\/scratch\/\.ariax-pack-/);
+    assert.match(script, /tempfile\.mkdtemp\(prefix='ariax-pack-', dir='\/scratch'\)/);
+    assert.doesNotMatch(script, /\brm -rf "\$SRC"/);
     assert.match(script, /\/workspace\/archives\/boltz2-batch\.tar\.zst/);
     // Verify generated bash script syntax with `bash -n`
     const scriptFile = path.join(tempRoot, 'pack-check.sh');

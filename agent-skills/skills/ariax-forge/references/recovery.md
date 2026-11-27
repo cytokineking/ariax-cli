@@ -93,12 +93,12 @@ copy. It frees catalog file and byte capacity when the deletion is committed,
 while object cleanup proceeds separately. `--wait` also observes cleanup.
 Inspect `cleanup_state` for `complete`, `pending`, `attention`, or `unknown`.
 
-An accepted request can remain pending during session startup, shutdown, or
-while commands are active. Queued deletion does not block new commands;
-application waits for active writers and fences admission during each bounded
-turn. An uncertain commit keeps that fence until it is reconciled. Continuously
-overlapping commands can defer deletion. The recursive result's `progress`
-counts accepted children, catalog deletions, confirmed local removals, and
+Saved-file deletion is offline-only under single-writer ownership: requests
+submitted while a Forge session is active are rejected with `409`
+`project_session_active`. Pause or close the active session first to delete
+saved files externally, or edit/delete `/workspace` files inside the running
+session via `ariax forge run`. For offline recursive deletions, the result's
+`progress` counts accepted children, catalog deletions, confirmed removals, and
 failures separately from `cleanup_remaining`; it excludes paths not yet
 discovered by the CLI. A failed child does not stop independent accepted
 children, and its containing directories remain in place. Inspect retained
