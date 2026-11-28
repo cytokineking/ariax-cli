@@ -406,8 +406,8 @@ default 80 lines / 4 KiB) and exit with code `11` when a remote command fails
 `ariax forge create` and `ariax forge resume` accept an optional `--offline` flag:
 `--offline` declares that the workload does not need outbound internet access,
 enabling faster startup and broader single-GPU capacity (no outbound internet
-access and a fixed tool set; omit `--offline` for internet access, multi-GPU, or
-multi-tool sessions). Session limit and lifecycle error codes surface actionable
+access, a fixed tool set, and one command at a time; omit `--offline` for
+internet access, concurrent commands, multi-GPU, or multi-tool sessions). Session limit and lifecycle error codes surface actionable
 guidance: `memory_limit_exceeded` (exceeded session RAM limit, exit `11`),
 `disk_limit_exceeded` (exceeded workspace/scratch disk limit, exit `11`),
 `host_restarted` (remote host restarted and fenced the session without replaying

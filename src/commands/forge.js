@@ -71,10 +71,10 @@ const OPTIONS = {
 const SUBCOMMAND_HELP = Object.freeze({
   create: `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools TOOL,...] [--priority TOOL,...] [--max-gpu-hours H] [--min-ram-gib N] [--min-cpu-count N] [--min-disk-gib N] [--offline] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
   Include a compatible core GPU (H100, A100_80GB, L40S, or RTX6000PRO). base is always included.
-  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet; omit --offline for internet access, multi-GPU, or multi-tool sessions).`,
+  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet, one command at a time; omit --offline for internet access, concurrent commands, multi-GPU, or multi-tool sessions).`,
   resume: `ariax forge resume PROJECT [--control-revision N] --gpu GPU [--allowed-gpus ...] [--gpu-count N] [--tools TOOL,...] [--hydrate PATH ...] [--max-gpu-hours H] [--offline] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
   Reopens saved /workspace and /inputs in the same project. Prior /inputs remain remotely; inspect with ariax forge files PROJECT --path /inputs.
-  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet; omit --offline for internet access, multi-GPU, or multi-tool sessions).`,
+  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet, one command at a time; omit --offline for internet access, concurrent commands, multi-GPU, or multi-tool sessions).`,
   project: `ariax forge project <PROJECT_UUID_OR_NAME> [--limit 50] [--cursor CURSOR] [--details]
   Inspect project status, control revision, and session history.`,
   summary: `ariax forge summary PROJECT [--top 5]
@@ -180,7 +180,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   Sync flushes changed files on an active session; it is not an atomic multi-file snapshot.
   Pack stages in /scratch, verifies archive integrity, shards >--max-shard-gib (default 10 GiB), and writes a manifest under /workspace.
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
-  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet; omit --offline for internet access, multi-GPU, or multi-tool sessions).
+  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet, one command at a time; omit --offline for internet access, concurrent commands, multi-GPU, or multi-tool sessions).
   --wait-ready waits for the session, tool, listed inputs and command capacity before dispatch.
   --wait-timeout bounds local waiting in seconds (create/resume/close/run/pack/files recover default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
   --tail bounds output_tail lines returned by run --wait, pack --wait, and watch (default 80, max 400, capped at 4096 bytes). Remote command failures exit with code 11.
