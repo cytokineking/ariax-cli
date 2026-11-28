@@ -65,11 +65,12 @@ export function errorCodeToExit(code) {
   if (c.includes('unauth') || c === 'invalid_api_key' || c === 'expired' || c === 'revoked') return EXIT.AUTH;
   if (c.includes('forbidden') || c.includes('scope') || c.includes('denied')) return EXIT.FORBIDDEN;
   if (c.includes('not_found') || c === 'no_such_project' || c === 'no_such_job') return EXIT.NOT_FOUND;
-  if (c.includes('idempotency_conflict') || c === 'conflict' || c === 'cursor_stale' || c.includes('already_exists') || c === 'input_exists' || c === 'input_path_exists') return EXIT.CONFLICT;
+  if (c.includes('idempotency_conflict') || c === 'conflict' || c === 'cursor_stale' || c.includes('already_exists') || c === 'input_exists' || c === 'input_path_exists' || c === 'container_image_fixed' || c === 'incarnation_fenced') return EXIT.CONFLICT;
   if (c.includes('rate_limit') || c.includes('too_many_requests')) return EXIT.RATE_LIMIT;
   if (c.includes('payment') || c.includes('credit') || c.includes('insufficient')) return EXIT.PAYMENT;
   if (c === 'server_timeout' || c === 'network_error') return EXIT.NETWORK;
-  if (c === 'command_failed' || c === 'remote_command_failed') return EXIT.REMOTE_COMMAND;
+  if (c === 'command_failed' || c === 'remote_command_failed' || c === 'memory_limit_exceeded' || c === 'disk_limit_exceeded') return EXIT.REMOTE_COMMAND;
+  if (c === 'host_restarted') return EXIT.SERVER;
   if (c.includes('validat') || c.includes('schema') || c.includes('ambiguous') || c.includes('bad_request') || c.includes('payload_too_large')) return EXIT.VALIDATION;
   return undefined;
 }

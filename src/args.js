@@ -76,6 +76,7 @@ const BOOLEAN_FLAGS = new Set([
   'active',
   'suggested',
   'all-origins',
+  'offline',
 ]);
 
 /**

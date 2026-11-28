@@ -40,11 +40,17 @@ ariax forge tools wait SESSION boltz2 --wait-timeout 1800 --json
 ```
 
 Use `--min-ram-gib`, `--min-cpu-count`, and `--min-disk-gib` for hardware
-minima. `--wait` on `create`, `resume`, and `close` polls until the session
+minima. `--offline` on `create` or `resume` declares that the workload does not
+need outbound internet access, enabling faster startup and broader single-GPU
+capacity (no outbound internet access and a fixed tool set; omit `--offline` for
+internet access, multi-GPU, or multi-tool sessions; see
+[offline sessions & error codes](references/recovery.md#5-offline-sessions-and-error-codes)).
+`--wait` on `create`, `resume`, and `close` polls until the session
 reaches its target state (bound with `--wait-timeout`). Session `available`
 means `base` accepts commands; each scientific tool reports `queued`,
 `installing`, `ready`, or `failed` independently. Add more tools later with
-`ariax forge tools add SESSION --tools TOOL`.
+`ariax forge tools add SESSION --tools TOOL` (on `--offline` sessions the tool
+set may be fixed; incompatible additions return `container_image_fixed`).
 
 ## 3. Stage inputs & run native commands
 

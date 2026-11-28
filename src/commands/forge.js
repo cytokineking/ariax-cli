@@ -9,7 +9,7 @@ import { isUUID } from '../uuid.js';
 import { accountIdentity, atomicWrite } from '../operations.js';
 import { ApiError, NetworkError, backoffDelay, createClient, sanitizeErrorDetails } from '../http.js';
 import { requireTrustedApiOrigin, supportsStoredCredentials } from '../config.js';
-import { EXIT } from '../exit-codes.js';
+import { EXIT, errorCodeToExit } from '../exit-codes.js';
 import { checkGpuPolicy } from '../gpu-policy.js';
 import { printData, printJson, printKv, printProgress, printTable } from '../output.js';
 import { resolveProjectId } from '../resolve.js';
@@ -29,7 +29,19 @@ const DEFAULT_WATCH_TAIL_LINES = 80;
 const MAX_WATCH_TAIL_LINES = 400;
 const MAX_WATCH_TAIL_BYTES = 4096;
 const SESSION_OPTIONS = ['gpu', 'allowed-gpus', 'gpu-count', 'tools', 'priority', 'max-gpu-hours',
-  'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'session-id'];
+  'min-ram-gib', 'min-cpu-count', 'min-disk-gib', 'offline', 'session-id'];
+const FORGE_SESSION_ERROR_ACTIONS = Object.freeze({
+  memory_limit_exceeded:
+    'Command exceeded the session memory limit. Reduce memory or batch size, request more RAM with --min-ram-gib, or launch a larger GPU.',
+  disk_limit_exceeded:
+    'Command exceeded the workspace/scratch disk limit. Free space under /scratch or /workspace, or request larger disk with --min-disk-gib.',
+  host_restarted:
+    'The remote host restarted and this session was fenced; in-flight commands were interrupted and are not replayed. Inspect saved files and resume the project or create a new session.',
+  container_image_fixed:
+    'This session has a fixed tool set. Start a new session for another tool, or omit --offline to add tools mid-session.',
+  incarnation_fenced:
+    'This session was fenced and can no longer accept commands. Close the session if still open and resume the project or create a new session.',
+});
 const OPTIONS = {
   create: [['name', ...SESSION_OPTIONS, 'wait', 'wait-timeout', 'details'], 1],
   resume: [['control-revision', 'hydrate', ...SESSION_OPTIONS, 'wait', 'wait-timeout', 'details'], 2],
@@ -57,10 +69,12 @@ const OPTIONS = {
 };
 
 const SUBCOMMAND_HELP = Object.freeze({
-  create: `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools TOOL,...] [--priority TOOL,...] [--max-gpu-hours H] [--min-ram-gib N] [--min-cpu-count N] [--min-disk-gib N] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
-  Include a compatible core GPU (H100, A100_80GB, L40S, or RTX6000PRO). base is always included.`,
-  resume: `ariax forge resume PROJECT [--control-revision N] --gpu GPU [--allowed-gpus ...] [--gpu-count N] [--tools TOOL,...] [--hydrate PATH ...] [--max-gpu-hours H] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
-  Reopens saved /workspace and /inputs in the same project. Prior /inputs remain remotely; inspect with ariax forge files PROJECT --path /inputs.`,
+  create: `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools TOOL,...] [--priority TOOL,...] [--max-gpu-hours H] [--min-ram-gib N] [--min-cpu-count N] [--min-disk-gib N] [--offline] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
+  Include a compatible core GPU (H100, A100_80GB, L40S, or RTX6000PRO). base is always included.
+  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet; omit --offline for internet access, multi-GPU, or multi-tool sessions).`,
+  resume: `ariax forge resume PROJECT [--control-revision N] --gpu GPU [--allowed-gpus ...] [--gpu-count N] [--tools TOOL,...] [--hydrate PATH ...] [--max-gpu-hours H] [--offline] [--session-id UUID] [--wait] [--wait-timeout SECONDS] [--details]
+  Reopens saved /workspace and /inputs in the same project. Prior /inputs remain remotely; inspect with ariax forge files PROJECT --path /inputs.
+  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet; omit --offline for internet access, multi-GPU, or multi-tool sessions).`,
   project: `ariax forge project <PROJECT_UUID_OR_NAME> [--limit 50] [--cursor CURSOR] [--details]
   Inspect project status, control revision, and session history.`,
   summary: `ariax forge summary PROJECT [--top 5]
@@ -125,8 +139,8 @@ export function helpFor(positionals = []) {
   return help;
 }
 
-export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
-  ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [usual hardware/tool options] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
+export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RTX5090,L40S] [--gpu-count 1] [--tools boltz2,bindcraft2] [--priority boltz2] [--max-gpu-hours H] [--offline] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
+  ariax forge resume PROJECT [--control-revision N] --gpu GPU [--hydrate PATH ...] [--offline] [usual hardware/tool options] [--session-id UUID] [--wait] [--wait-timeout SECONDS]
   ariax forge project PROJECT [--limit 50] [--cursor CURSOR] [--details]
   ariax forge summary PROJECT [--top 5]
   ariax forge activity PROJECT [--limit 50] [--cursor CURSOR] [--details]
@@ -166,6 +180,7 @@ export const help = `ariax forge create --name NAME --gpu GPU [--allowed-gpus RT
   Sync flushes changed files on an active session; it is not an atomic multi-file snapshot.
   Pack stages in /scratch, verifies archive integrity, shards >--max-shard-gib (default 10 GiB), and writes a manifest under /workspace.
   Hardware options: --min-ram-gib N --min-cpu-count N --min-disk-gib N
+  --offline declares that the workload does not need outbound internet access, enabling faster startup and broader single-GPU capacity (fixed tool set, no outbound internet; omit --offline for internet access, multi-GPU, or multi-tool sessions).
   --wait-ready waits for the session, tool, listed inputs and command capacity before dispatch.
   --wait-timeout bounds local waiting in seconds (create/resume/close/run/pack/files recover default 1800, recover default 60); --timeout-seconds limits remote execution (default 86400).
   --tail bounds output_tail lines returned by run --wait, pack --wait, and watch (default 80, max 400, capped at 4096 bytes). Remote command failures exit with code 11.
@@ -331,7 +346,8 @@ function sessionOptions(flags) {
     gpu_count: flags['gpu-count'] === undefined ? 1 : number(flags['gpu-count'], 'gpu-count', { integer: true }),
     ...selection(flags),
     ...(Object.keys(hardware).length ? { hardware } : {}),
-    ...(flags['max-gpu-hours'] === undefined ? {} : { max_gpu_hours: number(flags['max-gpu-hours'], 'max-gpu-hours') }) };
+    ...(flags['max-gpu-hours'] === undefined ? {} : { max_gpu_hours: number(flags['max-gpu-hours'], 'max-gpu-hours') }),
+    ...(flags.offline === true ? { offline: true } : {}) };
 }
 
 function gpuSelection(value) {
@@ -1313,20 +1329,50 @@ function isFailedCommand(command) {
 function commandFailedError(sessionId, commandId, command, outputTail) {
   const state = command?.state ?? 'failed';
   const exitCode = command?.exit_code;
+  const remoteCode = typeof command?.error?.code === 'string' ? command.error.code.trim() : '';
+  const knownSessionCode = Object.prototype.hasOwnProperty.call(FORGE_SESSION_ERROR_ACTIONS, remoteCode)
+    ? remoteCode
+    : null;
+  const code = knownSessionCode || 'command_failed';
   const details = {
     command_id: commandId,
     state,
     ...(exitCode !== undefined ? { exit_code: exitCode } : {}),
+    ...(remoteCode && !knownSessionCode ? { error_code: remoteCode } : {}),
     ...(outputTail ? { output_tail: outputTail } : {}),
   };
   const failure = new ApiError({
-    code: 'command_failed',
+    code,
     message: `Command ${commandId} is ${state}${typeof exitCode === 'number' ? ` (exit_code=${exitCode})` : ''}${command?.error?.message ? `: ${command.error.message}` : ''}`,
     details,
     retryable: false,
   });
-  failure.action = `Inspect ariax forge command ${sessionId} ${commandId} and ariax forge logs ${sessionId} ${commandId}. Keep the same command ID while its outcome is uncertain.`;
+  failure.exitCode = errorCodeToExit(code) ?? EXIT.REMOTE_COMMAND;
+  const baseAction = `Inspect ariax forge command ${sessionId} ${commandId} and ariax forge logs ${sessionId} ${commandId}. Keep the same command ID while its outcome is uncertain.`;
+  failure.action = knownSessionCode
+    ? `${FORGE_SESSION_ERROR_ACTIONS[knownSessionCode]} ${baseAction}`
+    : baseAction;
   return failure;
+}
+
+function isDirectSessionUnavailable(error) {
+  if (error instanceof NetworkError) return true;
+  if (error instanceof ApiError) {
+    if ([502, 503, 504, 530].includes(error.status)) return true;
+    if (['session_unready', 'session_closed', 'incarnation_fenced', 'host_restarted'].includes(error.code)) return true;
+  }
+  return false;
+}
+
+async function readRetainedTerminalCommand(ctx, sessionId, commandId, signal) {
+  try {
+    const res = await ctx.client.get(`${API}/sessions/${sessionId}/commands/${commandId}`, {
+      query: { view: 'summary' },
+      signal,
+    });
+    if (TERMINAL_COMMANDS.has(res.data?.state)) return res;
+  } catch { /* Fall through to the original direct-session error. */ }
+  return null;
 }
 
 async function watchCommand(ctx, sessionId, commandId, options = {}) {
@@ -1344,9 +1390,23 @@ async function watchCommand(ctx, sessionId, commandId, options = {}) {
   printProgress(`Waiting. Resume with: ariax forge watch ${sessionId} ${commandId}`);
   try {
     for (;;) {
-      const result = await forgeRequest(ctx, sessionId, 'GET', `/v1/commands/${commandId}/logs`, {
-        query: { wait_seconds: 25, ...(cursor ? { cursor } : { tail: maxLines }) }, signal,
-      });
+      let result;
+      try {
+        result = await forgeRequest(ctx, sessionId, 'GET', `/v1/commands/${commandId}/logs`, {
+          query: { wait_seconds: 25, ...(cursor ? { cursor } : { tail: maxLines }) }, signal,
+        });
+      } catch (watchErr) {
+        if (!signal.aborted && isDirectSessionUnavailable(watchErr)) {
+          const retained = await readRetainedTerminalCommand(ctx, sessionId, commandId, signal);
+          if (retained) {
+            const command = retained.data;
+            remember(ctx, commandId, `/v1/commands/${commandId}`, command);
+            if (isFailedCommand(command)) throw commandFailedError(sessionId, commandId, command, rollingTail);
+            return { ...retained, data: { ...command, ...(rollingTail ? { output_tail: rollingTail } : {}) } };
+          }
+        }
+        throw watchErr;
+      }
       cursor = result.data.next_cursor;
       if (result.data.gap) {
         printProgress('An output interval is unavailable; the retained tail follows.');
@@ -1510,8 +1570,19 @@ async function waitRecovered(ctx, record, result, kind, account, signal) {
 }
 
 export function failed(code, message, error, recovery) {
-  const failure = new ApiError({ status: 500, code, message: `${message}${error?.message ? `: ${error.message}` : ''}`, retryable: false });
-  if (recovery) failure.action = recovery;
+  const remoteCode = typeof error?.code === 'string' ? error.code.trim() : '';
+  const knownSessionCode = Object.prototype.hasOwnProperty.call(FORGE_SESSION_ERROR_ACTIONS, remoteCode)
+    ? remoteCode
+    : null;
+  const failure = new ApiError({
+    status: 500,
+    code: knownSessionCode || code,
+    message: `${message}${error?.message ? `: ${error.message}` : ''}`,
+    retryable: false,
+  });
+  const sessionHint = knownSessionCode ? FORGE_SESSION_ERROR_ACTIONS[knownSessionCode] : undefined;
+  const action = [sessionHint, recovery].filter(Boolean).join(' ');
+  if (action) failure.action = action;
   throw failure;
 }
 
@@ -2825,6 +2896,11 @@ export async function run(ctx) {
         const sessionId = action === 'recover' ? recoveredSession
           : ctx.positionals[action.startsWith('tools ') || action.startsWith('inputs ') ? 2 : 1];
         error.action = `Inspect ariax forge status ${sessionId}. If provisioning or starting, run ariax forge tools wait ${sessionId} base --wait-timeout 1800, then retry the original operation with the same IDs. A closing, closed or failed session requires inspection of its project controls and retained history. ${error.action || ''}`.trim();
+      }
+    } else if (Object.prototype.hasOwnProperty.call(FORGE_SESSION_ERROR_ACTIONS, error.code)) {
+      const hint = FORGE_SESSION_ERROR_ACTIONS[error.code];
+      if (typeof error.action !== 'string' || !error.action.startsWith(hint)) {
+        error.action = hint;
       }
     } else if (['request_conflict', 'idempotency_conflict', 'command_conflict'].includes(error.code)) {
       error.action = action === 'finish' ? `Inspect ariax forge finish ${ctx.positionals[1]}; a session has only one finish operation and its deadline cannot be changed.`

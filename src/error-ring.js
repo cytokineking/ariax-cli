@@ -102,6 +102,7 @@ const FORGE_NESTED_SUBCOMMANDS = Object.freeze({
 
 const ANOMALY_ERROR_CODES = new Set([
   'finish_incomplete',
+  'host_restarted',
   'invalid_feedback_response',
   'invalid_storage_response',
   'invalid_host_response',

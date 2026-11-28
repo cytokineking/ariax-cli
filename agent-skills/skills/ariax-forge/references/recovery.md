@@ -115,3 +115,22 @@ at the reported `ariax-recovered-...` workspace path. An unresolved input
 conflict continues to block commands. Unsaved local entries can prevent
 recursive removal; delete those entries, then start a new deletion with a new
 operation ID.
+
+## 5. Offline sessions and error codes
+
+Pass `--offline` to `ariax forge create` or `ariax forge resume` to declare
+that the workload does not need outbound internet access, enabling faster
+startup and broader single-GPU capacity. Offline sessions block outbound
+internet access and keep a fixed tool set for the life of the session. Note
+that `--offline` is a workload declaration for scheduling, not a security
+guarantee that outbound network access is blocked on every host. Omit
+`--offline` when a session needs outbound internet, multi-GPU execution, or
+mid-session tool additions.
+
+| Error code | Meaning & recommended action |
+| --- | --- |
+| `memory_limit_exceeded` | Command exceeded the session memory limit (exit `11`). Reduce memory or batch size, request more RAM with `--min-ram-gib`, or launch a larger GPU. |
+| `disk_limit_exceeded` | Command exceeded the workspace/scratch disk limit (exit `11`). Free space under `/scratch` or `/workspace`, or request larger disk with `--min-disk-gib`. |
+| `host_restarted` | The remote host restarted and the session was fenced (exit `10`, both at session level and when watching an interrupted command); in-flight commands were interrupted and are not replayed. Inspect saved files and `ariax forge resume` or create a new session. |
+| `container_image_fixed` | This session has a fixed tool set (exit `7`). Start a new session for another tool, or omit `--offline` to add tools mid-session. |
+| `incarnation_fenced` | This session was fenced (exit `7`). Finish or emergency `ariax forge close SESSION --force` if still open, then resume or create a new session. |

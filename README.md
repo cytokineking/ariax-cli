@@ -400,7 +400,20 @@ ceiling) and guards against closing when commands are active (or status cannot
 be verified) or any files remain pending sync unless `--force` is passed. `ariax forge create`, `resume`, and `close`
 support `--wait` and `--wait-timeout`. `ariax forge run --wait`, `pack --wait`,
 and `watch` return a bounded `output_tail` (configurable with `--tail N`,
-default 80 lines / 4 KiB) and exit with code `11` when a remote command fails.
+default 80 lines / 4 KiB) and exit with code `11` when a remote command fails
+(or `10` if the remote host restarted with `host_restarted`).
+
+`ariax forge create` and `ariax forge resume` accept an optional `--offline` flag:
+`--offline` declares that the workload does not need outbound internet access,
+enabling faster startup and broader single-GPU capacity (no outbound internet
+access and a fixed tool set; omit `--offline` for internet access, multi-GPU, or
+multi-tool sessions). Session limit and lifecycle error codes surface actionable
+guidance: `memory_limit_exceeded` (exceeded session RAM limit, exit `11`),
+`disk_limit_exceeded` (exceeded workspace/scratch disk limit, exit `11`),
+`host_restarted` (remote host restarted and fenced the session without replaying
+in-flight commands, exit `10`), `container_image_fixed` (session tool set is
+fixed, exit `7`), and `incarnation_fenced` (session was fenced; close/recreate,
+exit `7`).
 
 ### Exit codes
 
@@ -413,11 +426,11 @@ default 80 lines / 4 KiB) and exit with code `11` when a remote command fails.
 | `4` | Not found (HTTP 404) |
 | `5` | Validation failure (HTTP 400/413/422, local validation) |
 | `6` | Payment or credit rejection (HTTP 402) |
-| `7` | Conflict (HTTP 409, including `idempotency_conflict` and `pending_files_use_finish`) |
+| `7` | Conflict (HTTP 409, including `idempotency_conflict`, `pending_files_use_finish`, `container_image_fixed`, and `incarnation_fenced`) |
 | `8` | Rate limited (HTTP 429) |
 | `9` | Network or timeout failure (transport error, HTTP 504, local `--wait-timeout`) |
-| `10` | Server failure (HTTP 500/502/503, unexpected status) |
-| `11` | Remote command failed (Forge command exited nonzero, interrupted, or timed out) |
+| `10` | Server failure (HTTP 500/502/503, `host_restarted`, unexpected status) |
+| `11` | Remote command failed (Forge command exited nonzero, interrupted, timed out, or hit `memory_limit_exceeded` / `disk_limit_exceeded`) |
 | `130` | Interrupted (`SIGINT` during `--wait`; remote work continues) |
 `ariax forge files recover PROJECT` copies an authorized catalog version,
 archived file, or managed artifact into the current project workspace; the
